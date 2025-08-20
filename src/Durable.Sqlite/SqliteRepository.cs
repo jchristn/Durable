@@ -13,10 +13,10 @@
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
 
-    // SQLite Repository Implementation with Full Transaction Support
-    public class SqliteRepository<T> : IRepository<T> where T : class, new()
+// SQLite Repository Implementation with Full Transaction Support and Connection Pooling
+    public class SqliteRepository<T> : IRepository<T>, IDisposable where T : class, new()
     {
-        internal readonly string _connectionString;
+        internal readonly IConnectionFactory _connectionFactory;
         internal readonly string _tableName;
         internal readonly string _primaryKeyColumn;
         internal readonly PropertyInfo _primaryKeyProperty;
@@ -26,7 +26,7 @@
 
         public SqliteRepository(string connectionString)
         {
-            _connectionString = connectionString;
+            _connectionFactory = new SqliteConnectionFactory(connectionString);
             _tableName = GetEntityName();
             (_primaryKeyColumn, _primaryKeyProperty) = GetPrimaryKeyInfo();
             _columnMappings = GetColumnMappings();
@@ -34,14 +34,48 @@
             _navigationProperties = GetNavigationProperties();
         }
 
-        // Connection helper
-        protected SqliteConnection GetConnection()
+        public SqliteRepository(IConnectionFactory connectionFactory)
         {
-            return new SqliteConnection(_connectionString);
+            _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _tableName = GetEntityName();
+            (_primaryKeyColumn, _primaryKeyProperty) = GetPrimaryKeyInfo();
+            _columnMappings = GetColumnMappings();
+            _foreignKeys = GetForeignKeys();
+            _navigationProperties = GetNavigationProperties();
         }
 
-        // Helper method to get connection and command with transaction support
-        internal (SqliteConnection connection, SqliteCommand command, bool shouldDispose) GetConnectionAndCommand(ITransaction transaction)
+        // Connection helper using connection factory
+        protected SqliteConnection GetConnection()
+        {
+            return (SqliteConnection)_connectionFactory.GetConnection();
+        }
+
+        protected async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            return (SqliteConnection)await _connectionFactory.GetConnectionAsync(cancellationToken);
+        }
+
+        // Helper methods for proper connection cleanup
+        private void CleanupConnection(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
+        {
+            command?.Dispose();
+            if (shouldReturnToPool && connection != null)
+            {
+                _connectionFactory.ReturnConnection(connection);
+            }
+        }
+
+        private async Task CleanupConnectionAsync(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
+        {
+            if (command != null) await command.DisposeAsync();
+            if (shouldReturnToPool && connection != null)
+            {
+                await _connectionFactory.ReturnConnectionAsync(connection);
+            }
+        }
+
+        // Helper method to get connection and command with transaction support and pooling
+        internal (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) GetConnectionAndCommand(ITransaction transaction)
         {
             if (transaction != null)
             {
@@ -53,14 +87,17 @@
             else
             {
                 var connection = GetConnection();
-                connection.Open();
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
                 var command = new SqliteCommand();
                 command.Connection = connection;
                 return (connection, command, true);
             }
         }
 
-        internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldDispose)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
+        internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
         {
             if (transaction != null)
             {
@@ -71,8 +108,11 @@
             }
             else
             {
-                var connection = GetConnection();
-                await connection.OpenAsync(token);
+                var connection = await GetConnectionAsync(token);
+                if (connection.State != ConnectionState.Open)
+                {
+                    await connection.OpenAsync(token);
+                }
                 var command = new SqliteCommand();
                 command.Connection = connection;
                 return (connection, command, true);
@@ -182,7 +222,7 @@
 
         public T ReadById(object id, ITransaction transaction = null)
         {
-            var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
+            var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
                 command.CommandText = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
@@ -198,17 +238,13 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldReturnToPool);
             }
         }
 
         public async Task<T> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
-            var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            var (connection, command, shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
                 command.CommandText = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
@@ -224,11 +260,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldReturnToPool);
             }
         }
 
@@ -255,11 +287,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -315,11 +343,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -375,11 +399,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -435,11 +455,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -488,11 +504,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -551,11 +563,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -635,11 +643,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -658,11 +662,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -718,11 +718,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -757,11 +753,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -805,11 +797,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -888,11 +876,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1082,11 +1066,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1254,11 +1234,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1310,11 +1286,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1349,11 +1321,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1378,7 +1346,7 @@
 
         public int DeleteAll(ITransaction transaction = null)
         {
-            var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
+            var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
                 command.CommandText = $"DELETE FROM {_tableName};";
@@ -1386,11 +1354,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldReturnToPool);
             }
         }
 
@@ -1452,11 +1416,7 @@
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
-                {
-                    connection?.Dispose();
-                }
+                CleanupConnection(connection, command, shouldDispose);
             }
         }
 
@@ -1733,6 +1693,11 @@
             }
 
             return result;
+        }
+
+        public void Dispose()
+        {
+            _connectionFactory?.Dispose();
         }
     }
 }
