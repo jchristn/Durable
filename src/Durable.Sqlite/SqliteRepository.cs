@@ -14,7 +14,7 @@
     using Microsoft.Data.Sqlite;
 
 // SQLite Repository Implementation with Full Transaction Support and Connection Pooling
-    public class SqliteRepository<T> : IRepository<T>, IDisposable where T : class, new()
+    public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
     {
         internal readonly IConnectionFactory _connectionFactory;
         internal readonly string _tableName;
@@ -23,8 +23,9 @@
         internal readonly Dictionary<string, PropertyInfo> _columnMappings;
         internal readonly Dictionary<PropertyInfo, ForeignKeyAttribute> _foreignKeys;
         internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _navigationProperties;
+        internal readonly IBatchInsertConfiguration _batchConfig;
 
-        public SqliteRepository(string connectionString)
+        public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null)
         {
             _connectionFactory = new SqliteConnectionFactory(connectionString);
             _tableName = GetEntityName();
@@ -32,9 +33,10 @@
             _columnMappings = GetColumnMappings();
             _foreignKeys = GetForeignKeys();
             _navigationProperties = GetNavigationProperties();
+            _batchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
-        public SqliteRepository(IConnectionFactory connectionFactory)
+        public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null)
         {
             _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _tableName = GetEntityName();
@@ -42,6 +44,7 @@
             _columnMappings = GetColumnMappings();
             _foreignKeys = GetForeignKeys();
             _navigationProperties = GetNavigationProperties();
+            _batchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
         // Connection helper using connection factory
@@ -936,6 +939,9 @@
 
         public IEnumerable<T> CreateMany(IEnumerable<T> entities, ITransaction transaction = null)
         {
+            var entitiesList = entities.ToList();
+            if (!entitiesList.Any()) return entitiesList;
+
             bool ownTransaction = transaction == null;
             SqliteConnection connection = null;
             SqliteTransaction localTransaction = null;
@@ -951,9 +957,18 @@
                 }
 
                 var results = new List<T>();
-                foreach (var entity in entities)
+                
+                if (_batchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
                 {
-                    results.Add(Create(entity, transaction));
+                    results.AddRange(CreateManyOptimized(entitiesList, transaction));
+                }
+                else
+                {
+                    // Fallback to individual inserts
+                    foreach (var entity in entitiesList)
+                    {
+                        results.Add(Create(entity, transaction));
+                    }
                 }
 
                 if (ownTransaction)
@@ -976,13 +991,16 @@
                 if (ownTransaction)
                 {
                     localTransaction?.Dispose();
-                    connection?.Dispose();
+                    _connectionFactory.ReturnConnection(connection);
                 }
             }
         }
 
         public async Task<IEnumerable<T>> CreateManyAsync(IEnumerable<T> entities, ITransaction transaction = null, CancellationToken token = default)
         {
+            var entitiesList = entities.ToList();
+            if (!entitiesList.Any()) return entitiesList;
+
             bool ownTransaction = transaction == null;
             SqliteConnection connection = null;
             SqliteTransaction localTransaction = null;
@@ -991,16 +1009,25 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    connection = await GetConnectionAsync(token);
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction);
                 }
 
                 var results = new List<T>();
-                foreach (var entity in entities)
+                
+                if (_batchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
                 {
-                    results.Add(await CreateAsync(entity, transaction, token));
+                    results.AddRange(await CreateManyOptimizedAsync(entitiesList, transaction, token));
+                }
+                else
+                {
+                    // Fallback to individual inserts
+                    foreach (var entity in entitiesList)
+                    {
+                        results.Add(await CreateAsync(entity, transaction, token));
+                    }
                 }
 
                 if (ownTransaction)
@@ -1023,7 +1050,7 @@
                 if (ownTransaction)
                 {
                     if (localTransaction != null) await localTransaction.DisposeAsync();
-                    if (connection != null) await connection.DisposeAsync();
+                    if (connection != null) await _connectionFactory.ReturnConnectionAsync(connection);
                 }
             }
         }
@@ -1693,6 +1720,268 @@
             }
 
             return result;
+        }
+
+        // IBatchInsertConfiguration implementation
+        public int MaxRowsPerBatch => _batchConfig.MaxRowsPerBatch;
+        public int MaxParametersPerStatement => _batchConfig.MaxParametersPerStatement;
+        public bool EnablePreparedStatementReuse => _batchConfig.EnablePreparedStatementReuse;
+        public bool EnableMultiRowInsert => _batchConfig.EnableMultiRowInsert;
+
+        // Optimized batch insert methods
+        private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction transaction)
+        {
+            var (connection, _, shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            var results = new List<T>();
+            
+            try
+            {
+                var batches = CreateBatches(entities);
+                var preparedCommands = new Dictionary<int, SqliteCommand>();
+                
+                foreach (var batch in batches)
+                {
+                    var batchSize = batch.Count;
+                    
+                    if (EnablePreparedStatementReuse && preparedCommands.TryGetValue(batchSize, out var preparedCommand))
+                    {
+                        // Reuse prepared statement for this batch size
+                        preparedCommand.Parameters.Clear();
+                        AddParametersForBatch(preparedCommand, batch);
+                        ExecuteBatchInsert(preparedCommand, batch);
+                    }
+                    else
+                    {
+                        // Create new command for this batch
+                        using var command = new SqliteCommand();
+                        command.Connection = connection;
+                        if (transaction != null)
+                            command.Transaction = (SqliteTransaction)transaction.Transaction;
+                        
+                        BuildBatchInsertCommand(command, batch);
+                        ExecuteBatchInsert(command, batch);
+                        
+                        if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
+                        {
+                            // Keep command as prepared statement template for this batch size
+                            var newPreparedCommand = new SqliteCommand(command.CommandText, connection);
+                            if (transaction != null)
+                                newPreparedCommand.Transaction = (SqliteTransaction)transaction.Transaction;
+                            preparedCommands[batchSize] = newPreparedCommand;
+                        }
+                    }
+                    
+                    results.AddRange(batch);
+                }
+                
+                // Dispose all prepared commands
+                foreach (var preparedCommand in preparedCommands.Values)
+                {
+                    preparedCommand?.Dispose();
+                }
+                
+                return results;
+            }
+            finally
+            {
+                if (shouldReturnToPool)
+                {
+                    _connectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+        
+        private async Task<IEnumerable<T>> CreateManyOptimizedAsync(IList<T> entities, ITransaction transaction, CancellationToken token)
+        {
+            var (connection, _, shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
+            var results = new List<T>();
+            
+            try
+            {
+                var batches = CreateBatches(entities);
+                var preparedCommands = new Dictionary<int, SqliteCommand>();
+                
+                foreach (var batch in batches)
+                {
+                    var batchSize = batch.Count;
+                    
+                    if (EnablePreparedStatementReuse && preparedCommands.TryGetValue(batchSize, out var preparedCommand))
+                    {
+                        // Reuse prepared statement for this batch size
+                        preparedCommand.Parameters.Clear();
+                        AddParametersForBatch(preparedCommand, batch);
+                        await ExecuteBatchInsertAsync(preparedCommand, batch, token);
+                    }
+                    else
+                    {
+                        // Create new command for this batch
+                        using var command = new SqliteCommand();
+                        command.Connection = connection;
+                        if (transaction != null)
+                            command.Transaction = (SqliteTransaction)transaction.Transaction;
+                        
+                        BuildBatchInsertCommand(command, batch);
+                        await ExecuteBatchInsertAsync(command, batch, token);
+                        
+                        if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
+                        {
+                            // Keep command as prepared statement template for this batch size
+                            var newPreparedCommand = new SqliteCommand(command.CommandText, connection);
+                            if (transaction != null)
+                                newPreparedCommand.Transaction = (SqliteTransaction)transaction.Transaction;
+                            preparedCommands[batchSize] = newPreparedCommand;
+                        }
+                    }
+                    
+                    results.AddRange(batch);
+                }
+                
+                // Dispose all prepared commands
+                foreach (var preparedCommand in preparedCommands.Values)
+                {
+                    if (preparedCommand != null)
+                        await preparedCommand.DisposeAsync();
+                }
+                
+                return results;
+            }
+            finally
+            {
+                if (shouldReturnToPool)
+                {
+                    await _connectionFactory.ReturnConnectionAsync(connection);
+                }
+            }
+        }
+        
+        private IEnumerable<IList<T>> CreateBatches(IList<T> entities)
+        {
+            var nonAutoIncrementColumns = GetNonAutoIncrementColumns();
+            var parametersPerEntity = nonAutoIncrementColumns.Count;
+            var maxEntitiesPerBatch = Math.Min(
+                MaxRowsPerBatch,
+                MaxParametersPerStatement / parametersPerEntity);
+                
+            if (maxEntitiesPerBatch <= 0)
+                maxEntitiesPerBatch = 1;
+            
+            for (int i = 0; i < entities.Count; i += maxEntitiesPerBatch)
+            {
+                var batchSize = Math.Min(maxEntitiesPerBatch, entities.Count - i);
+                var batch = new List<T>(batchSize);
+                for (int j = 0; j < batchSize; j++)
+                {
+                    batch.Add(entities[i + j]);
+                }
+                yield return batch;
+            }
+        }
+        
+        private List<string> GetNonAutoIncrementColumns()
+        {
+            var columns = new List<string>();
+            foreach (var kvp in _columnMappings)
+            {
+                var columnName = kvp.Key;
+                var property = kvp.Value;
+                var columnAttr = property.GetCustomAttribute<PropertyAttribute>();
+
+                // Skip auto-increment primary keys
+                if (columnAttr != null &&
+                    (columnAttr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey &&
+                    (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
+                {
+                    continue;
+                }
+                
+                columns.Add(columnName);
+            }
+            return columns;
+        }
+        
+        private void BuildBatchInsertCommand(SqliteCommand command, IList<T> entities)
+        {
+            var columns = GetNonAutoIncrementColumns();
+            var valuesList = new List<string>();
+            
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var parameters = new List<string>();
+                foreach (var column in columns)
+                {
+                    parameters.Add($"@{column}_{i}");
+                }
+                valuesList.Add($"({string.Join(", ", parameters)})");
+            }
+            
+            command.CommandText = $"INSERT INTO {_tableName} ({string.Join(", ", columns)}) VALUES {string.Join(", ", valuesList)};";
+            AddParametersForBatch(command, entities);
+        }
+        
+        private void AddParametersForBatch(SqliteCommand command, IList<T> entities)
+        {
+            var columns = GetNonAutoIncrementColumns();
+            
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var entity = entities[i];
+                foreach (var column in columns)
+                {
+                    var property = _columnMappings[column];
+                    var value = property.GetValue(entity);
+                    command.Parameters.AddWithValue($"@{column}_{i}", value ?? DBNull.Value);
+                }
+            }
+        }
+        
+        private void ExecuteBatchInsert(SqliteCommand command, IList<T> entities)
+        {
+            var rowsAffected = command.ExecuteNonQuery();
+            
+            // For auto-increment primary keys, we need to get the inserted IDs
+            if (_primaryKeyProperty != null)
+            {
+                var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
+                {
+                    // SQLite's last_insert_rowid() gives us the last inserted ID
+                    // For batch inserts, we need to calculate the range
+                    using var idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    var lastId = Convert.ToInt64(idCommand.ExecuteScalar());
+                    
+                    // Assign IDs to entities (assuming they were inserted in order)
+                    for (int i = entities.Count - 1; i >= 0; i--)
+                    {
+                        var id = lastId - (entities.Count - 1 - i);
+                        _primaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _primaryKeyProperty.PropertyType));
+                    }
+                }
+            }
+        }
+        
+        private async Task ExecuteBatchInsertAsync(SqliteCommand command, IList<T> entities, CancellationToken token)
+        {
+            var rowsAffected = await command.ExecuteNonQueryAsync(token);
+            
+            // For auto-increment primary keys, we need to get the inserted IDs
+            if (_primaryKeyProperty != null)
+            {
+                var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
+                {
+                    // SQLite's last_insert_rowid() gives us the last inserted ID
+                    // For batch inserts, we need to calculate the range
+                    using var idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    var lastId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(token));
+                    
+                    // Assign IDs to entities (assuming they were inserted in order)
+                    for (int i = entities.Count - 1; i >= 0; i--)
+                    {
+                        var id = lastId - (entities.Count - 1 - i);
+                        _primaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _primaryKeyProperty.PropertyType));
+                    }
+                }
+            }
         }
 
         public void Dispose()

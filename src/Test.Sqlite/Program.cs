@@ -50,6 +50,9 @@
             Console.WriteLine("\n========== PERFORMANCE COMPARISON ==========\n");
             await TestPerformanceComparison(repository);
 
+            // Test batch insert optimizations
+            await BatchInsertTest.RunBatchInsertTests();
+
             // Run cancellation tests
             Console.WriteLine("\n========== CANCELLATION TOKEN TESTS ==========\n");
             await TestCancellation(repository);
