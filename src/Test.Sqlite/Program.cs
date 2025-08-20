@@ -58,6 +58,13 @@
             Console.WriteLine("\n========== ENHANCED TRANSACTION TESTS ==========\n");
             await TestTransactionsProperlyAsync(repository);
 
+            // Run connection pooling demonstrations
+            Console.WriteLine("\n========== CONNECTION POOLING TESTS ==========\n");
+            PoolingExample.DemonstrateConnectionPooling();
+            
+            Console.WriteLine("\n");
+            PoolingExample.ComparePerformance();
+
             Console.WriteLine("\nPress any key to exit...");
             Console.ReadKey();
         }
