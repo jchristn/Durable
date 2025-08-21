@@ -22,6 +22,7 @@
         private int? _SkipCount;
         private int? _TakeCount;
         private bool _Distinct;
+        private string _CachedSql;
 
         public SqliteQueryBuilder(SqliteRepository<TEntity> repository, ITransaction transaction = null)
         {
@@ -232,6 +233,37 @@
         {
             // Simplified async include processing
             await Task.CompletedTask;
+        }
+
+        public string Query
+        {
+            get
+            {
+                if (_CachedSql == null)
+                    _CachedSql = BuildSql();
+                return _CachedSql;
+            }
+        }
+
+        public IDurableResult<TEntity> ExecuteWithQuery()
+        {
+            var query = Query;
+            var results = Execute();
+            return new DurableResult<TEntity>(query, results);
+        }
+
+        public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
+        {
+            var query = Query;
+            var results = await ExecuteAsync(token);
+            return new DurableResult<TEntity>(query, results);
+        }
+
+        public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
+        {
+            var query = Query;
+            var results = ExecuteAsyncEnumerable(token);
+            return new AsyncDurableResult<TEntity>(query, results);
         }
 
         public string BuildSql()
