@@ -8,58 +8,78 @@ namespace Durable.Sqlite
 
     public class SqliteConnectionFactory : IConnectionFactory
     {
-        private readonly ConnectionPool _connectionPool;
-        private readonly string _connectionString;
-        private volatile bool _disposed;
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
+        private readonly ConnectionPool _ConnectionPool;
+        private readonly string _ConnectionString;
+        private volatile bool _Disposed;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public SqliteConnectionFactory(string connectionString, ConnectionPoolOptions options = null)
         {
-            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-            _connectionPool = new ConnectionPool(() => new SqliteConnection(_connectionString), options);
+            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _ConnectionPool = new ConnectionPool(() => new SqliteConnection(_ConnectionString), options);
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public DbConnection GetConnection()
         {
             ThrowIfDisposed();
-            return _connectionPool.GetConnection();
+            return _ConnectionPool.GetConnection();
         }
 
         public Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            return _connectionPool.GetConnectionAsync(cancellationToken);
+            return _ConnectionPool.GetConnectionAsync(cancellationToken);
         }
 
         public void ReturnConnection(DbConnection connection)
         {
-            if (!_disposed && connection != null)
+            if (!_Disposed && connection != null)
             {
-                _connectionPool.ReturnConnection(connection);
+                _ConnectionPool.ReturnConnection(connection);
             }
         }
 
         public Task ReturnConnectionAsync(DbConnection connection)
         {
-            if (_disposed || connection == null)
+            if (_Disposed || connection == null)
                 return Task.CompletedTask;
 
-            return _connectionPool.ReturnConnectionAsync(connection);
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(SqliteConnectionFactory));
+            return _ConnectionPool.ReturnConnectionAsync(connection);
         }
 
         public void Dispose()
         {
-            if (_disposed)
+            if (_Disposed)
                 return;
 
-            _disposed = true;
-            _connectionPool?.Dispose();
+            _Disposed = true;
+            _ConnectionPool?.Dispose();
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        private void ThrowIfDisposed()
+        {
+            if (_Disposed)
+                throw new ObjectDisposedException(nameof(SqliteConnectionFactory));
+        }
+
+        #endregion
     }
 
     public static class SqliteConnectionFactoryExtensions

@@ -7,6 +7,8 @@
     [Entity("people")]
     public class Person
     {
+        #region Public-Members
+
         [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
         public int Id { get; set; }
 
@@ -30,10 +32,28 @@
 
         public string Name => $"{FirstName} {LastName}";
 
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
+
         public override string ToString()
         {
             return $"Person: Id={Id}, Name={FirstName} {LastName}, Age={Age}, Email={Email}, Salary={Salary:C}, Dept={Department}";
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 
 }
