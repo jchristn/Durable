@@ -68,6 +68,10 @@
             Console.WriteLine("\n");
             PoolingExample.ComparePerformance();
 
+            // Run query exposure tests
+            Console.WriteLine("\n========== QUERY EXPOSURE TESTS ==========\n");
+            await QueryExposureTest.RunQueryExposureTest();
+
             Console.WriteLine("\nPress any key to exit...");
             Console.ReadKey();
         }

@@ -35,7 +35,15 @@
         Task<IEnumerable<T>> ExecuteAsync(CancellationToken token = default);
         IAsyncEnumerable<T> ExecuteAsyncEnumerable(CancellationToken token = default);
 
-        // For debugging
+        // Execution with query exposure
+        IDurableResult<T> ExecuteWithQuery();
+        Task<IDurableResult<T>> ExecuteWithQueryAsync(CancellationToken token = default);
+        IAsyncDurableResult<T> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default);
+
+        // Query property for direct access
+        string Query { get; }
+
+        // For debugging (existing)
         string BuildSql();
     }
 }
