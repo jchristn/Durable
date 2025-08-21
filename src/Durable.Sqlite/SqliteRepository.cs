@@ -16,46 +16,46 @@
 // SQLite Repository Implementation with Full Transaction Support and Connection Pooling
     public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
     {
-        internal readonly IConnectionFactory _connectionFactory;
-        internal readonly string _tableName;
-        internal readonly string _primaryKeyColumn;
-        internal readonly PropertyInfo _primaryKeyProperty;
-        internal readonly Dictionary<string, PropertyInfo> _columnMappings;
-        internal readonly Dictionary<PropertyInfo, ForeignKeyAttribute> _foreignKeys;
-        internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _navigationProperties;
-        internal readonly IBatchInsertConfiguration _batchConfig;
+        internal readonly IConnectionFactory _ConnectionFactory;
+        internal readonly string _TableName;
+        internal readonly string _PrimaryKeyColumn;
+        internal readonly PropertyInfo _PrimaryKeyProperty;
+        internal readonly Dictionary<string, PropertyInfo> _ColumnMappings;
+        internal readonly Dictionary<PropertyInfo, ForeignKeyAttribute> _ForeignKeys;
+        internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _NavigationProperties;
+        internal readonly IBatchInsertConfiguration _BatchConfig;
 
         public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null)
         {
-            _connectionFactory = new SqliteConnectionFactory(connectionString);
-            _tableName = GetEntityName();
-            (_primaryKeyColumn, _primaryKeyProperty) = GetPrimaryKeyInfo();
-            _columnMappings = GetColumnMappings();
-            _foreignKeys = GetForeignKeys();
-            _navigationProperties = GetNavigationProperties();
-            _batchConfig = batchConfig ?? BatchInsertConfiguration.Default;
+            _ConnectionFactory = new SqliteConnectionFactory(connectionString);
+            _TableName = GetEntityName();
+            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            _ColumnMappings = GetColumnMappings();
+            _ForeignKeys = GetForeignKeys();
+            _NavigationProperties = GetNavigationProperties();
+            _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
         public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null)
         {
-            _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-            _tableName = GetEntityName();
-            (_primaryKeyColumn, _primaryKeyProperty) = GetPrimaryKeyInfo();
-            _columnMappings = GetColumnMappings();
-            _foreignKeys = GetForeignKeys();
-            _navigationProperties = GetNavigationProperties();
-            _batchConfig = batchConfig ?? BatchInsertConfiguration.Default;
+            _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _TableName = GetEntityName();
+            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            _ColumnMappings = GetColumnMappings();
+            _ForeignKeys = GetForeignKeys();
+            _NavigationProperties = GetNavigationProperties();
+            _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
         // Connection helper using connection factory
         protected SqliteConnection GetConnection()
         {
-            return (SqliteConnection)_connectionFactory.GetConnection();
+            return (SqliteConnection)_ConnectionFactory.GetConnection();
         }
 
         protected async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
-            return (SqliteConnection)await _connectionFactory.GetConnectionAsync(cancellationToken);
+            return (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken);
         }
 
         // Helper methods for proper connection cleanup
@@ -64,7 +64,7 @@
             command?.Dispose();
             if (shouldReturnToPool && connection != null)
             {
-                _connectionFactory.ReturnConnection(connection);
+                _ConnectionFactory.ReturnConnection(connection);
             }
         }
 
@@ -73,7 +73,7 @@
             if (command != null) await command.DisposeAsync();
             if (shouldReturnToPool && connection != null)
             {
-                await _connectionFactory.ReturnConnectionAsync(connection);
+                await _ConnectionFactory.ReturnConnectionAsync(connection);
             }
         }
 
@@ -218,7 +218,7 @@
             return ReadMany(null, transaction);
         }
 
-        public IAsyncEnumerable<T> ReadAllAsync(ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default)
+        public IAsyncEnumerable<T> ReadAllAsync(ITransaction transaction = null, CancellationToken token = default)
         {
             return ReadManyAsync(null, transaction, token);
         }
@@ -228,7 +228,7 @@
             var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"SELECT * FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 using var reader = command.ExecuteReader();
@@ -250,7 +250,7 @@
             var (connection, command, shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"SELECT * FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 await using var reader = await command.ExecuteReaderAsync(token);
@@ -274,7 +274,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -300,7 +300,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -330,7 +330,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -356,7 +356,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -386,7 +386,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -412,7 +412,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -442,7 +442,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -468,7 +468,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -498,11 +498,11 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                var parser = new ExpressionParser<T>(_columnMappings);
+                var parser = new ExpressionParser<T>(_ColumnMappings);
                 var whereClause = BuildWhereClause(predicate);
                 var setPairs = parser.ParseUpdateExpression(updateExpression);
 
-                command.CommandText = $"UPDATE {_tableName} SET {setPairs} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_TableName} SET {setPairs} WHERE {whereClause};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -516,11 +516,11 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                var parser = new ExpressionParser<T>(_columnMappings);
+                var parser = new ExpressionParser<T>(_ColumnMappings);
                 var whereClause = BuildWhereClause(predicate);
                 var setPairs = parser.ParseUpdateExpression(updateExpression);
 
-                command.CommandText = $"UPDATE {_tableName} SET {setPairs} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_TableName} SET {setPairs} WHERE {whereClause};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -716,7 +716,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_tableName} WHERE {whereClause} LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {whereClause} LIMIT 1);";
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -731,7 +731,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_tableName} WHERE {whereClause} LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {whereClause} LIMIT 1);";
                 var result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -750,7 +750,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_tableName} WHERE {_primaryKeyColumn} = @id LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
@@ -765,7 +765,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_tableName} WHERE {_primaryKeyColumn} = @id LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
                 var result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
@@ -786,7 +786,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -809,7 +809,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_tableName}");
+                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_TableName}");
 
                 if (predicate != null)
                 {
@@ -841,7 +841,7 @@
                 var columns = new List<string>();
                 var parameters = new List<string>();
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
@@ -861,17 +861,17 @@
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                 }
 
-                command.CommandText = $"INSERT INTO {_tableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
 
                 var insertedId = Convert.ToInt64(command.ExecuteScalar());
 
                 // Set the ID back on the entity if it's auto-increment
-                if (_primaryKeyProperty != null)
+                if (_PrimaryKeyProperty != null)
                 {
-                    var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                    var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                     if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                     {
-                        _primaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _primaryKeyProperty.PropertyType));
+                        _PrimaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _PrimaryKeyProperty.PropertyType));
                     }
                 }
 
@@ -891,7 +891,7 @@
                 var columns = new List<string>();
                 var parameters = new List<string>();
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
@@ -911,17 +911,17 @@
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                 }
 
-                command.CommandText = $"INSERT INTO {_tableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
 
                 var insertedId = Convert.ToInt64(await command.ExecuteScalarAsync(token));
 
                 // Set the ID back on the entity if it's auto-increment
-                if (_primaryKeyProperty != null)
+                if (_PrimaryKeyProperty != null)
                 {
-                    var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                    var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                     if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                     {
-                        _primaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _primaryKeyProperty.PropertyType));
+                        _PrimaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _PrimaryKeyProperty.PropertyType));
                     }
                 }
 
@@ -958,7 +958,7 @@
 
                 var results = new List<T>();
                 
-                if (_batchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
+                if (_BatchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
                 {
                     results.AddRange(CreateManyOptimized(entitiesList, transaction));
                 }
@@ -991,7 +991,7 @@
                 if (ownTransaction)
                 {
                     localTransaction?.Dispose();
-                    _connectionFactory.ReturnConnection(connection);
+                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -1017,7 +1017,7 @@
 
                 var results = new List<T>();
                 
-                if (_batchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
+                if (_BatchConfig.EnableMultiRowInsert && entitiesList.Count > 1)
                 {
                     results.AddRange(await CreateManyOptimizedAsync(entitiesList, transaction, token));
                 }
@@ -1050,7 +1050,7 @@
                 if (ownTransaction)
                 {
                     if (localTransaction != null) await localTransaction.DisposeAsync();
-                    if (connection != null) await _connectionFactory.ReturnConnectionAsync(connection);
+                    if (connection != null) await _ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
         }
@@ -1064,13 +1064,13 @@
                 var setPairs = new List<string>();
                 object idValue = null;
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
                     var value = property.GetValue(entity);
 
-                    if (columnName == _primaryKeyColumn)
+                    if (columnName == _PrimaryKeyColumn)
                     {
                         idValue = value;
                     }
@@ -1082,12 +1082,12 @@
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_tableName} SET {string.Join(", ", setPairs)} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"UPDATE {_TableName} SET {string.Join(", ", setPairs)} WHERE {_PrimaryKeyColumn} = @id;";
 
                 var rowsAffected = command.ExecuteNonQuery();
 
                 if (rowsAffected == 0)
-                    throw new InvalidOperationException($"No rows were updated for entity with {_primaryKeyColumn} = {idValue}");
+                    throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
 
                 return entity;
             }
@@ -1105,13 +1105,13 @@
                 var setPairs = new List<string>();
                 object idValue = null;
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
                     var value = property.GetValue(entity);
 
-                    if (columnName == _primaryKeyColumn)
+                    if (columnName == _PrimaryKeyColumn)
                     {
                         idValue = value;
                     }
@@ -1123,12 +1123,12 @@
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_tableName} SET {string.Join(", ", setPairs)} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"UPDATE {_TableName} SET {string.Join(", ", setPairs)} WHERE {_PrimaryKeyColumn} = @id;";
 
                 var rowsAffected = await command.ExecuteNonQueryAsync(token);
 
                 if (rowsAffected == 0)
-                    throw new InvalidOperationException($"No rows were updated for entity with {_primaryKeyColumn} = {idValue}");
+                    throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
 
                 return entity;
             }
@@ -1254,7 +1254,7 @@
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
 
-                command.CommandText = $"UPDATE {_tableName} SET {columnName} = @value WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_TableName} SET {columnName} = @value WHERE {whereClause};";
                 command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
 
                 return command.ExecuteNonQuery();
@@ -1273,7 +1273,7 @@
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
 
-                command.CommandText = $"UPDATE {_tableName} SET {columnName} = @value WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_TableName} SET {columnName} = @value WHERE {whereClause};";
                 command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
 
                 return await command.ExecuteNonQueryAsync(token);
@@ -1306,7 +1306,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"DELETE FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"DELETE FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 return command.ExecuteNonQuery() > 0;
@@ -1322,7 +1322,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"DELETE FROM {_tableName} WHERE {_primaryKeyColumn} = @id;";
+                command.CommandText = $"DELETE FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 return await command.ExecuteNonQueryAsync(token) > 0;
@@ -1343,7 +1343,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"DELETE FROM {_tableName} WHERE {whereClause};";
+                command.CommandText = $"DELETE FROM {_TableName} WHERE {whereClause};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1358,7 +1358,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"DELETE FROM {_tableName} WHERE {whereClause};";
+                command.CommandText = $"DELETE FROM {_TableName} WHERE {whereClause};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1376,7 +1376,7 @@
             var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"DELETE FROM {_tableName};";
+                command.CommandText = $"DELETE FROM {_TableName};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1390,7 +1390,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"DELETE FROM {_tableName};";
+                command.CommandText = $"DELETE FROM {_TableName};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1413,7 +1413,7 @@
                 var parameters = new List<string>();
                 var updatePairs = new List<string>();
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
@@ -1423,16 +1423,16 @@
                     parameters.Add($"@{columnName}");
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
 
-                    if (columnName != _primaryKeyColumn)
+                    if (columnName != _PrimaryKeyColumn)
                     {
                         updatePairs.Add($"{columnName} = excluded.{columnName}");
                     }
                 }
 
                 var sql = new StringBuilder();
-                sql.Append($"INSERT INTO {_tableName} ({string.Join(", ", columns)}) ");
+                sql.Append($"INSERT INTO {_TableName} ({string.Join(", ", columns)}) ");
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-                sql.Append($"ON CONFLICT({_primaryKeyColumn}) DO UPDATE SET ");
+                sql.Append($"ON CONFLICT({_PrimaryKeyColumn}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
                 sql.Append(";");
 
@@ -1456,7 +1456,7 @@
                 var parameters = new List<string>();
                 var updatePairs = new List<string>();
 
-                foreach (var kvp in _columnMappings)
+                foreach (var kvp in _ColumnMappings)
                 {
                     var columnName = kvp.Key;
                     var property = kvp.Value;
@@ -1466,16 +1466,16 @@
                     parameters.Add($"@{columnName}");
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
 
-                    if (columnName != _primaryKeyColumn)
+                    if (columnName != _PrimaryKeyColumn)
                     {
                         updatePairs.Add($"{columnName} = excluded.{columnName}");
                     }
                 }
 
                 var sql = new StringBuilder();
-                sql.Append($"INSERT INTO {_tableName} ({string.Join(", ", columns)}) ");
+                sql.Append($"INSERT INTO {_TableName} ({string.Join(", ", columns)}) ");
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-                sql.Append($"ON CONFLICT({_primaryKeyColumn}) DO UPDATE SET ");
+                sql.Append($"ON CONFLICT({_PrimaryKeyColumn}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
                 sql.Append(";");
 
@@ -1667,18 +1667,18 @@
 
         protected object GetPrimaryKeyValue(T entity)
         {
-            return _primaryKeyProperty.GetValue(entity);
+            return _PrimaryKeyProperty.GetValue(entity);
         }
 
         internal string BuildWhereClause(Expression<Func<T, bool>> predicate)
         {
-            var parser = new ExpressionParser<T>(_columnMappings);
+            var parser = new ExpressionParser<T>(_ColumnMappings);
             return parser.ParseExpression(predicate.Body);
         }
 
         internal string GetColumnFromExpression(Expression expression)
         {
-            var parser = new ExpressionParser<T>(_columnMappings);
+            var parser = new ExpressionParser<T>(_ColumnMappings);
             return parser.GetColumnFromExpression(expression);
         }
 
@@ -1686,7 +1686,7 @@
         {
             var entity = new T();
 
-            foreach (var kvp in _columnMappings)
+            foreach (var kvp in _ColumnMappings)
             {
                 var columnName = kvp.Key;
                 var property = kvp.Value;
@@ -1723,10 +1723,10 @@
         }
 
         // IBatchInsertConfiguration implementation
-        public int MaxRowsPerBatch => _batchConfig.MaxRowsPerBatch;
-        public int MaxParametersPerStatement => _batchConfig.MaxParametersPerStatement;
-        public bool EnablePreparedStatementReuse => _batchConfig.EnablePreparedStatementReuse;
-        public bool EnableMultiRowInsert => _batchConfig.EnableMultiRowInsert;
+        public int MaxRowsPerBatch => _BatchConfig.MaxRowsPerBatch;
+        public int MaxParametersPerStatement => _BatchConfig.MaxParametersPerStatement;
+        public bool EnablePreparedStatementReuse => _BatchConfig.EnablePreparedStatementReuse;
+        public bool EnableMultiRowInsert => _BatchConfig.EnableMultiRowInsert;
 
         // Optimized batch insert methods
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction transaction)
@@ -1786,7 +1786,7 @@
             {
                 if (shouldReturnToPool)
                 {
-                    _connectionFactory.ReturnConnection(connection);
+                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -1849,7 +1849,7 @@
             {
                 if (shouldReturnToPool)
                 {
-                    await _connectionFactory.ReturnConnectionAsync(connection);
+                    await _ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
         }
@@ -1880,7 +1880,7 @@
         private List<string> GetNonAutoIncrementColumns()
         {
             var columns = new List<string>();
-            foreach (var kvp in _columnMappings)
+            foreach (var kvp in _ColumnMappings)
             {
                 var columnName = kvp.Key;
                 var property = kvp.Value;
@@ -1914,7 +1914,7 @@
                 valuesList.Add($"({string.Join(", ", parameters)})");
             }
             
-            command.CommandText = $"INSERT INTO {_tableName} ({string.Join(", ", columns)}) VALUES {string.Join(", ", valuesList)};";
+            command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES {string.Join(", ", valuesList)};";
             AddParametersForBatch(command, entities);
         }
         
@@ -1927,7 +1927,7 @@
                 var entity = entities[i];
                 foreach (var column in columns)
                 {
-                    var property = _columnMappings[column];
+                    var property = _ColumnMappings[column];
                     var value = property.GetValue(entity);
                     command.Parameters.AddWithValue($"@{column}_{i}", value ?? DBNull.Value);
                 }
@@ -1939,9 +1939,9 @@
             var rowsAffected = command.ExecuteNonQuery();
             
             // For auto-increment primary keys, we need to get the inserted IDs
-            if (_primaryKeyProperty != null)
+            if (_PrimaryKeyProperty != null)
             {
-                var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     // SQLite's last_insert_rowid() gives us the last inserted ID
@@ -1953,7 +1953,7 @@
                     for (int i = entities.Count - 1; i >= 0; i--)
                     {
                         var id = lastId - (entities.Count - 1 - i);
-                        _primaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _primaryKeyProperty.PropertyType));
+                        _PrimaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _PrimaryKeyProperty.PropertyType));
                     }
                 }
             }
@@ -1964,9 +1964,9 @@
             var rowsAffected = await command.ExecuteNonQueryAsync(token);
             
             // For auto-increment primary keys, we need to get the inserted IDs
-            if (_primaryKeyProperty != null)
+            if (_PrimaryKeyProperty != null)
             {
-                var columnAttr = _primaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     // SQLite's last_insert_rowid() gives us the last inserted ID
@@ -1978,7 +1978,7 @@
                     for (int i = entities.Count - 1; i >= 0; i--)
                     {
                         var id = lastId - (entities.Count - 1 - i);
-                        _primaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _primaryKeyProperty.PropertyType));
+                        _PrimaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _PrimaryKeyProperty.PropertyType));
                     }
                 }
             }
@@ -1986,7 +1986,7 @@
 
         public void Dispose()
         {
-            _connectionFactory?.Dispose();
+            _ConnectionFactory?.Dispose();
         }
     }
 }

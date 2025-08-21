@@ -30,8 +30,8 @@
         Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
         Task<T> ReadSingleAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default);
         Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default);
-        IAsyncEnumerable<T> ReadManyAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default);
-        IAsyncEnumerable<T> ReadAllAsync(ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default);
+        IAsyncEnumerable<T> ReadManyAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
+        IAsyncEnumerable<T> ReadAllAsync(ITransaction transaction = null, CancellationToken token = default);
         Task<T> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default);
 
         // Existence checks

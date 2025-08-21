@@ -11,87 +11,87 @@
 
     public class SqliteQueryBuilder<TEntity> : IQueryBuilder<TEntity> where TEntity : class, new()
     {
-        private readonly SqliteRepository<TEntity> _repository;
-        private readonly ITransaction _transaction;
-        private readonly List<string> _whereClauses = new List<string>();
-        private readonly List<OrderByClause> _orderByClauses = new List<OrderByClause>();
-        private readonly List<string> _includes = new List<string>();
-        private readonly List<string> _groupByColumns = new List<string>();
-        private Expression _selectExpression;
-        private Type _selectType;
-        private int? _skipCount;
-        private int? _takeCount;
-        private bool _distinct;
+        private readonly SqliteRepository<TEntity> _Repository;
+        private readonly ITransaction _Transaction;
+        private readonly List<string> _WhereClauses = new List<string>();
+        private readonly List<OrderByClause> _OrderByClauses = new List<OrderByClause>();
+        private readonly List<string> _Includes = new List<string>();
+        private readonly List<string> _GroupByColumns = new List<string>();
+        private Expression _SelectExpression;
+        private Type _SelectType;
+        private int? _SkipCount;
+        private int? _TakeCount;
+        private bool _Distinct;
 
         public SqliteQueryBuilder(SqliteRepository<TEntity> repository, ITransaction transaction = null)
         {
-            _repository = repository;
-            _transaction = transaction;
+            _Repository = repository;
+            _Transaction = transaction;
         }
 
         public IQueryBuilder<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
         {
-            var whereClause = _repository.BuildWhereClause(predicate);
-            _whereClauses.Add(whereClause);
+            var whereClause = _Repository.BuildWhereClause(predicate);
+            _WhereClauses.Add(whereClause);
             return this;
         }
 
         public IQueryBuilder<TEntity> OrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _repository.GetColumnFromExpression(keySelector.Body);
-            _orderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
+            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
             return this;
         }
 
         public IQueryBuilder<TEntity> OrderByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _repository.GetColumnFromExpression(keySelector.Body);
-            _orderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
+            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
             return this;
         }
 
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            if (_orderByClauses.Count == 0)
+            if (_OrderByClauses.Count == 0)
                 throw new InvalidOperationException("ThenBy can only be used after OrderBy or OrderByDescending");
 
-            var column = _repository.GetColumnFromExpression(keySelector.Body);
-            _orderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
+            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
             return this;
         }
 
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            if (_orderByClauses.Count == 0)
+            if (_OrderByClauses.Count == 0)
                 throw new InvalidOperationException("ThenByDescending can only be used after OrderBy or OrderByDescending");
 
-            var column = _repository.GetColumnFromExpression(keySelector.Body);
-            _orderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
+            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
             return this;
         }
 
         public IQueryBuilder<TEntity> Skip(int count)
         {
-            _skipCount = count;
+            _SkipCount = count;
             return this;
         }
 
         public IQueryBuilder<TEntity> Take(int count)
         {
-            _takeCount = count;
+            _TakeCount = count;
             return this;
         }
 
         public IQueryBuilder<TEntity> Distinct()
         {
-            _distinct = true;
+            _Distinct = true;
             return this;
         }
 
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
-            _selectExpression = selector;
-            _selectType = typeof(TResult);
+            _SelectExpression = selector;
+            _SelectType = typeof(TResult);
             // Note: This would require a more complex implementation to properly handle projection
             // For now, we'll throw a not implemented exception
             throw new NotImplementedException("Select projection is not yet implemented");
@@ -101,7 +101,7 @@
         {
             // Store include information for later processing
             var propertyName = GetPropertyName(navigationProperty);
-            _includes.Add(propertyName);
+            _Includes.Add(propertyName);
             return this;
         }
 
@@ -109,18 +109,18 @@
         {
             // Store nested include information
             var propertyName = GetPropertyName(navigationProperty);
-            if (_includes.Count > 0)
+            if (_Includes.Count > 0)
             {
-                _includes[_includes.Count - 1] += "." + propertyName;
+                _Includes[_Includes.Count - 1] += "." + propertyName;
             }
             return this;
         }
 
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _repository.GetColumnFromExpression(keySelector.Body);
-            _groupByColumns.Add(column);
-            return new SqliteGroupedQueryBuilder<TEntity, TKey>(_repository, this);
+            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _GroupByColumns.Add(column);
+            return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this);
         }
 
         private string GetPropertyName<TProp, TProperty>(Expression<Func<TProp, TProperty>> expression)
@@ -134,7 +134,7 @@
 
         public IEnumerable<TEntity> Execute()
         {
-            var (connection, command, shouldDispose) = _repository.GetConnectionAndCommand(_transaction);
+            var (connection, command, shouldDispose) = _Repository.GetConnectionAndCommand(_Transaction);
             try
             {
                 command.CommandText = BuildSql();
@@ -143,11 +143,11 @@
                 var results = new List<TEntity>();
                 while (reader.Read())
                 {
-                    results.Add(_repository.MapReaderToEntity(reader));
+                    results.Add(_Repository.MapReaderToEntity(reader));
                 }
 
                 // Process includes if any (simplified version - full implementation would require multiple queries)
-                if (_includes.Count > 0 && shouldDispose)
+                if (_Includes.Count > 0 && shouldDispose)
                 {
                     ProcessIncludes(results, connection);
                 }
@@ -166,7 +166,7 @@
 
         public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
-            var (connection, command, shouldDispose) = await _repository.GetConnectionAndCommandAsync(_transaction, token);
+            var (connection, command, shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
             try
             {
                 command.CommandText = BuildSql();
@@ -175,11 +175,11 @@
                 var results = new List<TEntity>();
                 while (await reader.ReadAsync(token))
                 {
-                    results.Add(_repository.MapReaderToEntity(reader));
+                    results.Add(_Repository.MapReaderToEntity(reader));
                 }
 
                 // Process includes if any
-                if (_includes.Count > 0 && shouldDispose)
+                if (_Includes.Count > 0 && shouldDispose)
                 {
                     await ProcessIncludesAsync(results, connection, token);
                 }
@@ -198,7 +198,7 @@
 
         public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
-            var (connection, command, shouldDispose) = await _repository.GetConnectionAndCommandAsync(_transaction, token);
+            var (connection, command, shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
             try
             {
                 command.CommandText = BuildSql();
@@ -206,7 +206,7 @@
 
                 while (await reader.ReadAsync(token))
                 {
-                    yield return _repository.MapReaderToEntity(reader);
+                    yield return _Repository.MapReaderToEntity(reader);
                 }
             }
             finally
@@ -239,9 +239,9 @@
             var sql = new StringBuilder();
 
             sql.Append("SELECT ");
-            if (_distinct) sql.Append("DISTINCT ");
+            if (_Distinct) sql.Append("DISTINCT ");
 
-            if (_selectExpression != null)
+            if (_SelectExpression != null)
             {
                 // Build projection columns - simplified version
                 sql.Append("*");
@@ -251,48 +251,48 @@
                 sql.Append("*");
             }
 
-            sql.Append($" FROM {_repository._tableName}");
+            sql.Append($" FROM {_Repository._TableName}");
 
             // Add JOINs for includes
-            foreach (var include in _includes)
+            foreach (var include in _Includes)
             {
                 // Simplified - full implementation would generate proper JOIN clauses
             }
 
-            if (_whereClauses.Count > 0)
+            if (_WhereClauses.Count > 0)
             {
                 sql.Append(" WHERE ");
-                sql.Append(string.Join(" AND ", _whereClauses));
+                sql.Append(string.Join(" AND ", _WhereClauses));
             }
 
-            if (_groupByColumns.Count > 0)
+            if (_GroupByColumns.Count > 0)
             {
                 sql.Append(" GROUP BY ");
-                sql.Append(string.Join(", ", _groupByColumns));
+                sql.Append(string.Join(", ", _GroupByColumns));
             }
 
-            if (_orderByClauses.Count > 0)
+            if (_OrderByClauses.Count > 0)
             {
                 sql.Append(" ORDER BY ");
-                var orderParts = _orderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
+                var orderParts = _OrderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
                 sql.Append(string.Join(", ", orderParts));
             }
 
-            if (_takeCount.HasValue)
+            if (_TakeCount.HasValue)
             {
-                sql.Append($" LIMIT {_takeCount.Value}");
+                sql.Append($" LIMIT {_TakeCount.Value}");
             }
 
-            if (_skipCount.HasValue)
+            if (_SkipCount.HasValue)
             {
-                sql.Append($" OFFSET {_skipCount.Value}");
+                sql.Append($" OFFSET {_SkipCount.Value}");
             }
 
             sql.Append(";");
             return sql.ToString();
         }
 
-        internal List<string> GetGroupByColumns() => _groupByColumns;
-        internal List<string> GetWhereClauses() => _whereClauses;
+        internal List<string> GetGroupByColumns() => _GroupByColumns;
+        internal List<string> GetWhereClauses() => _WhereClauses;
     }
 }

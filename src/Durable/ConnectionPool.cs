@@ -10,42 +10,42 @@ namespace Durable
 
     public class ConnectionPool : IDisposable
     {
-        private readonly Func<DbConnection> _connectionFactory;
-        private readonly ConnectionPoolOptions _options;
-        private readonly ConcurrentQueue<PooledConnection> _availableConnections;
-        private readonly ConcurrentBag<PooledConnection> _allConnections;
-        private readonly SemaphoreSlim _semaphore;
-        private readonly System.Timers.Timer _cleanupTimer;
-        private volatile bool _disposed;
-        private int _connectionCount;
+        private readonly Func<DbConnection> _ConnectionFactory;
+        private readonly ConnectionPoolOptions _Options;
+        private readonly ConcurrentQueue<PooledConnection> _AvailableConnections;
+        private readonly ConcurrentBag<PooledConnection> _AllConnections;
+        private readonly SemaphoreSlim _Semaphore;
+        private readonly System.Timers.Timer _CleanupTimer;
+        private volatile bool _Disposed;
+        private int _ConnectionCount;
 
-        public ConnectionPool(Func<DbConnection> connectionFactory, ConnectionPoolOptions options = null)
+        public ConnectionPool(Func<DbConnection> connectionFactory, ConnectionPoolOptions? options = null)
         {
-            _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-            _options = options ?? new ConnectionPoolOptions();
-            _availableConnections = new ConcurrentQueue<PooledConnection>();
-            _allConnections = new ConcurrentBag<PooledConnection>();
-            _semaphore = new SemaphoreSlim(_options.MaxPoolSize, _options.MaxPoolSize);
+            _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _Options = options ?? new ConnectionPoolOptions();
+            _AvailableConnections = new ConcurrentQueue<PooledConnection>();
+            _AllConnections = new ConcurrentBag<PooledConnection>();
+            _Semaphore = new SemaphoreSlim(_Options.MaxPoolSize, _Options.MaxPoolSize);
 
             InitializeMinConnections();
 
-            _cleanupTimer = new System.Timers.Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
-            _cleanupTimer.Elapsed += CleanupIdleConnections;
-            _cleanupTimer.Start();
+            _CleanupTimer = new System.Timers.Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
+            _CleanupTimer.Elapsed += CleanupIdleConnections;
+            _CleanupTimer.Start();
         }
 
         public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
 
-            if (!await _semaphore.WaitAsync(_options.ConnectionTimeout, cancellationToken))
+            if (!await _Semaphore.WaitAsync(_Options.ConnectionTimeout, cancellationToken))
             {
                 throw new TimeoutException("Timeout waiting for available connection from pool");
             }
 
             try
             {
-                if (_availableConnections.TryDequeue(out var pooledConnection))
+                if (_AvailableConnections.TryDequeue(out var pooledConnection))
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -64,7 +64,7 @@ namespace Durable
             }
             catch
             {
-                _semaphore.Release();
+                _Semaphore.Release();
                 throw;
             }
         }
@@ -73,14 +73,14 @@ namespace Durable
         {
             ThrowIfDisposed();
 
-            if (!_semaphore.Wait(_options.ConnectionTimeout))
+            if (!_Semaphore.Wait(_Options.ConnectionTimeout))
             {
                 throw new TimeoutException("Timeout waiting for available connection from pool");
             }
 
             try
             {
-                if (_availableConnections.TryDequeue(out var pooledConnection))
+                if (_AvailableConnections.TryDequeue(out var pooledConnection))
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -99,14 +99,14 @@ namespace Durable
             }
             catch
             {
-                _semaphore.Release();
+                _Semaphore.Release();
                 throw;
             }
         }
 
         public async Task ReturnConnectionAsync(DbConnection connection)
         {
-            if (connection == null || _disposed)
+            if (connection == null || _Disposed)
                 return;
 
             var pooledConnection = FindPooledConnection(connection);
@@ -117,7 +117,7 @@ namespace Durable
 
                 if (IsConnectionValid(pooledConnection))
                 {
-                    _availableConnections.Enqueue(pooledConnection);
+                    _AvailableConnections.Enqueue(pooledConnection);
                 }
                 else
                 {
@@ -125,12 +125,12 @@ namespace Durable
                 }
             }
 
-            _semaphore.Release();
+            _Semaphore.Release();
         }
 
         public void ReturnConnection(DbConnection connection)
         {
-            if (connection == null || _disposed)
+            if (connection == null || _Disposed)
                 return;
 
             var pooledConnection = FindPooledConnection(connection);
@@ -141,7 +141,7 @@ namespace Durable
 
                 if (IsConnectionValid(pooledConnection))
                 {
-                    _availableConnections.Enqueue(pooledConnection);
+                    _AvailableConnections.Enqueue(pooledConnection);
                 }
                 else
                 {
@@ -149,21 +149,21 @@ namespace Durable
                 }
             }
 
-            _semaphore.Release();
+            _Semaphore.Release();
         }
 
         private void InitializeMinConnections()
         {
-            for (int i = 0; i < _options.MinPoolSize; i++)
+            for (int i = 0; i < _Options.MinPoolSize; i++)
             {
                 try
                 {
-                    var connection = _connectionFactory();
+                    var connection = _ConnectionFactory();
                     connection.Open(); // Ensure connections are opened during initialization
                     var pooledConnection = new PooledConnection(connection);
-                    _allConnections.Add(pooledConnection);
-                    _availableConnections.Enqueue(pooledConnection);
-                    Interlocked.Increment(ref _connectionCount);
+                    _AllConnections.Add(pooledConnection);
+                    _AvailableConnections.Enqueue(pooledConnection);
+                    Interlocked.Increment(ref _ConnectionCount);
                 }
                 catch
                 {
@@ -174,38 +174,38 @@ namespace Durable
 
         private async Task<DbConnection> CreateNewConnectionAsync(CancellationToken cancellationToken)
         {
-            var connection = _connectionFactory();
+            var connection = _ConnectionFactory();
             await connection.OpenAsync(cancellationToken);
             
             var pooledConnection = new PooledConnection(connection) { IsInUse = true };
-            _allConnections.Add(pooledConnection);
-            Interlocked.Increment(ref _connectionCount);
+            _AllConnections.Add(pooledConnection);
+            Interlocked.Increment(ref _ConnectionCount);
             
             return connection;
         }
 
         private DbConnection CreateNewConnection()
         {
-            var connection = _connectionFactory();
+            var connection = _ConnectionFactory();
             connection.Open();
             
             var pooledConnection = new PooledConnection(connection) { IsInUse = true };
-            _allConnections.Add(pooledConnection);
-            Interlocked.Increment(ref _connectionCount);
+            _AllConnections.Add(pooledConnection);
+            Interlocked.Increment(ref _ConnectionCount);
             
             return connection;
         }
 
         private bool IsConnectionValid(PooledConnection pooledConnection)
         {
-            if (!_options.ValidateConnections)
+            if (!_Options.ValidateConnections)
                 return true;
 
             try
             {
                 var connection = pooledConnection.Connection;
                 return connection.State == System.Data.ConnectionState.Open &&
-                       DateTime.UtcNow - pooledConnection.LastUsed < _options.IdleTimeout;
+                       DateTime.UtcNow - pooledConnection.LastUsed < _Options.IdleTimeout;
             }
             catch
             {
@@ -213,9 +213,9 @@ namespace Durable
             }
         }
 
-        private PooledConnection FindPooledConnection(DbConnection connection)
+        private PooledConnection? FindPooledConnection(DbConnection connection)
         {
-            foreach (var pooledConnection in _allConnections)
+            foreach (var pooledConnection in _AllConnections)
             {
                 if (ReferenceEquals(pooledConnection.Connection, connection))
                 {
@@ -234,7 +234,7 @@ namespace Durable
             catch { }
             finally
             {
-                Interlocked.Decrement(ref _connectionCount);
+                Interlocked.Decrement(ref _ConnectionCount);
             }
         }
 
@@ -247,28 +247,28 @@ namespace Durable
             catch { }
             finally
             {
-                Interlocked.Decrement(ref _connectionCount);
+                Interlocked.Decrement(ref _ConnectionCount);
             }
         }
 
-        private void CleanupIdleConnections(object sender, ElapsedEventArgs e)
+        private void CleanupIdleConnections(object? sender, ElapsedEventArgs e)
         {
-            if (_disposed)
+            if (_Disposed)
                 return;
 
-            var cutoffTime = DateTime.UtcNow - _options.IdleTimeout;
+            var cutoffTime = DateTime.UtcNow - _Options.IdleTimeout;
             var connectionsToRemove = new List<PooledConnection>();
 
             // Collect idle connections while preserving minimum pool size
-            while (_availableConnections.TryDequeue(out var pooledConnection))
+            while (_AvailableConnections.TryDequeue(out var pooledConnection))
             {
-                if (pooledConnection.LastUsed < cutoffTime && _connectionCount > _options.MinPoolSize)
+                if (pooledConnection.LastUsed < cutoffTime && _ConnectionCount > _Options.MinPoolSize)
                 {
                     connectionsToRemove.Add(pooledConnection);
                 }
                 else
                 {
-                    _availableConnections.Enqueue(pooledConnection);
+                    _AvailableConnections.Enqueue(pooledConnection);
                     break;
                 }
             }
@@ -282,21 +282,21 @@ namespace Durable
 
         private void ThrowIfDisposed()
         {
-            if (_disposed)
+            if (_Disposed)
                 throw new ObjectDisposedException(nameof(ConnectionPool));
         }
 
         public void Dispose()
         {
-            if (_disposed)
+            if (_Disposed)
                 return;
 
-            _disposed = true;
-            _cleanupTimer?.Stop();
-            _cleanupTimer?.Dispose();
+            _Disposed = true;
+            _CleanupTimer?.Stop();
+            _CleanupTimer?.Dispose();
 
             // Dispose all connections
-            foreach (var pooledConnection in _allConnections)
+            foreach (var pooledConnection in _AllConnections)
             {
                 try
                 {
@@ -305,7 +305,7 @@ namespace Durable
                 catch { }
             }
 
-            _semaphore?.Dispose();
+            _Semaphore?.Dispose();
         }
 
         private class PooledConnection

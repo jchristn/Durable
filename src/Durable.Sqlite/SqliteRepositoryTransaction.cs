@@ -11,46 +11,46 @@
 
     internal class SqliteRepositoryTransaction : ITransaction
     {
-        private readonly SqliteConnection _connection;
-        private readonly SqliteTransaction _transaction;
-        private bool _disposed;
+        private readonly SqliteConnection _Connection;
+        private readonly SqliteTransaction _Transaction;
+        private bool _Disposed;
 
         public SqliteRepositoryTransaction(SqliteConnection connection, SqliteTransaction transaction)
         {
-            _connection = connection;
-            _transaction = transaction;
+            _Connection = connection;
+            _Transaction = transaction;
         }
 
-        public DbConnection Connection => _connection;
-        public DbTransaction Transaction => _transaction;
+        public DbConnection Connection => _Connection;
+        public DbTransaction Transaction => _Transaction;
 
         public void Commit()
         {
-            _transaction.Commit();
+            _Transaction.Commit();
         }
 
         public async Task CommitAsync(CancellationToken token = default)
         {
-            await _transaction.CommitAsync(token);
+            await _Transaction.CommitAsync(token);
         }
 
         public void Rollback()
         {
-            _transaction.Rollback();
+            _Transaction.Rollback();
         }
 
         public async Task RollbackAsync(CancellationToken token = default)
         {
-            await _transaction.RollbackAsync(token);
+            await _Transaction.RollbackAsync(token);
         }
 
         public void Dispose()
         {
-            if (!_disposed)
+            if (!_Disposed)
             {
-                _transaction?.Dispose();
-                _connection?.Dispose();
-                _disposed = true;
+                _Transaction?.Dispose();
+                _Connection?.Dispose();
+                _Disposed = true;
             }
         }
     }

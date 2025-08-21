@@ -9,11 +9,11 @@
     using System.Threading.Tasks;
     public class ExpressionParser<T> where T : class
     {
-        private readonly Dictionary<string, PropertyInfo> _columnMappings;
+        private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
 
         public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings)
         {
-            _columnMappings = columnMappings;
+            _ColumnMappings = columnMappings;
         }
 
         public string ParseExpression(Expression expression)
@@ -28,7 +28,7 @@
                 var propInfo = memberExpr.Member as PropertyInfo;
                 if (propInfo != null)
                 {
-                    var mapping = _columnMappings.FirstOrDefault(m => m.Value == propInfo);
+                    var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                     if (mapping.Key != null)
                         return mapping.Key;
                 }
@@ -46,7 +46,7 @@
                     if (binding is MemberAssignment assignment)
                     {
                         var propInfo = assignment.Member as PropertyInfo;
-                        var mapping = _columnMappings.FirstOrDefault(m => m.Value == propInfo);
+                        var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                         if (mapping.Key != null)
                         {
                             var value = GetConstantValue(assignment.Expression);
@@ -110,7 +110,7 @@
         {
             if (member.Member is PropertyInfo propInfo)
             {
-                var mapping = _columnMappings.FirstOrDefault(m => m.Value == propInfo);
+                var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                 if (mapping.Key != null)
                     return mapping.Key;
             }
