@@ -72,7 +72,11 @@
                 case MethodCallExpression methodCall:
                     return VisitMethodCall(methodCall);
                 case UnaryExpression unary:
-                    return Visit(unary.Operand);
+                    return VisitUnary(unary);
+                case ConditionalExpression conditional:
+                    return VisitConditional(conditional);
+                case NewArrayExpression newArray:
+                    return VisitNewArray(newArray);
                 default:
                     throw new NotSupportedException($"Expression type {expression.GetType()} is not supported");
             }
@@ -85,14 +89,28 @@
 
             var op = binary.NodeType switch
             {
+                // Comparison operators
                 ExpressionType.Equal => "=",
                 ExpressionType.NotEqual => "!=",
                 ExpressionType.LessThan => "<",
                 ExpressionType.LessThanOrEqual => "<=",
                 ExpressionType.GreaterThan => ">",
                 ExpressionType.GreaterThanOrEqual => ">=",
+                
+                // Logical operators
                 ExpressionType.AndAlso => "AND",
                 ExpressionType.OrElse => "OR",
+                ExpressionType.And => "AND",
+                ExpressionType.Or => "OR",
+                
+                // Math operators
+                ExpressionType.Add => "+",
+                ExpressionType.Subtract => "-",
+                ExpressionType.Multiply => "*",
+                ExpressionType.Divide => "/",
+                ExpressionType.Modulo => "%",
+                ExpressionType.Power => "POWER",
+                
                 _ => throw new NotSupportedException($"Binary operator {binary.NodeType} is not supported")
             };
 
@@ -101,6 +119,18 @@
             {
                 if (op == "=") return $"{left} IS NULL";
                 if (op == "!=") return $"{left} IS NOT NULL";
+            }
+
+            // Special handling for POWER operator
+            if (binary.NodeType == ExpressionType.Power)
+            {
+                return $"POWER({left}, {right})";
+            }
+
+            // For logical operators, ensure proper parentheses for complex expressions
+            if (op == "AND" || op == "OR")
+            {
+                return $"({left} {op} {right})";
             }
 
             return $"({left} {op} {right})";
@@ -147,29 +177,10 @@
                     break;
 
                 case "Contains":
-                    if (methodCall.Object != null && methodCall.Arguments.Count == 1)
-                    {
-                        // String.Contains
-                        var column = Visit(methodCall.Object);
-                        var value = GetConstantValue(methodCall.Arguments[0]);
-                        return $"{column} LIKE '%{value}%'";
-                    }
-                    else if (methodCall.Arguments.Count == 2)
-                    {
-                        // List.Contains
-                        var value = Visit(methodCall.Arguments[1]);
-                        var list = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
-                        if (list != null)
-                        {
-                            var values = new List<string>();
-                            foreach (var item in list)
-                            {
-                                values.Add(FormatValue(item));
-                            }
-                            return $"{value} IN ({string.Join(", ", values)})";
-                        }
-                    }
-                    break;
+                    return HandleContains(methodCall);
+
+                case "Any":
+                    return HandleAny(methodCall);
 
                 case "StartsWith":
                     if (methodCall.Object != null && methodCall.Arguments.Count == 1)
@@ -188,7 +199,90 @@
                         return $"{column} LIKE '%{value}'";
                     }
                     break;
+
+                // DateTime operations
+                case "AddDays":
+                case "AddHours":
+                case "AddMinutes":
+                case "AddSeconds":
+                case "AddMonths":
+                case "AddYears":
+                    return HandleDateTimeAdd(methodCall);
+
+                case "get_Year":
+                case "get_Month":
+                case "get_Day":
+                case "get_Hour":
+                case "get_Minute":
+                case "get_Second":
+                    return HandleDateTimePart(methodCall);
+
+                // Math operations
+                case "Abs":
+                case "Floor":
+                case "Ceiling":
+                case "Round":
+                case "Sqrt":
+                case "Sin":
+                case "Cos":
+                case "Tan":
+                    return HandleMathFunction(methodCall);
+
+                // String operations
+                case "ToUpper":
+                case "ToLower":
+                case "Trim":
+                case "Length":
+                    return HandleStringFunction(methodCall);
+
+                // Custom Between method (extension method)
+                case "Between":
+                    return HandleBetween(methodCall);
+
+                // Extension methods for additional functionality
+                case "In":
+                    return HandleIn(methodCall);
+
+                case "NotIn":
+                    return HandleNotIn(methodCall);
+
+                case "IsNull":
+                    return HandleIsNull(methodCall);
+
+                case "IsNotNull":
+                    return HandleIsNotNull(methodCall);
+
+                case "IsNullOrEmpty":
+                    return HandleIsNullOrEmpty(methodCall);
+
+                case "IsNotNullOrEmpty":
+                    return HandleIsNotNullOrEmpty(methodCall);
+
+                case "IsNullOrWhiteSpace":
+                    return HandleIsNullOrWhiteSpace(methodCall);
+
+                case "IsNotNullOrWhiteSpace":
+                    return HandleIsNotNullOrWhiteSpace(methodCall);
             }
+
+            // Handle static method calls on specific types
+            if (methodCall.Method.DeclaringType != null)
+            {
+                var typeName = methodCall.Method.DeclaringType.Name;
+                if (typeName == "DateTime" && methodCall.Method.Name == "Now")
+                {
+                    return $"datetime('now')";
+                }
+                if (typeName == "DateTime" && methodCall.Method.Name == "UtcNow")
+                {
+                    return $"datetime('now', 'utc')";
+                }
+                if (typeName == "DateTime" && methodCall.Method.Name == "Today")
+                {
+                    return $"date('now')";
+                }
+            }
+
             throw new NotSupportedException($"Method {methodCall.Method.Name} is not supported");
         }
 
@@ -219,8 +313,364 @@
                 string s => $"'{s.Replace("'", "''")}'",
                 bool b => b ? "1" : "0",
                 DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
+                DateTimeOffset dto => $"'{dto:yyyy-MM-dd HH:mm:ss}'",
+                TimeSpan ts => $"'{ts}'",
                 _ => value.ToString()
             };
+        }
+
+        private string VisitUnary(UnaryExpression unary)
+        {
+            switch (unary.NodeType)
+            {
+                case ExpressionType.Not:
+                    var operand = Visit(unary.Operand);
+                    return $"NOT ({operand})";
+                case ExpressionType.Negate:
+                    var negateOperand = Visit(unary.Operand);
+                    return $"-({negateOperand})";
+                case ExpressionType.Convert:
+                case ExpressionType.ConvertChecked:
+                    // Handle type conversions by visiting the operand
+                    return Visit(unary.Operand);
+                default:
+                    throw new NotSupportedException($"Unary operator {unary.NodeType} is not supported");
+            }
+        }
+
+        private string VisitConditional(ConditionalExpression conditional)
+        {
+            // CASE WHEN expression support
+            var test = Visit(conditional.Test);
+            var ifTrue = Visit(conditional.IfTrue);
+            var ifFalse = Visit(conditional.IfFalse);
+            
+            return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
+        }
+
+        private string VisitNewArray(NewArrayExpression newArray)
+        {
+            var values = new List<string>();
+            foreach (var expr in newArray.Expressions)
+            {
+                var value = GetConstantValue(expr);
+                values.Add(FormatValue(value));
+            }
+            return string.Join(", ", values);
+        }
+
+        private string HandleContains(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null && methodCall.Arguments.Count == 1)
+            {
+                // Check if this is a collection.Contains(item) call
+                var objectType = methodCall.Object.Type;
+                if (typeof(System.Collections.IEnumerable).IsAssignableFrom(objectType) && objectType != typeof(string))
+                {
+                    // Collection.Contains(item) - IN operator
+                    var collection = GetConstantValue(methodCall.Object) as System.Collections.IEnumerable;
+                    var item = Visit(methodCall.Arguments[0]);
+                    
+                    if (collection != null)
+                    {
+                        var values = new List<string>();
+                        foreach (var collectionItem in collection)
+                        {
+                            values.Add(FormatValue(collectionItem));
+                        }
+                        return $"{item} IN ({string.Join(", ", values)})";
+                    }
+                }
+                else
+                {
+                    // String.Contains - LIKE operation
+                    var column = Visit(methodCall.Object);
+                    var value = GetConstantValue(methodCall.Arguments[0]);
+                    return $"{column} LIKE '%{value}%'";
+                }
+            }
+            else if (methodCall.Arguments.Count == 2)
+            {
+                // Static Contains method: collection.Contains(item)
+                var collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                var item = Visit(methodCall.Arguments[1]);
+                
+                if (collection != null)
+                {
+                    var values = new List<string>();
+                    foreach (var collectionItem in collection)
+                    {
+                        values.Add(FormatValue(collectionItem));
+                    }
+                    return $"{item} IN ({string.Join(", ", values)})";
+                }
+            }
+            
+            throw new NotSupportedException("Contains method call not supported in this context");
+        }
+
+        private string HandleAny(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                // collection.Any() - check if collection has any items
+                var collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                if (collection != null)
+                {
+                    var hasItems = collection.Cast<object>().Any();
+                    return hasItems ? "1" : "0";
+                }
+            }
+            
+            throw new NotSupportedException("Any method call not supported in this context");
+        }
+
+        private string HandleBetween(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 3)
+            {
+                // value.Between(min, max)
+                var value = Visit(methodCall.Arguments[0]);
+                var min = Visit(methodCall.Arguments[1]);
+                var max = Visit(methodCall.Arguments[2]);
+                
+                return $"({value} BETWEEN {min} AND {max})";
+            }
+            
+            throw new NotSupportedException("Between method requires exactly 3 arguments: value, min, max");
+        }
+
+        private string HandleDateTimeAdd(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null && methodCall.Arguments.Count == 1)
+            {
+                var dateColumn = Visit(methodCall.Object);
+                var amount = GetConstantValue(methodCall.Arguments[0]);
+                
+                var modifier = methodCall.Method.Name switch
+                {
+                    "AddDays" => $"{amount} days",
+                    "AddHours" => $"{amount} hours",
+                    "AddMinutes" => $"{amount} minutes",
+                    "AddSeconds" => $"{amount} seconds",
+                    "AddMonths" => $"{amount} months",
+                    "AddYears" => $"{amount} years",
+                    _ => throw new NotSupportedException($"DateTime method {methodCall.Method.Name} is not supported")
+                };
+                
+                return $"datetime({dateColumn}, '{modifier}')";
+            }
+            
+            throw new NotSupportedException($"DateTime {methodCall.Method.Name} method call not supported in this context");
+        }
+
+        private string HandleDateTimePart(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null)
+            {
+                var dateColumn = Visit(methodCall.Object);
+                
+                var part = methodCall.Method.Name switch
+                {
+                    "get_Year" => "strftime('%Y', " + dateColumn + ")",
+                    "get_Month" => "strftime('%m', " + dateColumn + ")",
+                    "get_Day" => "strftime('%d', " + dateColumn + ")",
+                    "get_Hour" => "strftime('%H', " + dateColumn + ")",
+                    "get_Minute" => "strftime('%M', " + dateColumn + ")",
+                    "get_Second" => "strftime('%S', " + dateColumn + ")",
+                    _ => throw new NotSupportedException($"DateTime property {methodCall.Method.Name} is not supported")
+                };
+                
+                return part;
+            }
+            
+            throw new NotSupportedException($"DateTime property {methodCall.Method.Name} call not supported in this context");
+        }
+
+        private string HandleMathFunction(MethodCallExpression methodCall)
+        {
+            var functionName = methodCall.Method.Name.ToUpper();
+            
+            if (methodCall.Arguments.Count == 1)
+            {
+                var argument = Visit(methodCall.Arguments[0]);
+                
+                return functionName switch
+                {
+                    "ABS" => $"ABS({argument})",
+                    "FLOOR" => $"FLOOR({argument})",
+                    "CEILING" => $"CEILING({argument})",
+                    "ROUND" => $"ROUND({argument})",
+                    "SQRT" => $"SQRT({argument})",
+                    "SIN" => $"SIN({argument})",
+                    "COS" => $"COS({argument})",
+                    "TAN" => $"TAN({argument})",
+                    _ => throw new NotSupportedException($"Math function {functionName} is not supported")
+                };
+            }
+            else if (methodCall.Arguments.Count == 2 && functionName == "ROUND")
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                var digits = Visit(methodCall.Arguments[1]);
+                return $"ROUND({value}, {digits})";
+            }
+            
+            throw new NotSupportedException($"Math function {functionName} call not supported in this context");
+        }
+
+        private string HandleStringFunction(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null)
+            {
+                var stringColumn = Visit(methodCall.Object);
+                
+                return methodCall.Method.Name switch
+                {
+                    "ToUpper" => $"UPPER({stringColumn})",
+                    "ToLower" => $"LOWER({stringColumn})",
+                    "Trim" => $"TRIM({stringColumn})",
+                    "Length" => $"LENGTH({stringColumn})",
+                    _ => throw new NotSupportedException($"String method {methodCall.Method.Name} is not supported")
+                };
+            }
+            
+            throw new NotSupportedException($"String method {methodCall.Method.Name} call not supported in this context");
+        }
+
+        private string HandleIn(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count >= 2)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                var values = new List<string>();
+                
+                // Handle params array or IEnumerable
+                if (methodCall.Arguments.Count == 2 && methodCall.Arguments[1].Type.IsAssignableFrom(typeof(System.Collections.IEnumerable)))
+                {
+                    var collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
+                    if (collection != null)
+                    {
+                        foreach (var item in collection)
+                        {
+                            values.Add(FormatValue(item));
+                        }
+                    }
+                }
+                else
+                {
+                    // Handle params array
+                    for (int i = 1; i < methodCall.Arguments.Count; i++)
+                    {
+                        var item = GetConstantValue(methodCall.Arguments[i]);
+                        values.Add(FormatValue(item));
+                    }
+                }
+                
+                return $"{value} IN ({string.Join(", ", values)})";
+            }
+            
+            throw new NotSupportedException("In method requires at least 2 arguments: value and collection/values");
+        }
+
+        private string HandleNotIn(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count >= 2)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                var values = new List<string>();
+                
+                // Handle params array or IEnumerable
+                if (methodCall.Arguments.Count == 2 && methodCall.Arguments[1].Type.IsAssignableFrom(typeof(System.Collections.IEnumerable)))
+                {
+                    var collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
+                    if (collection != null)
+                    {
+                        foreach (var item in collection)
+                        {
+                            values.Add(FormatValue(item));
+                        }
+                    }
+                }
+                else
+                {
+                    // Handle params array
+                    for (int i = 1; i < methodCall.Arguments.Count; i++)
+                    {
+                        var item = GetConstantValue(methodCall.Arguments[i]);
+                        values.Add(FormatValue(item));
+                    }
+                }
+                
+                return $"{value} NOT IN ({string.Join(", ", values)})";
+            }
+            
+            throw new NotSupportedException("NotIn method requires at least 2 arguments: value and collection/values");
+        }
+
+        private string HandleIsNull(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"{value} IS NULL";
+            }
+            
+            throw new NotSupportedException("IsNull method requires exactly 1 argument");
+        }
+
+        private string HandleIsNotNull(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"{value} IS NOT NULL";
+            }
+            
+            throw new NotSupportedException("IsNotNull method requires exactly 1 argument");
+        }
+
+        private string HandleIsNullOrEmpty(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"({value} IS NULL OR {value} = '')";
+            }
+            
+            throw new NotSupportedException("IsNullOrEmpty method requires exactly 1 argument");
+        }
+
+        private string HandleIsNotNullOrEmpty(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"({value} IS NOT NULL AND {value} != '')";
+            }
+            
+            throw new NotSupportedException("IsNotNullOrEmpty method requires exactly 1 argument");
+        }
+
+        private string HandleIsNullOrWhiteSpace(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"({value} IS NULL OR TRIM({value}) = '')";
+            }
+            
+            throw new NotSupportedException("IsNullOrWhiteSpace method requires exactly 1 argument");
+        }
+
+        private string HandleIsNotNullOrWhiteSpace(MethodCallExpression methodCall)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                var value = Visit(methodCall.Arguments[0]);
+                return $"({value} IS NOT NULL AND TRIM({value}) != '')";
+            }
+            
+            throw new NotSupportedException("IsNotNullOrWhiteSpace method requires exactly 1 argument");
         }
     }
 }
