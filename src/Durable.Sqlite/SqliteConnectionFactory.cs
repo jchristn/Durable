@@ -8,15 +8,29 @@ namespace Durable.Sqlite
 
     public class SqliteConnectionFactory : IConnectionFactory
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly ConnectionPool _ConnectionPool;
         private readonly string _ConnectionString;
         private volatile bool _Disposed;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public SqliteConnectionFactory(string connectionString, ConnectionPoolOptions options = null)
         {
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             _ConnectionPool = new ConnectionPool(() => new SqliteConnection(_ConnectionString), options);
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public DbConnection GetConnection()
         {
@@ -46,12 +60,6 @@ namespace Durable.Sqlite
             return _ConnectionPool.ReturnConnectionAsync(connection);
         }
 
-        private void ThrowIfDisposed()
-        {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(SqliteConnectionFactory));
-        }
-
         public void Dispose()
         {
             if (_Disposed)
@@ -60,6 +68,18 @@ namespace Durable.Sqlite
             _Disposed = true;
             _ConnectionPool?.Dispose();
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        private void ThrowIfDisposed()
+        {
+            if (_Disposed)
+                throw new ObjectDisposedException(nameof(SqliteConnectionFactory));
+        }
+
+        #endregion
     }
 
     public static class SqliteConnectionFactoryExtensions

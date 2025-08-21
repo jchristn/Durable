@@ -16,6 +16,12 @@
 // SQLite Repository Implementation with Full Transaction Support and Connection Pooling
     public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         internal readonly IConnectionFactory _ConnectionFactory;
         internal readonly string _TableName;
         internal readonly string _PrimaryKeyColumn;
@@ -24,6 +30,10 @@
         internal readonly Dictionary<PropertyInfo, ForeignKeyAttribute> _ForeignKeys;
         internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _NavigationProperties;
         internal readonly IBatchInsertConfiguration _BatchConfig;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null)
         {
@@ -47,80 +57,9 @@
             _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
-        // Connection helper using connection factory
-        protected SqliteConnection GetConnection()
-        {
-            return (SqliteConnection)_ConnectionFactory.GetConnection();
-        }
+        #endregion
 
-        protected async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
-        {
-            return (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken);
-        }
-
-        // Helper methods for proper connection cleanup
-        private void CleanupConnection(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
-        {
-            command?.Dispose();
-            if (shouldReturnToPool && connection != null)
-            {
-                _ConnectionFactory.ReturnConnection(connection);
-            }
-        }
-
-        private async Task CleanupConnectionAsync(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
-        {
-            if (command != null) await command.DisposeAsync();
-            if (shouldReturnToPool && connection != null)
-            {
-                await _ConnectionFactory.ReturnConnectionAsync(connection);
-            }
-        }
-
-        // Helper method to get connection and command with transaction support and pooling
-        internal (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) GetConnectionAndCommand(ITransaction transaction)
-        {
-            if (transaction != null)
-            {
-                var command = new SqliteCommand();
-                command.Connection = (SqliteConnection)transaction.Connection;
-                command.Transaction = (SqliteTransaction)transaction.Transaction;
-                return ((SqliteConnection)transaction.Connection, command, false);
-            }
-            else
-            {
-                var connection = GetConnection();
-                if (connection.State != ConnectionState.Open)
-                {
-                    connection.Open();
-                }
-                var command = new SqliteCommand();
-                command.Connection = connection;
-                return (connection, command, true);
-            }
-        }
-
-        internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
-        {
-            if (transaction != null)
-            {
-                var command = new SqliteCommand();
-                command.Connection = (SqliteConnection)transaction.Connection;
-                command.Transaction = (SqliteTransaction)transaction.Transaction;
-                return ((SqliteConnection)transaction.Connection, command, false);
-            }
-            else
-            {
-                var connection = await GetConnectionAsync(token);
-                if (connection.State != ConnectionState.Open)
-                {
-                    await connection.OpenAsync(token);
-                }
-                var command = new SqliteCommand();
-                command.Connection = connection;
-                return (connection, command, true);
-            }
-        }
+        #region Public-Methods
 
         // Read operations
         public T ReadFirst(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
@@ -1594,7 +1533,93 @@
             return new SqliteQueryBuilder<T>(this, transaction);
         }
 
-        // Helper methods
+        // IBatchInsertConfiguration implementation
+        public int MaxRowsPerBatch => _BatchConfig.MaxRowsPerBatch;
+        public int MaxParametersPerStatement => _BatchConfig.MaxParametersPerStatement;
+        public bool EnablePreparedStatementReuse => _BatchConfig.EnablePreparedStatementReuse;
+        public bool EnableMultiRowInsert => _BatchConfig.EnableMultiRowInsert;
+
+        public void Dispose()
+        {
+            _ConnectionFactory?.Dispose();
+        }
+
+        #endregion
+
+        #region Private-Methods
+
+        protected SqliteConnection GetConnection()
+        {
+            return (SqliteConnection)_ConnectionFactory.GetConnection();
+        }
+
+        protected async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            return (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken);
+        }
+
+        private void CleanupConnection(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
+        {
+            command?.Dispose();
+            if (shouldReturnToPool && connection != null)
+            {
+                _ConnectionFactory.ReturnConnection(connection);
+            }
+        }
+
+        private async Task CleanupConnectionAsync(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
+        {
+            if (command != null) await command.DisposeAsync();
+            if (shouldReturnToPool && connection != null)
+            {
+                await _ConnectionFactory.ReturnConnectionAsync(connection);
+            }
+        }
+
+        internal (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) GetConnectionAndCommand(ITransaction transaction)
+        {
+            if (transaction != null)
+            {
+                var command = new SqliteCommand();
+                command.Connection = (SqliteConnection)transaction.Connection;
+                command.Transaction = (SqliteTransaction)transaction.Transaction;
+                return ((SqliteConnection)transaction.Connection, command, false);
+            }
+            else
+            {
+                var connection = GetConnection();
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+                var command = new SqliteCommand();
+                command.Connection = connection;
+                return (connection, command, true);
+            }
+        }
+
+        internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
+        {
+            if (transaction != null)
+            {
+                var command = new SqliteCommand();
+                command.Connection = (SqliteConnection)transaction.Connection;
+                command.Transaction = (SqliteTransaction)transaction.Transaction;
+                return ((SqliteConnection)transaction.Connection, command, false);
+            }
+            else
+            {
+                var connection = await GetConnectionAsync(token);
+                if (connection.State != ConnectionState.Open)
+                {
+                    await connection.OpenAsync(token);
+                }
+                var command = new SqliteCommand();
+                command.Connection = connection;
+                return (connection, command, true);
+            }
+        }
+
         protected string GetEntityName()
         {
             var entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
@@ -1722,13 +1747,6 @@
             return result;
         }
 
-        // IBatchInsertConfiguration implementation
-        public int MaxRowsPerBatch => _BatchConfig.MaxRowsPerBatch;
-        public int MaxParametersPerStatement => _BatchConfig.MaxParametersPerStatement;
-        public bool EnablePreparedStatementReuse => _BatchConfig.EnablePreparedStatementReuse;
-        public bool EnableMultiRowInsert => _BatchConfig.EnableMultiRowInsert;
-
-        // Optimized batch insert methods
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction transaction)
         {
             var (connection, _, shouldReturnToPool) = GetConnectionAndCommand(transaction);
@@ -1745,14 +1763,12 @@
                     
                     if (EnablePreparedStatementReuse && preparedCommands.TryGetValue(batchSize, out var preparedCommand))
                     {
-                        // Reuse prepared statement for this batch size
                         preparedCommand.Parameters.Clear();
                         AddParametersForBatch(preparedCommand, batch);
                         ExecuteBatchInsert(preparedCommand, batch);
                     }
                     else
                     {
-                        // Create new command for this batch
                         using var command = new SqliteCommand();
                         command.Connection = connection;
                         if (transaction != null)
@@ -1763,7 +1779,6 @@
                         
                         if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
                         {
-                            // Keep command as prepared statement template for this batch size
                             var newPreparedCommand = new SqliteCommand(command.CommandText, connection);
                             if (transaction != null)
                                 newPreparedCommand.Transaction = (SqliteTransaction)transaction.Transaction;
@@ -1774,7 +1789,6 @@
                     results.AddRange(batch);
                 }
                 
-                // Dispose all prepared commands
                 foreach (var preparedCommand in preparedCommands.Values)
                 {
                     preparedCommand?.Dispose();
@@ -1807,14 +1821,12 @@
                     
                     if (EnablePreparedStatementReuse && preparedCommands.TryGetValue(batchSize, out var preparedCommand))
                     {
-                        // Reuse prepared statement for this batch size
                         preparedCommand.Parameters.Clear();
                         AddParametersForBatch(preparedCommand, batch);
                         await ExecuteBatchInsertAsync(preparedCommand, batch, token);
                     }
                     else
                     {
-                        // Create new command for this batch
                         using var command = new SqliteCommand();
                         command.Connection = connection;
                         if (transaction != null)
@@ -1825,7 +1837,6 @@
                         
                         if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
                         {
-                            // Keep command as prepared statement template for this batch size
                             var newPreparedCommand = new SqliteCommand(command.CommandText, connection);
                             if (transaction != null)
                                 newPreparedCommand.Transaction = (SqliteTransaction)transaction.Transaction;
@@ -1836,7 +1847,6 @@
                     results.AddRange(batch);
                 }
                 
-                // Dispose all prepared commands
                 foreach (var preparedCommand in preparedCommands.Values)
                 {
                     if (preparedCommand != null)
@@ -1886,7 +1896,6 @@
                 var property = kvp.Value;
                 var columnAttr = property.GetCustomAttribute<PropertyAttribute>();
 
-                // Skip auto-increment primary keys
                 if (columnAttr != null &&
                     (columnAttr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey &&
                     (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
@@ -1938,18 +1947,14 @@
         {
             var rowsAffected = command.ExecuteNonQuery();
             
-            // For auto-increment primary keys, we need to get the inserted IDs
             if (_PrimaryKeyProperty != null)
             {
                 var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
-                    // SQLite's last_insert_rowid() gives us the last inserted ID
-                    // For batch inserts, we need to calculate the range
                     using var idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
                     var lastId = Convert.ToInt64(idCommand.ExecuteScalar());
                     
-                    // Assign IDs to entities (assuming they were inserted in order)
                     for (int i = entities.Count - 1; i >= 0; i--)
                     {
                         var id = lastId - (entities.Count - 1 - i);
@@ -1963,18 +1968,14 @@
         {
             var rowsAffected = await command.ExecuteNonQueryAsync(token);
             
-            // For auto-increment primary keys, we need to get the inserted IDs
             if (_PrimaryKeyProperty != null)
             {
                 var columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
-                    // SQLite's last_insert_rowid() gives us the last inserted ID
-                    // For batch inserts, we need to calculate the range
                     using var idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
                     var lastId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(token));
                     
-                    // Assign IDs to entities (assuming they were inserted in order)
                     for (int i = entities.Count - 1; i >= 0; i--)
                     {
                         var id = lastId - (entities.Count - 1 - i);
@@ -1984,9 +1985,6 @@
             }
         }
 
-        public void Dispose()
-        {
-            _ConnectionFactory?.Dispose();
-        }
+        #endregion
     }
 }

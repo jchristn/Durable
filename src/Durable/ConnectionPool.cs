@@ -10,6 +10,12 @@ namespace Durable
 
     public class ConnectionPool : IDisposable
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly Func<DbConnection> _ConnectionFactory;
         private readonly ConnectionPoolOptions _Options;
         private readonly ConcurrentQueue<PooledConnection> _AvailableConnections;
@@ -18,6 +24,10 @@ namespace Durable
         private readonly System.Timers.Timer _CleanupTimer;
         private volatile bool _Disposed;
         private int _ConnectionCount;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public ConnectionPool(Func<DbConnection> connectionFactory, ConnectionPoolOptions? options = null)
         {
@@ -33,6 +43,10 @@ namespace Durable
             _CleanupTimer.Elapsed += CleanupIdleConnections;
             _CleanupTimer.Start();
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
@@ -151,6 +165,32 @@ namespace Durable
 
             _Semaphore.Release();
         }
+
+        public void Dispose()
+        {
+            if (_Disposed)
+                return;
+
+            _Disposed = true;
+            _CleanupTimer?.Stop();
+            _CleanupTimer?.Dispose();
+
+            // Dispose all connections
+            foreach (var pooledConnection in _AllConnections)
+            {
+                try
+                {
+                    pooledConnection.Connection.Dispose();
+                }
+                catch { }
+            }
+
+            _Semaphore?.Dispose();
+        }
+
+        #endregion
+
+        #region Private-Methods
 
         private void InitializeMinConnections()
         {
@@ -286,27 +326,7 @@ namespace Durable
                 throw new ObjectDisposedException(nameof(ConnectionPool));
         }
 
-        public void Dispose()
-        {
-            if (_Disposed)
-                return;
-
-            _Disposed = true;
-            _CleanupTimer?.Stop();
-            _CleanupTimer?.Dispose();
-
-            // Dispose all connections
-            foreach (var pooledConnection in _AllConnections)
-            {
-                try
-                {
-                    pooledConnection.Connection.Dispose();
-                }
-                catch { }
-            }
-
-            _Semaphore?.Dispose();
-        }
+        #endregion
 
         private class PooledConnection
         {

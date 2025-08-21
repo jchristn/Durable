@@ -5,6 +5,8 @@ namespace Durable
     /// </summary>
     public class BatchInsertConfiguration : IBatchInsertConfiguration
     {
+        #region Public-Members
+
         /// <summary>
         /// Gets or sets the maximum number of rows to include in a single multi-row INSERT statement.
         /// Default is 500 rows per batch, which provides good performance without hitting parameter limits.
@@ -66,5 +68,23 @@ namespace Durable
             EnablePreparedStatementReuse = false,
             EnableMultiRowInsert = false
         };
+
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 }
