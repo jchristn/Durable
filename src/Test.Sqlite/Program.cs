@@ -18,6 +18,8 @@
     // Demo program
     class Program
     {
+        private static readonly List<TestResult> _testResults = new List<TestResult>();
+
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== SQLite Repository Pattern Demo - Sync & Async ===\n");
@@ -36,41 +38,50 @@
             var repository = new SqliteRepository<Person>(connectionString);
 
             // Run synchronous tests
-            Console.WriteLine("\n========== SYNCHRONOUS API TESTS ==========\n");
-            TestSyncApi(repository);
+            Console.WriteLine("========== SYNCHRONOUS API TESTS ==========");
+            await RunTest("Synchronous API", () => TestSyncApi(repository));
 
             // Clear data before async tests
             repository.DeleteAll();
 
             // Run asynchronous tests
-            Console.WriteLine("\n========== ASYNCHRONOUS API TESTS ==========\n");
-            await TestAsyncApi(repository);
+            Console.WriteLine("\n========== ASYNCHRONOUS API TESTS ==========");
+            await RunTestAsync("Asynchronous API", () => TestAsyncApi(repository));
 
-            // Run performance comparison
-            Console.WriteLine("\n========== PERFORMANCE COMPARISON ==========\n");
-            await TestPerformanceComparison(repository);
 
             // Test batch insert optimizations
-            await BatchInsertTest.RunBatchInsertTests();
+            Console.WriteLine("\n========== BATCH INSERT TESTS ==========");
+            await RunTestAsync("Batch Insert", () => BatchInsertTest.RunBatchInsertTests());
 
             // Run cancellation tests
-            Console.WriteLine("\n========== CANCELLATION TOKEN TESTS ==========\n");
-            await TestCancellation(repository);
+            Console.WriteLine("\n========== CANCELLATION TOKEN TESTS ==========");
+            await RunTestAsync("Cancellation Token", () => TestCancellation(repository));
 
             // Run enhanced transaction tests
-            Console.WriteLine("\n========== ENHANCED TRANSACTION TESTS ==========\n");
-            await TestTransactionsProperlyAsync(repository);
+            Console.WriteLine("\n========== ENHANCED TRANSACTION TESTS ==========");
+            await RunTestAsync("Enhanced Transaction", () => TestTransactionsProperlyAsync(repository));
 
             // Run connection pooling demonstrations
-            Console.WriteLine("\n========== CONNECTION POOLING TESTS ==========\n");
-            PoolingExample.DemonstrateConnectionPooling();
-            
-            Console.WriteLine("\n");
-            PoolingExample.ComparePerformance();
+            Console.WriteLine("\n========== CONNECTION POOLING TESTS ==========");
+            await RunTest("Connection Pooling", () => 
+            {
+                PoolingExample.DemonstrateConnectionPooling();
+            });
 
             // Run query exposure tests
-            Console.WriteLine("\n========== QUERY EXPOSURE TESTS ==========\n");
-            await QueryExposureTest.RunQueryExposureTest();
+            Console.WriteLine("\n========== QUERY EXPOSURE TESTS ==========");
+            await RunTestAsync("Query Exposure", () => QueryExposureTest.RunQueryExposureTest());
+
+            // Run complex expression tests
+            Console.WriteLine("\n========== COMPLEX EXPRESSION TESTS ==========");
+            await RunTest("Complex Expression Parsing", () => 
+            {
+                var complexTest = new ComplexExpressionTest();
+                complexTest.RunAllTests();
+            });
+
+            // Display summary
+            DisplayTestSummary();
 
             Console.WriteLine("\nPress any key to exit...");
             Console.ReadKey();
@@ -93,10 +104,8 @@
             Console.WriteLine($"Created: {john}");
 
             var people = GeneratePeople(10);
-            var sw = Stopwatch.StartNew();
             var createdPeople = repository.CreateMany(people).ToList();
-            sw.Stop();
-            Console.WriteLine($"Created {createdPeople.Count} people in {sw.ElapsedMilliseconds}ms");
+            Console.WriteLine($"Created {createdPeople.Count} people");
 
             // READ operations
             Console.WriteLine("\n--- SYNC READ OPERATIONS ---");
@@ -185,6 +194,26 @@
             {
                 Console.WriteLine($"  {p}");
             }
+
+            // RAW QUERY EXPOSURE operations
+            Console.WriteLine("\n--- SYNC RAW QUERY EXPOSURE ---");
+            
+            // Test ExecuteWithQuery - returns both query and results
+            var queryWithResults = repository.Query()
+                .Where(p => p.Department == "IT")
+                .Where(p => p.Salary > 60000)
+                .ExecuteWithQuery();
+            Console.WriteLine($"ExecuteWithQuery SQL: {queryWithResults.Query}");
+            Console.WriteLine($"ExecuteWithQuery results: {queryWithResults.Result.Count()} records");
+            
+            // Test SelectWithQuery extension method
+            var extensionResult = repository.SelectWithQuery(p => p.Age > 25 && p.Salary < 100000);
+            Console.WriteLine($"SelectWithQuery SQL: {extensionResult.Query}");
+            Console.WriteLine($"SelectWithQuery results: {extensionResult.Result.Count()} records");
+            
+            // Test GetSelectQuery - returns only the SQL query
+            var sqlOnly = repository.GetSelectQuery(p => p.FirstName.Contains("o") || p.LastName.StartsWith("D"));
+            Console.WriteLine($"GetSelectQuery SQL only: {sqlOnly}");
 
             var query1 = repository.Query()
                 .Where(p => p.Department == "IT")
@@ -375,10 +404,8 @@
             Console.WriteLine($"Created async: {john}");
 
             var people = GeneratePeople(20);
-            var sw = Stopwatch.StartNew();
             var createdPeople = await repository.CreateManyAsync(people);
-            sw.Stop();
-            Console.WriteLine($"Created {createdPeople.Count()} people async in {sw.ElapsedMilliseconds}ms");
+            Console.WriteLine($"Created {createdPeople.Count()} people async");
 
             // READ operations
             Console.WriteLine("\n--- ASYNC READ OPERATIONS ---");
@@ -603,60 +630,39 @@
                 }
             }
             Console.WriteLine($"  Total streamed: {streamCount}");
-        }
 
-        static async Task TestPerformanceComparison(SqliteRepository<Person> repository)
-        {
-            // Clear all data
-            await repository.DeleteAllAsync();
-
-            const int recordCount = 1000;
-            var testData = GeneratePeople(recordCount);
-
-            // Test sync performance
-            var syncStopwatch = Stopwatch.StartNew();
-            var syncCreated = repository.CreateMany(testData).ToList();
-            syncStopwatch.Stop();
-            Console.WriteLine($"Sync CreateMany {recordCount} records: {syncStopwatch.ElapsedMilliseconds}ms");
-
-            // Clear for async test
-            repository.DeleteAll();
-
-            // Test async performance
-            var asyncStopwatch = Stopwatch.StartNew();
-            var asyncCreated = await repository.CreateManyAsync(testData);
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async CreateManyAsync {recordCount} records: {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Read performance comparison
-            syncStopwatch.Restart();
-            var syncReadCount = repository.ReadMany(p => p.Salary > 50000).Count();
-            syncStopwatch.Stop();
-            Console.WriteLine($"\nSync ReadMany count: {syncReadCount} in {syncStopwatch.ElapsedMilliseconds}ms");
-
-            asyncStopwatch.Restart();
-            var asyncReadCount = 0;
-            await foreach (var person in repository.ReadManyAsync(p => p.Salary > 50000))
+            // RAW QUERY EXPOSURE operations (Async)
+            Console.WriteLine("\n--- ASYNC RAW QUERY EXPOSURE ---");
+            
+            // Test ExecuteWithQueryAsync - returns both query and results
+            var asyncQueryWithResults = await repository.Query()
+                .Where(p => p.Department == "IT")
+                .Where(p => p.Age > 25)
+                .ExecuteWithQueryAsync();
+            Console.WriteLine($"ExecuteWithQueryAsync SQL: {asyncQueryWithResults.Query}");
+            Console.WriteLine($"ExecuteWithQueryAsync results: {asyncQueryWithResults.Result.Count()} records");
+            
+            // Test SelectWithQueryAsync extension method
+            var asyncExtensionResult = await repository.SelectWithQueryAsync(p => p.Salary > 70000 && p.Department != "Sales");
+            Console.WriteLine($"SelectWithQueryAsync SQL: {asyncExtensionResult.Query}");
+            Console.WriteLine($"SelectWithQueryAsync results: {asyncExtensionResult.Result.Count()} records");
+            
+            // Test SelectAsyncWithQuery - streaming with query
+            Console.WriteLine("\nTesting SelectAsyncWithQuery (streaming):");
+            var streamingWithQuery = repository.SelectAsyncWithQuery(p => p.Age < 35);
+            Console.WriteLine($"SelectAsyncWithQuery SQL: {streamingWithQuery.Query}");
+            var streamingCount = 0;
+            await foreach (var person in streamingWithQuery.Result)
             {
-                asyncReadCount++;
+                streamingCount++;
+                if (streamingCount <= 2)
+                {
+                    Console.WriteLine($"  Streaming result: {person.FirstName} {person.LastName}");
+                }
             }
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async ReadManyAsync count: {asyncReadCount} in {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Update performance comparison
-            syncStopwatch.Restart();
-            var syncUpdated = repository.UpdateField(p => p.Department == "IT", p => p.Salary, 100000m);
-            syncStopwatch.Stop();
-            Console.WriteLine($"\nSync UpdateField: {syncUpdated} records in {syncStopwatch.ElapsedMilliseconds}ms");
-
-            asyncStopwatch.Restart();
-            var asyncUpdated = await repository.UpdateFieldAsync(p => p.Department == "Finance", p => p.Salary, 100000m);
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async UpdateFieldAsync: {asyncUpdated} records in {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Cleanup
-            await repository.DeleteAllAsync();
+            Console.WriteLine($"  Total streaming results: {streamingCount}");
         }
+
 
         static async Task TestCancellation(SqliteRepository<Person> repository)
         {
@@ -941,5 +947,77 @@
 
             Console.WriteLine("\nTransaction tests completed");
         }
+
+        static Task RunTest(string testName, Action testAction)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                testAction();
+                stopwatch.Stop();
+                _testResults.Add(new TestResult(testName, true, stopwatch.ElapsedMilliseconds, null));
+                Console.WriteLine($"✅ {testName} completed in {stopwatch.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                _testResults.Add(new TestResult(testName, false, stopwatch.ElapsedMilliseconds, ex.Message));
+                Console.WriteLine($"❌ {testName} failed in {stopwatch.ElapsedMilliseconds}ms: {ex.Message}");
+            }
+            return Task.CompletedTask;
+        }
+
+        static async Task RunTestAsync(string testName, Func<Task> testAction)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                await testAction();
+                stopwatch.Stop();
+                _testResults.Add(new TestResult(testName, true, stopwatch.ElapsedMilliseconds, null));
+                Console.WriteLine($"✅ {testName} completed in {stopwatch.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                _testResults.Add(new TestResult(testName, false, stopwatch.ElapsedMilliseconds, ex.Message));
+                Console.WriteLine($"❌ {testName} failed in {stopwatch.ElapsedMilliseconds}ms: {ex.Message}");
+            }
+        }
+
+        static void DisplayTestSummary()
+        {
+            Console.WriteLine("\n" + new string('=', 60));
+            Console.WriteLine("TEST RESULTS SUMMARY");
+            Console.WriteLine(new string('=', 60));
+
+            var passedTests = _testResults.Where(r => r.Success).ToList();
+            var failedTests = _testResults.Where(r => !r.Success).ToList();
+            var totalTime = _testResults.Sum(r => r.ElapsedMs);
+
+            Console.WriteLine($"Total Tests: {_testResults.Count}");
+            Console.WriteLine($"Passed: {passedTests.Count} ✅");
+            Console.WriteLine($"Failed: {failedTests.Count} ❌");
+            Console.WriteLine($"Total Execution Time: {totalTime}ms");
+            Console.WriteLine($"Success Rate: {(double)passedTests.Count / _testResults.Count * 100:F1}%");
+
+            if (failedTests.Any())
+            {
+                Console.WriteLine("\nFailed Tests:");
+                foreach (var test in failedTests)
+                {
+                    Console.WriteLine($"  ❌ {test.Name}: {test.ErrorMessage}");
+                }
+            }
+
+            Console.WriteLine("\nAll Tests:");
+            foreach (var test in _testResults)
+            {
+                var status = test.Success ? "✅" : "❌";
+                Console.WriteLine($"  {status} {test.Name} ({test.ElapsedMs}ms)");
+            }
+        }
     }
+
+    public record TestResult(string Name, bool Success, long ElapsedMs, string ErrorMessage);
 }
