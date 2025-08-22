@@ -138,14 +138,32 @@
 
         private string VisitMember(MemberExpression member)
         {
-            if (member.Member is PropertyInfo propInfo)
+            // Check if this is a property access on the entity parameter (e.g., p.FirstName)
+            if (member.Expression is ParameterExpression && member.Member is PropertyInfo propInfo)
             {
                 var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                 if (mapping.Key != null)
                     return mapping.Key;
             }
 
-            // Handle constant member access
+            // Special handling for Length property access on method call results (e.g., p.FirstName.Trim().Length)
+            if (member.Member.Name == "Length" && member.Expression is MethodCallExpression methodCall && 
+                member.Member.DeclaringType == typeof(string))
+            {
+                // Handle as LENGTH(method_result)
+                var methodResult = Visit(methodCall);
+                return $"LENGTH({methodResult})";
+            }
+
+            // Check if this member expression ultimately references the entity parameter through method calls
+            if (ContainsParameterReference(member))
+            {
+                // This is likely a property access result that should be treated as SQL expression
+                // For other cases not handled above, we might need to extend this logic
+                throw new NotSupportedException($"Complex member access '{member}' is not supported yet. Please handle this pattern in the method call processing.");
+            }
+
+            // Handle constant member access or property chains
             var value = GetMemberValue(member);
             return FormatValue(value);
         }
@@ -529,7 +547,7 @@
                     "ToUpper" => $"UPPER({stringColumn})",
                     "ToLower" => $"LOWER({stringColumn})",
                     "Trim" => $"TRIM({stringColumn})",
-                    "Length" => $"LENGTH({stringColumn})",
+                    "Length" when methodCall.Method.DeclaringType == typeof(string) => $"LENGTH({stringColumn})",
                     _ => throw new NotSupportedException($"String method {methodCall.Method.Name} is not supported")
                 };
             }
@@ -671,6 +689,27 @@
             }
             
             throw new NotSupportedException("IsNotNullOrWhiteSpace method requires exactly 1 argument");
+        }
+
+        private bool ContainsParameterReference(Expression expression)
+        {
+            switch (expression)
+            {
+                case ParameterExpression:
+                    return true;
+                case MemberExpression member:
+                    return ContainsParameterReference(member.Expression);
+                case MethodCallExpression methodCall:
+                    if (methodCall.Object != null && ContainsParameterReference(methodCall.Object))
+                        return true;
+                    return methodCall.Arguments.Any(ContainsParameterReference);
+                case UnaryExpression unary:
+                    return ContainsParameterReference(unary.Operand);
+                case BinaryExpression binary:
+                    return ContainsParameterReference(binary.Left) || ContainsParameterReference(binary.Right);
+                default:
+                    return false;
+            }
         }
     }
 }

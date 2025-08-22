@@ -44,7 +44,7 @@ namespace Test.Sqlite
 
         private void TestInOperator()
         {
-            Console.WriteLine("Testing IN operator...");
+            Console.WriteLine("✓ Testing IN operator");
             
             // Test with array
             var departments = new[] { "IT", "HR", "Finance" };
@@ -52,45 +52,43 @@ namespace Test.Sqlite
                 .Where(p => departments.Contains(p.Department))
                 .BuildSql();
             
-            Console.WriteLine($"IN with array: {query1}");
-            
             // Test with list
             var ageList = new List<int> { 25, 30, 35 };
             var query2 = _Repository.Query()
                 .Where(p => ageList.Contains(p.Age))
                 .BuildSql();
             
-            Console.WriteLine($"IN with list: {query2}");
-            
             // Test extension method (if supported)
             var query3 = _Repository.Query()
                 .Where(p => p.Age.In(25, 30, 35))
                 .BuildSql();
             
-            Console.WriteLine($"IN extension method: {query3}");
+            // Validate queries contain expected SQL
+            if (!query1.Contains("IN (") || !query2.Contains("IN (") || !query3.Contains("IN ("))
+                throw new Exception("IN operator tests failed - generated SQL missing IN clause");
         }
 
         private void TestBetweenOperator()
         {
-            Console.WriteLine("Testing BETWEEN operator...");
+            Console.WriteLine("✓ Testing BETWEEN operator");
             
             // Test Between extension method
             var query1 = _Repository.Query()
                 .Where(p => p.Age.Between(25, 65))
                 .BuildSql();
             
-            Console.WriteLine($"BETWEEN ages: {query1}");
-            
             var query2 = _Repository.Query()
                 .Where(p => p.Salary.Between(50000m, 100000m))
                 .BuildSql();
             
-            Console.WriteLine($"BETWEEN salaries: {query2}");
+            // Validate queries contain expected SQL
+            if (!query1.Contains("BETWEEN") || !query2.Contains("BETWEEN"))
+                throw new Exception("BETWEEN operator tests failed - generated SQL missing BETWEEN clause");
         }
 
         private void TestComplexBooleanLogic()
         {
-            Console.WriteLine("Testing complex boolean logic...");
+            Console.WriteLine("✓ Testing complex boolean logic");
             
             // Complex nested AND/OR
             var query1 = _Repository.Query()
@@ -98,19 +96,19 @@ namespace Test.Sqlite
                            (p.Age < 25 && p.Salary > 70000))
                 .BuildSql();
             
-            Console.WriteLine($"Complex AND/OR: {query1}");
-            
             // NOT operator
             var query2 = _Repository.Query()
                 .Where(p => !(p.Age < 18 || p.Age > 65))
                 .BuildSql();
             
-            Console.WriteLine($"NOT operator: {query2}");
+            // Validate queries contain expected SQL
+            if (!query1.Contains("AND") || !query1.Contains("OR") || !query2.Contains("NOT"))
+                throw new Exception("Boolean logic tests failed - generated SQL missing expected operators");
         }
 
         private void TestDateTimeOperations()
         {
-            Console.WriteLine("Testing DateTime operations...");
+            Console.WriteLine("✓ DateTime operations (skipped - requires DateTime fields)");
             
             // Note: Person doesn't have DateTime fields, so we'll test with expressions
             // These would work if Person had a CreatedDate field
@@ -120,101 +118,91 @@ namespace Test.Sqlite
                 .Where(p => p.CreatedDate.Year == 2024)
                 .BuildSql();
             
-            Console.WriteLine($"DateTime Year: {query1}");
-            
             var query2 = _Repository.Query()
                 .Where(p => p.CreatedDate.AddDays(30) > DateTime.Now)
                 .BuildSql();
-            
-            Console.WriteLine($"DateTime AddDays: {query2}");
             */
-            
-            Console.WriteLine("DateTime operations require DateTime fields in the model");
         }
 
         private void TestMathOperations()
         {
-            Console.WriteLine("Testing Math operations...");
+            Console.WriteLine("✓ Testing Math operations");
             
             // Math operations in WHERE clause
             var query1 = _Repository.Query()
                 .Where(p => p.Salary * 0.1m > 5000)
                 .BuildSql();
             
-            Console.WriteLine($"Math multiplication: {query1}");
-            
             var query2 = _Repository.Query()
                 .Where(p => p.Age + 5 > 30)
                 .BuildSql();
-            
-            Console.WriteLine($"Math addition: {query2}");
             
             var query3 = _Repository.Query()
                 .Where(p => p.Salary / 12 > 5000)
                 .BuildSql();
             
-            Console.WriteLine($"Math division: {query3}");
+            // Validate queries contain expected SQL operators
+            if (!query1.Contains("*") || !query2.Contains("+") || !query3.Contains("/"))
+                throw new Exception("Math operations tests failed - generated SQL missing math operators");
         }
 
         private void TestCaseWhenExpressions()
         {
-            Console.WriteLine("Testing CASE WHEN expressions...");
+            Console.WriteLine("✓ Testing CASE WHEN expressions");
             
             // Conditional expressions (ternary operator)
             var query1 = _Repository.Query()
                 .Where(p => (p.Age > 65 ? "Senior" : "Regular") == "Senior")
                 .BuildSql();
             
-            Console.WriteLine($"CASE WHEN (ternary): {query1}");
+            // Validate query contains expected SQL
+            if (!query1.Contains("CASE WHEN"))
+                throw new Exception("CASE WHEN tests failed - generated SQL missing CASE WHEN clause");
         }
 
         private void TestStringOperations()
         {
-            Console.WriteLine("Testing String operations...");
+            Console.WriteLine("✓ Testing String operations");
             
             // String methods
             var query1 = _Repository.Query()
                 .Where(p => p.FirstName.ToUpper().Contains("JOHN"))
                 .BuildSql();
             
-            Console.WriteLine($"String ToUpper + Contains: {query1}");
-            
             var query2 = _Repository.Query()
                 .Where(p => p.Email.ToLower().EndsWith("@company.com"))
                 .BuildSql();
-            
-            Console.WriteLine($"String ToLower + EndsWith: {query2}");
             
             var query3 = _Repository.Query()
                 .Where(p => p.FirstName.Trim().Length > 3)
                 .BuildSql();
             
-            Console.WriteLine($"String Trim + Length: {query3}");
+            // Validate queries contain expected SQL functions
+            if (!query1.Contains("UPPER") || !query2.Contains("LOWER") || !query3.Contains("TRIM") || !query3.Contains("LENGTH"))
+                throw new Exception("String operations tests failed - generated SQL missing expected functions");
         }
 
         private void TestNullChecks()
         {
-            Console.WriteLine("Testing NULL checks...");
+            Console.WriteLine("✓ Testing NULL checks");
             
             // Standard null comparison
             var query1 = _Repository.Query()
                 .Where(p => p.Email != null)
                 .BuildSql();
             
-            Console.WriteLine($"Standard not null: {query1}");
-            
             // Extension method null checks (if supported)
             var query2 = _Repository.Query()
                 .Where(p => p.Email.IsNotNullOrEmpty())
                 .BuildSql();
             
-            Console.WriteLine($"IsNotNullOrEmpty: {query2}");
-            
             var query3 = _Repository.Query()
                 .Where(p => p.FirstName.IsNotNullOrWhiteSpace())
                 .BuildSql();
             
-            Console.WriteLine($"IsNotNullOrWhiteSpace: {query3}");
+            // Validate queries contain expected SQL
+            if (!query1.Contains("IS NOT NULL") || !query2.Contains("IS NOT NULL") || !query3.Contains("IS NOT NULL"))
+                throw new Exception("NULL checks tests failed - generated SQL missing NULL check clauses");
         }
     }
 }
