@@ -48,9 +48,6 @@
             Console.WriteLine("\n========== ASYNCHRONOUS API TESTS ==========");
             await RunTestAsync("Asynchronous API", () => TestAsyncApi(repository));
 
-            // Run performance comparison
-            Console.WriteLine("\n========== PERFORMANCE COMPARISON ==========");
-            await RunTestAsync("Performance Comparison", () => TestPerformanceComparison(repository));
 
             // Test batch insert optimizations
             Console.WriteLine("\n========== BATCH INSERT TESTS ==========");
@@ -69,8 +66,6 @@
             await RunTest("Connection Pooling", () => 
             {
                 PoolingExample.DemonstrateConnectionPooling();
-                Console.WriteLine();
-                PoolingExample.ComparePerformance();
             });
 
             // Run query exposure tests
@@ -109,10 +104,8 @@
             Console.WriteLine($"Created: {john}");
 
             var people = GeneratePeople(10);
-            var sw = Stopwatch.StartNew();
             var createdPeople = repository.CreateMany(people).ToList();
-            sw.Stop();
-            Console.WriteLine($"Created {createdPeople.Count} people in {sw.ElapsedMilliseconds}ms");
+            Console.WriteLine($"Created {createdPeople.Count} people");
 
             // READ operations
             Console.WriteLine("\n--- SYNC READ OPERATIONS ---");
@@ -411,10 +404,8 @@
             Console.WriteLine($"Created async: {john}");
 
             var people = GeneratePeople(20);
-            var sw = Stopwatch.StartNew();
             var createdPeople = await repository.CreateManyAsync(people);
-            sw.Stop();
-            Console.WriteLine($"Created {createdPeople.Count()} people async in {sw.ElapsedMilliseconds}ms");
+            Console.WriteLine($"Created {createdPeople.Count()} people async");
 
             // READ operations
             Console.WriteLine("\n--- ASYNC READ OPERATIONS ---");
@@ -672,58 +663,6 @@
             Console.WriteLine($"  Total streaming results: {streamingCount}");
         }
 
-        static async Task TestPerformanceComparison(SqliteRepository<Person> repository)
-        {
-            // Clear all data
-            await repository.DeleteAllAsync();
-
-            const int recordCount = 1000;
-            var testData = GeneratePeople(recordCount);
-
-            // Test sync performance
-            var syncStopwatch = Stopwatch.StartNew();
-            var syncCreated = repository.CreateMany(testData).ToList();
-            syncStopwatch.Stop();
-            Console.WriteLine($"Sync CreateMany {recordCount} records: {syncStopwatch.ElapsedMilliseconds}ms");
-
-            // Clear for async test
-            repository.DeleteAll();
-
-            // Test async performance
-            var asyncStopwatch = Stopwatch.StartNew();
-            var asyncCreated = await repository.CreateManyAsync(testData);
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async CreateManyAsync {recordCount} records: {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Read performance comparison
-            syncStopwatch.Restart();
-            var syncReadCount = repository.ReadMany(p => p.Salary > 50000).Count();
-            syncStopwatch.Stop();
-            Console.WriteLine($"\nSync ReadMany count: {syncReadCount} in {syncStopwatch.ElapsedMilliseconds}ms");
-
-            asyncStopwatch.Restart();
-            var asyncReadCount = 0;
-            await foreach (var person in repository.ReadManyAsync(p => p.Salary > 50000))
-            {
-                asyncReadCount++;
-            }
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async ReadManyAsync count: {asyncReadCount} in {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Update performance comparison
-            syncStopwatch.Restart();
-            var syncUpdated = repository.UpdateField(p => p.Department == "IT", p => p.Salary, 100000m);
-            syncStopwatch.Stop();
-            Console.WriteLine($"\nSync UpdateField: {syncUpdated} records in {syncStopwatch.ElapsedMilliseconds}ms");
-
-            asyncStopwatch.Restart();
-            var asyncUpdated = await repository.UpdateFieldAsync(p => p.Department == "Finance", p => p.Salary, 100000m);
-            asyncStopwatch.Stop();
-            Console.WriteLine($"Async UpdateFieldAsync: {asyncUpdated} records in {asyncStopwatch.ElapsedMilliseconds}ms");
-
-            // Cleanup
-            await repository.DeleteAllAsync();
-        }
 
         static async Task TestCancellation(SqliteRepository<Person> repository)
         {
