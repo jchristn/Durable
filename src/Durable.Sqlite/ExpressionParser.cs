@@ -10,10 +10,12 @@
     public class ExpressionParser<T> where T : class
     {
         private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
+        private readonly ISanitizer _Sanitizer;
 
-        public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings)
+        public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings, ISanitizer sanitizer = null)
         {
             _ColumnMappings = columnMappings;
+            _Sanitizer = sanitizer ?? new SqliteSanitizer();
         }
 
         public string ParseExpression(Expression expression)
@@ -205,7 +207,10 @@
                     {
                         var column = Visit(methodCall.Object);
                         var value = GetConstantValue(methodCall.Arguments[0]);
-                        return $"{column} LIKE '{value}%'";
+                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        // Remove quotes and add % at the end
+                        var innerValue = sanitizedValue.Trim('\'');
+                        return $"{column} LIKE '{innerValue}%'";
                     }
                     break;
 
@@ -214,7 +219,10 @@
                     {
                         var column = Visit(methodCall.Object);
                         var value = GetConstantValue(methodCall.Arguments[0]);
-                        return $"{column} LIKE '%{value}'";
+                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        // Remove quotes and add % at the beginning
+                        var innerValue = sanitizedValue.Trim('\'');
+                        return $"{column} LIKE '%{innerValue}'";
                     }
                     break;
 
@@ -325,16 +333,7 @@
 
         private string FormatValue(object value)
         {
-            return value switch
-            {
-                null => "NULL",
-                string s => $"'{s.Replace("'", "''")}'",
-                bool b => b ? "1" : "0",
-                DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
-                DateTimeOffset dto => $"'{dto:yyyy-MM-dd HH:mm:ss}'",
-                TimeSpan ts => $"'{ts}'",
-                _ => value.ToString()
-            };
+            return _Sanitizer.FormatValue(value);
         }
 
         private string VisitUnary(UnaryExpression unary)
@@ -404,7 +403,10 @@
                     // String.Contains - LIKE operation
                     var column = Visit(methodCall.Object);
                     var value = GetConstantValue(methodCall.Arguments[0]);
-                    return $"{column} LIKE '%{value}%'";
+                    var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                    // Remove quotes and add % around the value
+                    var innerValue = sanitizedValue.Trim('\'');
+                    return $"{column} LIKE '%{innerValue}%'";
                 }
             }
             else if (methodCall.Arguments.Count == 2)

@@ -283,7 +283,7 @@
                 sql.Append("*");
             }
 
-            sql.Append($" FROM {_Repository._TableName}");
+            sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)}");
 
             // Add JOINs for includes
             foreach (var include in _Includes)
