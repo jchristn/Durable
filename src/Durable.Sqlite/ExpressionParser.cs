@@ -9,13 +9,29 @@
     using System.Threading.Tasks;
     public class ExpressionParser<T> where T : class
     {
-        private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
+        #region Public-Members
+        
+        #endregion
 
-        public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings)
+        #region Private-Members
+        
+        private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
+        private readonly ISanitizer _Sanitizer;
+        
+        #endregion
+
+        #region Constructors-and-Factories
+        
+        public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings, ISanitizer sanitizer = null)
         {
             _ColumnMappings = columnMappings;
+            _Sanitizer = sanitizer ?? new SqliteSanitizer();
         }
+        
+        #endregion
 
+        #region Public-Methods
+        
         public string ParseExpression(Expression expression)
         {
             return Visit(expression);
@@ -58,7 +74,11 @@
             }
             throw new ArgumentException("Update expression must be a member initialization expression");
         }
+        
+        #endregion
 
+        #region Private-Methods
+        
         private string Visit(Expression expression)
         {
             switch (expression)
@@ -205,7 +225,10 @@
                     {
                         var column = Visit(methodCall.Object);
                         var value = GetConstantValue(methodCall.Arguments[0]);
-                        return $"{column} LIKE '{value}%'";
+                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        // Remove quotes and add % at the end
+                        var innerValue = sanitizedValue.Trim('\'');
+                        return $"{column} LIKE '{innerValue}%'";
                     }
                     break;
 
@@ -214,7 +237,10 @@
                     {
                         var column = Visit(methodCall.Object);
                         var value = GetConstantValue(methodCall.Arguments[0]);
-                        return $"{column} LIKE '%{value}'";
+                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        // Remove quotes and add % at the beginning
+                        var innerValue = sanitizedValue.Trim('\'');
+                        return $"{column} LIKE '%{innerValue}'";
                     }
                     break;
 
@@ -325,16 +351,7 @@
 
         private string FormatValue(object value)
         {
-            return value switch
-            {
-                null => "NULL",
-                string s => $"'{s.Replace("'", "''")}'",
-                bool b => b ? "1" : "0",
-                DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
-                DateTimeOffset dto => $"'{dto:yyyy-MM-dd HH:mm:ss}'",
-                TimeSpan ts => $"'{ts}'",
-                _ => value.ToString()
-            };
+            return _Sanitizer.FormatValue(value);
         }
 
         private string VisitUnary(UnaryExpression unary)
@@ -404,7 +421,10 @@
                     // String.Contains - LIKE operation
                     var column = Visit(methodCall.Object);
                     var value = GetConstantValue(methodCall.Arguments[0]);
-                    return $"{column} LIKE '%{value}%'";
+                    var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                    // Remove quotes and add % around the value
+                    var innerValue = sanitizedValue.Trim('\'');
+                    return $"{column} LIKE '%{innerValue}%'";
                 }
             }
             else if (methodCall.Arguments.Count == 2)
@@ -711,5 +731,7 @@
                     return false;
             }
         }
+        
+        #endregion
     }
 }

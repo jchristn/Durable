@@ -30,6 +30,7 @@
         internal readonly Dictionary<PropertyInfo, ForeignKeyAttribute> _ForeignKeys;
         internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _NavigationProperties;
         internal readonly IBatchInsertConfiguration _BatchConfig;
+        internal readonly ISanitizer _Sanitizer;
 
         #endregion
 
@@ -38,6 +39,7 @@
         public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null)
         {
             _ConnectionFactory = new SqliteConnectionFactory(connectionString);
+            _Sanitizer = new SqliteSanitizer();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -49,6 +51,7 @@
         public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _Sanitizer = new SqliteSanitizer();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -167,7 +170,7 @@
             var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"SELECT * FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 using var reader = command.ExecuteReader();
@@ -189,7 +192,7 @@
             var (connection, command, shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"SELECT * FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 await using var reader = await command.ExecuteReaderAsync(token);
@@ -213,7 +216,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -239,7 +242,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT MAX({column}) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -269,7 +272,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -295,7 +298,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT MIN({column}) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -325,7 +328,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -351,7 +354,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT AVG(CAST({column} AS REAL)) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -381,7 +384,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -407,7 +410,7 @@
             try
             {
                 var column = GetColumnFromExpression(selector.Body);
-                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -437,11 +440,11 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                var parser = new ExpressionParser<T>(_ColumnMappings);
+                var parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
                 var whereClause = BuildWhereClause(predicate);
                 var setPairs = parser.ParseUpdateExpression(updateExpression);
 
-                command.CommandText = $"UPDATE {_TableName} SET {setPairs} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -455,11 +458,11 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                var parser = new ExpressionParser<T>(_ColumnMappings);
+                var parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
                 var whereClause = BuildWhereClause(predicate);
                 var setPairs = parser.ParseUpdateExpression(updateExpression);
 
-                command.CommandText = $"UPDATE {_TableName} SET {setPairs} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -655,7 +658,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {whereClause} LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -670,7 +673,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {whereClause} LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
                 var result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -689,7 +692,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
@@ -704,7 +707,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id LIMIT 1);";
+                command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
                 var result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
@@ -725,7 +728,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -748,7 +751,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_TableName}");
+                var sql = new StringBuilder($"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
 
                 if (predicate != null)
                 {
@@ -794,13 +797,13 @@
                         continue;
                     }
 
-                    columns.Add(columnName);
+                    columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     var value = property.GetValue(entity);
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                 }
 
-                command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
 
                 var insertedId = Convert.ToInt64(command.ExecuteScalar());
 
@@ -844,13 +847,13 @@
                         continue;
                     }
 
-                    columns.Add(columnName);
+                    columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     var value = property.GetValue(entity);
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                 }
 
-                command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
 
                 var insertedId = Convert.ToInt64(await command.ExecuteScalarAsync(token));
 
@@ -1015,13 +1018,13 @@
                     }
                     else
                     {
-                        setPairs.Add($"{columnName} = @{columnName}");
+                        setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
                         command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                     }
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_TableName} SET {string.Join(", ", setPairs)} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
 
                 var rowsAffected = command.ExecuteNonQuery();
 
@@ -1056,13 +1059,13 @@
                     }
                     else
                     {
-                        setPairs.Add($"{columnName} = @{columnName}");
+                        setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
                         command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
                     }
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_TableName} SET {string.Join(", ", setPairs)} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
 
                 var rowsAffected = await command.ExecuteNonQueryAsync(token);
 
@@ -1193,7 +1196,7 @@
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
 
-                command.CommandText = $"UPDATE {_TableName} SET {columnName} = @value WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
 
                 return command.ExecuteNonQuery();
@@ -1212,7 +1215,7 @@
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
 
-                command.CommandText = $"UPDATE {_TableName} SET {columnName} = @value WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
 
                 return await command.ExecuteNonQueryAsync(token);
@@ -1245,7 +1248,7 @@
             var (connection, command, shouldDispose) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"DELETE FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 return command.ExecuteNonQuery() > 0;
@@ -1261,7 +1264,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"DELETE FROM {_TableName} WHERE {_PrimaryKeyColumn} = @id;";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
 
                 return await command.ExecuteNonQueryAsync(token) > 0;
@@ -1282,7 +1285,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"DELETE FROM {_TableName} WHERE {whereClause};";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1297,7 +1300,7 @@
             try
             {
                 var whereClause = BuildWhereClause(predicate);
-                command.CommandText = $"DELETE FROM {_TableName} WHERE {whereClause};";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1315,7 +1318,7 @@
             var (connection, command, shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
-                command.CommandText = $"DELETE FROM {_TableName};";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1329,7 +1332,7 @@
             var (connection, command, shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
-                command.CommandText = $"DELETE FROM {_TableName};";
+                command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1358,20 +1361,20 @@
                     var property = kvp.Value;
                     var value = property.GetValue(entity);
 
-                    columns.Add(columnName);
+                    columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
 
                     if (columnName != _PrimaryKeyColumn)
                     {
-                        updatePairs.Add($"{columnName} = excluded.{columnName}");
+                        updatePairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = excluded.{_Sanitizer.SanitizeIdentifier(columnName)}");
                     }
                 }
 
                 var sql = new StringBuilder();
-                sql.Append($"INSERT INTO {_TableName} ({string.Join(", ", columns)}) ");
+                sql.Append($"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) ");
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-                sql.Append($"ON CONFLICT({_PrimaryKeyColumn}) DO UPDATE SET ");
+                sql.Append($"ON CONFLICT({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
                 sql.Append(";");
 
@@ -1401,20 +1404,20 @@
                     var property = kvp.Value;
                     var value = property.GetValue(entity);
 
-                    columns.Add(columnName);
+                    columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
 
                     if (columnName != _PrimaryKeyColumn)
                     {
-                        updatePairs.Add($"{columnName} = excluded.{columnName}");
+                        updatePairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = excluded.{_Sanitizer.SanitizeIdentifier(columnName)}");
                     }
                 }
 
                 var sql = new StringBuilder();
-                sql.Append($"INSERT INTO {_TableName} ({string.Join(", ", columns)}) ");
+                sql.Append($"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) ");
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-                sql.Append($"ON CONFLICT({_PrimaryKeyColumn}) DO UPDATE SET ");
+                sql.Append($"ON CONFLICT({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
                 sql.Append(";");
 
@@ -1697,14 +1700,15 @@
 
         internal string BuildWhereClause(Expression<Func<T, bool>> predicate)
         {
-            var parser = new ExpressionParser<T>(_ColumnMappings);
+            var parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
             return parser.ParseExpression(predicate.Body);
         }
 
         internal string GetColumnFromExpression(Expression expression)
         {
-            var parser = new ExpressionParser<T>(_ColumnMappings);
-            return parser.GetColumnFromExpression(expression);
+            var parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            var columnName = parser.GetColumnFromExpression(expression);
+            return _Sanitizer.SanitizeIdentifier(columnName);
         }
 
         internal T MapReaderToEntity(IDataReader reader)
@@ -1911,6 +1915,7 @@
         private void BuildBatchInsertCommand(SqliteCommand command, IList<T> entities)
         {
             var columns = GetNonAutoIncrementColumns();
+            var sanitizedColumns = columns.Select(c => _Sanitizer.SanitizeIdentifier(c)).ToList();
             var valuesList = new List<string>();
             
             for (int i = 0; i < entities.Count; i++)
@@ -1923,7 +1928,7 @@
                 valuesList.Add($"({string.Join(", ", parameters)})");
             }
             
-            command.CommandText = $"INSERT INTO {_TableName} ({string.Join(", ", columns)}) VALUES {string.Join(", ", valuesList)};";
+            command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", sanitizedColumns)}) VALUES {string.Join(", ", valuesList)};";
             AddParametersForBatch(command, entities);
         }
         

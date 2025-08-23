@@ -80,6 +80,10 @@
                 complexTest.RunAllTests();
             });
 
+            // Run sanitization tests
+            Console.WriteLine("\n========== SANITIZATION TESTS ==========");
+            await RunTestAsync("SQL Injection Protection", () => SanitizationTest.RunSanitizationTests());
+
             // Display summary
             DisplayTestSummary();
 
