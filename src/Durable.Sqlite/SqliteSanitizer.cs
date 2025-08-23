@@ -10,7 +10,21 @@ namespace Durable.Sqlite
     /// </summary>
     public class SqliteSanitizer : ISanitizer
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private static readonly Regex SqlIdentifierPattern = new Regex(@"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
 
         /// <summary>
         /// Sanitizes a string value for safe insertion into SQL queries.
@@ -131,5 +145,11 @@ namespace Durable.Sqlite
                 _ => SanitizeString(value.ToString())
             };
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 }

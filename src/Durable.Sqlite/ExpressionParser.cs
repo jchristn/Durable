@@ -9,15 +9,29 @@
     using System.Threading.Tasks;
     public class ExpressionParser<T> where T : class
     {
+        #region Public-Members
+        
+        #endregion
+
+        #region Private-Members
+        
         private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
         private readonly ISanitizer _Sanitizer;
+        
+        #endregion
 
+        #region Constructors-and-Factories
+        
         public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings, ISanitizer sanitizer = null)
         {
             _ColumnMappings = columnMappings;
             _Sanitizer = sanitizer ?? new SqliteSanitizer();
         }
+        
+        #endregion
 
+        #region Public-Methods
+        
         public string ParseExpression(Expression expression)
         {
             return Visit(expression);
@@ -60,7 +74,11 @@
             }
             throw new ArgumentException("Update expression must be a member initialization expression");
         }
+        
+        #endregion
 
+        #region Private-Methods
+        
         private string Visit(Expression expression)
         {
             switch (expression)
@@ -713,5 +731,7 @@
                     return false;
             }
         }
+        
+        #endregion
     }
 }
