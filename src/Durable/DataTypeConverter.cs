@@ -10,11 +10,25 @@ namespace Durable
 
     public class DataTypeConverter : IDataTypeConverter
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = false
         };
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
 
         public object ConvertToDatabase(object value, Type targetType, PropertyInfo propertyInfo = null)
         {
@@ -286,6 +300,10 @@ namespace Durable
             return "TEXT";
         }
 
+        #endregion
+
+        #region Private-Methods
+
         private bool IsSimpleType(Type type)
         {
             return type.IsPrimitive
@@ -308,5 +326,7 @@ namespace Durable
                 || type == typeof(float) || type == typeof(double)
                 || type == typeof(decimal);
         }
+
+        #endregion
     }
 }
