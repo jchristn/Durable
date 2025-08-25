@@ -31,15 +31,17 @@
         internal readonly Dictionary<PropertyInfo, NavigationPropertyAttribute> _NavigationProperties;
         internal readonly IBatchInsertConfiguration _BatchConfig;
         internal readonly ISanitizer _Sanitizer;
+        internal readonly IDataTypeConverter _DataTypeConverter;
 
         #endregion
 
         #region Constructors-and-Factories
 
-        public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null)
+        public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null)
         {
             _ConnectionFactory = new SqliteConnectionFactory(connectionString);
             _Sanitizer = new SqliteSanitizer();
+            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -48,10 +50,11 @@
             _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
         }
 
-        public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null)
+        public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _Sanitizer = new SqliteSanitizer();
+            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -800,7 +803,8 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     var value = property.GetValue(entity);
-                    command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                    var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
@@ -850,7 +854,8 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     var value = property.GetValue(entity);
-                    command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                    var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
@@ -1019,7 +1024,8 @@
                     else
                     {
                         setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
-                        command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                        var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                        command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                     }
                 }
 
@@ -1060,7 +1066,8 @@
                     else
                     {
                         setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
-                        command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                        var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                        command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                     }
                 }
 
@@ -1195,9 +1202,11 @@
             {
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
+                var propertyInfo = GetPropertyInfoFromColumnName(columnName);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
-                command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
+                var convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
+                command.Parameters.AddWithValue("@value", convertedValue);
 
                 return command.ExecuteNonQuery();
             }
@@ -1214,9 +1223,11 @@
             {
                 var whereClause = BuildWhereClause(predicate);
                 var columnName = GetColumnFromExpression(field.Body);
+                var propertyInfo = GetPropertyInfoFromColumnName(columnName);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
-                command.Parameters.AddWithValue("@value", value != null ? (object)value : DBNull.Value);
+                var convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
+                command.Parameters.AddWithValue("@value", convertedValue);
 
                 return await command.ExecuteNonQueryAsync(token);
             }
@@ -1363,7 +1374,8 @@
 
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
-                    command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                    var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    command.Parameters.AddWithValue($"@{columnName}", convertedValue);
 
                     if (columnName != _PrimaryKeyColumn)
                     {
@@ -1406,7 +1418,8 @@
 
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
-                    command.Parameters.AddWithValue($"@{columnName}", value ?? DBNull.Value);
+                    var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    command.Parameters.AddWithValue($"@{columnName}", convertedValue);
 
                     if (columnName != _PrimaryKeyColumn)
                     {
@@ -1711,6 +1724,20 @@
             return _Sanitizer.SanitizeIdentifier(columnName);
         }
 
+        internal PropertyInfo GetPropertyInfoFromColumnName(string sanitizedColumnName)
+        {
+            // The columnName from GetColumnFromExpression is sanitized, but _ColumnMappings uses unsanitized names
+            // Find the PropertyInfo by matching the column names
+            foreach (var kvp in _ColumnMappings)
+            {
+                if (_Sanitizer.SanitizeIdentifier(kvp.Key) == sanitizedColumnName)
+                {
+                    return kvp.Value;
+                }
+            }
+            return null;
+        }
+
         internal T MapReaderToEntity(IDataReader reader)
         {
             var entity = new T();
@@ -1724,7 +1751,8 @@
                 if (!reader.IsDBNull(ordinal))
                 {
                     var value = reader.GetValue(ordinal);
-                    property.SetValue(entity, Convert.ChangeType(value, property.PropertyType));
+                    var convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                    property.SetValue(entity, convertedValue);
                 }
             }
 
@@ -1943,7 +1971,8 @@
                 {
                     var property = _ColumnMappings[column];
                     var value = property.GetValue(entity);
-                    command.Parameters.AddWithValue($"@{column}_{i}", value ?? DBNull.Value);
+                    var convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    command.Parameters.AddWithValue($"@{column}_{i}", convertedValue);
                 }
             }
         }

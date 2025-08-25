@@ -84,6 +84,10 @@
             Console.WriteLine("\n========== SANITIZATION TESTS ==========");
             await RunTestAsync("SQL Injection Protection", () => SanitizationTest.RunSanitizationTests());
 
+            // Run data type converter tests
+            Console.WriteLine("\n========== DATA TYPE CONVERTER TESTS ==========");
+            await RunTestAsync("Data Type Converter", () => DataTypeConverterTest.RunDataTypeConverterTest());
+
             // Display summary
             DisplayTestSummary();
 
