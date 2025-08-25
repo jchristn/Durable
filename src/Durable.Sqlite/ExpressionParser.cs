@@ -41,10 +41,10 @@
         {
             if (expression is MemberExpression memberExpr)
             {
-                var propInfo = memberExpr.Member as PropertyInfo;
+                PropertyInfo propInfo = memberExpr.Member as PropertyInfo;
                 if (propInfo != null)
                 {
-                    var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
+                    KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                     if (mapping.Key != null)
                         return mapping.Key;
                 }
@@ -56,16 +56,16 @@
         {
             if (updateExpression.Body is MemberInitExpression memberInit)
             {
-                var setPairs = new List<string>();
-                foreach (var binding in memberInit.Bindings)
+                List<string> setPairs = new List<string>();
+                foreach (MemberBinding binding in memberInit.Bindings)
                 {
                     if (binding is MemberAssignment assignment)
                     {
-                        var propInfo = assignment.Member as PropertyInfo;
-                        var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
+                        PropertyInfo propInfo = assignment.Member as PropertyInfo;
+                        KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                         if (mapping.Key != null)
                         {
-                            var value = GetConstantValue(assignment.Expression);
+                            object value = GetConstantValue(assignment.Expression);
                             setPairs.Add($"{mapping.Key} = {FormatValue(value)}");
                         }
                     }
@@ -104,10 +104,10 @@
 
         private string VisitBinary(BinaryExpression binary)
         {
-            var left = Visit(binary.Left);
-            var right = Visit(binary.Right);
+            string left = Visit(binary.Left);
+            string right = Visit(binary.Right);
 
-            var op = binary.NodeType switch
+            string op = binary.NodeType switch
             {
                 // Comparison operators
                 ExpressionType.Equal => "=",
@@ -161,7 +161,7 @@
             // Check if this is a property access on the entity parameter (e.g., p.FirstName)
             if (member.Expression is ParameterExpression && member.Member is PropertyInfo propInfo)
             {
-                var mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
+                KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                 if (mapping.Key != null)
                     return mapping.Key;
             }
@@ -171,7 +171,7 @@
                 member.Member.DeclaringType == typeof(string))
             {
                 // Handle as LENGTH(method_result)
-                var methodResult = Visit(methodCall);
+                string methodResult = Visit(methodCall);
                 return $"LENGTH({methodResult})";
             }
 
@@ -184,7 +184,7 @@
             }
 
             // Handle constant member access or property chains
-            var value = GetMemberValue(member);
+            object value = GetMemberValue(member);
             return FormatValue(value);
         }
 
@@ -201,15 +201,15 @@
                     // Handle string.Equals(value) or value.Equals(string)
                     if (methodCall.Object != null && methodCall.Arguments.Count == 1)
                     {
-                        var left = Visit(methodCall.Object);
-                        var right = Visit(methodCall.Arguments[0]);
+                        string left = Visit(methodCall.Object);
+                        string right = Visit(methodCall.Arguments[0]);
                         return $"({left} = {right})";
                     }
                     else if (methodCall.Arguments.Count == 2)
                     {
                         // Static Equals method
-                        var left = Visit(methodCall.Arguments[0]);
-                        var right = Visit(methodCall.Arguments[1]);
+                        string left = Visit(methodCall.Arguments[0]);
+                        string right = Visit(methodCall.Arguments[1]);
                         return $"({left} = {right})";
                     }
                     break;
@@ -223,11 +223,11 @@
                 case "StartsWith":
                     if (methodCall.Object != null && methodCall.Arguments.Count == 1)
                     {
-                        var column = Visit(methodCall.Object);
-                        var value = GetConstantValue(methodCall.Arguments[0]);
-                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        string column = Visit(methodCall.Object);
+                        object value = GetConstantValue(methodCall.Arguments[0]);
+                        string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
                         // Remove quotes and add % at the end
-                        var innerValue = sanitizedValue.Trim('\'');
+                        string innerValue = sanitizedValue.Trim('\'');
                         return $"{column} LIKE '{innerValue}%'";
                     }
                     break;
@@ -235,11 +235,11 @@
                 case "EndsWith":
                     if (methodCall.Object != null && methodCall.Arguments.Count == 1)
                     {
-                        var column = Visit(methodCall.Object);
-                        var value = GetConstantValue(methodCall.Arguments[0]);
-                        var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                        string column = Visit(methodCall.Object);
+                        object value = GetConstantValue(methodCall.Arguments[0]);
+                        string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
                         // Remove quotes and add % at the beginning
-                        var innerValue = sanitizedValue.Trim('\'');
+                        string innerValue = sanitizedValue.Trim('\'');
                         return $"{column} LIKE '%{innerValue}'";
                     }
                     break;
@@ -312,7 +312,7 @@
             // Handle static method calls on specific types
             if (methodCall.Method.DeclaringType != null)
             {
-                var typeName = methodCall.Method.DeclaringType.Name;
+                string typeName = methodCall.Method.DeclaringType.Name;
                 if (typeName == "DateTime" && methodCall.Method.Name == "Now")
                 {
                     return $"datetime('now')";
@@ -332,9 +332,9 @@
 
         private object GetMemberValue(MemberExpression member)
         {
-            var objectMember = Expression.Convert(member, typeof(object));
-            var getterLambda = Expression.Lambda<Func<object>>(objectMember);
-            var getter = getterLambda.Compile();
+            UnaryExpression objectMember = Expression.Convert(member, typeof(object));
+            Expression<Func<object>> getterLambda = Expression.Lambda<Func<object>>(objectMember);
+            Func<object> getter = getterLambda.Compile();
             return getter();
         }
 
@@ -343,9 +343,9 @@
             if (expression is ConstantExpression constant)
                 return constant.Value;
 
-            var objectMember = Expression.Convert(expression, typeof(object));
-            var getterLambda = Expression.Lambda<Func<object>>(objectMember);
-            var getter = getterLambda.Compile();
+            UnaryExpression objectMember = Expression.Convert(expression, typeof(object));
+            Expression<Func<object>> getterLambda = Expression.Lambda<Func<object>>(objectMember);
+            Func<object> getter = getterLambda.Compile();
             return getter();
         }
 
@@ -359,10 +359,10 @@
             switch (unary.NodeType)
             {
                 case ExpressionType.Not:
-                    var operand = Visit(unary.Operand);
+                    string operand = Visit(unary.Operand);
                     return $"NOT ({operand})";
                 case ExpressionType.Negate:
-                    var negateOperand = Visit(unary.Operand);
+                    string negateOperand = Visit(unary.Operand);
                     return $"-({negateOperand})";
                 case ExpressionType.Convert:
                 case ExpressionType.ConvertChecked:
@@ -376,19 +376,19 @@
         private string VisitConditional(ConditionalExpression conditional)
         {
             // CASE WHEN expression support
-            var test = Visit(conditional.Test);
-            var ifTrue = Visit(conditional.IfTrue);
-            var ifFalse = Visit(conditional.IfFalse);
+            string test = Visit(conditional.Test);
+            string ifTrue = Visit(conditional.IfTrue);
+            string ifFalse = Visit(conditional.IfFalse);
             
             return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
         }
 
         private string VisitNewArray(NewArrayExpression newArray)
         {
-            var values = new List<string>();
-            foreach (var expr in newArray.Expressions)
+            List<string> values = new List<string>();
+            foreach (Expression expr in newArray.Expressions)
             {
-                var value = GetConstantValue(expr);
+                object value = GetConstantValue(expr);
                 values.Add(FormatValue(value));
             }
             return string.Join(", ", values);
@@ -399,17 +399,17 @@
             if (methodCall.Object != null && methodCall.Arguments.Count == 1)
             {
                 // Check if this is a collection.Contains(item) call
-                var objectType = methodCall.Object.Type;
+                Type objectType = methodCall.Object.Type;
                 if (typeof(System.Collections.IEnumerable).IsAssignableFrom(objectType) && objectType != typeof(string))
                 {
                     // Collection.Contains(item) - IN operator
-                    var collection = GetConstantValue(methodCall.Object) as System.Collections.IEnumerable;
-                    var item = Visit(methodCall.Arguments[0]);
+                    System.Collections.IEnumerable collection = GetConstantValue(methodCall.Object) as System.Collections.IEnumerable;
+                    string item = Visit(methodCall.Arguments[0]);
                     
                     if (collection != null)
                     {
-                        var values = new List<string>();
-                        foreach (var collectionItem in collection)
+                        List<string> values = new List<string>();
+                        foreach (object collectionItem in collection)
                         {
                             values.Add(FormatValue(collectionItem));
                         }
@@ -419,24 +419,24 @@
                 else
                 {
                     // String.Contains - LIKE operation
-                    var column = Visit(methodCall.Object);
-                    var value = GetConstantValue(methodCall.Arguments[0]);
-                    var sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                    string column = Visit(methodCall.Object);
+                    object value = GetConstantValue(methodCall.Arguments[0]);
+                    string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
                     // Remove quotes and add % around the value
-                    var innerValue = sanitizedValue.Trim('\'');
+                    string innerValue = sanitizedValue.Trim('\'');
                     return $"{column} LIKE '%{innerValue}%'";
                 }
             }
             else if (methodCall.Arguments.Count == 2)
             {
                 // Static Contains method: collection.Contains(item)
-                var collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
-                var item = Visit(methodCall.Arguments[1]);
+                System.Collections.IEnumerable collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                string item = Visit(methodCall.Arguments[1]);
                 
                 if (collection != null)
                 {
-                    var values = new List<string>();
-                    foreach (var collectionItem in collection)
+                    List<string> values = new List<string>();
+                    foreach (object collectionItem in collection)
                     {
                         values.Add(FormatValue(collectionItem));
                     }
@@ -452,10 +452,10 @@
             if (methodCall.Arguments.Count == 1)
             {
                 // collection.Any() - check if collection has any items
-                var collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                System.Collections.IEnumerable collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
                 if (collection != null)
                 {
-                    var hasItems = collection.Cast<object>().Any();
+                    bool hasItems = collection.Cast<object>().Any();
                     return hasItems ? "1" : "0";
                 }
             }
@@ -468,9 +468,9 @@
             if (methodCall.Arguments.Count == 3)
             {
                 // value.Between(min, max)
-                var value = Visit(methodCall.Arguments[0]);
-                var min = Visit(methodCall.Arguments[1]);
-                var max = Visit(methodCall.Arguments[2]);
+                string value = Visit(methodCall.Arguments[0]);
+                string min = Visit(methodCall.Arguments[1]);
+                string max = Visit(methodCall.Arguments[2]);
                 
                 return $"({value} BETWEEN {min} AND {max})";
             }
@@ -482,10 +482,10 @@
         {
             if (methodCall.Object != null && methodCall.Arguments.Count == 1)
             {
-                var dateColumn = Visit(methodCall.Object);
-                var amount = GetConstantValue(methodCall.Arguments[0]);
+                string dateColumn = Visit(methodCall.Object);
+                object amount = GetConstantValue(methodCall.Arguments[0]);
                 
-                var modifier = methodCall.Method.Name switch
+                string modifier = methodCall.Method.Name switch
                 {
                     "AddDays" => $"{amount} days",
                     "AddHours" => $"{amount} hours",
@@ -506,9 +506,9 @@
         {
             if (methodCall.Object != null)
             {
-                var dateColumn = Visit(methodCall.Object);
+                string dateColumn = Visit(methodCall.Object);
                 
-                var part = methodCall.Method.Name switch
+                string part = methodCall.Method.Name switch
                 {
                     "get_Year" => "strftime('%Y', " + dateColumn + ")",
                     "get_Month" => "strftime('%m', " + dateColumn + ")",
@@ -527,11 +527,11 @@
 
         private string HandleMathFunction(MethodCallExpression methodCall)
         {
-            var functionName = methodCall.Method.Name.ToUpper();
+            string functionName = methodCall.Method.Name.ToUpper();
             
             if (methodCall.Arguments.Count == 1)
             {
-                var argument = Visit(methodCall.Arguments[0]);
+                string argument = Visit(methodCall.Arguments[0]);
                 
                 return functionName switch
                 {
@@ -548,8 +548,8 @@
             }
             else if (methodCall.Arguments.Count == 2 && functionName == "ROUND")
             {
-                var value = Visit(methodCall.Arguments[0]);
-                var digits = Visit(methodCall.Arguments[1]);
+                string value = Visit(methodCall.Arguments[0]);
+                string digits = Visit(methodCall.Arguments[1]);
                 return $"ROUND({value}, {digits})";
             }
             
@@ -560,7 +560,7 @@
         {
             if (methodCall.Object != null)
             {
-                var stringColumn = Visit(methodCall.Object);
+                string stringColumn = Visit(methodCall.Object);
                 
                 return methodCall.Method.Name switch
                 {
@@ -579,16 +579,16 @@
         {
             if (methodCall.Arguments.Count >= 2)
             {
-                var value = Visit(methodCall.Arguments[0]);
-                var values = new List<string>();
+                string value = Visit(methodCall.Arguments[0]);
+                List<string> values = new List<string>();
                 
                 // Handle params array or IEnumerable
                 if (methodCall.Arguments.Count == 2 && methodCall.Arguments[1].Type.IsAssignableFrom(typeof(System.Collections.IEnumerable)))
                 {
-                    var collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
+                    System.Collections.IEnumerable collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
                     if (collection != null)
                     {
-                        foreach (var item in collection)
+                        foreach (object item in collection)
                         {
                             values.Add(FormatValue(item));
                         }
@@ -599,7 +599,7 @@
                     // Handle params array
                     for (int i = 1; i < methodCall.Arguments.Count; i++)
                     {
-                        var item = GetConstantValue(methodCall.Arguments[i]);
+                        object item = GetConstantValue(methodCall.Arguments[i]);
                         values.Add(FormatValue(item));
                     }
                 }
@@ -614,16 +614,16 @@
         {
             if (methodCall.Arguments.Count >= 2)
             {
-                var value = Visit(methodCall.Arguments[0]);
-                var values = new List<string>();
+                string value = Visit(methodCall.Arguments[0]);
+                List<string> values = new List<string>();
                 
                 // Handle params array or IEnumerable
                 if (methodCall.Arguments.Count == 2 && methodCall.Arguments[1].Type.IsAssignableFrom(typeof(System.Collections.IEnumerable)))
                 {
-                    var collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
+                    System.Collections.IEnumerable collection = GetConstantValue(methodCall.Arguments[1]) as System.Collections.IEnumerable;
                     if (collection != null)
                     {
-                        foreach (var item in collection)
+                        foreach (object item in collection)
                         {
                             values.Add(FormatValue(item));
                         }
@@ -634,7 +634,7 @@
                     // Handle params array
                     for (int i = 1; i < methodCall.Arguments.Count; i++)
                     {
-                        var item = GetConstantValue(methodCall.Arguments[i]);
+                        object item = GetConstantValue(methodCall.Arguments[i]);
                         values.Add(FormatValue(item));
                     }
                 }
@@ -649,7 +649,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"{value} IS NULL";
             }
             
@@ -660,7 +660,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"{value} IS NOT NULL";
             }
             
@@ -671,7 +671,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"({value} IS NULL OR {value} = '')";
             }
             
@@ -682,7 +682,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"({value} IS NOT NULL AND {value} != '')";
             }
             
@@ -693,7 +693,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"({value} IS NULL OR TRIM({value}) = '')";
             }
             
@@ -704,7 +704,7 @@
         {
             if (methodCall.Arguments.Count == 1)
             {
-                var value = Visit(methodCall.Arguments[0]);
+                string value = Visit(methodCall.Arguments[0]);
                 return $"({value} IS NOT NULL AND TRIM({value}) != '')";
             }
             

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Durable;
@@ -17,10 +18,10 @@ namespace Test.Sqlite
             const string connectionString = "Data Source=TestDB;Mode=Memory;Cache=Shared";
             
             // Keep one connection open to maintain the in-memory database
-            using var keepAliveConnection = new SqliteConnection(connectionString);
+            using SqliteConnection keepAliveConnection = new SqliteConnection(connectionString);
             keepAliveConnection.Open();
             
-            using var repository = new SqliteRepository<Person>(connectionString, BatchInsertConfiguration.Default);
+            using SqliteRepository<Person> repository = new SqliteRepository<Person>(connectionString, BatchInsertConfiguration.Default);
             
             Console.WriteLine("Creating table...");
             await repository.ExecuteSqlAsync(@"
@@ -36,7 +37,7 @@ namespace Test.Sqlite
             Console.WriteLine("Table created successfully");
             
             Console.WriteLine("Inserting test data...");
-            var testPerson = new Person
+            Person testPerson = new Person
             {
                 FirstName = "Test",
                 LastName = "User",
@@ -46,21 +47,21 @@ namespace Test.Sqlite
                 Department = "IT"
             };
             
-            var created = await repository.CreateAsync(testPerson);
+            Person created = await repository.CreateAsync(testPerson);
             Console.WriteLine($"Single insert successful: {created}");
             
             Console.WriteLine("Testing batch insert...");
-            var people = new[]
+            Person[] people = new[]
             {
                 new Person { FirstName = "John", LastName = "Doe", Age = 25, Email = "john@test.com", Salary = 60000, Department = "IT" },
                 new Person { FirstName = "Jane", LastName = "Smith", Age = 28, Email = "jane@test.com", Salary = 65000, Department = "HR" }
             };
             
-            var batchCreated = await repository.CreateManyAsync(people);
-            var batchCreatedList = batchCreated.ToList();
+            IEnumerable<Person> batchCreated = await repository.CreateManyAsync(people);
+            List<Person> batchCreatedList = batchCreated.ToList();
             Console.WriteLine($"Batch insert successful: {batchCreatedList.Count} records");
             
-            var count = await repository.CountAsync();
+            int count = await repository.CountAsync();
             Console.WriteLine($"Total records: {count}");
         }
     }

@@ -37,7 +37,7 @@ namespace Durable.Sqlite
             if (value == null) return "NULL";
             
             // Escape single quotes by doubling them (SQL standard)
-            var escaped = value.Replace("'", "''");
+            string escaped = value.Replace("'", "''");
             
             // Additional SQLite-specific escaping for backslashes and null bytes
             escaped = escaped.Replace("\\", "\\\\");
@@ -57,7 +57,7 @@ namespace Durable.Sqlite
             if (value == null) return "NULL";
             
             // First escape SQL injection characters
-            var escaped = value.Replace("'", "''");
+            string escaped = value.Replace("'", "''");
             escaped = escaped.Replace("\\", "\\\\");
             escaped = escaped.Replace("\0", "");
             
@@ -87,7 +87,7 @@ namespace Durable.Sqlite
             }
             
             // Use SQLite bracket notation for identifiers with special characters
-            var escaped = identifier.Replace("]", "]]");
+            string escaped = identifier.Replace("]", "]]");
             return $"[{escaped}]";
         }
 
@@ -101,7 +101,7 @@ namespace Durable.Sqlite
         {
             if (value == null) return false;
             
-            var type = value.GetType();
+            Type type = value.GetType();
             
             // Safe numeric types
             if (type.IsPrimitive && type != typeof(char))
@@ -116,7 +116,7 @@ namespace Durable.Sqlite
                 return false;
             
             // Nullable versions of safe types
-            var underlyingType = Nullable.GetUnderlyingType(type);
+            Type underlyingType = Nullable.GetUnderlyingType(type);
             if (underlyingType != null)
                 return RequiresSanitization(Activator.CreateInstance(underlyingType));
             

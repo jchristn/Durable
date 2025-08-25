@@ -32,21 +32,21 @@
 
         public IQueryBuilder<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
         {
-            var whereClause = _Repository.BuildWhereClause(predicate);
+            string whereClause = _Repository.BuildWhereClause(predicate);
             _WhereClauses.Add(whereClause);
             return this;
         }
 
         public IQueryBuilder<TEntity> OrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
             return this;
         }
 
         public IQueryBuilder<TEntity> OrderByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
             return this;
         }
@@ -56,7 +56,7 @@
             if (_OrderByClauses.Count == 0)
                 throw new InvalidOperationException("ThenBy can only be used after OrderBy or OrderByDescending");
 
-            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
             return this;
         }
@@ -66,7 +66,7 @@
             if (_OrderByClauses.Count == 0)
                 throw new InvalidOperationException("ThenByDescending can only be used after OrderBy or OrderByDescending");
 
-            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
             return this;
         }
@@ -101,7 +101,7 @@
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
         {
             // Store include information for later processing
-            var propertyName = GetPropertyName(navigationProperty);
+            string propertyName = GetPropertyName(navigationProperty);
             _Includes.Add(propertyName);
             return this;
         }
@@ -109,7 +109,7 @@
         public IQueryBuilder<TEntity> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
             // Store nested include information
-            var propertyName = GetPropertyName(navigationProperty);
+            string propertyName = GetPropertyName(navigationProperty);
             if (_Includes.Count > 0)
             {
                 _Includes[_Includes.Count - 1] += "." + propertyName;
@@ -119,7 +119,7 @@
 
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            var column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _GroupByColumns.Add(column);
             return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this);
         }
@@ -135,13 +135,13 @@
 
         public IEnumerable<TEntity> Execute()
         {
-            var (connection, command, shouldDispose) = _Repository.GetConnectionAndCommand(_Transaction);
+            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = _Repository.GetConnectionAndCommand(_Transaction);
             try
             {
                 command.CommandText = BuildSql();
-                using var reader = command.ExecuteReader();
+                using SqliteDataReader reader = command.ExecuteReader();
 
-                var results = new List<TEntity>();
+                List<TEntity> results = new List<TEntity>();
                 while (reader.Read())
                 {
                     results.Add(_Repository.MapReaderToEntity(reader));
@@ -167,13 +167,13 @@
 
         public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
-            var (connection, command, shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
             try
             {
                 command.CommandText = BuildSql();
-                await using var reader = await command.ExecuteReaderAsync(token);
+                await using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
 
-                var results = new List<TEntity>();
+                List<TEntity> results = new List<TEntity>();
                 while (await reader.ReadAsync(token))
                 {
                     results.Add(_Repository.MapReaderToEntity(reader));
@@ -199,11 +199,11 @@
 
         public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
-            var (connection, command, shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
             try
             {
                 command.CommandText = BuildSql();
-                await using var reader = await command.ExecuteReaderAsync(token);
+                await using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
 
                 while (await reader.ReadAsync(token))
                 {
@@ -247,28 +247,28 @@
 
         public IDurableResult<TEntity> ExecuteWithQuery()
         {
-            var query = Query;
-            var results = Execute();
+            string query = Query;
+            IEnumerable<TEntity> results = Execute();
             return new DurableResult<TEntity>(query, results);
         }
 
         public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
         {
-            var query = Query;
-            var results = await ExecuteAsync(token);
+            string query = Query;
+            IEnumerable<TEntity> results = await ExecuteAsync(token);
             return new DurableResult<TEntity>(query, results);
         }
 
         public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
         {
-            var query = Query;
-            var results = ExecuteAsyncEnumerable(token);
+            string query = Query;
+            IAsyncEnumerable<TEntity> results = ExecuteAsyncEnumerable(token);
             return new AsyncDurableResult<TEntity>(query, results);
         }
 
         public string BuildSql()
         {
-            var sql = new StringBuilder();
+            StringBuilder sql = new StringBuilder();
 
             sql.Append("SELECT ");
             if (_Distinct) sql.Append("DISTINCT ");
@@ -286,7 +286,7 @@
             sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)}");
 
             // Add JOINs for includes
-            foreach (var include in _Includes)
+            foreach (string include in _Includes)
             {
                 // Simplified - full implementation would generate proper JOIN clauses
             }
@@ -306,7 +306,7 @@
             if (_OrderByClauses.Count > 0)
             {
                 sql.Append(" ORDER BY ");
-                var orderParts = _OrderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
+                IEnumerable<string> orderParts = _OrderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
                 sql.Append(string.Join(", ", orderParts));
             }
 

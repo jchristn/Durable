@@ -13,13 +13,13 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Connection Pooling Example ===");
 
-            var connectionString = "Data Source=pooling_example.db";
+            string connectionString = "Data Source=pooling_example.db";
 
             // Initialize database
             InitializeDatabase(connectionString);
 
             // Create connection factory with custom pool options
-            var factory = connectionString.CreateFactory(options =>
+            IConnectionFactory factory = connectionString.CreateFactory(options =>
             {
                 options.MinPoolSize = 3;
                 options.MaxPoolSize = 20;
@@ -29,10 +29,10 @@ namespace Test.Sqlite
             });
 
             // Create repository using the pooled factory
-            using var repository = new SqliteRepository<Person>(factory);
+            using SqliteRepository<Person> repository = new SqliteRepository<Person>(factory);
 
             // Simulate multiple concurrent operations
-            var tasks = new Task[10];
+            Task[] tasks = new Task[10];
             for (int i = 0; i < 10; i++)
             {
                 int personId = i + 1;
@@ -41,7 +41,7 @@ namespace Test.Sqlite
                     Console.WriteLine($"Task {personId}: Starting database operations");
 
                     // Each operation will reuse connections from the pool
-                    var person = new Person
+                    Person person = new Person
                     {
                         FirstName = $"Person",
                         LastName = $"{personId}",
@@ -54,7 +54,7 @@ namespace Test.Sqlite
                     await repository.CreateAsync(person);
                     Console.WriteLine($"Task {personId}: Created person with ID {person.Id}");
 
-                    var retrieved = await repository.ReadByIdAsync(person.Id);
+                    Person retrieved = await repository.ReadByIdAsync(person.Id);
                     Console.WriteLine($"Task {personId}: Retrieved person: {retrieved.Name}");
 
                     await Task.Delay(100); // Simulate work
@@ -76,20 +76,20 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Performance Comparison ===");
 
-            var connectionString = "Data Source=performance_test.db";
+            string connectionString = "Data Source=performance_test.db";
             const int operationCount = 100;
 
             // Initialize database
             InitializeDatabase(connectionString);
 
             // Test without pooling (traditional approach)
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
             long traditionalTime;
-            using (var traditionalRepo = new SqliteRepository<Person>(connectionString))
+            using (SqliteRepository<Person> traditionalRepo = new SqliteRepository<Person>(connectionString))
             {
                 for (int i = 0; i < operationCount; i++)
                 {
-                    var person = new Person { FirstName = "Person", LastName = $"{i}", Age = 25, Email = $"test{i}@example.com", Salary = 50000, Department = "IT" };
+                    Person person = new Person { FirstName = "Person", LastName = $"{i}", Age = 25, Email = $"test{i}@example.com", Salary = 50000, Department = "IT" };
                     traditionalRepo.Create(person);
                 }
 
@@ -103,7 +103,7 @@ namespace Test.Sqlite
 
             // Test with pooling
             stopwatch.Restart();
-            using var factory = connectionString.CreateFactory(options =>
+            using IConnectionFactory factory = connectionString.CreateFactory(options =>
             {
                 options.MinPoolSize = 5;
                 options.MaxPoolSize = 20; // Reduce from default 100 to prevent semaphore exhaustion
@@ -111,19 +111,19 @@ namespace Test.Sqlite
                 options.IdleTimeout = TimeSpan.FromMinutes(5);
                 options.ValidateConnections = true;
             });
-            using var pooledRepo = new SqliteRepository<Person>(factory);
+            using SqliteRepository<Person> pooledRepo = new SqliteRepository<Person>(factory);
 
             for (int i = 0; i < operationCount; i++)
             {
-                var person = new Person { FirstName = "Person", LastName = $"{i}", Age = 25, Email = $"test{i}@example.com", Salary = 50000, Department = "IT" };
+                Person person = new Person { FirstName = "Person", LastName = $"{i}", Age = 25, Email = $"test{i}@example.com", Salary = 50000, Department = "IT" };
                 pooledRepo.Create(person);
             }
 
             stopwatch.Stop();
-            var pooledTime = stopwatch.ElapsedMilliseconds;
+            long pooledTime = stopwatch.ElapsedMilliseconds;
             Console.WriteLine($"With pooling: {pooledTime}ms for {operationCount} operations");
 
-            var improvement = ((double)(traditionalTime - pooledTime) / traditionalTime) * 100;
+            double improvement = ((double)(traditionalTime - pooledTime) / traditionalTime) * 100;
             Console.WriteLine($"Performance improvement: {improvement:F1}%");
 
             // Clean up
@@ -132,11 +132,11 @@ namespace Test.Sqlite
 
         private static void InitializeDatabase(string connectionString)
         {
-            using var connection = new SqliteConnection(connectionString);
+            using SqliteConnection connection = new SqliteConnection(connectionString);
             connection.Open();
 
             // Create table
-            var createTableSql = @"
+            string createTableSql = @"
                 CREATE TABLE IF NOT EXISTS people (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     first VARCHAR(64) NOT NULL,
@@ -147,7 +147,7 @@ namespace Test.Sqlite
                     department VARCHAR(32) NOT NULL
                 );";
 
-            using (var createCommand = new SqliteCommand(createTableSql, connection))
+            using (SqliteCommand createCommand = new SqliteCommand(createTableSql, connection))
             {
                 createCommand.ExecuteNonQuery();
             }

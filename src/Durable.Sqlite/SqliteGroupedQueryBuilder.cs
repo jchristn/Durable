@@ -30,15 +30,15 @@
         public IEnumerable<IGrouping<TKey, TEntity>> Execute()
         {
             // Simplified implementation - full version would need to properly handle grouping
-            var entities = _QueryBuilder.Execute();
-            var groups = entities.GroupBy(e => default(TKey)); // Placeholder
+            IEnumerable<TEntity> entities = _QueryBuilder.Execute();
+            IEnumerable<IGrouping<TKey, TEntity>> groups = entities.GroupBy(e => default(TKey)); // Placeholder
             return groups;
         }
 
         public async Task<IEnumerable<IGrouping<TKey, TEntity>>> ExecuteAsync(CancellationToken token = default)
         {
-            var entities = await _QueryBuilder.ExecuteAsync(token);
-            var groups = entities.GroupBy(e => default(TKey)); // Placeholder
+            IEnumerable<TEntity> entities = await _QueryBuilder.ExecuteAsync(token);
+            IEnumerable<IGrouping<TKey, TEntity>> groups = entities.GroupBy(e => default(TKey)); // Placeholder
             return groups;
         }
     }

@@ -14,7 +14,7 @@ namespace Test.Sqlite
         public ComplexExpressionTest()
         {
             // Initialize repository for testing
-            var connectionFactory = new SqliteConnectionFactory("Data Source=:memory:");
+            IConnectionFactory connectionFactory = new SqliteConnectionFactory("Data Source=:memory:");
             _Repository = new SqliteRepository<Person>(connectionFactory);
         }
 
@@ -47,19 +47,19 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing IN operator");
             
             // Test with array
-            var departments = new[] { "IT", "HR", "Finance" };
-            var query1 = _Repository.Query()
+            string[] departments = new[] { "IT", "HR", "Finance" };
+            string query1 = _Repository.Query()
                 .Where(p => departments.Contains(p.Department))
                 .BuildSql();
             
             // Test with list
-            var ageList = new List<int> { 25, 30, 35 };
-            var query2 = _Repository.Query()
+            List<int> ageList = new List<int> { 25, 30, 35 };
+            string query2 = _Repository.Query()
                 .Where(p => ageList.Contains(p.Age))
                 .BuildSql();
             
             // Test extension method (if supported)
-            var query3 = _Repository.Query()
+            string query3 = _Repository.Query()
                 .Where(p => p.Age.In(25, 30, 35))
                 .BuildSql();
             
@@ -73,11 +73,11 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing BETWEEN operator");
             
             // Test Between extension method
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => p.Age.Between(25, 65))
                 .BuildSql();
             
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => p.Salary.Between(50000m, 100000m))
                 .BuildSql();
             
@@ -91,13 +91,13 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing complex boolean logic");
             
             // Complex nested AND/OR
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => (p.Age > 30 && p.Department == "IT") || 
                            (p.Age < 25 && p.Salary > 70000))
                 .BuildSql();
             
             // NOT operator
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => !(p.Age < 18 || p.Age > 65))
                 .BuildSql();
             
@@ -114,11 +114,11 @@ namespace Test.Sqlite
             // These would work if Person had a CreatedDate field
             
             /*
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => p.CreatedDate.Year == 2024)
                 .BuildSql();
             
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => p.CreatedDate.AddDays(30) > DateTime.Now)
                 .BuildSql();
             */
@@ -129,15 +129,15 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing Math operations");
             
             // Math operations in WHERE clause
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => p.Salary * 0.1m > 5000)
                 .BuildSql();
             
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => p.Age + 5 > 30)
                 .BuildSql();
             
-            var query3 = _Repository.Query()
+            string query3 = _Repository.Query()
                 .Where(p => p.Salary / 12 > 5000)
                 .BuildSql();
             
@@ -151,7 +151,7 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing CASE WHEN expressions");
             
             // Conditional expressions (ternary operator)
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => (p.Age > 65 ? "Senior" : "Regular") == "Senior")
                 .BuildSql();
             
@@ -165,15 +165,15 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing String operations");
             
             // String methods
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => p.FirstName.ToUpper().Contains("JOHN"))
                 .BuildSql();
             
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => p.Email.ToLower().EndsWith("@company.com"))
                 .BuildSql();
             
-            var query3 = _Repository.Query()
+            string query3 = _Repository.Query()
                 .Where(p => p.FirstName.Trim().Length > 3)
                 .BuildSql();
             
@@ -187,16 +187,16 @@ namespace Test.Sqlite
             Console.WriteLine("✓ Testing NULL checks");
             
             // Standard null comparison
-            var query1 = _Repository.Query()
+            string query1 = _Repository.Query()
                 .Where(p => p.Email != null)
                 .BuildSql();
             
             // Extension method null checks (if supported)
-            var query2 = _Repository.Query()
+            string query2 = _Repository.Query()
                 .Where(p => p.Email.IsNotNullOrEmpty())
                 .BuildSql();
             
-            var query3 = _Repository.Query()
+            string query3 = _Repository.Query()
                 .Where(p => p.FirstName.IsNotNullOrWhiteSpace())
                 .BuildSql();
             

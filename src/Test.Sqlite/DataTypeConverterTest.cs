@@ -18,17 +18,17 @@ namespace Test.Sqlite
             const string connectionString = "Data Source=DataTypeTest;Mode=Memory;Cache=Shared";
             
             // Keep one connection open to maintain the in-memory database
-            using var keepAliveConnection = new SqliteConnection(connectionString);
+            using SqliteConnection keepAliveConnection = new SqliteConnection(connectionString);
             keepAliveConnection.Open();
             
-            using var repository = new SqliteRepository<ComplexEntity>(connectionString);
+            using SqliteRepository<ComplexEntity> repository = new SqliteRepository<ComplexEntity>(connectionString);
             
             Console.WriteLine("Creating table...");
             await CreateTableAsync(repository);
             Console.WriteLine("Table created successfully");
             
             // Test data with various data types
-            var testEntity = new ComplexEntity
+            ComplexEntity testEntity = new ComplexEntity
             {
                 Name = "Test Entity",
                 CreatedDate = new DateTime(2023, 12, 25, 14, 30, 45, 123, DateTimeKind.Utc),
@@ -57,12 +57,12 @@ namespace Test.Sqlite
             };
 
             Console.WriteLine("Inserting complex entity...");
-            var created = await repository.CreateAsync(testEntity);
+            ComplexEntity created = await repository.CreateAsync(testEntity);
             Console.WriteLine($"Insert successful: ID = {created.Id}");
 
             // Test retrieval
             Console.WriteLine("Retrieving entity...");
-            var retrieved = await repository.ReadByIdAsync(created.Id);
+            ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
             
             if (retrieved == null)
             {
@@ -75,7 +75,7 @@ namespace Test.Sqlite
 
             // Test with null values
             Console.WriteLine("\nTesting null values...");
-            var entityWithNulls = new ComplexEntity
+            ComplexEntity entityWithNulls = new ComplexEntity
             {
                 Name = "Null Test",
                 CreatedDate = DateTime.UtcNow,
@@ -93,8 +93,8 @@ namespace Test.Sqlite
                 Price = 0m
             };
 
-            var createdNull = await repository.CreateAsync(entityWithNulls);
-            var retrievedNull = await repository.ReadByIdAsync(createdNull.Id);
+            ComplexEntity createdNull = await repository.CreateAsync(entityWithNulls);
+            ComplexEntity retrievedNull = await repository.ReadByIdAsync(createdNull.Id);
             
             Console.WriteLine($"Null test successful: ID = {createdNull.Id}");
 
@@ -143,7 +143,7 @@ namespace Test.Sqlite
             }
 
             // DateTime - allow small difference due to precision
-            var timeDiff = Math.Abs((original.CreatedDate - retrieved.CreatedDate).TotalMilliseconds);
+            double timeDiff = Math.Abs((original.CreatedDate - retrieved.CreatedDate).TotalMilliseconds);
             if (timeDiff > 1)
             {
                 Console.WriteLine($"ERROR: CreatedDate mismatch. Expected: {original.CreatedDate:O}, Got: {retrieved.CreatedDate:O}");
@@ -230,18 +230,18 @@ namespace Test.Sqlite
         private static async Task TestUpdateFieldOperations(SqliteRepository<ComplexEntity> repository, int entityId)
         {
             // Test updating DateTime field
-            var newDate = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Utc);
+            DateTime newDate = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Utc);
             await repository.UpdateFieldAsync(e => e.Id == entityId, e => e.CreatedDate, newDate);
 
             // Test updating array field
-            var newTags = new[] { "updated", "test", "array" };
+            string[] newTags = new[] { "updated", "test", "array" };
             await repository.UpdateFieldAsync(e => e.Id == entityId, e => e.Tags, newTags);
 
             // Test updating enum field
             await repository.UpdateFieldAsync(e => e.Id == entityId, e => e.Status, Status.Pending);
 
             // Verify updates
-            var updated = await repository.ReadByIdAsync(entityId);
+            ComplexEntity updated = await repository.ReadByIdAsync(entityId);
             if (updated.CreatedDate != newDate)
             {
                 throw new Exception($"UpdateField DateTime failed. Expected: {newDate:O}, Got: {updated.CreatedDate:O}");
@@ -263,7 +263,7 @@ namespace Test.Sqlite
         private static async Task TestQueryOperations(SqliteRepository<ComplexEntity> repository)
         {
             // Test querying by various data types
-            var results = repository.Query()
+            List<ComplexEntity> results = repository.Query()
                 .Where(e => e.Status == Status.Pending)
                 .Execute()
                 .ToList();

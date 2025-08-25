@@ -35,12 +35,12 @@ namespace Durable
             if (value == null)
                 return DBNull.Value;
 
-            var valueType = value.GetType();
+            Type valueType = value.GetType();
 
             // DateTime handling
             if (valueType == typeof(DateTime))
             {
-                var dt = (DateTime)value;
+                DateTime dt = (DateTime)value;
                 // Store as ISO 8601 string for consistency
                 return dt.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
             }
@@ -48,7 +48,7 @@ namespace Durable
             // DateTimeOffset handling
             if (valueType == typeof(DateTimeOffset))
             {
-                var dto = (DateTimeOffset)value;
+                DateTimeOffset dto = (DateTimeOffset)value;
                 // Store with timezone information
                 return dto.ToString("yyyy-MM-dd HH:mm:ss.fffffffzzz", CultureInfo.InvariantCulture);
             }
@@ -70,7 +70,7 @@ namespace Durable
             // TimeSpan handling
             if (valueType == typeof(TimeSpan))
             {
-                var ts = (TimeSpan)value;
+                TimeSpan ts = (TimeSpan)value;
                 return ts.ToString("c", CultureInfo.InvariantCulture);
             }
 
@@ -84,7 +84,7 @@ namespace Durable
             if (valueType.IsEnum)
             {
                 // Check for PropertyAttribute flags to determine storage preference
-                var attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
+                PropertyAttribute attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
                 if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)
                 {
                     // If String flag is NOT set, store as integer
@@ -129,7 +129,7 @@ namespace Durable
             }
 
             // Handle nullable types
-            var underlyingType = Nullable.GetUnderlyingType(targetType);
+            Type underlyingType = Nullable.GetUnderlyingType(targetType);
             if (underlyingType != null)
             {
                 targetType = underlyingType;
@@ -141,7 +141,7 @@ namespace Durable
                 if (value is string dateStr)
                 {
                     if (DateTime.TryParseExact(dateStr, "yyyy-MM-dd HH:mm:ss.fffffff", 
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime result))
                         return result;
                     // Fallback to general parsing
                     return DateTime.Parse(dateStr, CultureInfo.InvariantCulture);
@@ -155,7 +155,7 @@ namespace Durable
                 if (value is string dtoStr)
                 {
                     if (DateTimeOffset.TryParseExact(dtoStr, "yyyy-MM-dd HH:mm:ss.fffffffzzz",
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset result))
                         return result;
                     // Fallback to general parsing
                     return DateTimeOffset.Parse(dtoStr, CultureInfo.InvariantCulture);
@@ -172,8 +172,8 @@ namespace Durable
             {
                 if (value is string dateStr)
                 {
-                    var dateOnlyType = targetType;
-                    var parseMethod = dateOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
+                    Type dateOnlyType = targetType;
+                    MethodInfo parseMethod = dateOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
                     return parseMethod.Invoke(null, new object[] { dateStr, CultureInfo.InvariantCulture });
                 }
             }
@@ -183,8 +183,8 @@ namespace Durable
             {
                 if (value is string timeStr)
                 {
-                    var timeOnlyType = targetType;
-                    var parseMethod = timeOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
+                    Type timeOnlyType = targetType;
+                    MethodInfo parseMethod = timeOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
                     return parseMethod.Invoke(null, new object[] { timeStr, CultureInfo.InvariantCulture });
                 }
             }
@@ -254,7 +254,7 @@ namespace Durable
             type = Nullable.GetUnderlyingType(type) ?? type;
 
             // Check for PropertyAttribute
-            var attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
+            PropertyAttribute attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
             if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
             {
                 return $"TEXT";

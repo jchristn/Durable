@@ -26,16 +26,16 @@
 
             // For file-based database use: var connectionString = "Data Source=demo.db";
             // Create in-memory database
-            var connectionString = "Data Source=InMemoryDemo;Mode=Memory;Cache=Shared";
+            string connectionString = "Data Source=InMemoryDemo;Mode=Memory;Cache=Shared";
 
             // Keep one connection open to maintain the in-memory database
-            using var keepAliveConnection = new SqliteConnection(connectionString);
+            using SqliteConnection keepAliveConnection = new SqliteConnection(connectionString);
             keepAliveConnection.Open();
 
             InitializeDatabase(connectionString);
 
             // Create repository
-            var repository = new SqliteRepository<Person>(connectionString);
+            SqliteRepository<Person> repository = new SqliteRepository<Person>(connectionString);
 
             // Run synchronous tests
             Console.WriteLine("========== SYNCHRONOUS API TESTS ==========");
@@ -76,7 +76,7 @@
             Console.WriteLine("\n========== COMPLEX EXPRESSION TESTS ==========");
             await RunTest("Complex Expression Parsing", () => 
             {
-                var complexTest = new ComplexExpressionTest();
+                ComplexExpressionTest complexTest = new ComplexExpressionTest();
                 complexTest.RunAllTests();
             });
 
@@ -99,7 +99,7 @@
         {
             // CREATE operations
             Console.WriteLine("--- SYNC CREATE OPERATIONS ---");
-            var john = new Person
+            Person john = new Person
             {
                 FirstName = "John",
                 LastName = "Doe",
@@ -111,25 +111,25 @@
             john = repository.Create(john);
             Console.WriteLine($"Created: {john}");
 
-            var people = GeneratePeople(10);
-            var createdPeople = repository.CreateMany(people).ToList();
+            List<Person> people = GeneratePeople(10);
+            List<Person> createdPeople = repository.CreateMany(people).ToList();
             Console.WriteLine($"Created {createdPeople.Count} people");
 
             // READ operations
             Console.WriteLine("\n--- SYNC READ OPERATIONS ---");
 
             // ReadFirst
-            var first = repository.ReadFirst();
+            Person first = repository.ReadFirst();
             Console.WriteLine($"ReadFirst: {first}");
 
             // Use == instead of Equals to avoid the method call issue
-            var firstIT = repository.ReadFirst(p => p.Department == "IT");
+            Person firstIT = repository.ReadFirst(p => p.Department == "IT");
             Console.WriteLine($"ReadFirst IT: {firstIT}");
 
             // ReadSingle
             try
             {
-                var singleJohn = repository.ReadSingle(p => p.FirstName == "John");
+                Person singleJohn = repository.ReadSingle(p => p.FirstName == "John");
                 Console.WriteLine($"ReadSingle John: {singleJohn}");
             }
             catch (InvalidOperationException ex)
@@ -138,33 +138,33 @@
             }
 
             // ReadSingleOrDefault
-            var singleOrDefault = repository.ReadSingleOrDefault(p => p.Email == "john@example.com");
+            Person singleOrDefault = repository.ReadSingleOrDefault(p => p.Email == "john@example.com");
             Console.WriteLine($"ReadSingleOrDefault: {singleOrDefault}");
 
             // ReadById
-            var byId = repository.ReadById(1);
+            Person byId = repository.ReadById(1);
             Console.WriteLine($"ReadById(1): {byId}");
 
             // ReadMany
-            var allIT = repository.ReadMany(p => p.Department == "IT").ToList();
+            List<Person> allIT = repository.ReadMany(p => p.Department == "IT").ToList();
             Console.WriteLine($"ReadMany IT: {allIT.Count} people");
 
             // ReadAll
-            var all = repository.ReadAll().ToList();
+            List<Person> all = repository.ReadAll().ToList();
             Console.WriteLine($"ReadAll: {all.Count} people");
 
             // EXISTS and COUNT operations
             Console.WriteLine("\n--- SYNC EXISTS AND COUNT OPERATIONS ---");
-            var exists = repository.Exists(p => p.Age > 25);
+            bool exists = repository.Exists(p => p.Age > 25);
             Console.WriteLine($"Exists age > 25: {exists}");
 
-            var existsById = repository.ExistsById(1);
+            bool existsById = repository.ExistsById(1);
             Console.WriteLine($"ExistsById(1): {existsById}");
 
-            var countIT = repository.Count(p => p.Department == "IT");
+            int countIT = repository.Count(p => p.Department == "IT");
             Console.WriteLine($"Count IT: {countIT}");
 
-            var totalCount = repository.Count();
+            int totalCount = repository.Count();
             Console.WriteLine($"Total count: {totalCount}");
 
             // UPDATE operations
@@ -173,14 +173,14 @@
             repository.Update(john);
             Console.WriteLine($"Updated John's salary to 80000");
 
-            var updatedFields = repository.UpdateField(
+            int updatedFields = repository.UpdateField(
                 p => p.Department == "IT",
                 p => p.Salary,
                 90000m
             );
             Console.WriteLine($"UpdateField: Updated {updatedFields} IT salaries to 90000");
 
-            var updatedMany = repository.UpdateMany(
+            int updatedMany = repository.UpdateMany(
                 p => p.Age > 30,
                 person => person.Age += 1
             );
@@ -188,7 +188,7 @@
 
             // QUERY BUILDER operations
             Console.WriteLine("\n--- SYNC QUERY BUILDER OPERATIONS ---");
-            var query = repository.Query()
+            IQueryBuilder<Person> query = repository.Query()
                 .Where(p => p.Salary > 70000)
                 .Where(p => p.Age < 40)
                 .OrderByDescending(p => p.Salary)
@@ -196,9 +196,9 @@
                 .Skip(1)
                 .Take(3);
 
-            var queryResults = query.Execute().ToList();
+            List<Person> queryResults = query.Execute().ToList();
             Console.WriteLine($"Complex query returned {queryResults.Count} results");
-            foreach (var p in queryResults.Take(3))
+            foreach (Person p in queryResults.Take(3))
             {
                 Console.WriteLine($"  {p}");
             }
@@ -207,7 +207,7 @@
             Console.WriteLine("\n--- SYNC RAW QUERY EXPOSURE ---");
             
             // Test ExecuteWithQuery - returns both query and results
-            var queryWithResults = repository.Query()
+            IDurableResult<Person> queryWithResults = repository.Query()
                 .Where(p => p.Department == "IT")
                 .Where(p => p.Salary > 60000)
                 .ExecuteWithQuery();
@@ -215,32 +215,32 @@
             Console.WriteLine($"ExecuteWithQuery results: {queryWithResults.Result.Count()} records");
             
             // Test SelectWithQuery extension method
-            var extensionResult = repository.SelectWithQuery(p => p.Age > 25 && p.Salary < 100000);
+            IDurableResult<Person> extensionResult = repository.SelectWithQuery(p => p.Age > 25 && p.Salary < 100000);
             Console.WriteLine($"SelectWithQuery SQL: {extensionResult.Query}");
             Console.WriteLine($"SelectWithQuery results: {extensionResult.Result.Count()} records");
             
             // Test GetSelectQuery - returns only the SQL query
-            var sqlOnly = repository.GetSelectQuery(p => p.FirstName.Contains("o") || p.LastName.StartsWith("D"));
+            string sqlOnly = repository.GetSelectQuery(p => p.FirstName.Contains("o") || p.LastName.StartsWith("D"));
             Console.WriteLine($"GetSelectQuery SQL only: {sqlOnly}");
 
-            var query1 = repository.Query()
+            IQueryBuilder<Person> query1 = repository.Query()
                 .Where(p => p.Department == "IT")
                 .OrderByDescending(p => p.Salary)
                 .Take(2);
 
-            var queryResults1 = query1.Execute().ToList();
+            List<Person> queryResults1 = query1.Execute().ToList();
             Console.WriteLine($"\nTop 2 IT salaries:");
-            foreach (var p in queryResults1) Console.WriteLine($"  {p}");
+            foreach (Person p in queryResults1) Console.WriteLine($"  {p}");
 
-            var paginatedQuery = repository.Query()
+            IQueryBuilder<Person> paginatedQuery = repository.Query()
                 .Where(p => p.Salary > 60000)
                 .OrderBy(p => p.LastName)
                 .Skip(1)
                 .Take(3);
 
-            var paginatedResults = paginatedQuery.Execute().ToList();
+            List<Person> paginatedResults = paginatedQuery.Execute().ToList();
             Console.WriteLine($"\nPaginated results:");
-            foreach (var p in paginatedResults) Console.WriteLine($"  {p}");
+            foreach (Person p in paginatedResults) Console.WriteLine($"  {p}");
 
             // Test Distinct
             repository.Create(new Person
@@ -262,7 +262,7 @@
                 Department = "HR"
             });
 
-            var distinctCount = repository.Query()
+            int distinctCount = repository.Query()
                 .Where(p => p.FirstName == "Duplicate")
                 .Distinct()
                 .Execute()
@@ -271,7 +271,7 @@
 
             // UPSERT operations
             Console.WriteLine("\n--- SYNC UPSERT OPERATIONS ---");
-            var upsertPerson = new Person
+            Person upsertPerson = new Person
             {
                 Id = 1,
                 FirstName = "John",
@@ -282,23 +282,23 @@
                 Department = "Management"
             };
             repository.Upsert(upsertPerson);
-            var afterUpsert = repository.ReadById(1);
+            Person afterUpsert = repository.ReadById(1);
             Console.WriteLine($"After upsert: {afterUpsert}");
 
-            var upsertMany = new List<Person>
+            List<Person> upsertMany = new List<Person>
             {
                 new Person { Id = 2, FirstName = "Jane", LastName = "UpsertTest", Age = 26, Email = "jane.new@test.com", Salary = 70000, Department = "IT" },
                 new Person { Id = 999, FirstName = "New", LastName = "Person", Age = 35, Email = "new@test.com", Salary = 60000, Department = "Sales" }
             };
-            var upsertedCount = repository.UpsertMany(upsertMany).Count();
+            int upsertedCount = repository.UpsertMany(upsertMany).Count();
             Console.WriteLine($"UpsertMany: Processed {upsertedCount} records");
 
             // DELETE operations
             Console.WriteLine("\n--- SYNC DELETE OPERATIONS ---");
-            var toDeleteEntity = repository.ReadFirst(p => p.FirstName == "Duplicate");
+            Person toDeleteEntity = repository.ReadFirst(p => p.FirstName == "Duplicate");
             if (toDeleteEntity != null)
             {
-                var deleted = repository.Delete(toDeleteEntity);
+                bool deleted = repository.Delete(toDeleteEntity);
                 Console.WriteLine($"Delete entity: {deleted}");
             }
             else
@@ -306,43 +306,43 @@
                 Console.WriteLine("No entity found to delete");
             }
 
-            var deletedById = repository.DeleteById(999);
+            bool deletedById = repository.DeleteById(999);
             Console.WriteLine($"DeleteById(999): {deletedById}");
 
-            var deletedMany = repository.DeleteMany(p => p.Department == "Sales");
+            int deletedMany = repository.DeleteMany(p => p.Department == "Sales");
             Console.WriteLine($"DeleteMany Sales: {deletedMany} deleted");
 
             Console.WriteLine($"\nFinal sync count: {repository.Count()}");
 
             // AGGREGATE operations
             Console.WriteLine("\n--- SYNC AGGREGATE OPERATIONS ---");
-            var maxSalary = repository.Max(p => p.Salary);
+            decimal maxSalary = repository.Max(p => p.Salary);
             Console.WriteLine($"Max salary: {maxSalary:C}");
 
-            var minAge = repository.Min(p => p.Age);
+            int minAge = repository.Min(p => p.Age);
             Console.WriteLine($"Min age: {minAge}");
 
-            var avgSalary = repository.Average(p => p.Salary, p => p.Department == "IT");
+            decimal avgSalary = repository.Average(p => p.Salary, p => p.Department == "IT");
             Console.WriteLine($"Average IT salary: {avgSalary:C}");
 
-            var totalSalary = repository.Sum(p => p.Salary);
+            decimal totalSalary = repository.Sum(p => p.Salary);
             Console.WriteLine($"Total salary: {totalSalary:C}");
 
             // BATCH operations
             Console.WriteLine("\n--- SYNC BATCH OPERATIONS ---");
-            var batchDeleted = repository.BatchDelete(p => p.Age < 26);
+            int batchDeleted = repository.BatchDelete(p => p.Age < 26);
             Console.WriteLine($"BatchDelete: Deleted {batchDeleted} young employees");
 
             // RAW SQL operations
             Console.WriteLine("\n--- SYNC RAW SQL OPERATIONS ---");
-            var rawResults = repository.FromSql(
+            List<Person> rawResults = repository.FromSql(
                 "SELECT * FROM people WHERE age > @p0 AND department = @p1 ORDER BY salary DESC LIMIT 5",
                 null,  // transaction parameter
                 25, "IT"
             ).ToList();
             Console.WriteLine($"Raw SQL query returned {rawResults.Count} results");
 
-            var affectedRows = repository.ExecuteSql(
+            int affectedRows = repository.ExecuteSql(
                 "UPDATE people SET salary = salary * @p0 WHERE department = @p1",
                 null,  // transaction parameter
                 1.05m, "Finance"
@@ -351,10 +351,10 @@
 
             // TRANSACTION operations
             Console.WriteLine("\n--- SYNC TRANSACTION OPERATIONS ---");
-            var countBefore = repository.Count();
+            int countBefore = repository.Count();
             Console.WriteLine($"Count before transaction: {countBefore}");
 
-            using (var transaction = repository.BeginTransaction())
+            using (ITransaction transaction = repository.BeginTransaction())
             {
                 try
                 {
@@ -376,7 +376,7 @@
 
             // Test a commit transaction
             Console.WriteLine("\nTesting transaction with commit:");
-            using (var transaction = repository.BeginTransaction())
+            using (ITransaction transaction = repository.BeginTransaction())
             {
                 try
                 {
@@ -391,7 +391,7 @@
                 }
             }
 
-            var finalCount = repository.Count();
+            int finalCount = repository.Count();
             Console.WriteLine($"Count after transactions: {finalCount}");
         }
 
@@ -399,7 +399,7 @@
         {
             // CREATE operations
             Console.WriteLine("--- ASYNC CREATE OPERATIONS ---");
-            var john = new Person
+            Person john = new Person
             {
                 FirstName = "John",
                 LastName = "Async",
@@ -411,24 +411,24 @@
             john = await repository.CreateAsync(john);
             Console.WriteLine($"Created async: {john}");
 
-            var people = GeneratePeople(20);
-            var createdPeople = await repository.CreateManyAsync(people);
+            List<Person> people = GeneratePeople(20);
+            IEnumerable<Person> createdPeople = await repository.CreateManyAsync(people);
             Console.WriteLine($"Created {createdPeople.Count()} people async");
 
             // READ operations
             Console.WriteLine("\n--- ASYNC READ OPERATIONS ---");
 
             // ReadFirstAsync
-            var first = await repository.ReadFirstAsync();
+            Person first = await repository.ReadFirstAsync();
             Console.WriteLine($"ReadFirstAsync: {first}");
 
-            var firstIT = await repository.ReadFirstAsync(p => p.Department == "IT");
+            Person firstIT = await repository.ReadFirstAsync(p => p.Department == "IT");
             Console.WriteLine($"ReadFirstAsync IT: {firstIT}");
 
             // ReadSingleAsync
             try
             {
-                var singleAsync = await repository.ReadSingleAsync(p => p.Email == "john.async@example.com");
+                Person singleAsync = await repository.ReadSingleAsync(p => p.Email == "john.async@example.com");
                 Console.WriteLine($"ReadSingleAsync: {singleAsync}");
             }
             catch (InvalidOperationException ex)
@@ -437,17 +437,17 @@
             }
 
             // ReadSingleOrDefaultAsync
-            var singleOrDefaultAsync = await repository.ReadSingleOrDefaultAsync(p => p.Email == "john.async@example.com");
+            Person singleOrDefaultAsync = await repository.ReadSingleOrDefaultAsync(p => p.Email == "john.async@example.com");
             Console.WriteLine($"ReadSingleOrDefaultAsync: {singleOrDefaultAsync}");
 
             // ReadByIdAsync
-            var byIdAsync = await repository.ReadByIdAsync(john.Id);
+            Person byIdAsync = await repository.ReadByIdAsync(john.Id);
             Console.WriteLine($"ReadByIdAsync({john.Id}): {byIdAsync}");
 
             // ReadManyAsync with IAsyncEnumerable
             Console.WriteLine("ReadManyAsync IT department:");
-            var count = 0;
-            await foreach (var person in repository.ReadManyAsync(p => p.Department == "IT"))
+            int count = 0;
+            await foreach (Person person in repository.ReadManyAsync(p => p.Department == "IT"))
             {
                 count++;
                 if (count <= 3) // Show first 3
@@ -457,7 +457,7 @@
 
             // ReadAllAsync
             count = 0;
-            await foreach (var person in repository.ReadAllAsync())
+            await foreach (Person person in repository.ReadAllAsync())
             {
                 count++;
             }
@@ -465,16 +465,16 @@
 
             // EXISTS and COUNT operations
             Console.WriteLine("\n--- ASYNC EXISTS AND COUNT OPERATIONS ---");
-            var existsAsync = await repository.ExistsAsync(p => p.Age > 25);
+            bool existsAsync = await repository.ExistsAsync(p => p.Age > 25);
             Console.WriteLine($"ExistsAsync age > 25: {existsAsync}");
 
-            var existsByIdAsync = await repository.ExistsByIdAsync(john.Id);
+            bool existsByIdAsync = await repository.ExistsByIdAsync(john.Id);
             Console.WriteLine($"ExistsByIdAsync({john.Id}): {existsByIdAsync}");
 
-            var countITAsync = await repository.CountAsync(p => p.Department == "IT");
+            int countITAsync = await repository.CountAsync(p => p.Department == "IT");
             Console.WriteLine($"CountAsync IT: {countITAsync}");
 
-            var totalCountAsync = await repository.CountAsync();
+            int totalCountAsync = await repository.CountAsync();
             Console.WriteLine($"Total countAsync: {totalCountAsync}");
 
             // UPDATE operations
@@ -483,7 +483,7 @@
             await repository.UpdateAsync(john);
             Console.WriteLine($"UpdateAsync: John's salary to 85000");
 
-            var updatedFieldsAsync = await repository.UpdateFieldAsync(
+            int updatedFieldsAsync = await repository.UpdateFieldAsync(
                 p => p.Department == "Finance",
                 p => p.Salary,
                 95000m
@@ -491,7 +491,7 @@
             Console.WriteLine($"UpdateFieldAsync: Updated {updatedFieldsAsync} Finance salaries to 95000");
 
             // UpdateManyAsync with async action
-            var updatedManyAsync = await repository.UpdateManyAsync(
+            int updatedManyAsync = await repository.UpdateManyAsync(
                 p => p.Age < 30,
                 async person =>
                 {
@@ -504,7 +504,7 @@
 
             // UPSERT operations
             Console.WriteLine("\n--- ASYNC UPSERT OPERATIONS ---");
-            var upsertPersonAsync = new Person
+            Person upsertPersonAsync = new Person
             {
                 Id = john.Id,
                 FirstName = "John",
@@ -515,57 +515,57 @@
                 Department = "Executive"
             };
             await repository.UpsertAsync(upsertPersonAsync);
-            var afterUpsertAsync = await repository.ReadByIdAsync(john.Id);
+            Person afterUpsertAsync = await repository.ReadByIdAsync(john.Id);
             Console.WriteLine($"After upsertAsync: {afterUpsertAsync}");
 
-            var upsertManyAsync = new List<Person>
+            List<Person> upsertManyAsync = new List<Person>
             {
                 new Person { Id = 1000, FirstName = "Async1", LastName = "Test", Age = 25, Email = "async1@test.com", Salary = 50000, Department = "QA" },
                 new Person { Id = 1001, FirstName = "Async2", LastName = "Test", Age = 28, Email = "async2@test.com", Salary = 55000, Department = "QA" }
             };
-            var upsertedCountAsync = (await repository.UpsertManyAsync(upsertManyAsync)).Count();
+            int upsertedCountAsync = (await repository.UpsertManyAsync(upsertManyAsync)).Count();
             Console.WriteLine($"UpsertManyAsync: Processed {upsertedCountAsync} records");
 
             // DELETE operations
             Console.WriteLine("\n--- ASYNC DELETE OPERATIONS ---");
-            var toDelete = await repository.ReadFirstAsync(p => p.Department == "QA");
+            Person toDelete = await repository.ReadFirstAsync(p => p.Department == "QA");
             if (toDelete != null)
             {
-                var deletedAsync = await repository.DeleteAsync(toDelete);
+                bool deletedAsync = await repository.DeleteAsync(toDelete);
                 Console.WriteLine($"DeleteAsync entity: {deletedAsync}");
             }
 
-            var deletedByIdAsync = await repository.DeleteByIdAsync(1001);
+            bool deletedByIdAsync = await repository.DeleteByIdAsync(1001);
             Console.WriteLine($"DeleteByIdAsync(1001): {deletedByIdAsync}");
 
-            var deletedManyAsync = await repository.DeleteManyAsync(p => p.Salary < 60000);
+            int deletedManyAsync = await repository.DeleteManyAsync(p => p.Salary < 60000);
             Console.WriteLine($"DeleteManyAsync salary < 60000: {deletedManyAsync} deleted");
 
             Console.WriteLine($"\nFinal async count: {await repository.CountAsync()}");
 
             // AGGREGATE operations
             Console.WriteLine("\n--- ASYNC AGGREGATE OPERATIONS ---");
-            var maxSalaryAsync = await repository.MaxAsync(p => p.Salary);
+            decimal maxSalaryAsync = await repository.MaxAsync(p => p.Salary);
             Console.WriteLine($"Max salary: {maxSalaryAsync:C}");
 
-            var minAgeAsync = await repository.MinAsync(p => p.Age);
+            int minAgeAsync = await repository.MinAsync(p => p.Age);
             Console.WriteLine($"Min age: {minAgeAsync}");
 
-            var avgSalaryAsync = await repository.AverageAsync(p => p.Salary, p => p.Department == "IT");
+            decimal avgSalaryAsync = await repository.AverageAsync(p => p.Salary, p => p.Department == "IT");
             Console.WriteLine($"Average IT salary: {avgSalaryAsync:C}");
 
-            var totalSalaryAsync = await repository.SumAsync(p => p.Salary);
+            decimal totalSalaryAsync = await repository.SumAsync(p => p.Salary);
             Console.WriteLine($"Total salary: {totalSalaryAsync:C}");
 
             // BATCH operations
             Console.WriteLine("\n--- ASYNC BATCH OPERATIONS ---");
-            var batchDeletedAsync = await repository.BatchDeleteAsync(p => p.Salary < 55000);
+            int batchDeletedAsync = await repository.BatchDeleteAsync(p => p.Salary < 55000);
             Console.WriteLine($"BatchDeleteAsync: Deleted {batchDeletedAsync} low salary records");
 
             // RAW SQL operations
             Console.WriteLine("\n--- ASYNC RAW SQL OPERATIONS ---");
-            var rawResultsCount = 0;
-            await foreach (var person in repository.FromSqlAsync(
+            int rawResultsCount = 0;
+            await foreach (Person person in repository.FromSqlAsync(
                 "SELECT * FROM people WHERE age > @p0 ORDER BY salary DESC LIMIT 10",
                 null,  // transaction parameter
                 default(CancellationToken),
@@ -575,7 +575,7 @@
             }
             Console.WriteLine($"Raw SQL async query returned {rawResultsCount} results");
 
-            var affectedRowsAsync = await repository.ExecuteSqlAsync(
+            int affectedRowsAsync = await repository.ExecuteSqlAsync(
                 "UPDATE people SET age = age + @p0 WHERE department = @p1",
                 null,  // transaction parameter
                 default(CancellationToken),
@@ -586,10 +586,10 @@
 
             // TRANSACTION operations
             Console.WriteLine("\n--- ASYNC TRANSACTION OPERATIONS ---");
-            var countBeforeAsync = await repository.CountAsync();
+            int countBeforeAsync = await repository.CountAsync();
             Console.WriteLine($"Count before transaction: {countBeforeAsync}");
 
-            using (var transaction = await repository.BeginTransactionAsync())
+            using (ITransaction transaction = await repository.BeginTransactionAsync())
             {
                 try
                 {
@@ -609,12 +609,12 @@
                 }
             }
 
-            var countAfterAsync = await repository.CountAsync();
+            int countAfterAsync = await repository.CountAsync();
             Console.WriteLine($"Count after transaction: {countAfterAsync}");
 
             // Test query builder async execution
             Console.WriteLine("\n--- ASYNC QUERY BUILDER ---");
-            var asyncQueryResults = await repository.Query()
+            IEnumerable<Person> asyncQueryResults = await repository.Query()
                 .Where(p => p.Department == "IT")
                 .OrderByDescending(p => p.Salary)
                 .ThenBy(p => p.Age)
@@ -625,8 +625,8 @@
 
             // Test async enumerable query
             Console.WriteLine("\nStreaming results with ExecuteAsyncEnumerable:");
-            var streamCount = 0;
-            await foreach (var person in repository.Query()
+            int streamCount = 0;
+            await foreach (Person person in repository.Query()
                 .Where(p => p.Salary > 60000)
                 .OrderBy(p => p.LastName)
                 .ExecuteAsyncEnumerable())
@@ -643,7 +643,7 @@
             Console.WriteLine("\n--- ASYNC RAW QUERY EXPOSURE ---");
             
             // Test ExecuteWithQueryAsync - returns both query and results
-            var asyncQueryWithResults = await repository.Query()
+            IDurableResult<Person> asyncQueryWithResults = await repository.Query()
                 .Where(p => p.Department == "IT")
                 .Where(p => p.Age > 25)
                 .ExecuteWithQueryAsync();
@@ -651,16 +651,16 @@
             Console.WriteLine($"ExecuteWithQueryAsync results: {asyncQueryWithResults.Result.Count()} records");
             
             // Test SelectWithQueryAsync extension method
-            var asyncExtensionResult = await repository.SelectWithQueryAsync(p => p.Salary > 70000 && p.Department != "Sales");
+            IDurableResult<Person> asyncExtensionResult = await repository.SelectWithQueryAsync(p => p.Salary > 70000 && p.Department != "Sales");
             Console.WriteLine($"SelectWithQueryAsync SQL: {asyncExtensionResult.Query}");
             Console.WriteLine($"SelectWithQueryAsync results: {asyncExtensionResult.Result.Count()} records");
             
             // Test SelectAsyncWithQuery - streaming with query
             Console.WriteLine("\nTesting SelectAsyncWithQuery (streaming):");
-            var streamingWithQuery = repository.SelectAsyncWithQuery(p => p.Age < 35);
+            IAsyncDurableResult<Person> streamingWithQuery = repository.SelectAsyncWithQuery(p => p.Age < 35);
             Console.WriteLine($"SelectAsyncWithQuery SQL: {streamingWithQuery.Query}");
-            var streamingCount = 0;
-            await foreach (var person in streamingWithQuery.Result)
+            int streamingCount = 0;
+            await foreach (Person person in streamingWithQuery.Result)
             {
                 streamingCount++;
                 if (streamingCount <= 2)
@@ -675,18 +675,18 @@
         static async Task TestCancellation(SqliteRepository<Person> repository)
         {
             // Add test data
-            var testData = GeneratePeople(100);
+            List<Person> testData = GeneratePeople(100);
             await repository.CreateManyAsync(testData);
 
             // Test cancellation on read operation
-            using (var cts = new CancellationTokenSource())
+            using (CancellationTokenSource cts = new CancellationTokenSource())
             {
                 try
                 {
-                    var readTask = Task.Run(async () =>
+                    Task<int> readTask = Task.Run(async () =>
                     {
-                        var count = 0;
-                        await foreach (var person in repository.ReadAllAsync(null, cts.Token))
+                        int count = 0;
+                        await foreach (Person person in repository.ReadAllAsync(null, cts.Token))
                         {
                             count++;
                             if (count > 10)
@@ -706,7 +706,7 @@
             }
 
             // Test pre-cancelled token
-            using (var cts = new CancellationTokenSource())
+            using (CancellationTokenSource cts = new CancellationTokenSource())
             {
                 cts.Cancel(); // Pre-cancel the token
 
@@ -722,11 +722,11 @@
             }
 
             // Test cancellation during transaction
-            using (var cts = new CancellationTokenSource(100)) // Cancel after 100ms
+            using (CancellationTokenSource cts = new CancellationTokenSource(100)) // Cancel after 100ms
             {
                 try
                 {
-                    var largeUpdate = GeneratePeople(500);
+                    List<Person> largeUpdate = GeneratePeople(500);
                     await repository.CreateManyAsync(largeUpdate, null, cts.Token);
                     Console.WriteLine("ERROR: Large operation should have been cancelled");
                 }
@@ -741,9 +741,9 @@
 
         static List<Person> GeneratePeople(int count)
         {
-            var departments = new[] { "IT", "HR", "Finance", "Sales", "Marketing", "Operations" };
-            var random = new Random();
-            var people = new List<Person>();
+            string[] departments = new[] { "IT", "HR", "Finance", "Sales", "Marketing", "Operations" };
+            Random random = new Random();
+            List<Person> people = new List<Person>();
 
             for (int i = 0; i < count; i++)
             {
@@ -763,11 +763,11 @@
 
         static void InitializeDatabase(string connectionString)
         {
-            using var connection = new SqliteConnection(connectionString);
+            using SqliteConnection connection = new SqliteConnection(connectionString);
             connection.Open();
 
             // Create table
-            var createTableSql = @"
+            string createTableSql = @"
                 CREATE TABLE people (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     first VARCHAR(64) NOT NULL,
@@ -778,7 +778,7 @@
                     department VARCHAR(32) NOT NULL
                 );";
 
-            using (var createCommand = new SqliteCommand(createTableSql, connection))
+            using (SqliteCommand createCommand = new SqliteCommand(createTableSql, connection))
             {
                 createCommand.ExecuteNonQuery();
             }
@@ -792,15 +792,15 @@
 
             // Test 1: Rollback transaction
             Console.WriteLine("\nTest 1: Rollback Transaction");
-            var countBefore = await repository.CountAsync();
+            int countBefore = await repository.CountAsync();
             Console.WriteLine($"Count before transaction: {countBefore}");
 
-            using (var transaction = await repository.BeginTransactionAsync())
+            using (ITransaction transaction = await repository.BeginTransactionAsync())
             {
                 try
                 {
                     // Create person within transaction
-                    var person1 = new Person
+                    Person person1 = new Person
                     {
                         FirstName = "Transaction",
                         LastName = "Test1",
@@ -809,15 +809,15 @@
                         Salary = 75000,
                         Department = "IT"
                     };
-                    var created1 = await repository.CreateAsync(person1, transaction);
+                    Person created1 = await repository.CreateAsync(person1, transaction);
                     Console.WriteLine($"Created in transaction: {created1}");
 
                     // Verify it exists within the transaction
-                    var exists = await repository.ExistsByIdAsync(created1.Id, transaction);
+                    bool exists = await repository.ExistsByIdAsync(created1.Id, transaction);
                     Console.WriteLine($"Exists in transaction: {exists}");
 
                     // Count within transaction
-                    var countInTransaction = await repository.CountAsync(null, transaction);
+                    int countInTransaction = await repository.CountAsync(null, transaction);
                     Console.WriteLine($"Count in transaction: {countInTransaction}");
 
                     // Rollback
@@ -831,28 +831,28 @@
                 }
             }
 
-            var countAfterRollback = await repository.CountAsync();
+            int countAfterRollback = await repository.CountAsync();
             Console.WriteLine($"Count after rollback: {countAfterRollback}");
             Console.WriteLine($"Rollback successful: {countAfterRollback == countBefore}");
 
             // Test 2: Commit transaction
             Console.WriteLine("\nTest 2: Commit Transaction");
-            using (var transaction = await repository.BeginTransactionAsync())
+            using (ITransaction transaction = await repository.BeginTransactionAsync())
             {
                 try
                 {
                     // Create multiple people in transaction
-                    var people = new List<Person>
+                    List<Person> people = new List<Person>
                     {
                         new Person { FirstName = "Trans", LastName = "Person1", Age = 25, Email = "tp1@test.com", Salary = 60000, Department = "HR" },
                         new Person { FirstName = "Trans", LastName = "Person2", Age = 28, Email = "tp2@test.com", Salary = 65000, Department = "HR" }
                     };
 
-                    var created = await repository.CreateManyAsync(people, transaction);
+                    IEnumerable<Person> created = await repository.CreateManyAsync(people, transaction);
                     Console.WriteLine($"Created {created.Count()} people in transaction");
 
                     // Update within transaction
-                    var updated = await repository.UpdateFieldAsync(
+                    int updated = await repository.UpdateFieldAsync(
                         p => p.Department == "HR",
                         p => p.Salary,
                         70000m,
@@ -861,7 +861,7 @@
                     Console.WriteLine($"Updated {updated} salaries in transaction");
 
                     // Query within transaction
-                    var hrCount = await repository.CountAsync(p => p.Department == "HR", transaction);
+                    int hrCount = await repository.CountAsync(p => p.Department == "HR", transaction);
                     Console.WriteLine($"HR count in transaction: {hrCount}");
 
                     // Commit
@@ -876,17 +876,17 @@
                 }
             }
 
-            var countAfterCommit = await repository.CountAsync();
+            int countAfterCommit = await repository.CountAsync();
             Console.WriteLine($"Count after commit: {countAfterCommit}");
 
             // Test 3: Raw SQL within transaction
             Console.WriteLine("\nTest 3: Raw SQL Within Transaction");
-            using (var transaction = await repository.BeginTransactionAsync())
+            using (ITransaction transaction = await repository.BeginTransactionAsync())
             {
                 try
                 {
                     // Execute raw SQL within transaction
-                    var affectedRows = await repository.ExecuteSqlAsync(
+                    int affectedRows = await repository.ExecuteSqlAsync(
                         "UPDATE people SET age = age + @p0 WHERE department = @p1",
                         transaction,
                         default(CancellationToken),
@@ -896,8 +896,8 @@
                     Console.WriteLine($"Updated {affectedRows} ages using raw SQL");
 
                     // Query using raw SQL within transaction
-                    var results = new List<Person>();
-                    await foreach (var person in repository.FromSqlAsync(
+                    List<Person> results = new List<Person>();
+                    await foreach (Person person in repository.FromSqlAsync(
                         "SELECT * FROM people WHERE department = @p0 ORDER BY salary DESC",
                         transaction,
                         default(CancellationToken),
@@ -919,12 +919,12 @@
 
             // Test 4: Sync transaction operations
             Console.WriteLine("\nTest 4: Synchronous Transaction Operations");
-            using (var transaction = repository.BeginTransaction())
+            using (ITransaction transaction = repository.BeginTransaction())
             {
                 try
                 {
                     // Create
-                    var person = new Person
+                    Person person = new Person
                     {
                         FirstName = "Sync",
                         LastName = "Transaction",
@@ -940,7 +940,7 @@
                     repository.Update(person, transaction);
 
                     // Delete some records
-                    var deleted = repository.DeleteMany(p => p.Age > 65, transaction);
+                    int deleted = repository.DeleteMany(p => p.Age > 65, transaction);
                     Console.WriteLine($"Deleted {deleted} old records");
 
                     transaction.Commit();
@@ -958,7 +958,7 @@
 
         static Task RunTest(string testName, Action testAction)
         {
-            var stopwatch = Stopwatch.StartNew();
+            Stopwatch stopwatch = Stopwatch.StartNew();
             try
             {
                 testAction();
@@ -977,7 +977,7 @@
 
         static async Task RunTestAsync(string testName, Func<Task> testAction)
         {
-            var stopwatch = Stopwatch.StartNew();
+            Stopwatch stopwatch = Stopwatch.StartNew();
             try
             {
                 await testAction();
@@ -999,9 +999,9 @@
             Console.WriteLine("TEST RESULTS SUMMARY");
             Console.WriteLine(new string('=', 60));
 
-            var passedTests = _testResults.Where(r => r.Success).ToList();
-            var failedTests = _testResults.Where(r => !r.Success).ToList();
-            var totalTime = _testResults.Sum(r => r.ElapsedMs);
+            List<TestResult> passedTests = _testResults.Where(r => r.Success).ToList();
+            List<TestResult> failedTests = _testResults.Where(r => !r.Success).ToList();
+            long totalTime = _testResults.Sum(r => r.ElapsedMs);
 
             Console.WriteLine($"Total Tests: {_testResults.Count}");
             Console.WriteLine($"Passed: {passedTests.Count} ✅");
@@ -1012,16 +1012,16 @@
             if (failedTests.Any())
             {
                 Console.WriteLine("\nFailed Tests:");
-                foreach (var test in failedTests)
+                foreach (TestResult test in failedTests)
                 {
                     Console.WriteLine($"  ❌ {test.Name}: {test.ErrorMessage}");
                 }
             }
 
             Console.WriteLine("\nAll Tests:");
-            foreach (var test in _testResults)
+            foreach (TestResult test in _testResults)
             {
-                var status = test.Success ? "✅" : "❌";
+                string status = test.Success ? "✅" : "❌";
                 Console.WriteLine($"  {status} {test.Name} ({test.ElapsedMs}ms)");
             }
         }
