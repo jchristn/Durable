@@ -86,7 +86,7 @@ namespace Durable.Sqlite
     {
         public static SqliteConnectionFactory CreateFactory(this string connectionString, Action<ConnectionPoolOptions> configureOptions = null)
         {
-            var options = new ConnectionPoolOptions();
+            ConnectionPoolOptions options = new ConnectionPoolOptions();
             configureOptions?.Invoke(options);
             return new SqliteConnectionFactory(connectionString, options);
         }

@@ -59,7 +59,7 @@ namespace Durable
 
             try
             {
-                if (_AvailableConnections.TryDequeue(out var pooledConnection))
+                if (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -73,7 +73,7 @@ namespace Durable
                     }
                 }
 
-                var newConnection = await CreateNewConnectionAsync(cancellationToken);
+                DbConnection newConnection = await CreateNewConnectionAsync(cancellationToken);
                 return newConnection;
             }
             catch
@@ -94,7 +94,7 @@ namespace Durable
 
             try
             {
-                if (_AvailableConnections.TryDequeue(out var pooledConnection))
+                if (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -108,7 +108,7 @@ namespace Durable
                     }
                 }
 
-                var newConnection = CreateNewConnection();
+                DbConnection newConnection = CreateNewConnection();
                 return newConnection;
             }
             catch
@@ -123,7 +123,7 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            var pooledConnection = FindPooledConnection(connection);
+            PooledConnection pooledConnection = FindPooledConnection(connection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -147,7 +147,7 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            var pooledConnection = FindPooledConnection(connection);
+            PooledConnection pooledConnection = FindPooledConnection(connection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -176,7 +176,7 @@ namespace Durable
             _CleanupTimer?.Dispose();
 
             // Dispose all connections
-            foreach (var pooledConnection in _AllConnections)
+            foreach (PooledConnection pooledConnection in _AllConnections)
             {
                 try
                 {
@@ -198,9 +198,9 @@ namespace Durable
             {
                 try
                 {
-                    var connection = _ConnectionFactory();
+                    DbConnection connection = _ConnectionFactory();
                     connection.Open(); // Ensure connections are opened during initialization
-                    var pooledConnection = new PooledConnection(connection);
+                    PooledConnection pooledConnection = new PooledConnection(connection);
                     _AllConnections.Add(pooledConnection);
                     _AvailableConnections.Enqueue(pooledConnection);
                     Interlocked.Increment(ref _ConnectionCount);
@@ -214,10 +214,10 @@ namespace Durable
 
         private async Task<DbConnection> CreateNewConnectionAsync(CancellationToken cancellationToken)
         {
-            var connection = _ConnectionFactory();
+            DbConnection connection = _ConnectionFactory();
             await connection.OpenAsync(cancellationToken);
             
-            var pooledConnection = new PooledConnection(connection) { IsInUse = true };
+            PooledConnection pooledConnection = new PooledConnection(connection) { IsInUse = true };
             _AllConnections.Add(pooledConnection);
             Interlocked.Increment(ref _ConnectionCount);
             
@@ -226,10 +226,10 @@ namespace Durable
 
         private DbConnection CreateNewConnection()
         {
-            var connection = _ConnectionFactory();
+            DbConnection connection = _ConnectionFactory();
             connection.Open();
             
-            var pooledConnection = new PooledConnection(connection) { IsInUse = true };
+            PooledConnection pooledConnection = new PooledConnection(connection) { IsInUse = true };
             _AllConnections.Add(pooledConnection);
             Interlocked.Increment(ref _ConnectionCount);
             
@@ -243,7 +243,7 @@ namespace Durable
 
             try
             {
-                var connection = pooledConnection.Connection;
+                DbConnection connection = pooledConnection.Connection;
                 return connection.State == System.Data.ConnectionState.Open &&
                        DateTime.UtcNow - pooledConnection.LastUsed < _Options.IdleTimeout;
             }
@@ -255,7 +255,7 @@ namespace Durable
 
         private PooledConnection? FindPooledConnection(DbConnection connection)
         {
-            foreach (var pooledConnection in _AllConnections)
+            foreach (PooledConnection pooledConnection in _AllConnections)
             {
                 if (ReferenceEquals(pooledConnection.Connection, connection))
                 {
@@ -296,11 +296,11 @@ namespace Durable
             if (_Disposed)
                 return;
 
-            var cutoffTime = DateTime.UtcNow - _Options.IdleTimeout;
-            var connectionsToRemove = new List<PooledConnection>();
+            DateTime cutoffTime = DateTime.UtcNow - _Options.IdleTimeout;
+            List<PooledConnection> connectionsToRemove = new List<PooledConnection>();
 
             // Collect idle connections while preserving minimum pool size
-            while (_AvailableConnections.TryDequeue(out var pooledConnection))
+            while (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
             {
                 if (pooledConnection.LastUsed < cutoffTime && _ConnectionCount > _Options.MinPoolSize)
                 {
@@ -314,7 +314,7 @@ namespace Durable
             }
 
             // Dispose idle connections
-            foreach (var connection in connectionsToRemove)
+            foreach (PooledConnection connection in connectionsToRemove)
             {
                 _ = Task.Run(async () => await DisposePooledConnectionAsync(connection));
             }

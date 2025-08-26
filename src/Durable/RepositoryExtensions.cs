@@ -13,7 +13,7 @@ namespace Durable
         
         public static IDurableResult<T> SelectWithQuery<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null) where T : class, new()
         {
-            var query = repository.Query(transaction);
+            IQueryBuilder<T> query = repository.Query(transaction);
             if (predicate != null)
                 query = query.Where(predicate);
 
@@ -22,7 +22,7 @@ namespace Durable
 
         public static async Task<IDurableResult<T>> SelectWithQueryAsync<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
-            var query = repository.Query(transaction);
+            IQueryBuilder<T> query = repository.Query(transaction);
             if (predicate != null)
                 query = query.Where(predicate);
 
@@ -31,7 +31,7 @@ namespace Durable
 
         public static IAsyncDurableResult<T> SelectAsyncWithQuery<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
-            var query = repository.Query(transaction);
+            IQueryBuilder<T> query = repository.Query(transaction);
             if (predicate != null)
                 query = query.Where(predicate);
 
@@ -40,7 +40,7 @@ namespace Durable
 
         public static string GetSelectQuery<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null) where T : class, new()
         {
-            var query = repository.Query(transaction);
+            IQueryBuilder<T> query = repository.Query(transaction);
             if (predicate != null)
                 query = query.Where(predicate);
 
