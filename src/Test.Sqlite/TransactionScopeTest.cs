@@ -31,8 +31,8 @@ namespace Test.Sqlite
             // Test successful transaction
             _repository.ExecuteInTransactionScope(() =>
             {
-                var person1 = new Person { FirstName = "John", LastName = "Doe", Age = 30, Email = "john@test.com", Salary = 75000, Department = "IT" };
-                var person2 = new Person { FirstName = "Jane", LastName = "Smith", Age = 25, Email = "jane@test.com", Salary = 65000, Department = "HR" };
+                Person person1 = new Person { FirstName = "John", LastName = "Doe", Age = 30, Email = "john@test.com", Salary = 75000, Department = "IT" };
+                Person person2 = new Person { FirstName = "Jane", LastName = "Smith", Age = 25, Email = "jane@test.com", Salary = 65000, Department = "HR" };
                 
                 _repository.Create(person1);  // Uses ambient transaction
                 _repository.Create(person2);  // Uses ambient transaction
@@ -41,7 +41,7 @@ namespace Test.Sqlite
                 Console.WriteLine($"Created person 2 with ID: {person2.Id}");
             });
             
-            var count = _repository.Count();
+            int count = _repository.Count();
             Console.WriteLine($"Total persons after successful transaction: {count}");
             
             // Test rollback transaction
@@ -49,7 +49,7 @@ namespace Test.Sqlite
             {
                 _repository.ExecuteInTransactionScope(() =>
                 {
-                    var person3 = new Person { FirstName = "Bob", LastName = "Johnson", Age = 35, Email = "bob@test.com", Salary = 80000, Department = "Sales" };
+                    Person person3 = new Person { FirstName = "Bob", LastName = "Johnson", Age = 35, Email = "bob@test.com", Salary = 80000, Department = "Sales" };
                     _repository.Create(person3);
                     Console.WriteLine($"Created person 3 with ID: {person3.Id}");
                     
@@ -62,7 +62,7 @@ namespace Test.Sqlite
                 Console.WriteLine($"Caught expected exception: {ex.Message}");
             }
             
-            var finalCount = _repository.Count();
+            int finalCount = _repository.Count();
             Console.WriteLine($"Total persons after rollback: {finalCount}");
             Console.WriteLine();
         }
@@ -71,10 +71,10 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Async Transaction Scope ===");
             
-            var result = await _repository.ExecuteInTransactionScopeAsync(async () =>
+            string result = await _repository.ExecuteInTransactionScopeAsync(async () =>
             {
-                var person4 = new Person { FirstName = "Alice", LastName = "Wilson", Age = 28, Email = "alice@test.com", Salary = 70000, Department = "Marketing" };
-                var person5 = new Person { FirstName = "Charlie", LastName = "Brown", Age = 32, Email = "charlie@test.com", Salary = 85000, Department = "Finance" };
+                Person person4 = new Person { FirstName = "Alice", LastName = "Wilson", Age = 28, Email = "alice@test.com", Salary = 70000, Department = "Marketing" };
+                Person person5 = new Person { FirstName = "Charlie", LastName = "Brown", Age = 32, Email = "charlie@test.com", Salary = 85000, Department = "Finance" };
                 
                 await _repository.CreateAsync(person4);
                 await _repository.CreateAsync(person5);
@@ -87,7 +87,7 @@ namespace Test.Sqlite
             
             Console.WriteLine($"Operation result: {result}");
             
-            var count = _repository.Count();
+            int count = _repository.Count();
             Console.WriteLine($"Total persons after async transaction: {count}");
             Console.WriteLine();
         }
@@ -96,18 +96,18 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Nested Transactions with Savepoints ===");
             
-            using var transaction = _repository.BeginTransaction();
+            using ITransaction transaction = _repository.BeginTransaction();
             try
             {
                 // Create first person in main transaction
-                var person6 = new Person { FirstName = "David", LastName = "Lee", Age = 40, Email = "david@test.com", Salary = 90000, Department = "Operations" };
+                Person person6 = new Person { FirstName = "David", LastName = "Lee", Age = 40, Email = "david@test.com", Salary = 90000, Department = "Operations" };
                 _repository.Create(person6, transaction);
                 Console.WriteLine($"Created person 6 with ID: {person6.Id} in main transaction");
                 
                 // Execute operation with savepoint
                 transaction.ExecuteWithSavepoint(() =>
                 {
-                    var person7 = new Person { FirstName = "Eva", LastName = "Garcia", Age = 26, Email = "eva@test.com", Salary = 68000, Department = "HR" };
+                    Person person7 = new Person { FirstName = "Eva", LastName = "Garcia", Age = 26, Email = "eva@test.com", Salary = 68000, Department = "HR" };
                     _repository.Create(person7, transaction);
                     Console.WriteLine($"Created person 7 with ID: {person7.Id} in savepoint");
                     
@@ -119,7 +119,7 @@ namespace Test.Sqlite
                 {
                     transaction.ExecuteWithSavepoint(() =>
                     {
-                        var person8 = new Person { FirstName = "Frank", LastName = "Miller", Age = 45, Email = "frank@test.com", Salary = 95000, Department = "Legal" };
+                        Person person8 = new Person { FirstName = "Frank", LastName = "Miller", Age = 45, Email = "frank@test.com", Salary = 95000, Department = "Legal" };
                         _repository.Create(person8, transaction);
                         Console.WriteLine($"Created person 8 with ID: {person8.Id} in failing savepoint");
                         
@@ -141,7 +141,7 @@ namespace Test.Sqlite
                 throw;
             }
             
-            var finalCount = _repository.Count();
+            int finalCount = _repository.Count();
             Console.WriteLine($"Total persons after nested transaction test: {finalCount}");
             Console.WriteLine();
         }
@@ -150,17 +150,17 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Ambient Transaction Scope ===");
             
-            using var scope1 = TransactionScope.Create(_repository);
+            using TransactionScope scope1 = TransactionScope.Create(_repository);
             
             // These operations will use the ambient transaction
-            var person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 72000, Department = "Marketing" };
+            Person person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 72000, Department = "Marketing" };
             _repository.Create(person9);  // No transaction parameter needed
             Console.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
             
             // Nested scope with same transaction
-            using (var scope2 = TransactionScope.Create(scope1.Transaction))
+            using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
             {
-                var person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 78000, Department = "IT" };
+                Person person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 78000, Department = "IT" };
                 _repository.Create(person10);  // Still uses the same transaction
                 Console.WriteLine($"Created person 10 with ID: {person10.Id} using nested ambient transaction");
                 
@@ -169,7 +169,7 @@ namespace Test.Sqlite
             
             scope1.Complete();
             
-            var finalCount = _repository.Count();
+            int finalCount = _repository.Count();
             Console.WriteLine($"Total persons after ambient transaction test: {finalCount}");
             Console.WriteLine();
         }
@@ -178,9 +178,9 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Concurrent Transaction Scopes ===");
             
-            var tasks = new List<Task>();
-            var successCount = 0;
-            var lockObject = new object();
+            List<Task> tasks = new List<Task>();
+            int successCount = 0;
+            object lockObject = new object();
             
             // Create 10 concurrent tasks that each create persons in transaction scopes
             for (int i = 0; i < 10; i++)
@@ -192,7 +192,7 @@ namespace Test.Sqlite
                     {
                         _repository.ExecuteInTransactionScope(() =>
                         {
-                            var person = new Person 
+                            Person person = new Person 
                             { 
                                 FirstName = $"Concurrent{taskId}", 
                                 LastName = "Test", 
@@ -230,11 +230,11 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Deep Nested Savepoints ===");
             
-            using var transaction = _repository.BeginTransaction();
+            using ITransaction transaction = _repository.BeginTransaction();
             try
             {
                 // Create a person in the main transaction
-                var mainPerson = new Person { FirstName = "Main", LastName = "Transaction", Age = 30, Email = "main@test.com", Salary = 85000, Department = "Management" };
+                Person mainPerson = new Person { FirstName = "Main", LastName = "Transaction", Age = 30, Email = "main@test.com", Salary = 85000, Department = "Management" };
                 _repository.Create(mainPerson, transaction);
                 Console.WriteLine($"Created main person with ID: {mainPerson.Id}");
                 
@@ -261,7 +261,7 @@ namespace Test.Sqlite
                 
             transaction.ExecuteWithSavepoint(() =>
             {
-                var person = new Person 
+                Person person = new Person 
                 { 
                     FirstName = $"Nested{currentDepth}", 
                     LastName = "Savepoint", 
@@ -283,12 +283,12 @@ namespace Test.Sqlite
         {
             Console.WriteLine("=== Testing Concurrent Savepoint Creation ===");
             
-            using var transaction = _repository.BeginTransaction();
+            using ITransaction transaction = _repository.BeginTransaction();
             try
             {
-                var tasks = new List<Task>();
-                var savepointNames = new List<string>();
-                var lockObject = new object();
+                List<Task> tasks = new List<Task>();
+                List<string> savepointNames = new List<string>();
+                object lockObject = new object();
                 
                 // Create 20 concurrent savepoints to test thread safety
                 for (int i = 0; i < 20; i++)
@@ -315,7 +315,7 @@ namespace Test.Sqlite
                             }
                             
                             // Create a person within this savepoint
-                            var person = new Person 
+                            Person person = new Person 
                             { 
                                 FirstName = $"Savepoint{taskId}", 
                                 LastName = "Concurrent", 
@@ -348,7 +348,7 @@ namespace Test.Sqlite
                 await Task.WhenAll(tasks);
                 
                 // Verify all savepoint names are unique (thread safety test)
-                var uniqueNames = savepointNames.Distinct().Count();
+                int uniqueNames = savepointNames.Distinct().Count();
                 Console.WriteLine($"Created {savepointNames.Count} savepoints, {uniqueNames} unique names");
                 if (uniqueNames == savepointNames.Count)
                 {
@@ -380,13 +380,13 @@ namespace Test.Sqlite
             // Create many nested scopes to test for memory leaks
             for (int i = 0; i < 100; i++)
             {
-                using (var scope1 = TransactionScope.Create(_repository))
+                using (TransactionScope scope1 = TransactionScope.Create(_repository))
                 {
-                    using (var scope2 = TransactionScope.Create(scope1.Transaction))
+                    using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
                     {
-                        using (var scope3 = TransactionScope.Create(scope2.Transaction))
+                        using (TransactionScope scope3 = TransactionScope.Create(scope2.Transaction))
                         {
-                            var person = new Person 
+                            Person person = new Person 
                             { 
                                 FirstName = $"Memory{i}", 
                                 LastName = "Test", 
@@ -446,9 +446,9 @@ namespace Test.Sqlite
                 TestMemoryLeakPrevention();
                 
                 Console.WriteLine("=== All Tests Completed Successfully ===");
-                var allPersons = _repository.ReadAll();
+                IEnumerable<Person> allPersons = _repository.ReadAll();
                 Console.WriteLine("Final state of database:");
-                foreach (var person in allPersons)
+                foreach (Person person in allPersons)
                 {
                     Console.WriteLine($"  ID: {person.Id}, Name: {person.FirstName} {person.LastName}, Age: {person.Age}");
                 }

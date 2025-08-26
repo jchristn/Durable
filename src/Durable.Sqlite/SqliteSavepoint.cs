@@ -35,7 +35,7 @@ namespace Durable.Sqlite
             if (createSavepoint)
             {
                 // Create the savepoint
-                using var command = new SqliteCommand($"SAVEPOINT {_name};", _connection, _transaction);
+                using SqliteCommand command = new SqliteCommand($"SAVEPOINT {_name};", _connection, _transaction);
                 command.ExecuteNonQuery();
             }
         }
@@ -51,7 +51,7 @@ namespace Durable.Sqlite
 
             try
             {
-                using var command = new SqliteCommand($"RELEASE SAVEPOINT {_name};", _connection, _transaction);
+                using SqliteCommand command = new SqliteCommand($"RELEASE SAVEPOINT {_name};", _connection, _transaction);
                 command.ExecuteNonQuery();
                 _released = true;
             }
@@ -69,7 +69,7 @@ namespace Durable.Sqlite
 
             try
             {
-                using var command = new SqliteCommand($"RELEASE SAVEPOINT {_name};", _connection, _transaction);
+                using SqliteCommand command = new SqliteCommand($"RELEASE SAVEPOINT {_name};", _connection, _transaction);
                 await command.ExecuteNonQueryAsync(token);
                 _released = true;
             }
@@ -88,7 +88,7 @@ namespace Durable.Sqlite
             if (_released)
                 throw new InvalidOperationException("Savepoint has already been released");
 
-            using var command = new SqliteCommand($"ROLLBACK TO SAVEPOINT {_name};", _connection, _transaction);
+            using SqliteCommand command = new SqliteCommand($"ROLLBACK TO SAVEPOINT {_name};", _connection, _transaction);
             command.ExecuteNonQuery();
         }
 
@@ -100,7 +100,7 @@ namespace Durable.Sqlite
             if (_released)
                 throw new InvalidOperationException("Savepoint has already been released");
 
-            using var command = new SqliteCommand($"ROLLBACK TO SAVEPOINT {_name};", _connection, _transaction);
+            using SqliteCommand command = new SqliteCommand($"ROLLBACK TO SAVEPOINT {_name};", _connection, _transaction);
             await command.ExecuteNonQueryAsync(token);
         }
 

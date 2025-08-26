@@ -81,7 +81,7 @@
             name = name ?? $"sp_{Interlocked.Increment(ref _SavepointCounter)}";
             
             // Create savepoint asynchronously
-            using var command = new SqliteCommand($"SAVEPOINT {name};", _Connection, _Transaction);
+            using SqliteCommand command = new SqliteCommand($"SAVEPOINT {name};", _Connection, _Transaction);
             await command.ExecuteNonQueryAsync(token);
             
             return new SqliteSavepoint(_Connection, _Transaction, name, false);

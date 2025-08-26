@@ -40,7 +40,7 @@ namespace Durable
             if (transaction == null)
                 throw new ArgumentNullException(nameof(transaction));
 
-            var current = _current.Value;
+            TransactionScope? current = _current.Value;
             
             // If we already have a transaction and it's the same connection, create a nested scope
             if (current != null && 
@@ -54,13 +54,13 @@ namespace Durable
 
         public static async Task<TransactionScope> CreateAsync<T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
         {
-            var transaction = await repository.BeginTransactionAsync(token);
+            ITransaction transaction = await repository.BeginTransactionAsync(token);
             return new TransactionScope(transaction, true, _current.Value);
         }
 
         public static TransactionScope Create<T>(IRepository<T> repository) where T : class, new()
         {
-            var transaction = repository.BeginTransaction();
+            ITransaction transaction = repository.BeginTransaction();
             return new TransactionScope(transaction, true, _current.Value);
         }
 
