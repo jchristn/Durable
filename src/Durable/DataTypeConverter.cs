@@ -30,7 +30,7 @@ namespace Durable
 
         #region Public-Methods
 
-        public object ConvertToDatabase(object value, Type targetType, PropertyInfo propertyInfo = null)
+        public object ConvertToDatabase(object value, Type targetType, PropertyInfo? propertyInfo = null)
         {
             if (value == null)
                 return DBNull.Value;
@@ -77,21 +77,21 @@ namespace Durable
             // Guid handling
             if (valueType == typeof(Guid))
             {
-                return value.ToString();
+                return value.ToString()!;
             }
 
             // Enum handling
             if (valueType.IsEnum)
             {
                 // Check for PropertyAttribute flags to determine storage preference
-                PropertyAttribute attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
+                PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
                 if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)
                 {
                     // If String flag is NOT set, store as integer
                     return Convert.ToInt32(value);
                 }
                 // Default to string representation for readability
-                return value.ToString();
+                return value.ToString()!;
             }
 
             // Array and Collection handling - serialize to JSON
@@ -110,26 +110,26 @@ namespace Durable
             // Nullable handling
             if (Nullable.GetUnderlyingType(valueType) != null)
             {
-                return ConvertToDatabase(value, Nullable.GetUnderlyingType(valueType), propertyInfo);
+                return ConvertToDatabase(value, Nullable.GetUnderlyingType(valueType)!, propertyInfo);
             }
 
             // Default: return the value as-is for simple types
             return value;
         }
 
-        public object ConvertFromDatabase(object value, Type targetType, PropertyInfo propertyInfo = null)
+        public object? ConvertFromDatabase(object? value, Type targetType, PropertyInfo? propertyInfo = null)
         {
             if (value == null || value == DBNull.Value)
             {
                 if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
                 {
-                    return Activator.CreateInstance(targetType);
+                    return Activator.CreateInstance(targetType)!;
                 }
                 return null;
             }
 
             // Handle nullable types
-            Type underlyingType = Nullable.GetUnderlyingType(targetType);
+            Type? underlyingType = Nullable.GetUnderlyingType(targetType);
             if (underlyingType != null)
             {
                 targetType = underlyingType;
@@ -164,7 +164,7 @@ namespace Durable
                 {
                     return new DateTimeOffset(dt);
                 }
-                return DateTimeOffset.Parse(value.ToString(), CultureInfo.InvariantCulture);
+                return DateTimeOffset.Parse(value.ToString()!, CultureInfo.InvariantCulture);
             }
 
             // DateOnly handling (.NET 6+)
@@ -173,8 +173,8 @@ namespace Durable
                 if (value is string dateStr)
                 {
                     Type dateOnlyType = targetType;
-                    MethodInfo parseMethod = dateOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
-                    return parseMethod.Invoke(null, new object[] { dateStr, CultureInfo.InvariantCulture });
+                    MethodInfo? parseMethod = dateOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
+                    return parseMethod?.Invoke(null, new object[] { dateStr, CultureInfo.InvariantCulture });
                 }
             }
 
@@ -184,8 +184,8 @@ namespace Durable
                 if (value is string timeStr)
                 {
                     Type timeOnlyType = targetType;
-                    MethodInfo parseMethod = timeOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
-                    return parseMethod.Invoke(null, new object[] { timeStr, CultureInfo.InvariantCulture });
+                    MethodInfo? parseMethod = timeOnlyType.GetMethod("Parse", new[] { typeof(string), typeof(IFormatProvider) });
+                    return parseMethod?.Invoke(null, new object[] { timeStr, CultureInfo.InvariantCulture });
                 }
             }
 
@@ -196,7 +196,7 @@ namespace Durable
                 {
                     return TimeSpan.ParseExact(tsStr, "c", CultureInfo.InvariantCulture);
                 }
-                return TimeSpan.Parse(value.ToString(), CultureInfo.InvariantCulture);
+                return TimeSpan.Parse(value.ToString()!, CultureInfo.InvariantCulture);
             }
 
             // Guid handling
@@ -206,7 +206,7 @@ namespace Durable
                 {
                     return Guid.Parse(guidStr);
                 }
-                return new Guid(value.ToString());
+                return new Guid(value.ToString()!);
             }
 
             // Enum handling
@@ -248,13 +248,13 @@ namespace Durable
             return true;
         }
 
-        public string GetDatabaseTypeString(Type type, PropertyInfo propertyInfo = null)
+        public string GetDatabaseTypeString(Type type, PropertyInfo? propertyInfo = null)
         {
             // Nullable handling
             type = Nullable.GetUnderlyingType(type) ?? type;
 
             // Check for PropertyAttribute
-            PropertyAttribute attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
+            PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
             if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
             {
                 return $"TEXT";

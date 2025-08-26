@@ -5,12 +5,12 @@ namespace Durable
 
     public interface IDataTypeConverter
     {
-        object ConvertToDatabase(object value, Type targetType, PropertyInfo propertyInfo = null);
+        object ConvertToDatabase(object value, Type targetType, PropertyInfo? propertyInfo = null);
         
-        object ConvertFromDatabase(object value, Type targetType, PropertyInfo propertyInfo = null);
+        object? ConvertFromDatabase(object? value, Type targetType, PropertyInfo? propertyInfo = null);
         
         bool CanConvert(Type type);
         
-        string GetDatabaseTypeString(Type type, PropertyInfo propertyInfo = null);
+        string GetDatabaseTypeString(Type type, PropertyInfo? propertyInfo = null);
     }
 }
