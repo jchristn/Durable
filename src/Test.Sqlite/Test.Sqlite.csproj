@@ -18,6 +18,7 @@
 		<Compile Include="QueryExposureTest.cs" />
 		<Compile Include="SanitizationTest.cs" />
 		<Compile Include="SimpleTest.cs" />
+		<Compile Include="TransactionScopeTest.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

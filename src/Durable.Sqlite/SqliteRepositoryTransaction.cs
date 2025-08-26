@@ -3,6 +3,7 @@
     using Microsoft.Data.Sqlite;
     using System;
     using System.Collections.Generic;
+    using System.Data;
     using System.Data.Common;
     using System.Linq;
     using System.Text;
@@ -14,6 +15,7 @@
         private readonly SqliteConnection _Connection;
         private readonly SqliteTransaction _Transaction;
         private bool _Disposed;
+        private int _SavepointCounter;
 
         public SqliteRepositoryTransaction(SqliteConnection connection, SqliteTransaction transaction)
         {
@@ -42,6 +44,39 @@
         public async Task RollbackAsync(CancellationToken token = default)
         {
             await _Transaction.RollbackAsync(token);
+        }
+
+        public ISavepoint CreateSavepoint(string? name = null)
+        {
+            if (_Disposed)
+                throw new ObjectDisposedException(nameof(SqliteRepositoryTransaction));
+
+            ValidateConnectionState();
+
+            name = name ?? $"sp_{Interlocked.Increment(ref _SavepointCounter)}";
+            return new SqliteSavepoint(_Connection, _Transaction, name);
+        }
+
+        public async Task<ISavepoint> CreateSavepointAsync(string? name = null, CancellationToken token = default)
+        {
+            if (_Disposed)
+                throw new ObjectDisposedException(nameof(SqliteRepositoryTransaction));
+
+            ValidateConnectionState();
+
+            name = name ?? $"sp_{Interlocked.Increment(ref _SavepointCounter)}";
+            
+            // Create savepoint asynchronously
+            using var command = new SqliteCommand($"SAVEPOINT {name};", _Connection, _Transaction);
+            await command.ExecuteNonQueryAsync(token);
+            
+            return new SqliteSavepoint(_Connection, _Transaction, name, false);
+        }
+
+        private void ValidateConnectionState()
+        {
+            if (_Connection?.State != ConnectionState.Open)
+                throw new InvalidOperationException("Connection must be open to create savepoints");
         }
 
         public void Dispose()

@@ -1594,12 +1594,15 @@
 
         internal (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) GetConnectionAndCommand(ITransaction transaction)
         {
-            if (transaction != null)
+            // Use provided transaction or check for ambient transaction
+            ITransaction effectiveTransaction = transaction ?? TransactionScope.Current?.Transaction;
+
+            if (effectiveTransaction != null)
             {
                 SqliteCommand command = new SqliteCommand();
-                command.Connection = (SqliteConnection)transaction.Connection;
-                command.Transaction = (SqliteTransaction)transaction.Transaction;
-                return ((SqliteConnection)transaction.Connection, command, false);
+                command.Connection = (SqliteConnection)effectiveTransaction.Connection;
+                command.Transaction = (SqliteTransaction)effectiveTransaction.Transaction;
+                return ((SqliteConnection)effectiveTransaction.Connection, command, false);
             }
             else
             {
@@ -1616,12 +1619,15 @@
 
         internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
         {
-            if (transaction != null)
+            // Use provided transaction or check for ambient transaction
+            ITransaction effectiveTransaction = transaction ?? TransactionScope.Current?.Transaction;
+
+            if (effectiveTransaction != null)
             {
                 SqliteCommand command = new SqliteCommand();
-                command.Connection = (SqliteConnection)transaction.Connection;
-                command.Transaction = (SqliteTransaction)transaction.Transaction;
-                return ((SqliteConnection)transaction.Connection, command, false);
+                command.Connection = (SqliteConnection)effectiveTransaction.Connection;
+                command.Transaction = (SqliteTransaction)effectiveTransaction.Transaction;
+                return ((SqliteConnection)effectiveTransaction.Connection, command, false);
             }
             else
             {
