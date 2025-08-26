@@ -22,7 +22,10 @@
 
         static async Task Main(string[] args)
         {
-            Console.WriteLine("=== SQLite Repository Pattern Demo - Sync & Async ===\n");
+            try
+            {
+                Console.WriteLine("Starting program...");
+                Console.WriteLine("=== SQLite Repository Pattern Demo - Sync & Async ===\n");
 
             // For file-based database use: var connectionString = "Data Source=demo.db";
             // Create in-memory database
@@ -91,8 +94,13 @@
             // Display summary
             DisplayTestSummary();
 
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
+            Console.WriteLine("\nProgram completed successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Program failed with exception: {ex}");
+                Console.WriteLine("\nProgram terminated with errors.");
+            }
         }
 
         static void TestSyncApi(SqliteRepository<Person> repository)

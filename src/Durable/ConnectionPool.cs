@@ -59,7 +59,7 @@ namespace Durable
 
             try
             {
-                if (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
+                if (_AvailableConnections.TryDequeue(out PooledConnection? pooledConnection) && pooledConnection != null)
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -94,7 +94,7 @@ namespace Durable
 
             try
             {
-                if (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
+                if (_AvailableConnections.TryDequeue(out PooledConnection? pooledConnection) && pooledConnection != null)
                 {
                     if (IsConnectionValid(pooledConnection))
                     {
@@ -123,7 +123,7 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            PooledConnection pooledConnection = FindPooledConnection(connection);
+            PooledConnection? pooledConnection = FindPooledConnection(connection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -147,7 +147,7 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            PooledConnection pooledConnection = FindPooledConnection(connection);
+            PooledConnection? pooledConnection = FindPooledConnection(connection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -300,7 +300,7 @@ namespace Durable
             List<PooledConnection> connectionsToRemove = new List<PooledConnection>();
 
             // Collect idle connections while preserving minimum pool size
-            while (_AvailableConnections.TryDequeue(out PooledConnection pooledConnection))
+            while (_AvailableConnections.TryDequeue(out PooledConnection? pooledConnection) && pooledConnection != null)
             {
                 if (pooledConnection.LastUsed < cutoffTime && _ConnectionCount > _Options.MinPoolSize)
                 {
