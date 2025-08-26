@@ -91,6 +91,15 @@
             Console.WriteLine("\n========== DATA TYPE CONVERTER TESTS ==========");
             await RunTestAsync("Data Type Converter", () => DataTypeConverterTest.RunDataTypeConverterTest());
 
+            // Run transaction scope tests
+            Console.WriteLine("\n========== TRANSACTION SCOPE TESTS ==========");
+            await RunTest("Transaction Scope", () => 
+            {
+                TransactionScopeTest transactionTest = new TransactionScopeTest();
+                transactionTest.RunAllTests();
+                transactionTest.Dispose();
+            });
+
             // Display summary
             DisplayTestSummary();
 

@@ -13,5 +13,8 @@
         void Rollback();
         Task CommitAsync(CancellationToken token = default);
         Task RollbackAsync(CancellationToken token = default);
+        
+        ISavepoint CreateSavepoint(string? name = null);
+        Task<ISavepoint> CreateSavepointAsync(string? name = null, CancellationToken token = default);
     }
 }
