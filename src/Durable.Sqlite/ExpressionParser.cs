@@ -65,14 +65,323 @@
                         KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                         if (mapping.Key != null)
                         {
-                            object value = GetConstantValue(assignment.Expression);
-                            setPairs.Add($"{mapping.Key} = {FormatValue(value)}");
+                            string columnName = mapping.Key;
+                            string valueExpression = ParseUpdateValue(assignment.Expression);
+                            setPairs.Add($"{columnName} = {valueExpression}");
                         }
                     }
                 }
                 return string.Join(", ", setPairs);
             }
             throw new ArgumentException("Update expression must be a member initialization expression");
+        }
+
+        private string ParseUpdateValue(Expression expression)
+        {
+            switch (expression)
+            {
+                case ConstantExpression constant:
+                    if (constant.Value is DateTime dateTime)
+                    {
+                        var timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
+                        if (timeDiff < 5)
+                        {
+                            return "datetime('now')";
+                        }
+                    }
+                    return FormatValue(constant.Value);
+                    
+                case MemberExpression member:
+                    if (IsParameterMember(member))
+                    {
+                        return GetColumnFromExpression(member);
+                    }
+                    else
+                    {
+                        object value = GetMemberValue(member);
+                        if (value is DateTime memberDateTime)
+                        {
+                            var timeDiff = Math.Abs((DateTime.Now - memberDateTime).TotalSeconds);
+                            if (timeDiff < 5)
+                            {
+                                return "datetime('now')";
+                            }
+                        }
+                        return FormatValue(value);
+                    }
+                    
+                case BinaryExpression binary:
+                    return ParseUpdateBinaryExpression(binary);
+                    
+                case UnaryExpression unary:
+                    return ParseUpdateUnaryExpression(unary);
+                    
+                case ConditionalExpression conditional:
+                    return ParseUpdateConditionalExpression(conditional);
+                    
+                case MethodCallExpression methodCall:
+                    return ParseUpdateMethodCall(methodCall);
+                    
+                case NewExpression newExpr:
+                    if (newExpr.Type == typeof(DateTime) && newExpr.Arguments.Count >= 3)
+                    {
+                        object year = GetConstantValue(newExpr.Arguments[0]);
+                        object month = GetConstantValue(newExpr.Arguments[1]);
+                        object day = GetConstantValue(newExpr.Arguments[2]);
+                        
+                        if (newExpr.Arguments.Count >= 6)
+                        {
+                            object hour = GetConstantValue(newExpr.Arguments[3]);
+                            object minute = GetConstantValue(newExpr.Arguments[4]);
+                            object second = GetConstantValue(newExpr.Arguments[5]);
+                            return FormatValue(new DateTime((int)year, (int)month, (int)day, (int)hour, (int)minute, (int)second));
+                        }
+                        else
+                        {
+                            return FormatValue(new DateTime((int)year, (int)month, (int)day));
+                        }
+                    }
+                    goto default;
+                    
+                default:
+                    try
+                    {
+                        object value = GetConstantValue(expression);
+                        return FormatValue(value);
+                    }
+                    catch
+                    {
+                        throw new NotSupportedException($"Update expression type {expression.GetType()} is not supported");
+                    }
+            }
+        }
+
+        private string ParseUpdateBinaryExpression(BinaryExpression binary)
+        {
+            string left = ParseUpdateValue(binary.Left);
+            string right = ParseUpdateValue(binary.Right);
+            
+            // Handle string concatenation specifically
+            if (binary.NodeType == ExpressionType.Add && 
+                (binary.Left.Type == typeof(string) || binary.Right.Type == typeof(string)))
+            {
+                return $"({left} || {right})";
+            }
+            
+            string op = binary.NodeType switch
+            {
+                ExpressionType.Add => "+",
+                ExpressionType.Subtract => "-",
+                ExpressionType.Multiply => "*",
+                ExpressionType.Divide => "/",
+                ExpressionType.Modulo => "%",
+                ExpressionType.Coalesce => "COALESCE",
+                _ => throw new NotSupportedException($"Binary operator {binary.NodeType} is not supported in update expressions")
+            };
+            
+            if (binary.NodeType == ExpressionType.Coalesce)
+            {
+                return $"COALESCE({left}, {right})";
+            }
+            
+            return $"({left} {op} {right})";
+        }
+
+        private string ParseUpdateUnaryExpression(UnaryExpression unary)
+        {
+            switch (unary.NodeType)
+            {
+                case ExpressionType.Negate:
+                case ExpressionType.NegateChecked:
+                    string negateOperand = ParseUpdateValue(unary.Operand);
+                    return $"-({negateOperand})";
+                    
+                case ExpressionType.Convert:
+                case ExpressionType.ConvertChecked:
+                    return ParseUpdateValue(unary.Operand);
+                    
+                default:
+                    throw new NotSupportedException($"Unary operator {unary.NodeType} is not supported in update expressions");
+            }
+        }
+
+        private string ParseUpdateConditionalExpression(ConditionalExpression conditional)
+        {
+            string test = Visit(conditional.Test);
+            string ifTrue = ParseUpdateValue(conditional.IfTrue);
+            string ifFalse = ParseUpdateValue(conditional.IfFalse);
+            
+            return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
+        }
+
+        private string ParseUpdateMethodCall(MethodCallExpression methodCall)
+        {
+            switch (methodCall.Method.Name)
+            {
+                case "ToUpper":
+                case "ToLower":
+                case "Trim":
+                    if (methodCall.Object != null)
+                    {
+                        string column = ParseUpdateValue(methodCall.Object);
+                        return methodCall.Method.Name switch
+                        {
+                            "ToUpper" => $"UPPER({column})",
+                            "ToLower" => $"LOWER({column})",
+                            "Trim" => $"TRIM({column})",
+                            _ => throw new NotSupportedException()
+                        };
+                    }
+                    break;
+                    
+                case "Substring":
+                    if (methodCall.Object != null)
+                    {
+                        string column = ParseUpdateValue(methodCall.Object);
+                        if (methodCall.Arguments.Count == 1)
+                        {
+                            string start = ParseUpdateValue(methodCall.Arguments[0]);
+                            return $"SUBSTR({column}, {start} + 1)";
+                        }
+                        else if (methodCall.Arguments.Count == 2)
+                        {
+                            string start = ParseUpdateValue(methodCall.Arguments[0]);
+                            string length = ParseUpdateValue(methodCall.Arguments[1]);
+                            return $"SUBSTR({column}, {start} + 1, {length})";
+                        }
+                    }
+                    break;
+                    
+                case "Replace":
+                    if (methodCall.Object != null && methodCall.Arguments.Count == 2)
+                    {
+                        string column = ParseUpdateValue(methodCall.Object);
+                        string oldValue = ParseUpdateValue(methodCall.Arguments[0]);
+                        string newValue = ParseUpdateValue(methodCall.Arguments[1]);
+                        return $"REPLACE({column}, {oldValue}, {newValue})";
+                    }
+                    break;
+                    
+                case "Concat":
+                    if (methodCall.Method.DeclaringType == typeof(string))
+                    {
+                        List<string> parts = new List<string>();
+                        foreach (Expression arg in methodCall.Arguments)
+                        {
+                            parts.Add(ParseUpdateValue(arg));
+                        }
+                        return string.Join(" || ", parts);
+                    }
+                    break;
+                    
+                case "Round":
+                case "Floor":
+                case "Ceiling":
+                case "Abs":
+                    if (methodCall.Method.DeclaringType == typeof(Math))
+                    {
+                        string functionName = methodCall.Method.Name.ToUpper();
+                        if (methodCall.Arguments.Count == 1)
+                        {
+                            string argument = ParseUpdateValue(methodCall.Arguments[0]);
+                            return $"{functionName}({argument})";
+                        }
+                        else if (methodCall.Arguments.Count == 2 && functionName == "ROUND")
+                        {
+                            string value = ParseUpdateValue(methodCall.Arguments[0]);
+                            string digits = ParseUpdateValue(methodCall.Arguments[1]);
+                            return $"ROUND({value}, {digits})";
+                        }
+                    }
+                    break;
+                    
+                case "Max":
+                case "Min":
+                    if (methodCall.Method.DeclaringType == typeof(Math))
+                    {
+                        if (methodCall.Arguments.Count == 2)
+                        {
+                            string arg1 = ParseUpdateValue(methodCall.Arguments[0]);
+                            string arg2 = ParseUpdateValue(methodCall.Arguments[1]);
+                            return $"{methodCall.Method.Name.ToUpper()}({arg1}, {arg2})";
+                        }
+                    }
+                    break;
+                    
+                case "AddDays":
+                case "AddHours":
+                case "AddMinutes":
+                case "AddSeconds":
+                case "AddMonths":
+                case "AddYears":
+                    if (methodCall.Object != null && methodCall.Arguments.Count == 1)
+                    {
+                        string dateColumn = ParseUpdateValue(methodCall.Object);
+                        string amount = ParseUpdateValue(methodCall.Arguments[0]);
+                        
+                        string modifier = methodCall.Method.Name switch
+                        {
+                            "AddDays" => "days",
+                            "AddHours" => "hours",
+                            "AddMinutes" => "minutes",
+                            "AddSeconds" => "seconds",
+                            "AddMonths" => "months",
+                            "AddYears" => "years",
+                            _ => throw new NotSupportedException()
+                        };
+                        
+                        return $"datetime({dateColumn}, {amount} || ' {modifier}')";
+                    }
+                    break;
+            }
+            
+            if (methodCall.Method.DeclaringType == typeof(DateTime))
+            {
+                if (methodCall.Method.Name == "Now")
+                {
+                    return "datetime('now')";
+                }
+                else if (methodCall.Method.Name == "UtcNow")
+                {
+                    return "datetime('now', 'utc')";
+                }
+                else if (methodCall.Method.Name == "Today")
+                {
+                    return "date('now')";
+                }
+            }
+            
+            try
+            {
+                object value = GetConstantValue(methodCall);
+                return FormatValue(value);
+            }
+            catch
+            {
+                throw new NotSupportedException($"Method {methodCall.Method.Name} is not supported in update expressions");
+            }
+        }
+
+        private bool IsParameterMember(MemberExpression member)
+        {
+            Expression current = member;
+            while (current != null)
+            {
+                if (current is ParameterExpression)
+                {
+                    return true;
+                }
+                
+                if (current is MemberExpression memberExpr)
+                {
+                    current = memberExpr.Expression;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return false;
         }
         
         #endregion
@@ -190,6 +499,14 @@
 
         private string VisitConstant(ConstantExpression constant)
         {
+            if (constant.Value is DateTime dateTime)
+            {
+                var timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
+                if (timeDiff < 5)
+                {
+                    return "datetime('now')";
+                }
+            }
             return FormatValue(constant.Value);
         }
 
