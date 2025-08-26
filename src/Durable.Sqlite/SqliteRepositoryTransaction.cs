@@ -12,10 +12,23 @@
 
     internal class SqliteRepositoryTransaction : ITransaction
     {
+        #region Public-Members
+
+        public DbConnection Connection => _Connection;
+        public DbTransaction Transaction => _Transaction;
+
+        #endregion
+
+        #region Private-Members
+
         private readonly SqliteConnection _Connection;
         private readonly SqliteTransaction _Transaction;
         private bool _Disposed;
         private int _SavepointCounter;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public SqliteRepositoryTransaction(SqliteConnection connection, SqliteTransaction transaction)
         {
@@ -23,8 +36,9 @@
             _Transaction = transaction;
         }
 
-        public DbConnection Connection => _Connection;
-        public DbTransaction Transaction => _Transaction;
+        #endregion
+
+        #region Public-Methods
 
         public void Commit()
         {
@@ -73,12 +87,6 @@
             return new SqliteSavepoint(_Connection, _Transaction, name, false);
         }
 
-        private void ValidateConnectionState()
-        {
-            if (_Connection?.State != ConnectionState.Open)
-                throw new InvalidOperationException("Connection must be open to create savepoints");
-        }
-
         public void Dispose()
         {
             if (!_Disposed)
@@ -88,5 +96,17 @@
                 _Disposed = true;
             }
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        private void ValidateConnectionState()
+        {
+            if (_Connection?.State != ConnectionState.Open)
+                throw new InvalidOperationException("Connection must be open to create savepoints");
+        }
+
+        #endregion
     }
 }
