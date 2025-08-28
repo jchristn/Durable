@@ -76,6 +76,89 @@
             throw new ArgumentException("Update expression must be a member initialization expression");
         }
 
+        public List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> ParseSelectExpression<TResult>(Expression<Func<T, TResult>> selector)
+        {
+            List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> mappings = new List<(string, string, PropertyInfo, PropertyInfo)>();
+
+            switch (selector.Body)
+            {
+                case NewExpression newExpr:
+                    // Handle anonymous types and constructor initialization
+                    for (int i = 0; i < newExpr.Arguments.Count; i++)
+                    {
+                        Expression arg = newExpr.Arguments[i];
+                        PropertyInfo targetProp = null;
+                        
+                        if (newExpr.Members != null && i < newExpr.Members.Count)
+                        {
+                            targetProp = newExpr.Members[i] as PropertyInfo;
+                        }
+
+                        if (arg is MemberExpression memberExpr)
+                        {
+                            PropertyInfo sourceProp = memberExpr.Member as PropertyInfo;
+                            if (sourceProp != null)
+                            {
+                                KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == sourceProp);
+                                if (mapping.Key != null)
+                                {
+                                    string alias = targetProp?.Name ?? sourceProp.Name;
+                                    mappings.Add((mapping.Key, alias, sourceProp, targetProp));
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                case MemberInitExpression memberInit:
+                    // Handle member initialization expressions
+                    foreach (MemberBinding binding in memberInit.Bindings)
+                    {
+                        if (binding is MemberAssignment assignment)
+                        {
+                            PropertyInfo targetProp = assignment.Member as PropertyInfo;
+                            
+                            if (assignment.Expression is MemberExpression memberExpr)
+                            {
+                                PropertyInfo sourceProp = memberExpr.Member as PropertyInfo;
+                                if (sourceProp != null)
+                                {
+                                    KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == sourceProp);
+                                    if (mapping.Key != null)
+                                    {
+                                        mappings.Add((mapping.Key, targetProp.Name, sourceProp, targetProp));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                case MemberExpression memberExpr:
+                    // Handle single member selection
+                    PropertyInfo prop = memberExpr.Member as PropertyInfo;
+                    if (prop != null)
+                    {
+                        KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == prop);
+                        if (mapping.Key != null)
+                        {
+                            mappings.Add((mapping.Key, prop.Name, prop, prop));
+                        }
+                    }
+                    break;
+
+                case ParameterExpression:
+                    // Select all columns (identity projection)
+                    foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+                    {
+                        mappings.Add((kvp.Key, kvp.Key, kvp.Value, kvp.Value));
+                    }
+                    break;
+            }
+
+            return mappings;
+        }
+
         private string ParseUpdateValue(Expression expression)
         {
             switch (expression)

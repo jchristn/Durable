@@ -1,0 +1,449 @@
+namespace Durable.Sqlite
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Data;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using System.Reflection;
+    using System.Runtime.CompilerServices;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.Data.Sqlite;
+
+    public class SqliteProjectedQueryBuilder<TEntity, TResult> : IQueryBuilder<TResult> 
+        where TEntity : class, new()
+        where TResult : class, new()
+    {
+        #region Private-Members
+
+        private readonly SqliteRepository<TEntity> _Repository;
+        private readonly ITransaction _Transaction;
+        private readonly Expression<Func<TEntity, TResult>> _Selector;
+        private readonly List<string> _WhereClauses = new List<string>();
+        private readonly List<OrderByClause> _OrderByClauses = new List<OrderByClause>();
+        private readonly List<string> _Includes = new List<string>();
+        private readonly List<string> _GroupByColumns = new List<string>();
+        private int? _SkipCount;
+        private int? _TakeCount;
+        private bool _Distinct;
+        private string _CachedSql;
+        private List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> _SelectMappings;
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        public SqliteProjectedQueryBuilder(
+            SqliteRepository<TEntity> repository,
+            Expression<Func<TEntity, TResult>> selector,
+            SqliteQueryBuilder<TEntity> sourceQueryBuilder,
+            ITransaction transaction = null)
+        {
+            _Repository = repository ?? throw new ArgumentNullException(nameof(repository));
+            _Selector = selector ?? throw new ArgumentNullException(nameof(selector));
+            _Transaction = transaction;
+
+            // Copy state from source query builder if provided
+            if (sourceQueryBuilder != null)
+            {
+                _WhereClauses.AddRange(sourceQueryBuilder.GetWhereClauses());
+                _GroupByColumns.AddRange(sourceQueryBuilder.GetGroupByColumns());
+                // Note: Would need to expose more internal state from SqliteQueryBuilder if needed
+            }
+
+            // Parse the selector expression to determine columns
+            ParseSelector();
+        }
+
+        #endregion
+
+        #region Public-Methods
+
+        public IQueryBuilder<TResult> Where(Expression<Func<TResult, bool>> predicate)
+        {
+            // For projected queries, we need to translate the predicate back to TEntity
+            // This is complex and may not be supported for all cases
+            throw new NotSupportedException("Where clause on projected query is not supported. Apply Where before Select.");
+        }
+
+        public IQueryBuilder<TResult> OrderBy<TKey>(Expression<Func<TResult, TKey>> keySelector)
+        {
+            string column = GetProjectedColumn(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
+            return this;
+        }
+
+        public IQueryBuilder<TResult> OrderByDescending<TKey>(Expression<Func<TResult, TKey>> keySelector)
+        {
+            string column = GetProjectedColumn(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
+            return this;
+        }
+
+        public IQueryBuilder<TResult> ThenBy<TKey>(Expression<Func<TResult, TKey>> keySelector)
+        {
+            if (_OrderByClauses.Count == 0)
+                throw new InvalidOperationException("ThenBy can only be used after OrderBy or OrderByDescending");
+
+            string column = GetProjectedColumn(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = true });
+            return this;
+        }
+
+        public IQueryBuilder<TResult> ThenByDescending<TKey>(Expression<Func<TResult, TKey>> keySelector)
+        {
+            if (_OrderByClauses.Count == 0)
+                throw new InvalidOperationException("ThenByDescending can only be used after OrderBy or OrderByDescending");
+
+            string column = GetProjectedColumn(keySelector.Body);
+            _OrderByClauses.Add(new OrderByClause { Column = column, Ascending = false });
+            return this;
+        }
+
+        public IQueryBuilder<TResult> Skip(int count)
+        {
+            _SkipCount = count;
+            return this;
+        }
+
+        public IQueryBuilder<TResult> Take(int count)
+        {
+            _TakeCount = count;
+            return this;
+        }
+
+        public IQueryBuilder<TResult> Distinct()
+        {
+            _Distinct = true;
+            return this;
+        }
+
+        public IQueryBuilder<TNewResult> Select<TNewResult>(Expression<Func<TResult, TNewResult>> selector) where TNewResult : class, new()
+        {
+            // Chaining projections would require composing the expressions
+            throw new NotSupportedException("Chaining Select operations is not supported. Apply all projections in a single Select.");
+        }
+
+        public IQueryBuilder<TResult> Include<TProperty>(Expression<Func<TResult, TProperty>> navigationProperty)
+        {
+            // Including on projected results is complex and may not be meaningful
+            throw new NotSupportedException("Include on projected query is not supported. Apply Include before Select.");
+        }
+
+        public IQueryBuilder<TResult> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
+        {
+            throw new NotSupportedException("ThenInclude on projected query is not supported. Apply ThenInclude before Select.");
+        }
+
+        public IGroupedQueryBuilder<TResult, TKey> GroupBy<TKey>(Expression<Func<TResult, TKey>> keySelector)
+        {
+            throw new NotSupportedException("GroupBy on projected query is not supported. Apply GroupBy before Select.");
+        }
+
+        public IEnumerable<TResult> Execute()
+        {
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            try
+            {
+                connectionResult.Command.CommandText = BuildSql();
+                using SqliteDataReader reader = connectionResult.Command.ExecuteReader();
+
+                List<TResult> results = new List<TResult>();
+                while (reader.Read())
+                {
+                    results.Add(MapReaderToResult(reader));
+                }
+
+                return results;
+            }
+            finally
+            {
+                connectionResult.Command?.Dispose();
+                if (connectionResult.ShouldDispose)
+                {
+                    connectionResult.Connection?.Dispose();
+                }
+            }
+        }
+
+        public async Task<IEnumerable<TResult>> ExecuteAsync(CancellationToken token = default)
+        {
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            try
+            {
+                connectionResult.Command.CommandText = BuildSql();
+                await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
+
+                List<TResult> results = new List<TResult>();
+                while (await reader.ReadAsync(token))
+                {
+                    results.Add(MapReaderToResult(reader));
+                }
+
+                return results;
+            }
+            finally
+            {
+                if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
+                if (connectionResult.ShouldDispose && connectionResult.Connection != null)
+                {
+                    await connectionResult.Connection.DisposeAsync();
+                }
+            }
+        }
+
+        // Explicit interface implementations for CancellationToken overloads
+        Task<IEnumerable<TResult>> IQueryBuilder<TResult>.ExecuteAsync(CancellationToken token)
+        {
+            return ExecuteAsync(token);
+        }
+
+        IAsyncEnumerable<TResult> IQueryBuilder<TResult>.ExecuteAsyncEnumerable(CancellationToken token)
+        {
+            return ExecuteAsyncEnumerable(token);
+        }
+
+        Task<IDurableResult<TResult>> IQueryBuilder<TResult>.ExecuteWithQueryAsync(CancellationToken token)
+        {
+            return ExecuteWithQueryAsync(token);
+        }
+
+        IAsyncDurableResult<TResult> IQueryBuilder<TResult>.ExecuteAsyncEnumerableWithQuery(CancellationToken token)
+        {
+            return ExecuteAsyncEnumerableWithQuery(token);
+        }
+
+        public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
+        {
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            try
+            {
+                connectionResult.Command.CommandText = BuildSql();
+                await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
+
+                while (await reader.ReadAsync(token))
+                {
+                    yield return MapReaderToResult(reader);
+                }
+            }
+            finally
+            {
+                if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
+                if (connectionResult.ShouldDispose && connectionResult.Connection != null)
+                {
+                    await connectionResult.Connection.DisposeAsync();
+                }
+            }
+        }
+
+        public string Query
+        {
+            get
+            {
+                if (_CachedSql == null)
+                    _CachedSql = BuildSql();
+                return _CachedSql;
+            }
+        }
+
+        public IDurableResult<TResult> ExecuteWithQuery()
+        {
+            string query = Query;
+            IEnumerable<TResult> results = Execute();
+            return new DurableResult<TResult>(query, results);
+        }
+
+        public async Task<IDurableResult<TResult>> ExecuteWithQueryAsync(CancellationToken token = default)
+        {
+            string query = Query;
+            IEnumerable<TResult> results = await ExecuteAsync(token);
+            return new DurableResult<TResult>(query, results);
+        }
+
+        public IAsyncDurableResult<TResult> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
+        {
+            string query = Query;
+            IAsyncEnumerable<TResult> results = ExecuteAsyncEnumerable(token);
+            return new AsyncDurableResult<TResult>(query, results);
+        }
+
+        public string BuildSql()
+        {
+            System.Text.StringBuilder sql = new System.Text.StringBuilder();
+
+            sql.Append("SELECT ");
+            if (_Distinct) sql.Append("DISTINCT ");
+
+            // Build the column list from parsed mappings
+            if (_SelectMappings != null && _SelectMappings.Count > 0)
+            {
+                List<string> columns = new List<string>();
+                foreach ((string columnName, string alias, PropertyInfo sourceProp, PropertyInfo targetProp) mapping in _SelectMappings)
+                {
+                    if (mapping.columnName != mapping.alias)
+                    {
+                        columns.Add($"{_Repository._Sanitizer.SanitizeIdentifier(mapping.columnName)} AS {_Repository._Sanitizer.SanitizeIdentifier(mapping.alias)}");
+                    }
+                    else
+                    {
+                        columns.Add(_Repository._Sanitizer.SanitizeIdentifier(mapping.columnName));
+                    }
+                }
+                sql.Append(string.Join(", ", columns));
+            }
+            else
+            {
+                sql.Append("*");
+            }
+
+            sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)}");
+
+            if (_WhereClauses.Count > 0)
+            {
+                sql.Append(" WHERE ");
+                sql.Append(string.Join(" AND ", _WhereClauses));
+            }
+
+            if (_GroupByColumns.Count > 0)
+            {
+                sql.Append(" GROUP BY ");
+                sql.Append(string.Join(", ", _GroupByColumns));
+            }
+
+            if (_OrderByClauses.Count > 0)
+            {
+                sql.Append(" ORDER BY ");
+                IEnumerable<string> orderParts = _OrderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
+                sql.Append(string.Join(", ", orderParts));
+            }
+
+            if (_TakeCount.HasValue)
+            {
+                sql.Append($" LIMIT {_TakeCount.Value}");
+            }
+
+            if (_SkipCount.HasValue)
+            {
+                sql.Append($" OFFSET {_SkipCount.Value}");
+            }
+
+            sql.Append(";");
+            return sql.ToString();
+        }
+
+        #endregion
+
+        #region Private-Methods
+
+        private void ParseSelector()
+        {
+            ExpressionParser<TEntity> parser = new ExpressionParser<TEntity>(_Repository._ColumnMappings, _Repository._Sanitizer);
+            _SelectMappings = parser.ParseSelectExpression(_Selector);
+        }
+
+        private TResult MapReaderToResult(IDataReader reader)
+        {
+            TResult result = new TResult();
+            Type resultType = typeof(TResult);
+
+            // Map based on the parsed mappings
+            if (_SelectMappings != null && _SelectMappings.Count > 0)
+            {
+                foreach ((string columnName, string alias, PropertyInfo sourceProp, PropertyInfo targetProp) mapping in _SelectMappings)
+                {
+                    try
+                    {
+                        // Try to get by alias first, then by column name
+                        int ordinal = -1;
+                        try
+                        {
+                            ordinal = reader.GetOrdinal(mapping.alias);
+                        }
+                        catch
+                        {
+                            ordinal = reader.GetOrdinal(mapping.columnName);
+                        }
+
+                        if (ordinal >= 0 && !reader.IsDBNull(ordinal))
+                        {
+                            object value = reader.GetValue(ordinal);
+                            
+                            // Find the target property on TResult
+                            PropertyInfo targetProperty = resultType.GetProperty(mapping.alias, 
+                                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                            
+                            if (targetProperty == null && mapping.targetProp != null)
+                            {
+                                targetProperty = mapping.targetProp;
+                            }
+
+                            if (targetProperty != null && targetProperty.CanWrite)
+                            {
+                                object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(
+                                    value, 
+                                    targetProperty.PropertyType, 
+                                    mapping.sourceProp);
+                                targetProperty.SetValue(result, convertedValue);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log or handle mapping errors
+                        System.Diagnostics.Debug.WriteLine($"Error mapping column {mapping.columnName}: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to property name matching
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    string columnName = reader.GetName(i);
+                    PropertyInfo property = resultType.GetProperty(columnName, 
+                        BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    
+                    if (property != null && property.CanWrite && !reader.IsDBNull(i))
+                    {
+                        object value = reader.GetValue(i);
+                        object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(
+                            value, 
+                            property.PropertyType, 
+                            property);
+                        property.SetValue(result, convertedValue);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private string GetProjectedColumn(Expression expression)
+        {
+            if (expression is MemberExpression memberExpr)
+            {
+                PropertyInfo propInfo = memberExpr.Member as PropertyInfo;
+                if (propInfo != null)
+                {
+                    // Find the mapping for this property
+                    if (_SelectMappings != null)
+                    {
+                        var mapping = _SelectMappings.FirstOrDefault(m => m.Alias == propInfo.Name);
+                        if (!string.IsNullOrEmpty(mapping.ColumnName))
+                        {
+                            return mapping.ColumnName;
+                        }
+                    }
+                    return propInfo.Name;
+                }
+            }
+            throw new ArgumentException($"Cannot get column from projected expression: {expression}");
+        }
+
+        #endregion
+    }
+}
