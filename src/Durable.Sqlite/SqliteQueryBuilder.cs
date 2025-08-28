@@ -23,8 +23,6 @@
         private readonly List<OrderByClause> _OrderByClauses = new List<OrderByClause>();
         private readonly List<string> _Includes = new List<string>();
         private readonly List<string> _GroupByColumns = new List<string>();
-        private Expression _SelectExpression;
-        private Type _SelectType;
         private int? _SkipCount;
         private int? _TakeCount;
         private bool _Distinct;
@@ -105,11 +103,7 @@
 
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
-            _SelectExpression = selector;
-            _SelectType = typeof(TResult);
-            // Note: This would require a more complex implementation to properly handle projection
-            // For now, we'll throw a not implemented exception
-            throw new NotImplementedException("Select projection is not yet implemented");
+            return new SqliteProjectedQueryBuilder<TEntity, TResult>(_Repository, selector, this, _Transaction);
         }
 
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
@@ -265,16 +259,7 @@
 
             sql.Append("SELECT ");
             if (_Distinct) sql.Append("DISTINCT ");
-
-            if (_SelectExpression != null)
-            {
-                // Build projection columns - simplified version
-                sql.Append("*");
-            }
-            else
-            {
-                sql.Append("*");
-            }
+            sql.Append("*");
 
             sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)}");
 
