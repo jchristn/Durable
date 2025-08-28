@@ -102,7 +102,7 @@ namespace Durable
         {
             if (!_disposed)
             {
-                _current.Value = _parent;
+                _current.Value = _parent!;
 
                 if (!_completed && _ownsTransaction)
                 {

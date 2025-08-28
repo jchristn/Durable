@@ -17,8 +17,8 @@
         Task<IEnumerable<IGrouping<TKey, T>>> ExecuteAsync(CancellationToken token = default);
         
         // Aggregate methods
-        int Count(Expression<Func<T, bool>> predicate = null);
-        Task<int> CountAsync(Expression<Func<T, bool>> predicate = null, CancellationToken token = default);
+        int Count(Expression<Func<T, bool>>? predicate = null);
+        Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, CancellationToken token = default);
         decimal Sum(Expression<Func<T, decimal>> selector);
         Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, CancellationToken token = default);
         decimal Average(Expression<Func<T, decimal>> selector);
