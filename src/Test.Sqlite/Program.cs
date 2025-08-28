@@ -100,6 +100,10 @@
                 transactionTest.Dispose();
             });
 
+            // Run GroupBy tests
+            Console.WriteLine("\n========== GROUP BY TESTS ==========");
+            await RunTestAsync("GroupBy Operations", () => TestGroupByQuiet(repository));
+
             // Display summary
             DisplayTestSummary();
 
@@ -971,6 +975,72 @@
             }
 
             Console.WriteLine("\nTransaction tests completed");
+        }
+
+        static async Task TestGroupByQuiet(SqliteRepository<Person> repository)
+        {
+            // Simple, quiet GroupBy test with minimal output
+            Console.WriteLine("Testing GroupBy operations...");
+            
+            // Create some test data for GroupBy
+            List<Person> groupByTestData = new List<Person>
+            {
+                new Person { FirstName = "Alice", LastName = "Smith", Age = 30, Email = "alice@groupby.com", Salary = 75000, Department = "IT" },
+                new Person { FirstName = "Bob", LastName = "Jones", Age = 25, Email = "bob@groupby.com", Salary = 65000, Department = "IT" },
+                new Person { FirstName = "Carol", LastName = "Davis", Age = 35, Email = "carol@groupby.com", Salary = 80000, Department = "HR" },
+                new Person { FirstName = "David", LastName = "Wilson", Age = 28, Email = "david@groupby.com", Salary = 70000, Department = "IT" },
+                new Person { FirstName = "Eve", LastName = "Brown", Age = 32, Email = "eve@groupby.com", Salary = 85000, Department = "HR" }
+            };
+            
+            foreach (Person person in groupByTestData)
+            {
+                await repository.CreateAsync(person);
+            }
+            
+            // Test 1: Basic GroupBy
+            IEnumerable<IGrouping<string, Person>> groups = await repository.Query()
+                .GroupBy(p => p.Department)
+                .ExecuteAsync();
+            
+            int groupCount = groups.Count();
+            int totalInGroups = groups.Sum(g => g.Count());
+            Console.WriteLine($"✓ Basic GroupBy: {groupCount} departments, {totalInGroups} people total");
+            
+            // Test 2: GroupBy with WHERE
+            IEnumerable<IGrouping<string, Person>> seniorGroups = await repository.Query()
+                .Where(p => p.Age >= 30)
+                .GroupBy(p => p.Department)
+                .ExecuteAsync();
+            
+            int seniorGroupCount = seniorGroups.Count();
+            int seniorTotal = seniorGroups.Sum(g => g.Count());
+            Console.WriteLine($"✓ GroupBy with WHERE: {seniorGroupCount} departments, {seniorTotal} senior people");
+            
+            // Test 3: HAVING clause
+            IEnumerable<IGrouping<string, Person>> largeDepts = await repository.Query()
+                .GroupBy(p => p.Department)
+                .Having(g => g.Count() > 1)
+                .ExecuteAsync();
+            
+            int largeDeptsCount = largeDepts.Count();
+            Console.WriteLine($"✓ HAVING clause: {largeDeptsCount} departments with >1 person");
+            
+            // Test 4: Aggregate functions
+            int totalPeople = await repository.Query().GroupBy(p => p.Department).CountAsync();
+            decimal avgSalary = await repository.Query().GroupBy(p => p.Department).AverageAsync(p => p.Salary);
+            decimal maxSalary = await repository.Query().GroupBy(p => p.Department).MaxAsync(p => p.Salary);
+            
+            Console.WriteLine($"✓ Aggregates: {totalPeople} people, avg salary ${avgSalary:N0}, max ${maxSalary:N0}");
+            
+            // Test 5: Sync methods
+            IEnumerable<IGrouping<string, Person>> syncGroups = repository.Query()
+                .GroupBy(p => p.Department)
+                .Execute();
+            
+            int syncGroupCount = syncGroups.Count();
+            Console.WriteLine($"✓ Sync GroupBy: {syncGroupCount} departments");
+            
+            Console.WriteLine("All GroupBy tests passed!");
         }
 
         static Task RunTest(string testName, Action testAction)

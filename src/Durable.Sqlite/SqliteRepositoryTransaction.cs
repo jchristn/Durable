@@ -1,4 +1,5 @@
-﻿namespace Durable.Sqlite
+﻿#nullable enable
+namespace Durable.Sqlite
 {
     using Microsoft.Data.Sqlite;
     using System;

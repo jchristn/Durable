@@ -11,6 +11,12 @@
 
     public class SqliteQueryBuilder<TEntity> : IQueryBuilder<TEntity> where TEntity : class, new()
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly SqliteRepository<TEntity> _Repository;
         private readonly ITransaction _Transaction;
         private readonly List<string> _WhereClauses = new List<string>();
@@ -24,11 +30,19 @@
         private bool _Distinct;
         private string _CachedSql;
 
+        #endregion
+
+        #region Constructors-and-Factories
+
         public SqliteQueryBuilder(SqliteRepository<TEntity> repository, ITransaction transaction = null)
         {
             _Repository = repository;
             _Transaction = transaction;
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public IQueryBuilder<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
         {
@@ -121,25 +135,17 @@
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _GroupByColumns.Add(column);
-            return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this);
-        }
-
-        private string GetPropertyName<TProp, TProperty>(Expression<Func<TProp, TProperty>> expression)
-        {
-            if (expression.Body is MemberExpression memberExpression)
-            {
-                return memberExpression.Member.Name;
-            }
-            throw new ArgumentException("Expression must be a member expression");
+            return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this, keySelector);
         }
 
         public IEnumerable<TEntity> Execute()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = _Repository.GetConnectionAndCommand(_Transaction);
+            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
-                command.CommandText = BuildSql();
-                using SqliteDataReader reader = command.ExecuteReader();
+                connectionResult.Command.CommandText = BuildSql();
+                using SqliteDataReader reader = connectionResult.Command.ExecuteReader();
 
                 List<TEntity> results = new List<TEntity>();
                 while (reader.Read())
@@ -148,30 +154,31 @@
                 }
 
                 // Process includes if any (simplified version - full implementation would require multiple queries)
-                if (_Includes.Count > 0 && shouldDispose)
+                if (_Includes.Count > 0 && connectionResult.ShouldDispose)
                 {
-                    ProcessIncludes(results, connection);
+                    ProcessIncludes(results, connectionResult.Connection);
                 }
 
                 return results;
             }
             finally
             {
-                command?.Dispose();
-                if (shouldDispose)
+                connectionResult.Command?.Dispose();
+                if (connectionResult.ShouldDispose)
                 {
-                    connection?.Dispose();
+                    connectionResult.Connection?.Dispose();
                 }
             }
         }
 
         public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
-                command.CommandText = BuildSql();
-                await using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+                connectionResult.Command.CommandText = BuildSql();
+                await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 List<TEntity> results = new List<TEntity>();
                 while (await reader.ReadAsync(token))
@@ -180,30 +187,31 @@
                 }
 
                 // Process includes if any
-                if (_Includes.Count > 0 && shouldDispose)
+                if (_Includes.Count > 0 && connectionResult.ShouldDispose)
                 {
-                    await ProcessIncludesAsync(results, connection, token);
+                    await ProcessIncludesAsync(results, connectionResult.Connection, token);
                 }
 
                 return results;
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
+                if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
+                if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await connection.DisposeAsync();
+                    await connectionResult.Connection.DisposeAsync();
                 }
             }
         }
 
         public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
-                command.CommandText = BuildSql();
-                await using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+                connectionResult.Command.CommandText = BuildSql();
+                await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 while (await reader.ReadAsync(token))
                 {
@@ -212,27 +220,12 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
+                if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
+                if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await connection.DisposeAsync();
+                    await connectionResult.Connection.DisposeAsync();
                 }
             }
-        }
-
-        private void ProcessIncludes(List<TEntity> entities, SqliteConnection connection)
-        {
-            // Simplified include processing - full implementation would need to:
-            // 1. Parse navigation properties
-            // 2. Generate appropriate JOIN queries
-            // 3. Map related entities
-            // This is a placeholder for the complex logic required
-        }
-
-        private async Task ProcessIncludesAsync(List<TEntity> entities, SqliteConnection connection, CancellationToken token)
-        {
-            // Simplified async include processing
-            await Task.CompletedTask;
         }
 
         public string Query
@@ -326,5 +319,35 @@
 
         internal List<string> GetGroupByColumns() => _GroupByColumns;
         internal List<string> GetWhereClauses() => _WhereClauses;
+
+        #endregion
+
+        #region Private-Methods
+
+        private string GetPropertyName<TProp, TProperty>(Expression<Func<TProp, TProperty>> expression)
+        {
+            if (expression.Body is MemberExpression memberExpression)
+            {
+                return memberExpression.Member.Name;
+            }
+            throw new ArgumentException("Expression must be a member expression");
+        }
+
+        private void ProcessIncludes(List<TEntity> entities, SqliteConnection connection)
+        {
+            // Simplified include processing - full implementation would need to:
+            // 1. Parse navigation properties
+            // 2. Generate appropriate JOIN queries
+            // 3. Map related entities
+            // This is a placeholder for the complex logic required
+        }
+
+        private async Task ProcessIncludesAsync(List<TEntity> entities, SqliteConnection connection, CancellationToken token)
+        {
+            // Simplified async include processing
+            await Task.CompletedTask;
+        }
+
+        #endregion
     }
 }
