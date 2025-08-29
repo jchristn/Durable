@@ -57,7 +57,7 @@
 
         public int Count(Expression<Func<TEntity, bool>> predicate = null)
         {
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -77,7 +77,7 @@
 
         public async Task<int> CountAsync(Expression<Func<TEntity, bool>> predicate = null, CancellationToken token = default)
         {
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -98,7 +98,7 @@
         public decimal Sum(Expression<Func<TEntity, decimal>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -119,7 +119,7 @@
         public async Task<decimal> SumAsync(Expression<Func<TEntity, decimal>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -140,7 +140,7 @@
         public decimal Average(Expression<Func<TEntity, decimal>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -161,7 +161,7 @@
         public async Task<decimal> AverageAsync(Expression<Func<TEntity, decimal>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -182,7 +182,7 @@
         public TResult Max<TResult>(Expression<Func<TEntity, TResult>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -203,7 +203,7 @@
         public async Task<TResult> MaxAsync<TResult>(Expression<Func<TEntity, TResult>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -224,7 +224,7 @@
         public TResult Min<TResult>(Expression<Func<TEntity, TResult>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -245,7 +245,7 @@
         public async Task<TResult> MinAsync<TResult>(Expression<Func<TEntity, TResult>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -347,7 +347,7 @@
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            (var connection, var command, var shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
@@ -374,7 +374,7 @@
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            (var connection, var command, var shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
             ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
             try
             {
