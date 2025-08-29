@@ -6,6 +6,8 @@ namespace Durable.Sqlite
 
     internal class IncludeInfo
     {
+        #region Public-Members
+
         public string PropertyPath { get; set; }
         public PropertyInfo NavigationProperty { get; set; }
         public PropertyInfo ForeignKeyProperty { get; set; }
@@ -15,21 +17,53 @@ namespace Durable.Sqlite
         public IncludeInfo Parent { get; set; }
         public List<IncludeInfo> Children { get; set; } = new List<IncludeInfo>();
         public bool IsCollection { get; set; }
+
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 
     internal class IncludeProcessor
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly Dictionary<Type, string> _tableNameCache = new Dictionary<Type, string>();
         private readonly Dictionary<Type, Dictionary<string, PropertyInfo>> _columnMappingCache = new Dictionary<Type, Dictionary<string, PropertyInfo>>();
         private readonly ISanitizer _sanitizer;
         private readonly IncludeValidator _includeValidator;
         private int _aliasCounter = 0;
 
+        #endregion
+
+        #region Constructors-and-Factories
+
         public IncludeProcessor(ISanitizer sanitizer, int maxIncludeDepth = 5)
         {
             _sanitizer = sanitizer;
             _includeValidator = new IncludeValidator(maxIncludeDepth);
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public List<IncludeInfo> ParseIncludes<T>(List<string> includePaths) where T : class
         {
@@ -75,6 +109,32 @@ namespace Durable.Sqlite
 
             return rootIncludes;
         }
+
+        public Dictionary<string, PropertyInfo> GetColumnMappings(Type entityType)
+        {
+            if (_columnMappingCache.ContainsKey(entityType))
+            {
+                return _columnMappingCache[entityType];
+            }
+
+            Dictionary<string, PropertyInfo> columnMappings = new Dictionary<string, PropertyInfo>();
+
+            foreach (PropertyInfo prop in entityType.GetProperties())
+            {
+                PropertyAttribute attr = prop.GetCustomAttribute<PropertyAttribute>();
+                if (attr != null)
+                {
+                    columnMappings[attr.Name] = prop;
+                }
+            }
+
+            _columnMappingCache[entityType] = columnMappings;
+            return columnMappings;
+        }
+
+        #endregion
+
+        #region Private-Methods
 
         private IncludeInfo CreateIncludeInfo(Type entityType, string propertyName, string propertyPath, IncludeInfo parent)
         {
@@ -148,26 +208,6 @@ namespace Durable.Sqlite
             return entityAttr.Name;
         }
 
-        public Dictionary<string, PropertyInfo> GetColumnMappings(Type entityType)
-        {
-            if (_columnMappingCache.ContainsKey(entityType))
-            {
-                return _columnMappingCache[entityType];
-            }
-
-            Dictionary<string, PropertyInfo> columnMappings = new Dictionary<string, PropertyInfo>();
-
-            foreach (PropertyInfo prop in entityType.GetProperties())
-            {
-                PropertyAttribute attr = prop.GetCustomAttribute<PropertyAttribute>();
-                if (attr != null)
-                {
-                    columnMappings[attr.Name] = prop;
-                }
-            }
-
-            _columnMappingCache[entityType] = columnMappings;
-            return columnMappings;
-        }
+        #endregion
     }
 }

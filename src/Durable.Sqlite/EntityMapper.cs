@@ -10,9 +10,19 @@ namespace Durable.Sqlite
 
     internal class EntityMapper<T> where T : class, new()
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly IDataTypeConverter _dataTypeConverter;
         private readonly Dictionary<string, PropertyInfo> _baseColumnMappings;
         private readonly Dictionary<string, HashSet<object>> _processedEntities;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public EntityMapper(
             IDataTypeConverter dataTypeConverter,
@@ -22,6 +32,10 @@ namespace Durable.Sqlite
             _baseColumnMappings = baseColumnMappings;
             _processedEntities = new Dictionary<string, HashSet<object>>();
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public List<T> MapJoinedResults(
             SqliteDataReader reader,
@@ -50,6 +64,10 @@ namespace Durable.Sqlite
 
             return results;
         }
+
+        #endregion
+
+        #region Private-Methods
 
         private T MapPrimaryEntity(SqliteDataReader reader, Dictionary<object, T> existingEntities)
         {
@@ -184,18 +202,34 @@ namespace Durable.Sqlite
             }
             return entity.GetHashCode();
         }
+
+        #endregion
     }
 
     internal class CollectionLoader<T> where T : class, new()
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly ISanitizer _sanitizer;
         private readonly IDataTypeConverter _dataTypeConverter;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public CollectionLoader(ISanitizer sanitizer, IDataTypeConverter dataTypeConverter)
         {
             _sanitizer = sanitizer;
             _dataTypeConverter = dataTypeConverter;
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public void LoadCollections(
             List<T> entities,
@@ -229,6 +263,10 @@ namespace Durable.Sqlite
                 }
             }
         }
+
+        #endregion
+
+        #region Private-Methods
 
         private void LoadCollectionsForRelatedEntities(
             List<object> entities,
@@ -476,5 +514,7 @@ namespace Durable.Sqlite
 
             return result;
         }
+
+        #endregion
     }
 }

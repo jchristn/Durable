@@ -8,14 +8,28 @@ namespace Durable.Sqlite
 
     internal class JoinBuilder
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly ISanitizer _sanitizer;
         private readonly IncludeProcessor _includeProcessor;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public JoinBuilder(ISanitizer sanitizer)
         {
             _sanitizer = sanitizer;
             _includeProcessor = new IncludeProcessor(sanitizer);
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public class JoinResult
         {
@@ -78,6 +92,10 @@ namespace Durable.Sqlite
 
             return result;
         }
+
+        #endregion
+
+        #region Private-Methods
 
         private void BuildJoinForIncludes(
             List<IncludeInfo> includes,
@@ -148,5 +166,7 @@ namespace Durable.Sqlite
             }
             throw new InvalidOperationException($"No primary key found for type {entityType.Name}");
         }
+
+        #endregion
     }
 }

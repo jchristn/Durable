@@ -6,14 +6,28 @@ namespace Durable.Sqlite
 
     internal class CycleDetector
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly HashSet<string> _visitedPaths;
         private readonly Dictionary<Type, HashSet<Type>> _typeGraph;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public CycleDetector()
         {
             _visitedPaths = new HashSet<string>();
             _typeGraph = new Dictionary<Type, HashSet<Type>>();
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public bool WouldCreateCycle(string includePath, Type sourceType, Type targetType)
         {
@@ -51,6 +65,16 @@ namespace Durable.Sqlite
             return false;
         }
 
+        public void Reset()
+        {
+            _visitedPaths.Clear();
+            _typeGraph.Clear();
+        }
+
+        #endregion
+
+        #region Private-Methods
+
         private bool HasCycleDFS(Type current, Type target, HashSet<Type> visited)
         {
             if (visited.Contains(current))
@@ -75,18 +99,24 @@ namespace Durable.Sqlite
             return false;
         }
 
-        public void Reset()
-        {
-            _visitedPaths.Clear();
-            _typeGraph.Clear();
-        }
+        #endregion
     }
 
     internal class IncludeValidator
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly CycleDetector _cycleDetector;
         private readonly HashSet<string> _processedIncludes;
         private readonly int _maxIncludeDepth;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public IncludeValidator(int maxIncludeDepth = 5)
         {
@@ -94,6 +124,10 @@ namespace Durable.Sqlite
             _processedIncludes = new HashSet<string>();
             _maxIncludeDepth = maxIncludeDepth;
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public void ValidateInclude(string includePath, Type sourceType, Type targetType)
         {
@@ -124,5 +158,11 @@ namespace Durable.Sqlite
             _cycleDetector.Reset();
             _processedIncludes.Clear();
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 }
