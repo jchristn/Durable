@@ -11,6 +11,14 @@ namespace Durable.Sqlite
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
 
+    public class SelectMapping
+    {
+        public string ColumnName { get; set; }
+        public string Alias { get; set; }
+        public PropertyInfo SourceProperty { get; set; }
+        public PropertyInfo TargetProperty { get; set; }
+    }
+
     public class SqliteProjectedQueryBuilder<TEntity, TResult> : IQueryBuilder<TResult> 
         where TEntity : class, new()
         where TResult : class, new()
@@ -28,7 +36,7 @@ namespace Durable.Sqlite
         private int? _TakeCount;
         private bool _Distinct;
         private string _CachedSql;
-        private List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> _SelectMappings;
+        private List<SelectMapping> _SelectMappings;
 
         #endregion
 
@@ -282,15 +290,15 @@ namespace Durable.Sqlite
             if (_SelectMappings != null && _SelectMappings.Count > 0)
             {
                 List<string> columns = new List<string>();
-                foreach ((string columnName, string alias, PropertyInfo sourceProp, PropertyInfo targetProp) mapping in _SelectMappings)
+                foreach (SelectMapping mapping in _SelectMappings)
                 {
-                    if (mapping.columnName != mapping.alias)
+                    if (mapping.ColumnName != mapping.Alias)
                     {
-                        columns.Add($"{_Repository._Sanitizer.SanitizeIdentifier(mapping.columnName)} AS {_Repository._Sanitizer.SanitizeIdentifier(mapping.alias)}");
+                        columns.Add($"{_Repository._Sanitizer.SanitizeIdentifier(mapping.ColumnName)} AS {_Repository._Sanitizer.SanitizeIdentifier(mapping.Alias)}");
                     }
                     else
                     {
-                        columns.Add(_Repository._Sanitizer.SanitizeIdentifier(mapping.columnName));
+                        columns.Add(_Repository._Sanitizer.SanitizeIdentifier(mapping.ColumnName));
                     }
                 }
                 sql.Append(string.Join(", ", columns));
@@ -353,7 +361,7 @@ namespace Durable.Sqlite
             // Map based on the parsed mappings
             if (_SelectMappings != null && _SelectMappings.Count > 0)
             {
-                foreach ((string columnName, string alias, PropertyInfo sourceProp, PropertyInfo targetProp) mapping in _SelectMappings)
+                foreach (SelectMapping mapping in _SelectMappings)
                 {
                     try
                     {
@@ -361,11 +369,11 @@ namespace Durable.Sqlite
                         int ordinal = -1;
                         try
                         {
-                            ordinal = reader.GetOrdinal(mapping.alias);
+                            ordinal = reader.GetOrdinal(mapping.Alias);
                         }
                         catch
                         {
-                            ordinal = reader.GetOrdinal(mapping.columnName);
+                            ordinal = reader.GetOrdinal(mapping.ColumnName);
                         }
 
                         if (ordinal >= 0 && !reader.IsDBNull(ordinal))
@@ -373,12 +381,12 @@ namespace Durable.Sqlite
                             object value = reader.GetValue(ordinal);
                             
                             // Find the target property on TResult
-                            PropertyInfo targetProperty = resultType.GetProperty(mapping.alias, 
+                            PropertyInfo targetProperty = resultType.GetProperty(mapping.Alias, 
                                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                             
-                            if (targetProperty == null && mapping.targetProp != null)
+                            if (targetProperty == null && mapping.TargetProperty != null)
                             {
-                                targetProperty = mapping.targetProp;
+                                targetProperty = mapping.TargetProperty;
                             }
 
                             if (targetProperty != null && targetProperty.CanWrite)
@@ -386,7 +394,7 @@ namespace Durable.Sqlite
                                 object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(
                                     value, 
                                     targetProperty.PropertyType, 
-                                    mapping.sourceProp);
+                                    mapping.SourceProperty);
                                 targetProperty.SetValue(result, convertedValue);
                             }
                         }
@@ -394,7 +402,7 @@ namespace Durable.Sqlite
                     catch (Exception ex)
                     {
                         // Log or handle mapping errors
-                        System.Diagnostics.Debug.WriteLine($"Error mapping column {mapping.columnName}: {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"Error mapping column {mapping.ColumnName}: {ex.Message}");
                     }
                 }
             }
@@ -432,8 +440,8 @@ namespace Durable.Sqlite
                     // Find the mapping for this property
                     if (_SelectMappings != null)
                     {
-                        var mapping = _SelectMappings.FirstOrDefault(m => m.Alias == propInfo.Name);
-                        if (!string.IsNullOrEmpty(mapping.ColumnName))
+                        SelectMapping mapping = _SelectMappings.FirstOrDefault(m => m.Alias == propInfo.Name);
+                        if (mapping != null && !string.IsNullOrEmpty(mapping.ColumnName))
                         {
                             return mapping.ColumnName;
                         }

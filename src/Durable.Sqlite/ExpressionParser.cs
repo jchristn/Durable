@@ -76,9 +76,9 @@
             throw new ArgumentException("Update expression must be a member initialization expression");
         }
 
-        public List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> ParseSelectExpression<TResult>(Expression<Func<T, TResult>> selector)
+        public List<SelectMapping> ParseSelectExpression<TResult>(Expression<Func<T, TResult>> selector)
         {
-            List<(string ColumnName, string Alias, PropertyInfo SourceProperty, PropertyInfo TargetProperty)> mappings = new List<(string, string, PropertyInfo, PropertyInfo)>();
+            List<SelectMapping> mappings = new List<SelectMapping>();
 
             switch (selector.Body)
             {
@@ -103,7 +103,13 @@
                                 if (mapping.Key != null)
                                 {
                                     string alias = targetProp?.Name ?? sourceProp.Name;
-                                    mappings.Add((mapping.Key, alias, sourceProp, targetProp));
+                                    mappings.Add(new SelectMapping 
+                                    { 
+                                        ColumnName = mapping.Key, 
+                                        Alias = alias, 
+                                        SourceProperty = sourceProp, 
+                                        TargetProperty = targetProp 
+                                    });
                                 }
                             }
                         }
@@ -126,7 +132,13 @@
                                     KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == sourceProp);
                                     if (mapping.Key != null)
                                     {
-                                        mappings.Add((mapping.Key, targetProp.Name, sourceProp, targetProp));
+                                        mappings.Add(new SelectMapping 
+                                        { 
+                                            ColumnName = mapping.Key, 
+                                            Alias = targetProp.Name, 
+                                            SourceProperty = sourceProp, 
+                                            TargetProperty = targetProp 
+                                        });
                                     }
                                 }
                             }
@@ -142,7 +154,13 @@
                         KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == prop);
                         if (mapping.Key != null)
                         {
-                            mappings.Add((mapping.Key, prop.Name, prop, prop));
+                            mappings.Add(new SelectMapping 
+                            { 
+                                ColumnName = mapping.Key, 
+                                Alias = prop.Name, 
+                                SourceProperty = prop, 
+                                TargetProperty = prop 
+                            });
                         }
                     }
                     break;
@@ -151,7 +169,13 @@
                     // Select all columns (identity projection)
                     foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
                     {
-                        mappings.Add((kvp.Key, kvp.Key, kvp.Value, kvp.Value));
+                        mappings.Add(new SelectMapping 
+                        { 
+                            ColumnName = kvp.Key, 
+                            Alias = kvp.Key, 
+                            SourceProperty = kvp.Value, 
+                            TargetProperty = kvp.Value 
+                        });
                     }
                     break;
             }
@@ -166,7 +190,7 @@
                 case ConstantExpression constant:
                     if (constant.Value is DateTime dateTime)
                     {
-                        var timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
+                        double timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
                         if (timeDiff < 5)
                         {
                             return "datetime('now')";
@@ -184,7 +208,7 @@
                         object value = GetMemberValue(member);
                         if (value is DateTime memberDateTime)
                         {
-                            var timeDiff = Math.Abs((DateTime.Now - memberDateTime).TotalSeconds);
+                            double timeDiff = Math.Abs((DateTime.Now - memberDateTime).TotalSeconds);
                             if (timeDiff < 5)
                             {
                                 return "datetime('now')";
@@ -584,7 +608,7 @@
         {
             if (constant.Value is DateTime dateTime)
             {
-                var timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
+                double timeDiff = Math.Abs((DateTime.Now - dateTime).TotalSeconds);
                 if (timeDiff < 5)
                 {
                     return "datetime('now')";
