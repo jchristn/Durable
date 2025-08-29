@@ -104,6 +104,10 @@
             Console.WriteLine("\n========== GROUP BY TESTS ==========");
             await RunTestAsync("GroupBy Operations", () => TestGroupByQuiet(repository));
 
+            // Run Include/Join tests
+            Console.WriteLine("\n========== INCLUDE/JOIN TESTS ==========");
+            await RunTest("Include/Join Operations", () => IncludeTest.Run());
+
             // Display summary
             DisplayTestSummary();
 

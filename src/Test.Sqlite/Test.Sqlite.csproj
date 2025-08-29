@@ -11,9 +11,9 @@
 	<ItemGroup>
 		<Compile Include="Program.cs" />
 		<Compile Include="BatchInsertTest.cs" />
-		<Compile Include="BatchUpdateTests.cs" />
 		<Compile Include="ComplexExpressionTest.cs" />
 		<Compile Include="DataTypeConverterTest.cs" />
+		<Compile Include="IncludeTest.cs" />
 		<Compile Include="PoolingExample.cs" />
 		<Compile Include="QueryExposureTest.cs" />
 		<Compile Include="SanitizationTest.cs" />
