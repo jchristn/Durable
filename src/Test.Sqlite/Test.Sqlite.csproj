@@ -19,6 +19,7 @@
 		<Compile Include="SanitizationTest.cs" />
 		<Compile Include="SimpleTest.cs" />
 		<Compile Include="TransactionScopeTest.cs" />
+		<Compile Include="ConcurrencyIntegrationTest.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
