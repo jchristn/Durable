@@ -12,8 +12,8 @@ namespace Durable
         IWindowedQueryBuilder<T> RowNumber(string alias = "row_number");
         IWindowedQueryBuilder<T> Rank(string alias = "rank");
         IWindowedQueryBuilder<T> DenseRank(string alias = "dense_rank");
-        IWindowedQueryBuilder<T> Lead<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object defaultValue = null, string alias = "lead");
-        IWindowedQueryBuilder<T> Lag<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object defaultValue = null, string alias = "lag");
+        IWindowedQueryBuilder<T> Lead<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object? defaultValue = null, string alias = "lead");
+        IWindowedQueryBuilder<T> Lag<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object? defaultValue = null, string alias = "lag");
         IWindowedQueryBuilder<T> FirstValue<TKey>(Expression<Func<T, TKey>> column, string alias = "first_value");
         IWindowedQueryBuilder<T> LastValue<TKey>(Expression<Func<T, TKey>> column, string alias = "last_value");
         IWindowedQueryBuilder<T> NthValue<TKey>(Expression<Func<T, TKey>> column, int n, string alias = "nth_value");

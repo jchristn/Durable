@@ -46,7 +46,7 @@
         IQueryBuilder<T> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new();
 
         // Window functions
-        IWindowedQueryBuilder<T> WithWindowFunction(string functionName, string partitionBy = null, string orderBy = null);
+        IWindowedQueryBuilder<T> WithWindowFunction(string functionName, string? partitionBy = null, string? orderBy = null);
 
         // CTEs (Common Table Expressions)
         IQueryBuilder<T> WithCte(string cteName, string cteQuery);
