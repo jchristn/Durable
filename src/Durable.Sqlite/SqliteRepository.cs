@@ -12,6 +12,7 @@
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
+    using Durable.ConcurrencyConflictResolvers;
 
 // SQLite Repository Implementation with Full Transaction Support and Connection Pooling
     public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
@@ -32,12 +33,15 @@
         internal readonly IBatchInsertConfiguration _BatchConfig;
         internal readonly ISanitizer _Sanitizer;
         internal readonly IDataTypeConverter _DataTypeConverter;
+        internal readonly VersionColumnInfo _VersionColumnInfo;
+        internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
+        internal readonly IChangeTracker<T> _ChangeTracker;
 
         #endregion
 
         #region Constructors-and-Factories
 
-        public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null)
+        public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
             _ConnectionFactory = new SqliteConnectionFactory(connectionString);
             _Sanitizer = new SqliteSanitizer();
@@ -48,9 +52,12 @@
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
             _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
+            _VersionColumnInfo = GetVersionColumnInfo();
+            _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
+            _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
         }
 
-        public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null)
+        public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _Sanitizer = new SqliteSanitizer();
@@ -61,6 +68,9 @@
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
             _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
+            _VersionColumnInfo = GetVersionColumnInfo();
+            _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
+            _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
         }
 
         #endregion
@@ -803,6 +813,19 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     object value = property.GetValue(entity);
+                    
+                    // Set default version for version columns if not already set
+                    if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                    {
+                        if (value == null || (value is int intValue && intValue == 0) || 
+                            (value is DateTime dtValue && dtValue == DateTime.MinValue) ||
+                            (value is Guid guidValue && guidValue == Guid.Empty))
+                        {
+                            value = _VersionColumnInfo.GetDefaultVersion();
+                            _VersionColumnInfo.SetValue(entity, value);
+                        }
+                    }
+                    
                     object convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
@@ -854,6 +877,19 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     object value = property.GetValue(entity);
+                    
+                    // Set default version for version columns if not already set
+                    if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                    {
+                        if (value == null || (value is int intValue && intValue == 0) || 
+                            (value is DateTime dtValue && dtValue == DateTime.MinValue) ||
+                            (value is Guid guidValue && guidValue == Guid.Empty))
+                        {
+                            value = _VersionColumnInfo.GetDefaultVersion();
+                            _VersionColumnInfo.SetValue(entity, value);
+                        }
+                    }
+                    
                     object convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
@@ -1010,6 +1046,7 @@
             {
                 List<string> setPairs = new List<string>();
                 object idValue = null;
+                object currentVersion = null;
 
                 foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
                 {
@@ -1021,6 +1058,15 @@
                     {
                         idValue = value;
                     }
+                    else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                    {
+                        currentVersion = value;
+                        object newVersion = _VersionColumnInfo.IncrementVersion(currentVersion);
+                        setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @new_version");
+                        object convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion, _VersionColumnInfo.PropertyType, property);
+                        command.Parameters.AddWithValue("@new_version", convertedNewVersion);
+                        _VersionColumnInfo.SetValue(entity, newVersion);
+                    }
                     else
                     {
                         setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
@@ -1030,12 +1076,57 @@
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
+
+                string whereClause = $"{_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+                if (_VersionColumnInfo != null)
+                {
+                    object convertedCurrentVersion = _DataTypeConverter.ConvertToDatabase(currentVersion, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
+                    command.Parameters.AddWithValue("@current_version", convertedCurrentVersion ?? DBNull.Value);
+                    whereClause += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @current_version";
+                }
+
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
 
                 int rowsAffected = command.ExecuteNonQuery();
 
                 if (rowsAffected == 0)
-                    throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
+                {
+                    if (_VersionColumnInfo != null)
+                    {
+                        T currentDbEntity = ReadById(idValue, transaction);
+                        if (currentDbEntity == null)
+                        {
+                            throw new InvalidOperationException($"Entity with {_PrimaryKeyColumn} = {idValue} not found in database");
+                        }
+                        
+                        object actualVersion = _VersionColumnInfo.GetValue(currentDbEntity);
+                        
+                        // Create original entity by copying incoming entity but with the expected version
+                        // This represents the entity state as the user originally loaded it
+                        T originalEntity = CreateCopyOfEntity(entity);
+                        _VersionColumnInfo.SetValue(originalEntity, currentVersion);
+                        
+                        // Try to resolve the conflict
+                        ConflictResolutionStrategy strategy = _ConflictResolver.DefaultStrategy;
+                        bool resolved = _ConflictResolver.TryResolveConflict(currentDbEntity, entity, originalEntity, strategy, out T resolvedEntity);
+                        
+                        if (resolved && resolvedEntity != null)
+                        {
+                            // Copy the current version from the database to the resolved entity
+                            _VersionColumnInfo.SetValue(resolvedEntity, actualVersion);
+                            // Retry the update with the resolved entity
+                            return Update(resolvedEntity, transaction);
+                        }
+                        else
+                        {
+                            throw new OptimisticConcurrencyException(entity, currentVersion, actualVersion);
+                        }
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
+                    }
+                }
 
                 return entity;
             }
@@ -1052,6 +1143,7 @@
             {
                 List<string> setPairs = new List<string>();
                 object idValue = null;
+                object currentVersion = null;
 
                 foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
                 {
@@ -1063,6 +1155,15 @@
                     {
                         idValue = value;
                     }
+                    else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                    {
+                        currentVersion = value;
+                        object newVersion = _VersionColumnInfo.IncrementVersion(currentVersion);
+                        setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @new_version");
+                        object convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion, _VersionColumnInfo.PropertyType, property);
+                        command.Parameters.AddWithValue("@new_version", convertedNewVersion);
+                        _VersionColumnInfo.SetValue(entity, newVersion);
+                    }
                     else
                     {
                         setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
@@ -1072,12 +1173,57 @@
                 }
 
                 command.Parameters.AddWithValue("@id", idValue);
-                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
+
+                string whereClause = $"{_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+                if (_VersionColumnInfo != null)
+                {
+                    object convertedCurrentVersion = _DataTypeConverter.ConvertToDatabase(currentVersion, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
+                    command.Parameters.AddWithValue("@current_version", convertedCurrentVersion ?? DBNull.Value);
+                    whereClause += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @current_version";
+                }
+
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
 
                 int rowsAffected = await command.ExecuteNonQueryAsync(token);
 
                 if (rowsAffected == 0)
-                    throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
+                {
+                    if (_VersionColumnInfo != null)
+                    {
+                        T currentDbEntity = await ReadByIdAsync(idValue, transaction, token);
+                        if (currentDbEntity == null)
+                        {
+                            throw new InvalidOperationException($"Entity with {_PrimaryKeyColumn} = {idValue} not found in database");
+                        }
+                        
+                        object actualVersion = _VersionColumnInfo.GetValue(currentDbEntity);
+                        
+                        // Create original entity by copying incoming entity but with the expected version
+                        // This represents the entity state as the user originally loaded it
+                        T originalEntity = CreateCopyOfEntity(entity);
+                        _VersionColumnInfo.SetValue(originalEntity, currentVersion);
+                        
+                        // Try to resolve the conflict
+                        ConflictResolutionStrategy strategy = _ConflictResolver.DefaultStrategy;
+                        IConcurrencyConflictResolver<T>.TryResolveConflictResult result = await _ConflictResolver.TryResolveConflictAsync(currentDbEntity, entity, originalEntity, strategy);
+                        
+                        if (result.Success && result.ResolvedEntity != null)
+                        {
+                            // Copy the current version from the database to the resolved entity
+                            _VersionColumnInfo.SetValue(result.ResolvedEntity, actualVersion);
+                            // Retry the update with the resolved entity
+                            return await UpdateAsync(result.ResolvedEntity, transaction, token);
+                        }
+                        else
+                        {
+                            throw new OptimisticConcurrencyException(entity, currentVersion, actualVersion);
+                        }
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
+                    }
+                }
 
                 return entity;
             }
@@ -1563,6 +1709,92 @@
         #endregion
 
         #region Private-Methods
+        
+        private T CreateCopyOfEntity(T entity)
+        {
+            if (entity == null)
+                return null;
+                
+            T copy = new T();
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                PropertyInfo property = kvp.Value;
+                if (property.CanRead && property.CanWrite)
+                {
+                    object value = property.GetValue(entity);
+                    property.SetValue(copy, value);
+                }
+            }
+            return copy;
+        }
+        
+        private T ReadByIdAtVersion(object id, object version, ITransaction transaction = null)
+        {
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            try
+            {
+                string sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+                if (_VersionColumnInfo != null)
+                {
+                    sql += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @version";
+                }
+                sql += ";";
+                
+                command.CommandText = sql;
+                command.Parameters.AddWithValue("@id", id);
+                if (_VersionColumnInfo != null)
+                {
+                    object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
+                    command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
+                }
+
+                using DbDataReader reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    return MapReaderToEntity(reader);
+                }
+
+                return null;
+            }
+            finally
+            {
+                CleanupConnection(connection, command, shouldReturnToPool);
+            }
+        }
+        
+        private async Task<T> ReadByIdAtVersionAsync(object id, object version, ITransaction transaction = null, CancellationToken token = default)
+        {
+            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
+            try
+            {
+                string sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+                if (_VersionColumnInfo != null)
+                {
+                    sql += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @version";
+                }
+                sql += ";";
+                
+                command.CommandText = sql;
+                command.Parameters.AddWithValue("@id", id);
+                if (_VersionColumnInfo != null)
+                {
+                    object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
+                    command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
+                }
+
+                await using DbDataReader reader = await command.ExecuteReaderAsync(token);
+                if (await reader.ReadAsync(token))
+                {
+                    return MapReaderToEntity(reader);
+                }
+
+                return null;
+            }
+            finally
+            {
+                await CleanupConnectionAsync(connection, command, shouldReturnToPool);
+            }
+        }
 
         protected SqliteConnection GetConnection()
         {
@@ -1710,6 +1942,33 @@
             }
 
             return navProps;
+        }
+
+        protected VersionColumnInfo GetVersionColumnInfo()
+        {
+            foreach (PropertyInfo prop in typeof(T).GetProperties())
+            {
+                VersionColumnAttribute versionAttr = prop.GetCustomAttribute<VersionColumnAttribute>();
+                if (versionAttr != null)
+                {
+                    PropertyAttribute propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                    if (propAttr == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Property {prop.Name} has VersionColumnAttribute but no PropertyAttribute for column mapping.");
+                    }
+                    
+                    return new VersionColumnInfo
+                    {
+                        ColumnName = propAttr.Name,
+                        Property = prop,
+                        Type = versionAttr.Type,
+                        PropertyType = prop.PropertyType
+                    };
+                }
+            }
+            
+            return null;
         }
 
         protected object GetPrimaryKeyValue(T entity)

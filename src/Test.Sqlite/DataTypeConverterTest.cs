@@ -131,7 +131,7 @@ namespace Test.Sqlite
                 );");
         }
 
-        private static async Task VerifyDataIntegrity(ComplexEntity original, ComplexEntity retrieved)
+        private static Task VerifyDataIntegrity(ComplexEntity original, ComplexEntity retrieved)
         {
             bool success = true;
 
@@ -225,6 +225,8 @@ namespace Test.Sqlite
             {
                 throw new Exception("Data integrity verification failed!");
             }
+            
+            return Task.CompletedTask;
         }
 
         private static async Task TestUpdateFieldOperations(SqliteRepository<ComplexEntity> repository, int entityId)
@@ -260,7 +262,7 @@ namespace Test.Sqlite
             Console.WriteLine("✓ UpdateField operations with type conversion passed!");
         }
 
-        private static async Task TestQueryOperations(SqliteRepository<ComplexEntity> repository)
+        private static Task TestQueryOperations(SqliteRepository<ComplexEntity> repository)
         {
             // Test querying by various data types
             List<ComplexEntity> results = repository.Query()
@@ -274,6 +276,8 @@ namespace Test.Sqlite
             }
 
             Console.WriteLine("✓ Query operations with type conversion passed!");
+            
+            return Task.CompletedTask;
         }
 
         private static bool ArraysEqual<T>(T[] arr1, T[] arr2)
