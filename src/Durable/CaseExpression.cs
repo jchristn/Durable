@@ -1,0 +1,59 @@
+namespace Durable
+{
+    using System.Collections.Generic;
+    using System.Text;
+
+    public class CaseExpression
+    {
+        public List<WhenClause> WhenClauses { get; set; }
+        public string ElseResult { get; set; }
+        public string Alias { get; set; }
+
+        public CaseExpression()
+        {
+            WhenClauses = new List<WhenClause>();
+        }
+
+        public string BuildSql()
+        {
+            StringBuilder sql = new StringBuilder();
+            sql.Append("CASE");
+            
+            foreach (WhenClause whenClause in WhenClauses)
+            {
+                sql.Append(" WHEN ");
+                sql.Append(whenClause.Condition);
+                sql.Append(" THEN ");
+                sql.Append(whenClause.Result);
+            }
+            
+            if (!string.IsNullOrEmpty(ElseResult))
+            {
+                sql.Append(" ELSE ");
+                sql.Append(ElseResult);
+            }
+            
+            sql.Append(" END");
+            
+            if (!string.IsNullOrEmpty(Alias))
+            {
+                sql.Append(" AS ");
+                sql.Append(Alias);
+            }
+            
+            return sql.ToString();
+        }
+    }
+
+    public class WhenClause
+    {
+        public string Condition { get; set; }
+        public string Result { get; set; }
+
+        public WhenClause(string condition, string result)
+        {
+            Condition = condition;
+            Result = result;
+        }
+    }
+}

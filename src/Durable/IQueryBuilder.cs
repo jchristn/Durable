@@ -29,6 +29,37 @@
 
         // Group by support
         IGroupedQueryBuilder<T, TKey> GroupBy<TKey>(Expression<Func<T, TKey>> keySelector);
+        IQueryBuilder<T> Having(Expression<Func<T, bool>> predicate);
+
+        // Set operations
+        IQueryBuilder<T> Union(IQueryBuilder<T> other);
+        IQueryBuilder<T> UnionAll(IQueryBuilder<T> other);
+        IQueryBuilder<T> Intersect(IQueryBuilder<T> other);
+        IQueryBuilder<T> Except(IQueryBuilder<T> other);
+
+        // Subquery support
+        IQueryBuilder<T> WhereIn<TKey>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new();
+        IQueryBuilder<T> WhereNotIn<TKey>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new();
+        IQueryBuilder<T> WhereInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql);
+        IQueryBuilder<T> WhereNotInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql);
+        IQueryBuilder<T> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new();
+        IQueryBuilder<T> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new();
+
+        // Window functions
+        IWindowedQueryBuilder<T> WithWindowFunction(string functionName, string partitionBy = null, string orderBy = null);
+
+        // CTEs (Common Table Expressions)
+        IQueryBuilder<T> WithCte(string cteName, string cteQuery);
+        IQueryBuilder<T> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery);
+
+        // Custom SQL fragments
+        IQueryBuilder<T> WhereRaw(string sql, params object[] parameters);
+        IQueryBuilder<T> SelectRaw(string sql);
+        IQueryBuilder<T> FromRaw(string sql);
+        IQueryBuilder<T> JoinRaw(string sql);
+
+        // CASE WHEN expressions
+        ICaseExpressionBuilder<T> SelectCase();
 
         // Execution
         IEnumerable<T> Execute();
