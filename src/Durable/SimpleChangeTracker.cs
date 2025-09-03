@@ -34,21 +34,24 @@ namespace Durable
         {
             if (entity == null) return;
             
-            T originalCopy = CreateCopy(entity);
-            _originalValues.AddOrUpdate(entity, originalCopy, (key, existing) => originalCopy);
+            T? originalCopy = CreateCopy(entity);
+            if (originalCopy != null)
+            {
+                _originalValues.AddOrUpdate(entity, originalCopy, (key, existing) => originalCopy);
+            }
         }
 
-        public T GetOriginalValues(T entity)
+        public T? GetOriginalValues(T entity)
         {
             if (entity == null) return null;
-            return _originalValues.TryGetValue(entity, out T original) ? original : null;
+            return _originalValues.TryGetValue(entity, out T? original) ? original : null;
         }
 
         public bool HasChanges(T entity)
         {
             if (entity == null) return false;
             
-            T original = GetOriginalValues(entity);
+            T? original = GetOriginalValues(entity);
             if (original == null) return false;
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _columnMappings)
@@ -56,8 +59,8 @@ namespace Durable
                 PropertyInfo property = kvp.Value;
                 if (!property.CanRead) continue;
 
-                object originalValue = property.GetValue(original);
-                object currentValue = property.GetValue(entity);
+                object? originalValue = property.GetValue(original);
+                object? currentValue = property.GetValue(entity);
 
                 if (!ObjectEquals(originalValue, currentValue))
                 {
@@ -72,7 +75,7 @@ namespace Durable
         {
             if (entity != null)
             {
-                _originalValues.TryRemove(entity, out T removed);
+                _originalValues.TryRemove(entity, out T? removed);
             }
         }
 
@@ -85,7 +88,7 @@ namespace Durable
 
         #region Private-Methods
 
-        private T CreateCopy(T entity)
+        private T? CreateCopy(T entity)
         {
             if (entity == null) return null;
             
@@ -95,14 +98,14 @@ namespace Durable
                 PropertyInfo property = kvp.Value;
                 if (property.CanRead && property.CanWrite)
                 {
-                    object value = property.GetValue(entity);
+                    object? value = property.GetValue(entity);
                     property.SetValue(copy, value);
                 }
             }
             return copy;
         }
 
-        private bool ObjectEquals(object obj1, object obj2)
+        private bool ObjectEquals(object? obj1, object? obj2)
         {
             if (obj1 == null && obj2 == null) return true;
             if (obj1 == null || obj2 == null) return false;
