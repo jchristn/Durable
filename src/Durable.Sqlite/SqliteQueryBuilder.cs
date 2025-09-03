@@ -31,6 +31,15 @@
         private bool _Distinct;
         private string _CachedSql;
         private JoinBuilder.JoinResult _CachedJoinResult;
+        
+        // Advanced query features
+        private readonly List<SetOperation<TEntity>> _SetOperations = new List<SetOperation<TEntity>>();
+        private readonly List<CteDefinition> _CteDefinitions = new List<CteDefinition>();
+        internal readonly List<WindowFunction> _WindowFunctions = new List<WindowFunction>();
+        private string _CustomFromClause;
+        private string _CustomSelectClause;
+        private readonly List<string> _CustomJoinClauses = new List<string>();
+        private readonly List<string> _HavingClauses = new List<string>();
 
         #endregion
 
@@ -135,6 +144,165 @@
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
             _GroupByColumns.Add(column);
             return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this, keySelector);
+        }
+
+        public IQueryBuilder<TEntity> Having(Expression<Func<TEntity, bool>> predicate)
+        {
+            if (_GroupByColumns.Count == 0)
+            {
+                throw new InvalidOperationException("HAVING clause can only be used with GROUP BY");
+            }
+            
+            string havingClause = _Repository.BuildWhereClause(predicate);
+            _HavingClauses.Add(havingClause);
+            _CachedSql = null;
+            return this;
+        }
+
+        // Set operations
+        public IQueryBuilder<TEntity> Union(IQueryBuilder<TEntity> other)
+        {
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Union, other));
+            _CachedSql = null; // Invalidate cached SQL
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> UnionAll(IQueryBuilder<TEntity> other)
+        {
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.UnionAll, other));
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> Intersect(IQueryBuilder<TEntity> other)
+        {
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Intersect, other));
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> Except(IQueryBuilder<TEntity> other)
+        {
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Except, other));
+            _CachedSql = null;
+            return this;
+        }
+
+        // Subquery support
+        public IQueryBuilder<TEntity> WhereIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
+        {
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WhereNotIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
+        {
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WhereInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
+        {
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WhereNotInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
+        {
+            string column = _Repository.GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
+        {
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"EXISTS ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
+        {
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"NOT EXISTS ({subquerySql})");
+            _CachedSql = null;
+            return this;
+        }
+
+        // Window functions
+        public IWindowedQueryBuilder<TEntity> WithWindowFunction(string functionName, string partitionBy = null, string orderBy = null)
+        {
+            return new SqliteWindowedQueryBuilder<TEntity>(this, _Repository, _Transaction, functionName, partitionBy, orderBy);
+        }
+
+        // CTEs
+        public IQueryBuilder<TEntity> WithCte(string cteName, string cteQuery)
+        {
+            _CteDefinitions.Add(new CteDefinition(cteName, cteQuery));
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery)
+        {
+            _CteDefinitions.Add(new CteDefinition(cteName, anchorQuery, recursiveQuery));
+            _CachedSql = null;
+            return this;
+        }
+
+        // Custom SQL fragments
+        public IQueryBuilder<TEntity> WhereRaw(string sql, params object[] parameters)
+        {
+            if (parameters != null && parameters.Length > 0)
+            {
+                sql = string.Format(sql, parameters.Select(p => _Repository._Sanitizer.FormatValue(p)).ToArray());
+            }
+            _WhereClauses.Add(sql);
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> SelectRaw(string sql)
+        {
+            _CustomSelectClause = sql;
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> FromRaw(string sql)
+        {
+            _CustomFromClause = sql;
+            _CachedSql = null;
+            return this;
+        }
+
+        public IQueryBuilder<TEntity> JoinRaw(string sql)
+        {
+            _CustomJoinClauses.Add(sql);
+            _CachedSql = null;
+            return this;
+        }
+
+        // CASE WHEN expressions
+        public ICaseExpressionBuilder<TEntity> SelectCase()
+        {
+            return new SqliteCaseExpressionBuilder<TEntity>(this, _Repository);
+        }
+
+        // Internal helper methods
+        internal string GetCustomSelectClause()
+        {
+            return _CustomSelectClause;
         }
 
         public IEnumerable<TEntity> Execute()
@@ -309,10 +477,97 @@
         {
             StringBuilder sql = new StringBuilder();
 
+            // Handle CTEs
+            if (_CteDefinitions.Count > 0)
+            {
+                sql.Append("WITH ");
+                if (_CteDefinitions.Any(c => c.IsRecursive))
+                {
+                    sql.Append("RECURSIVE ");
+                }
+                
+                List<string> cteStrings = new List<string>();
+                foreach (CteDefinition cte in _CteDefinitions)
+                {
+                    if (cte.IsRecursive)
+                    {
+                        cteStrings.Add($"{cte.Name} AS ({cte.AnchorQuery} UNION ALL {cte.RecursiveQuery})");
+                    }
+                    else
+                    {
+                        cteStrings.Add($"{cte.Name} AS ({cte.Query})");
+                    }
+                }
+                sql.Append(string.Join(", ", cteStrings));
+                sql.Append(" ");
+            }
+
+            // Build main query
+            string mainQuery = BuildMainQuery();
+            
+            // Handle set operations
+            if (_SetOperations.Count > 0)
+            {
+                sql.Append("(");
+                sql.Append(mainQuery);
+                sql.Append(")");
+                
+                foreach (SetOperation<TEntity> setOp in _SetOperations)
+                {
+                    switch (setOp.Type)
+                    {
+                        case SetOperationType.Union:
+                            sql.Append(" UNION ");
+                            break;
+                        case SetOperationType.UnionAll:
+                            sql.Append(" UNION ALL ");
+                            break;
+                        case SetOperationType.Intersect:
+                            sql.Append(" INTERSECT ");
+                            break;
+                        case SetOperationType.Except:
+                            sql.Append(" EXCEPT ");
+                            break;
+                    }
+                    sql.Append("(");
+                    sql.Append(setOp.OtherQuery.BuildSql().TrimEnd(';'));
+                    sql.Append(")");
+                }
+            }
+            else
+            {
+                sql.Append(mainQuery);
+            }
+
+            sql.Append(";");
+            return sql.ToString();
+        }
+
+        private string BuildMainQuery()
+        {
+            StringBuilder sql = new StringBuilder();
+
+            // SELECT clause
             sql.Append("SELECT ");
             if (_Distinct) sql.Append("DISTINCT ");
             
-            if (_Includes.Count > 0)
+            if (!string.IsNullOrEmpty(_CustomSelectClause))
+            {
+                sql.Append(_CustomSelectClause);
+            }
+            else if (_WindowFunctions.Count > 0)
+            {
+                List<string> selectParts = new List<string>();
+                selectParts.Add("t0.*");
+                
+                foreach (WindowFunction windowFunc in _WindowFunctions)
+                {
+                    selectParts.Add(BuildWindowFunctionSql(windowFunc));
+                }
+                
+                sql.Append(string.Join(", ", selectParts));
+            }
+            else if (_Includes.Count > 0)
             {
                 JoinBuilder.JoinResult joinResult = GetOrBuildJoinResult();
                 sql.Append(joinResult.SelectClause);
@@ -322,32 +577,57 @@
                 sql.Append("t0.*");
             }
 
-            sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)} t0");
+            // FROM clause
+            if (!string.IsNullOrEmpty(_CustomFromClause))
+            {
+                sql.Append($" FROM {_CustomFromClause}");
+            }
+            else
+            {
+                sql.Append($" FROM {_Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName)} t0");
+            }
 
-            // Add JOINs for includes
+            // JOINs
             if (_Includes.Count > 0)
             {
                 JoinBuilder.JoinResult joinResult = GetOrBuildJoinResult();
                 sql.Append(joinResult.JoinClause);
             }
+            
+            if (_CustomJoinClauses.Count > 0)
+            {
+                foreach (string customJoin in _CustomJoinClauses)
+                {
+                    sql.Append(" ");
+                    sql.Append(customJoin);
+                }
+            }
 
+            // WHERE clause
             if (_WhereClauses.Count > 0)
             {
                 sql.Append(" WHERE ");
-                // Update WHERE clauses to use t0 alias
                 List<string> updatedWhereClauses = _WhereClauses.Select(w => 
                     UpdateWhereClauseWithAlias(w, "t0")).ToList();
                 sql.Append(string.Join(" AND ", updatedWhereClauses));
             }
 
+            // GROUP BY clause
             if (_GroupByColumns.Count > 0)
             {
                 sql.Append(" GROUP BY ");
-                // Update GROUP BY columns to use t0 alias
                 List<string> updatedGroupByColumns = _GroupByColumns.Select(c => $"t0.{c}").ToList();
                 sql.Append(string.Join(", ", updatedGroupByColumns));
             }
 
+            // HAVING clause
+            if (_HavingClauses.Count > 0)
+            {
+                sql.Append(" HAVING ");
+                sql.Append(string.Join(" AND ", _HavingClauses));
+            }
+
+            // ORDER BY clause
             if (_OrderByClauses.Count > 0)
             {
                 sql.Append(" ORDER BY ");
@@ -356,6 +636,7 @@
                 sql.Append(string.Join(", ", orderParts));
             }
 
+            // LIMIT/OFFSET
             if (_TakeCount.HasValue)
             {
                 sql.Append($" LIMIT {_TakeCount.Value}");
@@ -366,8 +647,147 @@
                 sql.Append($" OFFSET {_SkipCount.Value}");
             }
 
-            sql.Append(";");
             return sql.ToString();
+        }
+
+        private string BuildWindowFunctionSql(WindowFunction windowFunc)
+        {
+            StringBuilder funcSql = new StringBuilder();
+            
+            funcSql.Append(windowFunc.FunctionName);
+            funcSql.Append("(");
+            
+            // Handle special functions with parameters like LEAD/LAG
+            if (windowFunc.FunctionName == "LEAD" || windowFunc.FunctionName == "LAG")
+            {
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    funcSql.Append(windowFunc.Column);
+                }
+                
+                if (windowFunc.Parameters.ContainsKey("offset"))
+                {
+                    funcSql.Append(", ");
+                    funcSql.Append(windowFunc.Parameters["offset"]);
+                }
+                
+                if (windowFunc.Parameters.ContainsKey("default"))
+                {
+                    funcSql.Append(", ");
+                    object defaultValue = windowFunc.Parameters["default"];
+                    if (defaultValue is string)
+                    {
+                        funcSql.Append($"'{defaultValue}'");
+                    }
+                    else
+                    {
+                        funcSql.Append(defaultValue);
+                    }
+                }
+            }
+            else if (windowFunc.FunctionName == "NTH_VALUE")
+            {
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    funcSql.Append(windowFunc.Column);
+                }
+                
+                if (windowFunc.Parameters.ContainsKey("n"))
+                {
+                    funcSql.Append(", ");
+                    funcSql.Append(windowFunc.Parameters["n"]);
+                }
+            }
+            else
+            {
+                // Regular window functions
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    funcSql.Append(windowFunc.Column);
+                }
+            }
+            
+            funcSql.Append(") OVER (");
+            
+            if (windowFunc.PartitionByColumns.Count > 0)
+            {
+                funcSql.Append("PARTITION BY ");
+                funcSql.Append(string.Join(", ", windowFunc.PartitionByColumns));
+            }
+            
+            if (windowFunc.OrderByColumns.Count > 0)
+            {
+                if (windowFunc.PartitionByColumns.Count > 0)
+                {
+                    funcSql.Append(" ");
+                }
+                funcSql.Append("ORDER BY ");
+                IEnumerable<string> orderParts = windowFunc.OrderByColumns.Select(o => 
+                    $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}");
+                funcSql.Append(string.Join(", ", orderParts));
+            }
+            
+            if (windowFunc.Frame != null)
+            {
+                funcSql.Append(" ");
+                funcSql.Append(BuildWindowFrameSql(windowFunc.Frame));
+            }
+            
+            funcSql.Append(") AS ");
+            funcSql.Append(windowFunc.Alias);
+            
+            return funcSql.ToString();
+        }
+
+        private string BuildWindowFrameSql(WindowFrame frame)
+        {
+            StringBuilder frameSql = new StringBuilder();
+            
+            switch (frame.Type)
+            {
+                case WindowFrameType.Rows:
+                    frameSql.Append("ROWS ");
+                    break;
+                case WindowFrameType.Range:
+                    frameSql.Append("RANGE ");
+                    break;
+                case WindowFrameType.Groups:
+                    frameSql.Append("GROUPS ");
+                    break;
+            }
+            
+            if (frame.EndBound != null)
+            {
+                frameSql.Append("BETWEEN ");
+                frameSql.Append(BuildWindowBoundSql(frame.StartBound));
+                frameSql.Append(" AND ");
+                frameSql.Append(BuildWindowBoundSql(frame.EndBound));
+            }
+            else
+            {
+                frameSql.Append(BuildWindowBoundSql(frame.StartBound));
+            }
+            
+            return frameSql.ToString();
+        }
+
+        private string BuildWindowBoundSql(WindowFrameBound bound)
+        {
+            switch (bound.Type)
+            {
+                case WindowFrameBoundType.UnboundedPreceding:
+                    return "UNBOUNDED PRECEDING";
+                case WindowFrameBoundType.UnboundedFollowing:
+                    return "UNBOUNDED FOLLOWING";
+                case WindowFrameBoundType.CurrentRow:
+                    return "CURRENT ROW";
+                case WindowFrameBoundType.Preceding:
+                    return $"{bound.Offset} PRECEDING";
+                case WindowFrameBoundType.Following:
+                    return $"{bound.Offset} FOLLOWING";
+                default:
+                    return "CURRENT ROW";
+            }
         }
 
         internal List<string> GetGroupByColumns() => _GroupByColumns;

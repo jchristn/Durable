@@ -149,6 +149,107 @@ namespace Durable.Sqlite
             throw new NotSupportedException("GroupBy on projected query is not supported. Apply GroupBy before Select.");
         }
 
+        public IQueryBuilder<TResult> Having(Expression<Func<TResult, bool>> predicate)
+        {
+            throw new NotSupportedException("Having on projected query is not supported. Apply Having before Select.");
+        }
+
+        // Set operations
+        public IQueryBuilder<TResult> Union(IQueryBuilder<TResult> other)
+        {
+            throw new NotSupportedException("Union on projected query is not supported. Apply Union before Select.");
+        }
+
+        public IQueryBuilder<TResult> UnionAll(IQueryBuilder<TResult> other)
+        {
+            throw new NotSupportedException("UnionAll on projected query is not supported. Apply UnionAll before Select.");
+        }
+
+        public IQueryBuilder<TResult> Intersect(IQueryBuilder<TResult> other)
+        {
+            throw new NotSupportedException("Intersect on projected query is not supported. Apply Intersect before Select.");
+        }
+
+        public IQueryBuilder<TResult> Except(IQueryBuilder<TResult> other)
+        {
+            throw new NotSupportedException("Except on projected query is not supported. Apply Except before Select.");
+        }
+
+        // Subquery support
+        public IQueryBuilder<TResult> WhereIn<TKey>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
+        {
+            throw new NotSupportedException("WhereIn on projected query is not supported. Apply WhereIn before Select.");
+        }
+
+        public IQueryBuilder<TResult> WhereNotIn<TKey>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
+        {
+            throw new NotSupportedException("WhereNotIn on projected query is not supported. Apply WhereNotIn before Select.");
+        }
+
+        public IQueryBuilder<TResult> WhereInRaw<TKey>(Expression<Func<TResult, TKey>> keySelector, string subquerySql)
+        {
+            throw new NotSupportedException("WhereInRaw on projected query is not supported. Apply WhereInRaw before Select.");
+        }
+
+        public IQueryBuilder<TResult> WhereNotInRaw<TKey>(Expression<Func<TResult, TKey>> keySelector, string subquerySql)
+        {
+            throw new NotSupportedException("WhereNotInRaw on projected query is not supported. Apply WhereNotInRaw before Select.");
+        }
+
+        public IQueryBuilder<TResult> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
+        {
+            throw new NotSupportedException("WhereExists on projected query is not supported. Apply WhereExists before Select.");
+        }
+
+        public IQueryBuilder<TResult> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
+        {
+            throw new NotSupportedException("WhereNotExists on projected query is not supported. Apply WhereNotExists before Select.");
+        }
+
+        // Window functions
+        public IWindowedQueryBuilder<TResult> WithWindowFunction(string functionName, string partitionBy = null, string orderBy = null)
+        {
+            throw new NotSupportedException("Window functions on projected query is not supported. Apply window functions before Select.");
+        }
+
+        // CTEs
+        public IQueryBuilder<TResult> WithCte(string cteName, string cteQuery)
+        {
+            throw new NotSupportedException("CTEs on projected query is not supported. Apply CTEs before Select.");
+        }
+
+        public IQueryBuilder<TResult> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery)
+        {
+            throw new NotSupportedException("Recursive CTEs on projected query is not supported. Apply recursive CTEs before Select.");
+        }
+
+        // Custom SQL fragments
+        public IQueryBuilder<TResult> WhereRaw(string sql, params object[] parameters)
+        {
+            throw new NotSupportedException("WhereRaw on projected query is not supported. Apply WhereRaw before Select.");
+        }
+
+        public IQueryBuilder<TResult> SelectRaw(string sql)
+        {
+            throw new NotSupportedException("SelectRaw on projected query is not supported. Use a single Select with projection.");
+        }
+
+        public IQueryBuilder<TResult> FromRaw(string sql)
+        {
+            throw new NotSupportedException("FromRaw on projected query is not supported. Apply FromRaw before Select.");
+        }
+
+        public IQueryBuilder<TResult> JoinRaw(string sql)
+        {
+            throw new NotSupportedException("JoinRaw on projected query is not supported. Apply JoinRaw before Select.");
+        }
+
+        // CASE WHEN expressions
+        public ICaseExpressionBuilder<TResult> SelectCase()
+        {
+            throw new NotSupportedException("CASE expressions on projected query is not supported. Apply CASE expressions before Select.");
+        }
+
         public IEnumerable<TResult> Execute()
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
