@@ -4,10 +4,20 @@ namespace Durable
 {
     public class OptimisticConcurrencyException : Exception
     {
+        #region Public-Members
+
         public object Entity { get; init; } = null!;
         public object ExpectedVersion { get; init; } = null!;
         public object ActualVersion { get; init; } = null!;
-        
+
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
         public OptimisticConcurrencyException(string message) 
             : base(message)
         {
@@ -33,5 +43,15 @@ namespace Durable
             ExpectedVersion = expectedVersion;
             ActualVersion = actualVersion;
         }
+
+        #endregion
+
+        #region Public-Methods
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 }

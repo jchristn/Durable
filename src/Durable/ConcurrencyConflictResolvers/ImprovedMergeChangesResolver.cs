@@ -7,9 +7,8 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     public class ImprovedMergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
-        private readonly HashSet<string> _ignoredProperties;
-        private readonly ConflictBehavior _conflictBehavior;
-        
+        #region Public-Members
+
         public ConflictResolutionStrategy DefaultStrategy { get; set; } = ConflictResolutionStrategy.MergeChanges;
 
         public enum ConflictBehavior
@@ -18,13 +17,28 @@ namespace Durable.ConcurrencyConflictResolvers
             CurrentWins, 
             ThrowException
         }
-        
+
+        #endregion
+
+        #region Private-Members
+
+        private readonly HashSet<string> _ignoredProperties;
+        private readonly ConflictBehavior _conflictBehavior;
+
+        #endregion
+
+        #region Constructors-and-Factories
+
         public ImprovedMergeChangesResolver(ConflictBehavior conflictBehavior = ConflictBehavior.IncomingWins, params string[] ignoredProperties)
         {
             _ignoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
             _conflictBehavior = conflictBehavior;
         }
-        
+
+        #endregion
+
+        #region Public-Methods
+
         public T ResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             if (currentEntity == null || incomingEntity == null || originalEntity == null)
@@ -80,23 +94,6 @@ namespace Durable.ConcurrencyConflictResolvers
             return mergedEntity;
         }
         
-        private object? ResolvePropertyConflict(PropertyInfo property, object? currentValue, object? incomingValue, object? originalValue)
-        {
-            switch (_conflictBehavior)
-            {
-                case ConflictBehavior.CurrentWins:
-                    return currentValue;
-                case ConflictBehavior.IncomingWins:
-                    return incomingValue;
-                case ConflictBehavior.ThrowException:
-                    throw new ConcurrencyConflictException(
-                        $"Conflict detected on property '{property.Name}': " +
-                        $"Original='{originalValue}', Current='{currentValue}', Incoming='{incomingValue}'");
-                default:
-                    return incomingValue;
-            }
-        }
-        
         public Task<T> ResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             T resolvedEntity = ResolveConflict(currentEntity, incomingEntity, originalEntity, strategy);
@@ -127,6 +124,27 @@ namespace Durable.ConcurrencyConflictResolvers
             catch
             {
                 return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = false, ResolvedEntity = null! };
+            }
+        }
+
+        #endregion
+
+        #region Private-Methods
+
+        private object? ResolvePropertyConflict(PropertyInfo property, object? currentValue, object? incomingValue, object? originalValue)
+        {
+            switch (_conflictBehavior)
+            {
+                case ConflictBehavior.CurrentWins:
+                    return currentValue;
+                case ConflictBehavior.IncomingWins:
+                    return incomingValue;
+                case ConflictBehavior.ThrowException:
+                    throw new ConcurrencyConflictException(
+                        $"Conflict detected on property '{property.Name}': " +
+                        $"Original='{originalValue}', Current='{currentValue}', Incoming='{incomingValue}'");
+                default:
+                    return incomingValue;
             }
         }
         
@@ -176,5 +194,7 @@ namespace Durable.ConcurrencyConflictResolvers
             
             return obj1.Equals(obj2);
         }
+
+        #endregion
     }
 }

@@ -8,15 +8,29 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     public class MergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
-        private readonly HashSet<string> _ignoredProperties;
-        
+        #region Public-Members
+
         public ConflictResolutionStrategy DefaultStrategy { get; set; } = ConflictResolutionStrategy.MergeChanges;
-        
+
+        #endregion
+
+        #region Private-Members
+
+        private readonly HashSet<string> _ignoredProperties;
+
+        #endregion
+
+        #region Constructors-and-Factories
+
         public MergeChangesResolver(params string[] ignoredProperties)
         {
             _ignoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
         }
-        
+
+        #endregion
+
+        #region Public-Methods
+
         public T ResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             if (currentEntity == null || incomingEntity == null || originalEntity == null)
@@ -99,7 +113,11 @@ namespace Durable.ConcurrencyConflictResolvers
                 return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = false, ResolvedEntity = null! };
             }
         }
-        
+
+        #endregion
+
+        #region Private-Methods
+
         private bool ObjectEquals(object? obj1, object? obj2)
         {
             if (obj1 == null && obj2 == null)
@@ -129,5 +147,7 @@ namespace Durable.ConcurrencyConflictResolvers
             
             return obj1.Equals(obj2);
         }
+
+        #endregion
     }
 }

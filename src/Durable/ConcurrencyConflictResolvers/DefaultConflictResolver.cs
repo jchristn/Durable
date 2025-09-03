@@ -5,13 +5,23 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     public class DefaultConflictResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
+        #region Public-Members
+
+        public ConflictResolutionStrategy DefaultStrategy { get; set; }
+
+        #endregion
+
+        #region Private-Members
+
         private readonly IConcurrencyConflictResolver<T> _throwExceptionResolver;
         private readonly IConcurrencyConflictResolver<T> _clientWinsResolver;
         private readonly IConcurrencyConflictResolver<T> _databaseWinsResolver;
         private readonly IConcurrencyConflictResolver<T> _mergeChangesResolver;
-        
-        public ConflictResolutionStrategy DefaultStrategy { get; set; }
-        
+
+        #endregion
+
+        #region Constructors-and-Factories
+
         public DefaultConflictResolver(ConflictResolutionStrategy defaultStrategy = ConflictResolutionStrategy.ThrowException)
         {
             DefaultStrategy = defaultStrategy;
@@ -20,7 +30,11 @@ namespace Durable.ConcurrencyConflictResolvers
             _databaseWinsResolver = new DatabaseWinsResolver<T>();
             _mergeChangesResolver = new MergeChangesResolver<T>();
         }
-        
+
+        #endregion
+
+        #region Public-Methods
+
         public T ResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
@@ -44,7 +58,11 @@ namespace Durable.ConcurrencyConflictResolvers
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
             return resolver.TryResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);
         }
-        
+
+        #endregion
+
+        #region Private-Methods
+
         private IConcurrencyConflictResolver<T> GetResolver(ConflictResolutionStrategy strategy)
         {
             ConflictResolutionStrategy effectiveStrategy = strategy == ConflictResolutionStrategy.Custom ? DefaultStrategy : strategy;
@@ -62,5 +80,7 @@ namespace Durable.ConcurrencyConflictResolvers
                     return _throwExceptionResolver;
             }
         }
+
+        #endregion
     }
 }

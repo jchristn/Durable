@@ -7,14 +7,28 @@ namespace Durable
 {
     public class SimpleChangeTracker<T> : IChangeTracker<T> where T : class, new()
     {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
         private readonly ConcurrentDictionary<T, T> _originalValues;
         private readonly Dictionary<string, PropertyInfo> _columnMappings;
+
+        #endregion
+
+        #region Constructors-and-Factories
 
         public SimpleChangeTracker(Dictionary<string, PropertyInfo> columnMappings)
         {
             _originalValues = new ConcurrentDictionary<T, T>();
             _columnMappings = columnMappings ?? throw new ArgumentNullException(nameof(columnMappings));
         }
+
+        #endregion
+
+        #region Public-Methods
 
         public void TrackEntity(T entity)
         {
@@ -67,6 +81,10 @@ namespace Durable
             _originalValues.Clear();
         }
 
+        #endregion
+
+        #region Private-Methods
+
         private T CreateCopy(T entity)
         {
             if (entity == null) return null;
@@ -90,5 +108,7 @@ namespace Durable
             if (obj1 == null || obj2 == null) return false;
             return obj1.Equals(obj2);
         }
+
+        #endregion
     }
 }

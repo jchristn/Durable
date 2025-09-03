@@ -5,11 +5,25 @@ namespace Durable
 {
     public class VersionColumnInfo
     {
+        #region Public-Members
+
         public string ColumnName { get; set; } = null!;
         public PropertyInfo Property { get; set; } = null!;
         public VersionColumnType Type { get; set; }
         public Type PropertyType { get; set; } = null!;
-        
+
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
+
         public object? GetValue(object entity)
         {
             if (entity == null)
@@ -123,5 +137,11 @@ namespace Durable
             
             return "NULL";
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        #endregion
     }
 }
