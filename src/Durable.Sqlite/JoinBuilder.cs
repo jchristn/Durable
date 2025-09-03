@@ -107,39 +107,78 @@ namespace Durable.Sqlite
         {
             foreach (IncludeInfo include in includes)
             {
-                if (include.IsCollection)
+                if (include.IsCollection && !include.IsManyToMany)
                 {
+                    // Skip one-to-many collections (handled by CollectionLoader)
                     continue;
                 }
 
-                ForeignKeyAttribute fkAttr = include.ForeignKeyProperty.GetCustomAttribute<ForeignKeyAttribute>();
-                PropertyAttribute fkPropAttr = include.ForeignKeyProperty.GetCustomAttribute<PropertyAttribute>();
-                string fkColumnName = fkPropAttr?.Name ?? include.ForeignKeyProperty.Name;
-
-                Dictionary<string, PropertyInfo> relatedColumns = _includeProcessor.GetColumnMappings(include.RelatedEntityType);
-                List<ColumnMapping> mappings = new List<ColumnMapping>();
-
-                foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
+                if (include.IsManyToMany)
                 {
-                    string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
-                    selectBuilder.Append($", {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(kvp.Key)} AS {columnAlias}");
-                    
-                    mappings.Add(new ColumnMapping
+                    // Handle many-to-many relationships with junction table
+                    string parentPkColumn = GetPrimaryKeyColumn(include.ForeignKeyProperty.DeclaringType);
+
+                    Dictionary<string, PropertyInfo> relatedColumns = _includeProcessor.GetColumnMappings(include.RelatedEntityType);
+                    List<ColumnMapping> mappings = new List<ColumnMapping>();
+
+                    foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
                     {
-                        ColumnName = kvp.Key,
-                        Alias = columnAlias,
-                        Property = kvp.Value,
-                        TableAlias = include.JoinAlias
-                    });
+                        string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
+                        selectBuilder.Append($", {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(kvp.Key)} AS {columnAlias}");
+                        
+                        mappings.Add(new ColumnMapping
+                        {
+                            ColumnName = kvp.Key,
+                            Alias = columnAlias,
+                            Property = kvp.Value,
+                            TableAlias = include.JoinAlias
+                        });
+                    }
+
+                    columnMappingsByAlias[include.JoinAlias] = mappings;
+
+                    string relatedPkColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
+
+                    joinBuilder.AppendLine();
+                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.JunctionTableName)} {include.JunctionAlias} ");
+                    joinBuilder.Append($"ON {parentAlias}.{_sanitizer.SanitizeIdentifier(parentPkColumn)} = {include.JunctionAlias}.{_sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, true))}");
+
+                    joinBuilder.AppendLine();
+                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
+                    joinBuilder.Append($"ON {include.JunctionAlias}.{_sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, false))} = {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(relatedPkColumn)}");
                 }
+                else
+                {
+                    // Handle regular one-to-one relationships
+                    ForeignKeyAttribute fkAttr = include.ForeignKeyProperty.GetCustomAttribute<ForeignKeyAttribute>();
+                    PropertyAttribute fkPropAttr = include.ForeignKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                    string fkColumnName = fkPropAttr?.Name ?? include.ForeignKeyProperty.Name;
 
-                columnMappingsByAlias[include.JoinAlias] = mappings;
+                    Dictionary<string, PropertyInfo> relatedColumns = _includeProcessor.GetColumnMappings(include.RelatedEntityType);
+                    List<ColumnMapping> mappings = new List<ColumnMapping>();
 
-                string referencedColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
+                    foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
+                    {
+                        string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
+                        selectBuilder.Append($", {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(kvp.Key)} AS {columnAlias}");
+                        
+                        mappings.Add(new ColumnMapping
+                        {
+                            ColumnName = kvp.Key,
+                            Alias = columnAlias,
+                            Property = kvp.Value,
+                            TableAlias = include.JoinAlias
+                        });
+                    }
 
-                joinBuilder.AppendLine();
-                joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
-                joinBuilder.Append($"ON {parentAlias}.{_sanitizer.SanitizeIdentifier(fkColumnName)} = {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(referencedColumn)}");
+                    columnMappingsByAlias[include.JoinAlias] = mappings;
+
+                    string referencedColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
+
+                    joinBuilder.AppendLine();
+                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
+                    joinBuilder.Append($"ON {parentAlias}.{_sanitizer.SanitizeIdentifier(fkColumnName)} = {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(referencedColumn)}");
+                }
 
                 if (include.Children.Count > 0)
                 {
@@ -165,6 +204,40 @@ namespace Durable.Sqlite
                 }
             }
             throw new InvalidOperationException($"No primary key found for type {entityType.Name}");
+        }
+
+        private string GetJunctionForeignKeyColumn(IncludeInfo include, bool forThisEntity)
+        {
+            ManyToManyNavigationPropertyAttribute m2mAttr = include.NavigationProperty.GetCustomAttribute<ManyToManyNavigationPropertyAttribute>();
+            if (m2mAttr == null)
+            {
+                throw new InvalidOperationException($"ManyToManyNavigationPropertyAttribute not found for {include.PropertyPath}");
+            }
+
+            if (forThisEntity)
+            {
+                // Get the foreign key property for the source entity
+                PropertyInfo fkProp = include.JunctionEntityType.GetProperties()
+                    .FirstOrDefault(p => p.Name == m2mAttr.ThisEntityForeignKeyProperty);
+                if (fkProp == null)
+                {
+                    throw new InvalidOperationException($"Junction foreign key property '{m2mAttr.ThisEntityForeignKeyProperty}' not found");
+                }
+                PropertyAttribute propAttr = fkProp.GetCustomAttribute<PropertyAttribute>();
+                return propAttr?.Name ?? fkProp.Name;
+            }
+            else
+            {
+                // Get the foreign key property for the related entity
+                PropertyInfo fkProp = include.JunctionEntityType.GetProperties()
+                    .FirstOrDefault(p => p.Name == m2mAttr.RelatedEntityForeignKeyProperty);
+                if (fkProp == null)
+                {
+                    throw new InvalidOperationException($"Junction foreign key property '{m2mAttr.RelatedEntityForeignKeyProperty}' not found");
+                }
+                PropertyAttribute propAttr = fkProp.GetCustomAttribute<PropertyAttribute>();
+                return propAttr?.Name ?? fkProp.Name;
+            }
         }
 
         #endregion
