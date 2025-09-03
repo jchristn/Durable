@@ -2,11 +2,11 @@ namespace Durable
 {
     public class CteDefinition
     {
-        public string Name { get; set; }
-        public string Query { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Query { get; set; } = string.Empty;
         public bool IsRecursive { get; set; }
-        public string AnchorQuery { get; set; }
-        public string RecursiveQuery { get; set; }
+        public string AnchorQuery { get; set; } = string.Empty;
+        public string RecursiveQuery { get; set; } = string.Empty;
 
         public CteDefinition(string name, string query)
         {
