@@ -124,7 +124,8 @@ namespace Durable.Sqlite
                     foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
                     {
                         string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
-                        selectBuilder.Append($", {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(kvp.Key)} AS {columnAlias}");
+                        string sanitizedColumn = _sanitizer.SanitizeIdentifier(kvp.Key);
+                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_sanitizer.SanitizeIdentifier(columnAlias)}");
                         
                         mappings.Add(new ColumnMapping
                         {
@@ -160,7 +161,8 @@ namespace Durable.Sqlite
                     foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
                     {
                         string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
-                        selectBuilder.Append($", {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(kvp.Key)} AS {columnAlias}");
+                        string sanitizedColumn = _sanitizer.SanitizeIdentifier(kvp.Key);
+                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_sanitizer.SanitizeIdentifier(columnAlias)}");
                         
                         mappings.Add(new ColumnMapping
                         {

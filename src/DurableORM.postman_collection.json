@@ -1,0 +1,127 @@
+{
+  "info": {
+    "name": "Durable ORM Testing",
+    "description": "Test collection for LINQ capabilities",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Simple Select",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/querytest/authors",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "querytest", "authors"]
+        }
+      }
+    },
+    {
+      "name": "Where Clause",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/querytest/authors/where?name=John",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "querytest", "authors", "where"],
+          "query": [
+            {
+              "key": "name",
+              "value": "John"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Pagination",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/querytest/authors/paged?skip=10&take=5",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "querytest", "authors", "paged"],
+          "query": [
+            {
+              "key": "skip",
+              "value": "10"
+            },
+            {
+              "key": "take",
+              "value": "5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Complex Query",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/querytest/books/complex-query?title=Programming&minPages=300&includeAuthor=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "querytest", "books", "complex-query"],
+          "query": [
+            {
+              "key": "title",
+              "value": "Programming"
+            },
+            {
+              "key": "minPages",
+              "value": "300"
+            },
+            {
+              "key": "includeAuthor",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Dynamic LINQ Query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"where\": \"Name.StartsWith(\\\"J\\\") && Books.Any(b => b.PageCount > 200)\",\n  \"orderBy\": \"Name\",\n  \"select\": \"new { Id, Name, TotalBooks = Books.Count() }\",\n  \"take\": 10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/dynamicquery/authors/query",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dynamicquery", "authors", "query"]
+        }
+      }
+    },
+    {
+      "name": "Test All LINQ Operations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/querytest/test-linq",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "querytest", "test-linq"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:5001",
+      "type": "string"
+    }
+  ]
+}
