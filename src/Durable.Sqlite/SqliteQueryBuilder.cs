@@ -826,10 +826,30 @@
 
         private string UpdateWhereClauseWithAlias(string whereClause, string alias)
         {
-            // This is a simplified implementation
-            // A more robust implementation would parse the WHERE clause properly
-            // For now, we'll just prepend the alias to column names that aren't already aliased
-            return whereClause;
+            // Update column references in WHERE clause to include table alias
+            // This handles common patterns for column names in WHERE clauses
+            
+            // Simple column names that are not already aliased
+            // Look for patterns like "id = " or "name LIKE " etc.
+            string result = whereClause;
+            
+            // Get all column names from the entity
+            foreach (KeyValuePair<string, PropertyInfo> mapping in _Repository._ColumnMappings)
+            {
+                string columnName = mapping.Key;
+                
+                // Replace unaliased column references with aliased ones
+                // Match column name followed by space and operator (=, <, >, LIKE, IN, etc)
+                string pattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(columnName)}\b(?=\s*[=<>!]|\s+LIKE|\s+IN|\s+NOT|\s+IS)";
+                result = System.Text.RegularExpressions.Regex.Replace(
+                    result, 
+                    pattern, 
+                    $"{alias}.{columnName}",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                );
+            }
+            
+            return result;
         }
 
         private List<TEntity> ProcessRawJoinResults(List<Dictionary<string, object>> rawResults, List<IncludeInfo> includeInfos)
