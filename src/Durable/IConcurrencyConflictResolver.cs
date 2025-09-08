@@ -12,12 +12,6 @@ namespace Durable
         
         bool TryResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy, out T resolvedEntity);
         
-        public class TryResolveConflictResult
-        {
-            public bool Success { get; set; }
-            public T? ResolvedEntity { get; set; }
-        }
-        
-        Task<TryResolveConflictResult> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy);
+        Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy);
     }
 }

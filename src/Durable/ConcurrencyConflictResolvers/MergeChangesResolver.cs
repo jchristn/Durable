@@ -101,16 +101,16 @@ namespace Durable.ConcurrencyConflictResolvers
             }
         }
         
-        public async Task<IConcurrencyConflictResolver<T>.TryResolveConflictResult> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        public async Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             try
             {
                 T resolvedEntity = await ResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);
-                return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = true, ResolvedEntity = resolvedEntity };
+                return new TryResolveConflictResult<T> { Success = true, ResolvedEntity = resolvedEntity };
             }
             catch
             {
-                return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = false, ResolvedEntity = null! };
+                return new TryResolveConflictResult<T> { Success = false, ResolvedEntity = null! };
             }
         }
 

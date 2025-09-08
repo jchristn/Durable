@@ -53,7 +53,7 @@ namespace Durable.ConcurrencyConflictResolvers
             return resolver.TryResolveConflict(currentEntity, incomingEntity, originalEntity, strategy, out resolvedEntity);
         }
         
-        public Task<IConcurrencyConflictResolver<T>.TryResolveConflictResult> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        public Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
             return resolver.TryResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);

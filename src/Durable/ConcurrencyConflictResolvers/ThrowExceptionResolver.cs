@@ -23,9 +23,9 @@ namespace Durable.ConcurrencyConflictResolvers
             return false;
         }
         
-        public Task<IConcurrencyConflictResolver<T>.TryResolveConflictResult> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        public Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
-            return Task.FromResult(new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = false, ResolvedEntity = null! });
+            return Task.FromResult(new TryResolveConflictResult<T> { Success = false, ResolvedEntity = null! });
         }
     }
 }

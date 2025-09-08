@@ -1205,7 +1205,7 @@
                         
                         // Try to resolve the conflict
                         ConflictResolutionStrategy strategy = _ConflictResolver.DefaultStrategy;
-                        IConcurrencyConflictResolver<T>.TryResolveConflictResult result = await _ConflictResolver.TryResolveConflictAsync(currentDbEntity, entity, originalEntity, strategy);
+                        TryResolveConflictResult<T> result = await _ConflictResolver.TryResolveConflictAsync(currentDbEntity, entity, originalEntity, strategy);
                         
                         if (result.Success && result.ResolvedEntity != null)
                         {
