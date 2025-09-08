@@ -22,8 +22,8 @@ namespace Durable.ConcurrencyConflictResolvers
 
         #region Private-Members
 
-        private readonly HashSet<string> _ignoredProperties;
-        private readonly ConflictBehavior _conflictBehavior;
+        private readonly HashSet<string> _IgnoredProperties;
+        private readonly ConflictBehavior _ConflictBehavior;
 
         #endregion
 
@@ -31,8 +31,8 @@ namespace Durable.ConcurrencyConflictResolvers
 
         public ImprovedMergeChangesResolver(ConflictBehavior conflictBehavior = ConflictBehavior.IncomingWins, params string[] ignoredProperties)
         {
-            _ignoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
-            _conflictBehavior = conflictBehavior;
+            _IgnoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
+            _ConflictBehavior = conflictBehavior;
         }
 
         #endregion
@@ -54,7 +54,7 @@ namespace Durable.ConcurrencyConflictResolvers
                 if (!property.CanRead || !property.CanWrite)
                     continue;
                     
-                if (_ignoredProperties.Contains(property.Name))
+                if (_IgnoredProperties.Contains(property.Name))
                 {
                     object? currentValue = property.GetValue(currentEntity);
                     property.SetValue(mergedEntity, currentValue);
@@ -133,7 +133,7 @@ namespace Durable.ConcurrencyConflictResolvers
 
         private object? ResolvePropertyConflict(PropertyInfo property, object? currentValue, object? incomingValue, object? originalValue)
         {
-            switch (_conflictBehavior)
+            switch (_ConflictBehavior)
             {
                 case ConflictBehavior.CurrentWins:
                     return currentValue;

@@ -16,7 +16,7 @@ namespace Durable.ConcurrencyConflictResolvers
 
         #region Private-Members
 
-        private readonly HashSet<string> _ignoredProperties;
+        private readonly HashSet<string> _IgnoredProperties;
 
         #endregion
 
@@ -24,7 +24,7 @@ namespace Durable.ConcurrencyConflictResolvers
 
         public MergeChangesResolver(params string[] ignoredProperties)
         {
-            _ignoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
+            _IgnoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
         }
 
         #endregion
@@ -46,7 +46,7 @@ namespace Durable.ConcurrencyConflictResolvers
                 if (!property.CanRead || !property.CanWrite)
                     continue;
                     
-                if (_ignoredProperties.Contains(property.Name))
+                if (_IgnoredProperties.Contains(property.Name))
                 {
                     object? currentValue = property.GetValue(currentEntity);
                     property.SetValue(mergedEntity, currentValue);

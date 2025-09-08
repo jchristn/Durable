@@ -13,10 +13,10 @@ namespace Durable.ConcurrencyConflictResolvers
 
         #region Private-Members
 
-        private readonly IConcurrencyConflictResolver<T> _throwExceptionResolver;
-        private readonly IConcurrencyConflictResolver<T> _clientWinsResolver;
-        private readonly IConcurrencyConflictResolver<T> _databaseWinsResolver;
-        private readonly IConcurrencyConflictResolver<T> _mergeChangesResolver;
+        private readonly IConcurrencyConflictResolver<T> _ThrowExceptionResolver;
+        private readonly IConcurrencyConflictResolver<T> _ClientWinsResolver;
+        private readonly IConcurrencyConflictResolver<T> _DatabaseWinsResolver;
+        private readonly IConcurrencyConflictResolver<T> _MergeChangesResolver;
 
         #endregion
 
@@ -25,10 +25,10 @@ namespace Durable.ConcurrencyConflictResolvers
         public DefaultConflictResolver(ConflictResolutionStrategy defaultStrategy = ConflictResolutionStrategy.ThrowException)
         {
             DefaultStrategy = defaultStrategy;
-            _throwExceptionResolver = new ThrowExceptionResolver<T>();
-            _clientWinsResolver = new ClientWinsResolver<T>();
-            _databaseWinsResolver = new DatabaseWinsResolver<T>();
-            _mergeChangesResolver = new MergeChangesResolver<T>();
+            _ThrowExceptionResolver = new ThrowExceptionResolver<T>();
+            _ClientWinsResolver = new ClientWinsResolver<T>();
+            _DatabaseWinsResolver = new DatabaseWinsResolver<T>();
+            _MergeChangesResolver = new MergeChangesResolver<T>();
         }
 
         #endregion
@@ -70,14 +70,14 @@ namespace Durable.ConcurrencyConflictResolvers
             switch (effectiveStrategy)
             {
                 case ConflictResolutionStrategy.ClientWins:
-                    return _clientWinsResolver;
+                    return _ClientWinsResolver;
                 case ConflictResolutionStrategy.DatabaseWins:
-                    return _databaseWinsResolver;
+                    return _DatabaseWinsResolver;
                 case ConflictResolutionStrategy.MergeChanges:
-                    return _mergeChangesResolver;
+                    return _MergeChangesResolver;
                 case ConflictResolutionStrategy.ThrowException:
                 default:
-                    return _throwExceptionResolver;
+                    return _ThrowExceptionResolver;
             }
         }
 
