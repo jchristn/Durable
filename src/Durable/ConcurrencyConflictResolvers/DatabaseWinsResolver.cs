@@ -1,7 +1,7 @@
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System.Threading.Tasks;
+    
     public class DatabaseWinsResolver<T> : IConcurrencyConflictResolver<T> where T : class
     {
         public ConflictResolutionStrategy DefaultStrategy { get; set; } = ConflictResolutionStrategy.DatabaseWins;

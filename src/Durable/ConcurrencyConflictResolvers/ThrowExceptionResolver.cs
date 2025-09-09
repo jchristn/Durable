@@ -1,8 +1,8 @@
-using System;
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System;
+    using System.Threading.Tasks;
+    
     public class ThrowExceptionResolver<T> : IConcurrencyConflictResolver<T> where T : class
     {
         public ConflictResolutionStrategy DefaultStrategy { get; set; } = ConflictResolutionStrategy.ThrowException;

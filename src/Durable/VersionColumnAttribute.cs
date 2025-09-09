@@ -1,7 +1,7 @@
-using System;
-
 namespace Durable
 {
+    using System;
+
     [AttributeUsage(AttributeTargets.Property)]
     public class VersionColumnAttribute : Attribute
     {

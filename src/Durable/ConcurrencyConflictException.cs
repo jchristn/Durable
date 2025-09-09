@@ -1,7 +1,7 @@
-using System;
-
 namespace Durable
 {
+    using System;
+    
     public class ConcurrencyConflictException : Exception
     {
         public object? CurrentEntity { get; set; }

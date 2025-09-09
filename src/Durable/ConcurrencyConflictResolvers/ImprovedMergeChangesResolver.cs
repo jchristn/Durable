@@ -1,10 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+    using System.Threading.Tasks;
+    
     public class ImprovedMergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members

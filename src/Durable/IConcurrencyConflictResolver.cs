@@ -1,7 +1,7 @@
-using System.Threading.Tasks;
-
 namespace Durable
 {
+    using System.Threading.Tasks;
+    
     public interface IConcurrencyConflictResolver<T> where T : class
     {
         ConflictResolutionStrategy DefaultStrategy { get; set; }

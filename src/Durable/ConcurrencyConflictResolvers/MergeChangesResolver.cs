@@ -1,11 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
+    using System.Threading.Tasks;
+    
     public class MergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members

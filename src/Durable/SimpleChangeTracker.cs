@@ -1,10 +1,10 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Reflection;
-
 namespace Durable
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Reflection;
+    
     public class SimpleChangeTracker<T> : IChangeTracker<T> where T : class, new()
     {
         #region Public-Members

@@ -1,8 +1,8 @@
-using System;
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System;
+    using System.Threading.Tasks;
+    
     public class DefaultConflictResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members

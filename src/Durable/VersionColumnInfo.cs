@@ -1,8 +1,8 @@
-using System;
-using System.Reflection;
-
 namespace Durable
 {
+    using System;
+    using System.Reflection;
+    
     public class VersionColumnInfo
     {
         #region Public-Members

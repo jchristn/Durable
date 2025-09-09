@@ -1,7 +1,7 @@
-using System;
-
 namespace Durable
 {
+    using System;
+    
     public class OptimisticConcurrencyException : Exception
     {
         #region Public-Members
