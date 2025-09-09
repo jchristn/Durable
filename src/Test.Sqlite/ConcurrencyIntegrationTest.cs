@@ -1,12 +1,12 @@
-using System;
-using System.IO;
-using Durable;
-using Durable.Sqlite;
-using Durable.ConcurrencyConflictResolvers;
-using Xunit;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.IO;
+    using Durable;
+    using Durable.Sqlite;
+    using Durable.ConcurrencyConflictResolvers;
+    using Xunit;
+    
     public class ConcurrencyIntegrationTest
     {
         [Fact]

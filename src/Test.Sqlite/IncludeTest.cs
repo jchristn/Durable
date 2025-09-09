@@ -1,20 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Durable;
-using Durable.Sqlite;
-using Microsoft.Data.Sqlite;
-using Test.Shared;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using Durable;
+    using Durable.Sqlite;
+    using Microsoft.Data.Sqlite;
+    using Test.Shared;
+    
     public class IncludeTest
     {
-        private static string _connectionString = "Data Source=include_test.db";
-        private static SqliteConnectionFactory _connectionFactory;
-        private static SqliteRepository<Book> _bookRepository;
-        private static SqliteRepository<Author> _authorRepository;
-        private static SqliteRepository<Company> _companyRepository;
+        private static string _ConnectionString = "Data Source=include_test.db";
+        private static SqliteConnectionFactory _ConnectionFactory;
+        private static SqliteRepository<Book> _BookRepository;
+        private static SqliteRepository<Author> _AuthorRepository;
+        private static SqliteRepository<Company> _CompanyRepository;
 
         public static void Run()
         {
@@ -58,12 +58,12 @@ namespace Test.Sqlite
                 System.IO.File.Delete("include_test.db");
             }
 
-            _connectionFactory = new SqliteConnectionFactory(_connectionString);
-            _bookRepository = new SqliteRepository<Book>(_connectionFactory);
-            _authorRepository = new SqliteRepository<Author>(_connectionFactory);
-            _companyRepository = new SqliteRepository<Company>(_connectionFactory);
+            _ConnectionFactory = new SqliteConnectionFactory(_ConnectionString);
+            _BookRepository = new SqliteRepository<Book>(_ConnectionFactory);
+            _AuthorRepository = new SqliteRepository<Author>(_ConnectionFactory);
+            _CompanyRepository = new SqliteRepository<Company>(_ConnectionFactory);
 
-            using SqliteConnection connection = new SqliteConnection(_connectionString);
+            using SqliteConnection connection = new SqliteConnection(_ConnectionString);
             connection.Open();
 
             // Create tables
@@ -105,59 +105,59 @@ namespace Test.Sqlite
             Console.WriteLine("Seeding test data...");
 
             // Create companies
-            Company techCorp = _companyRepository.Create(new Company { Name = "TechCorp Publishing" });
-            Company literaryHouse = _companyRepository.Create(new Company { Name = "Literary House" });
-            Company sciencePress = _companyRepository.Create(new Company { Name = "Science Press" });
+            Company techCorp = _CompanyRepository.Create(new Company { Name = "TechCorp Publishing" });
+            Company literaryHouse = _CompanyRepository.Create(new Company { Name = "Literary House" });
+            Company sciencePress = _CompanyRepository.Create(new Company { Name = "Science Press" });
 
             // Create authors
-            Author johnDoe = _authorRepository.Create(new Author 
+            Author johnDoe = _AuthorRepository.Create(new Author 
             { 
                 Name = "John Doe", 
                 CompanyId = techCorp.Id 
             });
             
-            Author janeSmith = _authorRepository.Create(new Author 
+            Author janeSmith = _AuthorRepository.Create(new Author 
             { 
                 Name = "Jane Smith", 
                 CompanyId = literaryHouse.Id 
             });
             
-            Author bobJohnson = _authorRepository.Create(new Author 
+            Author bobJohnson = _AuthorRepository.Create(new Author 
             { 
                 Name = "Bob Johnson", 
                 CompanyId = null // No company
             });
 
             // Create books
-            _bookRepository.Create(new Book 
+            _BookRepository.Create(new Book 
             { 
                 Title = "Introduction to C#", 
                 AuthorId = johnDoe.Id,
                 PublisherId = techCorp.Id
             });
             
-            _bookRepository.Create(new Book 
+            _BookRepository.Create(new Book 
             { 
                 Title = "Advanced .NET", 
                 AuthorId = johnDoe.Id,
                 PublisherId = techCorp.Id
             });
             
-            _bookRepository.Create(new Book 
+            _BookRepository.Create(new Book 
             { 
                 Title = "Poetry Collection", 
                 AuthorId = janeSmith.Id,
                 PublisherId = literaryHouse.Id
             });
             
-            _bookRepository.Create(new Book 
+            _BookRepository.Create(new Book 
             { 
                 Title = "Science Fiction Novel", 
                 AuthorId = bobJohnson.Id,
                 PublisherId = sciencePress.Id
             });
             
-            _bookRepository.Create(new Book 
+            _BookRepository.Create(new Book 
             { 
                 Title = "Independent Work", 
                 AuthorId = bobJohnson.Id,
@@ -171,7 +171,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Simple Include ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .Execute()
                 .ToList();
@@ -197,7 +197,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Nested Include (ThenInclude) ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .ThenInclude<Author, Company>(a => a.Company)
                 .Execute()
@@ -219,7 +219,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Multiple Includes ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .Include(b => b.Publisher)
                 .Execute()
@@ -241,7 +241,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Include with Where Clause ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .Where(b => b.AuthorId == 1)
                 .Execute()
@@ -266,7 +266,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Include with OrderBy ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .OrderBy(b => b.Title)
                 .Execute()
@@ -294,7 +294,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Include with Paging ---");
             
-            List<Book> page1 = _bookRepository.Query()
+            List<Book> page1 = _BookRepository.Query()
                 .Include(b => b.Author)
                 .OrderBy(b => b.Id)
                 .Take(2)
@@ -307,7 +307,7 @@ namespace Test.Sqlite
                 Console.WriteLine($"  Book: {book.Title} by {book.Author?.Name}");
             }
 
-            List<Book> page2 = _bookRepository.Query()
+            List<Book> page2 = _BookRepository.Query()
                 .Include(b => b.Author)
                 .OrderBy(b => b.Id)
                 .Skip(2)
@@ -334,7 +334,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: ThenInclude Chain ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .ThenInclude<Author, Company>(a => a.Company)
                 .Include(b => b.Publisher)
@@ -358,7 +358,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test: Complex Query with Includes ---");
             
-            List<Book> books = _bookRepository.Query()
+            List<Book> books = _BookRepository.Query()
                 .Include(b => b.Author)
                 .ThenInclude<Author, Company>(a => a.Company)
                 .Include(b => b.Publisher)
