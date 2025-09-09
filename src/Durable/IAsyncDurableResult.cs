@@ -2,9 +2,9 @@ namespace Durable
 {
     using System.Collections.Generic;
 
-    public interface IDurableResult<T>
+    public interface IAsyncDurableResult<T>
     {
         string Query { get; }
-        IEnumerable<T> Result { get; }
+        IAsyncEnumerable<T> Result { get; }
     }
 }
