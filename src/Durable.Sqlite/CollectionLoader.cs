@@ -16,7 +16,7 @@ namespace Durable.Sqlite
 
         #region Private-Members
 
-        private readonly ISanitizer _sanitizer;
+        private readonly ISanitizer _Sanitizer;
         private readonly IDataTypeConverter _DataTypeConverter;
 
         #endregion
@@ -25,7 +25,7 @@ namespace Durable.Sqlite
 
         public CollectionLoader(ISanitizer sanitizer, IDataTypeConverter dataTypeConverter)
         {
-            _sanitizer = sanitizer;
+            _Sanitizer = sanitizer;
             _DataTypeConverter = dataTypeConverter;
         }
 
@@ -132,7 +132,7 @@ namespace Durable.Sqlite
                 string fkColumnName = fkAttr?.Name ?? foreignKeyPropInRelated.Name;
 
                 StringBuilder sql = new StringBuilder();
-                sql.Append($"SELECT * FROM {_sanitizer.SanitizeIdentifier(relatedTableName)} WHERE {_sanitizer.SanitizeIdentifier(fkColumnName)} IN (");
+                sql.Append($"SELECT * FROM {_Sanitizer.SanitizeIdentifier(relatedTableName)} WHERE {_Sanitizer.SanitizeIdentifier(fkColumnName)} IN (");
                 sql.Append(string.Join(", ", primaryKeys.Select((_, i) => $"@pk{i}")));
                 sql.Append(")");
 
@@ -169,12 +169,12 @@ namespace Durable.Sqlite
             string relatedPkColumn = GetPrimaryKeyColumnName(collectionItemType);
 
             StringBuilder sql = new StringBuilder();
-            sql.Append($"SELECT r.* FROM {_sanitizer.SanitizeIdentifier(relatedTableName)} r ");
-            sql.Append($"INNER JOIN {_sanitizer.SanitizeIdentifier(include.JunctionTableName)} j ");
-            sql.Append($"ON r.{_sanitizer.SanitizeIdentifier(relatedPkColumn)} = j.{_sanitizer.SanitizeIdentifier(relatedEntityFkColumn)} ");
-            sql.Append($"WHERE j.{_sanitizer.SanitizeIdentifier(thisEntityFkColumn)} IN (");
+            sql.Append($"SELECT r.* FROM {_Sanitizer.SanitizeIdentifier(relatedTableName)} r ");
+            sql.Append($"INNER JOIN {_Sanitizer.SanitizeIdentifier(include.JunctionTableName)} j ");
+            sql.Append($"ON r.{_Sanitizer.SanitizeIdentifier(relatedPkColumn)} = j.{_Sanitizer.SanitizeIdentifier(relatedEntityFkColumn)} ");
+            sql.Append($"WHERE j.{_Sanitizer.SanitizeIdentifier(thisEntityFkColumn)} IN (");
             sql.Append(string.Join(", ", primaryKeys.Select((_, i) => $"@pk{i}")));
-            sql.Append($") ORDER BY j.{_sanitizer.SanitizeIdentifier(thisEntityFkColumn)}");
+            sql.Append($") ORDER BY j.{_Sanitizer.SanitizeIdentifier(thisEntityFkColumn)}");
 
             LoadManyToManyResults(entities, include, connection, transaction, sql.ToString(), primaryKeys, collectionItemType, thisEntityFkColumn);
         }
@@ -334,10 +334,10 @@ namespace Durable.Sqlite
             foreach (object primaryKey in primaryKeys)
             {
                 StringBuilder sql = new StringBuilder();
-                sql.Append($"SELECT r.* FROM {_sanitizer.SanitizeIdentifier(relatedTableName)} r ");
-                sql.Append($"INNER JOIN {_sanitizer.SanitizeIdentifier(include.JunctionTableName)} j ");
-                sql.Append($"ON r.{_sanitizer.SanitizeIdentifier(relatedPkColumn)} = j.{_sanitizer.SanitizeIdentifier(relatedEntityFkColumn)} ");
-                sql.Append($"WHERE j.{_sanitizer.SanitizeIdentifier(thisEntityFkColumn)} = @pk");
+                sql.Append($"SELECT r.* FROM {_Sanitizer.SanitizeIdentifier(relatedTableName)} r ");
+                sql.Append($"INNER JOIN {_Sanitizer.SanitizeIdentifier(include.JunctionTableName)} j ");
+                sql.Append($"ON r.{_Sanitizer.SanitizeIdentifier(relatedPkColumn)} = j.{_Sanitizer.SanitizeIdentifier(relatedEntityFkColumn)} ");
+                sql.Append($"WHERE j.{_Sanitizer.SanitizeIdentifier(thisEntityFkColumn)} = @pk");
 
                 using SqliteCommand command = connection.CreateCommand();
                 if (transaction != null && transaction is SqliteRepositoryTransaction sqliteTransaction)
@@ -396,7 +396,7 @@ namespace Durable.Sqlite
             string fkColumnName = fkAttr?.Name ?? foreignKeyPropInRelated.Name;
 
             StringBuilder sql = new StringBuilder();
-            sql.Append($"SELECT * FROM {_sanitizer.SanitizeIdentifier(relatedTableName)} WHERE {_sanitizer.SanitizeIdentifier(fkColumnName)} IN (");
+            sql.Append($"SELECT * FROM {_Sanitizer.SanitizeIdentifier(relatedTableName)} WHERE {_Sanitizer.SanitizeIdentifier(fkColumnName)} IN (");
             sql.Append(string.Join(", ", primaryKeys.Select((_, i) => $"@pk{i}")));
             sql.Append(")");
 
