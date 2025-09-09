@@ -1,9 +1,9 @@
-using Durable;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-
 namespace Test.Shared
 {
+    using Durable;
+    using System.Collections.Generic;
+    using System.ComponentModel.DataAnnotations;
+    
     [Entity("authors")]
     public class Author
     {

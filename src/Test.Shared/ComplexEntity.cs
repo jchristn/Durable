@@ -1,22 +1,8 @@
-using System;
-using System.Collections.Generic;
-using Durable;
-
 namespace Test.Shared
 {
-    public enum Status
-    {
-        Active,
-        Inactive,
-        Pending
-    }
-
-    public class Address
-    {
-        public string Street { get; set; }
-        public string City { get; set; }
-        public string ZipCode { get; set; }
-    }
+    using System;
+    using System.Collections.Generic;
+    using Durable;
 
     [Entity("complex_entities")]
     public class ComplexEntity

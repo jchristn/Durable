@@ -1,8 +1,8 @@
-using Durable;
-using System.ComponentModel.DataAnnotations;
-
 namespace Test.Shared
 {
+    using Durable;
+    using System.ComponentModel.DataAnnotations;
+    
     [Entity("books")]
     public class Book
     {

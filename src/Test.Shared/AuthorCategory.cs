@@ -1,7 +1,7 @@
-using Durable;
-
 namespace Test.Shared
 {
+    using Durable;
+
     [Entity("author_categories")]
     public class AuthorCategory
     {

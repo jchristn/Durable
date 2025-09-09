@@ -1,7 +1,7 @@
-using Durable;
-
 namespace Test.Sqlite
 {
+    using Durable;
+
     [Entity("authors")]
     public class AuthorWithoutVersion
     {
