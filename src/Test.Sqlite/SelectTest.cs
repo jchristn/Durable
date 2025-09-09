@@ -7,19 +7,6 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
 
-    public class PersonSummary
-    {
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string Email { get; set; }
-    }
-
-    public class DepartmentInfo
-    {
-        public string Department { get; set; }
-        public decimal Salary { get; set; }
-    }
-
     public static class SelectTest
     {
         public static void RunSelectTests()
