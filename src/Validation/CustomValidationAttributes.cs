@@ -1,8 +1,8 @@
-using System.ComponentModel.DataAnnotations;
-using Test.Shared;
-
 namespace TestApi.Validation
 {
+    using System.ComponentModel.DataAnnotations;
+    using Test.Shared;
+
     /// <summary>
     /// Validates that a company ID exists and is positive when provided
     /// </summary>
