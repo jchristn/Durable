@@ -1,28 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Durable.Sqlite;
-using Microsoft.Data.Sqlite;
-using Test.Shared;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using Durable.Sqlite;
+    using Microsoft.Data.Sqlite;
+    using Test.Shared;
+    
     public static class TestSelectFunctionality
     {
-        public class PersonName
-        {
-            public string FirstName { get; set; }
-            public string LastName { get; set; }
-        }
-        
-        public class PersonSummary
-        {
-            public string FirstName { get; set; }
-            public string LastName { get; set; }
-            public string Email { get; set; }
-            public decimal Salary { get; set; }
-        }
-        
         public static void Main(string[] args)
         {
             Console.WriteLine("Testing Select/Projection Functionality...");
