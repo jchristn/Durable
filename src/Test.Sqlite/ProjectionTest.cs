@@ -7,19 +7,6 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
 
-    public class PersonSummary
-    {
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string Email { get; set; }
-    }
-
-    public class DepartmentInfo
-    {
-        public string Department { get; set; }
-        public decimal Salary { get; set; }
-    }
-
     public class ProjectionTest
     {
         #region Public-Members
@@ -28,8 +15,8 @@ namespace Test.Sqlite
 
         #region Private-Members
 
-        private string _ConnectionString = "Data Source=projection_test.db";
-        private SqliteRepository<Person> _PersonRepository;
+        private string ConnectionString = "Data Source=projection_test.db";
+        private SqliteRepository<Person> PersonRepository;
 
         #endregion
 
@@ -42,7 +29,7 @@ namespace Test.Sqlite
         public void Run()
         {
             // Initialize repository
-            _PersonRepository = new SqliteRepository<Person>(_ConnectionString);
+            PersonRepository = new SqliteRepository<Person>(ConnectionString);
 
             // Create table
             CreateTable();
@@ -83,7 +70,7 @@ namespace Test.Sqlite
 
         private void CreateTable()
         {
-            using SqliteConnection connection = new SqliteConnection(_ConnectionString);
+            using SqliteConnection connection = new SqliteConnection(ConnectionString);
             connection.Open();
 
             string dropTable = "DROP TABLE IF EXISTS people;";
@@ -123,7 +110,7 @@ namespace Test.Sqlite
 
             foreach (Person person in people)
             {
-                _PersonRepository.Create(person);
+                PersonRepository.Create(person);
             }
 
             Console.WriteLine($"Inserted {people.Count} test records");
@@ -133,7 +120,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 1: Select specific fields ===");
 
-            IEnumerable<PersonSummary> summaries = _PersonRepository
+            IEnumerable<PersonSummary> summaries = PersonRepository
                 .Query()
                 .Select(p => new PersonSummary
                 {
@@ -155,7 +142,7 @@ namespace Test.Sqlite
             
             // Note: Anonymous types would need special handling in the actual implementation
             // For this test, we'll use a concrete type
-            IEnumerable<PersonSummary> results = _PersonRepository
+            IEnumerable<PersonSummary> results = PersonRepository
                 .Query()
                 .Where(p => p.Department == "IT")
                 .Select(p => new PersonSummary
@@ -176,7 +163,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 3: Select with member initialization ===");
 
-            IEnumerable<DepartmentInfo> deptInfo = _PersonRepository
+            IEnumerable<DepartmentInfo> deptInfo = PersonRepository
                 .Query()
                 .Select(p => new DepartmentInfo
                 {
@@ -195,7 +182,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 4: Select with ordering ===");
 
-            IEnumerable<PersonSummary> ordered = _PersonRepository
+            IEnumerable<PersonSummary> ordered = PersonRepository
                 .Query()
                 .Select(p => new PersonSummary
                 {
@@ -217,7 +204,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 5: Select with filtering (WHERE before SELECT) ===");
 
-            IEnumerable<PersonSummary> filtered = _PersonRepository
+            IEnumerable<PersonSummary> filtered = PersonRepository
                 .Query()
                 .Where(p => p.Age > 30)
                 .Select(p => new PersonSummary
@@ -239,7 +226,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 6: Select distinct values ===");
 
-            IEnumerable<DepartmentInfo> distinctDepts = _PersonRepository
+            IEnumerable<DepartmentInfo> distinctDepts = PersonRepository
                 .Query()
                 .Select(p => new DepartmentInfo
                 {
@@ -259,7 +246,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 7: Select with pagination ===");
 
-            IEnumerable<PersonSummary> page1 = _PersonRepository
+            IEnumerable<PersonSummary> page1 = PersonRepository
                 .Query()
                 .Select(p => new PersonSummary
                 {
@@ -277,7 +264,7 @@ namespace Test.Sqlite
                 Console.WriteLine($"    {person.FirstName} {person.LastName}");
             }
 
-            IEnumerable<PersonSummary> page2 = _PersonRepository
+            IEnumerable<PersonSummary> page2 = PersonRepository
                 .Query()
                 .Select(p => new PersonSummary
                 {
@@ -301,7 +288,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n=== Test 8: Async operations ===");
 
-            IEnumerable<PersonSummary> asyncResults = await _PersonRepository
+            IEnumerable<PersonSummary> asyncResults = await PersonRepository
                 .Query()
                 .Where(p => p.Salary > 60000)
                 .Select(p => new PersonSummary
@@ -319,7 +306,7 @@ namespace Test.Sqlite
             }
 
             // Test with query exposure
-            IDurableResult<PersonSummary> resultWithQuery = await _PersonRepository
+            IDurableResult<PersonSummary> resultWithQuery = await PersonRepository
                 .Query()
                 .Select(p => new PersonSummary
                 {
