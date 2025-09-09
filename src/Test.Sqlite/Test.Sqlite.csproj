@@ -6,6 +6,7 @@
 		<IsPackable>false</IsPackable>
 		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
 		<StartupObject>Test.Sqlite.Program</StartupObject>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 	</PropertyGroup>
 
 	<ItemGroup>
