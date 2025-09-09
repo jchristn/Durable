@@ -1,70 +1,33 @@
-using System;
-using System.Linq.Expressions;
-using Xunit;
-using Durable.Sqlite;
-using System.Collections.Generic;
-using System.Reflection;
-using Microsoft.Data.Sqlite;
-using System.Threading.Tasks;
-using System.Linq;
-using Durable;
-
 namespace Test.Sqlite
 {
-    [Entity("TestPerson")]
-    public class TestPerson
-    {
-        [Property("Id", Flags.PrimaryKey)]
-        public int Id { get; set; }
-        
-        [Property("FirstName", Flags.String, 64)]
-        public string FirstName { get; set; }
-        
-        [Property("LastName", Flags.String, 64)]
-        public string LastName { get; set; }
-        
-        [Property("Salary")]
-        public decimal Salary { get; set; }
-        
-        [Property("Age")]
-        public int Age { get; set; }
-        
-        [Property("LastModified")]
-        public DateTime LastModified { get; set; }
-        
-        [Property("Department", Flags.String, 32)]
-        public string Department { get; set; }
-        
-        [Property("Bonus")]
-        public decimal Bonus { get; set; }
-        
-        [Property("Status", Flags.String, 16)]
-        public string Status { get; set; }
-        
-        [Property("YearsOfService")]
-        public int YearsOfService { get; set; }
-        
-        [Property("Email", Flags.String, 128)]
-        public string Email { get; set; }
-    }
-
+    using System;
+    using System.Linq.Expressions;
+    using Xunit;
+    using Durable.Sqlite;
+    using System.Collections.Generic;
+    using System.Reflection;
+    using Microsoft.Data.Sqlite;
+    using System.Threading.Tasks;
+    using System.Linq;
+    using Durable;
+    
     public class BatchUpdateTests : IDisposable
     {
-        private readonly SqliteRepository<TestPerson> _repository;
-        private readonly Dictionary<string, PropertyInfo> _columnMappings;
+        private readonly SqliteRepository<TestPerson> Repository;
+        private readonly Dictionary<string, PropertyInfo> ColumnMappings;
 
         public BatchUpdateTests()
         {
             string connectionString = "Data Source=batch_update_test.db";
-            _repository = new SqliteRepository<TestPerson>(connectionString);
+            Repository = new SqliteRepository<TestPerson>(connectionString);
             
-            _columnMappings = typeof(TestPerson).GetProperties()
+            ColumnMappings = typeof(TestPerson).GetProperties()
                 .ToDictionary(p => p.Name, p => p);
         }
 
         private async Task CreateTableAsync()
         {
-            await _repository.ExecuteSqlAsync(@"
+            await Repository.ExecuteSqlAsync(@"
                 CREATE TABLE IF NOT EXISTS TestPerson (
                     Id INTEGER PRIMARY KEY,
                     FirstName TEXT NOT NULL,
@@ -85,7 +48,7 @@ namespace Test.Sqlite
             await CreateTableAsync();
             
             // Clear existing data
-            await _repository.ExecuteSqlAsync("DELETE FROM TestPerson");
+            await Repository.ExecuteSqlAsync("DELETE FROM TestPerson");
             
             var people = new[]
             {
@@ -95,7 +58,7 @@ namespace Test.Sqlite
                 new TestPerson { Id = 4, FirstName = "Alice", LastName = "Brown", Salary = 70000, Age = 42, Department = "Finance", Bonus = 8000, Status = "Active", YearsOfService = 10, Email = "alice@example.com" }
             };
 
-            await _repository.CreateManyAsync(people);
+            await Repository.CreateManyAsync(people);
         }
 
         [Fact]
@@ -103,7 +66,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -120,7 +83,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -141,7 +104,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -165,7 +128,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -186,7 +149,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -205,7 +168,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -224,7 +187,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -241,9 +204,9 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var initialPeople = _repository.ReadMany(p => p.Department == "IT").ToList();
+            var initialPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
             
-            int rowsAffected = await _repository.BatchUpdateAsync(
+            int rowsAffected = await Repository.BatchUpdateAsync(
                 p => p.Department == "IT",
                 p => new TestPerson
                 {
@@ -254,7 +217,7 @@ namespace Test.Sqlite
             
             Assert.Equal(2, rowsAffected);
             
-            var updatedPeople = _repository.ReadMany(p => p.Department == "IT").ToList();
+            var updatedPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
             
             foreach (var person in updatedPeople)
             {
@@ -269,7 +232,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            int rowsAffected = await _repository.BatchUpdateAsync(
+            int rowsAffected = await Repository.BatchUpdateAsync(
                 p => p.Status == "Active",
                 p => new TestPerson
                 {
@@ -286,7 +249,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -303,7 +266,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -322,7 +285,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(_columnMappings);
+            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -343,7 +306,7 @@ namespace Test.Sqlite
 
         public void Dispose()
         {
-            _repository?.Dispose();
+            Repository?.Dispose();
         }
     }
 }
