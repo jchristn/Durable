@@ -11,12 +11,4 @@ namespace Durable
             OtherQuery = otherQuery;
         }
     }
-
-    public enum SetOperationType
-    {
-        Union,
-        UnionAll,
-        Intersect,
-        Except
-    }
 }
