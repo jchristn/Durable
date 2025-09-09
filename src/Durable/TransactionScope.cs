@@ -8,20 +8,20 @@ namespace Durable
     {
         #region Public-Members
 
-        public static TransactionScope? Current => _current.Value;
-        public ITransaction Transaction => _transaction;
-        public bool IsCompleted => _completed;
+        public static TransactionScope? Current => _Current.Value;
+        public ITransaction Transaction => _Transaction;
+        public bool IsCompleted => _Completed;
 
         #endregion
 
         #region Private-Members
 
-        private static readonly AsyncLocal<TransactionScope> _current = new AsyncLocal<TransactionScope>();
-        private readonly TransactionScope? _parent;
-        private readonly ITransaction _transaction;
-        private readonly bool _ownsTransaction;
-        private bool _completed;
-        private bool _disposed;
+        private static readonly AsyncLocal<TransactionScope> _Current = new AsyncLocal<TransactionScope>();
+        private readonly TransactionScope? _Parent;
+        private readonly ITransaction _Transaction;
+        private readonly bool _OwnsTransaction;
+        private bool _Completed;
+        private bool _Disposed;
 
         #endregion
 
@@ -29,10 +29,10 @@ namespace Durable
 
         private TransactionScope(ITransaction transaction, bool ownsTransaction, TransactionScope? parent)
         {
-            _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
-            _ownsTransaction = ownsTransaction;
-            _parent = parent;
-            _current.Value = this;
+            _Transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
+            _OwnsTransaction = ownsTransaction;
+            _Parent = parent;
+            _Current.Value = this;
         }
 
         public static TransactionScope Create(ITransaction transaction)
@@ -40,13 +40,13 @@ namespace Durable
             if (transaction == null)
                 throw new ArgumentNullException(nameof(transaction));
 
-            TransactionScope? current = _current.Value;
+            TransactionScope? current = _Current.Value;
             
             // If we already have a transaction and it's the same connection, create a nested scope
             if (current != null && 
-                current._transaction.Connection == transaction.Connection)
+                current._Transaction.Connection == transaction.Connection)
             {
-                return new TransactionScope(current._transaction, false, current);
+                return new TransactionScope(current._Transaction, false, current);
             }
 
             return new TransactionScope(transaction, true, current);
@@ -55,13 +55,13 @@ namespace Durable
         public static async Task<TransactionScope> CreateAsync<T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
         {
             ITransaction transaction = await repository.BeginTransactionAsync(token);
-            return new TransactionScope(transaction, true, _current.Value);
+            return new TransactionScope(transaction, true, _Current.Value);
         }
 
         public static TransactionScope Create<T>(IRepository<T> repository) where T : class, new()
         {
             ITransaction transaction = repository.BeginTransaction();
-            return new TransactionScope(transaction, true, _current.Value);
+            return new TransactionScope(transaction, true, _Current.Value);
         }
 
         #endregion
@@ -70,45 +70,45 @@ namespace Durable
 
         public void Complete()
         {
-            if (_disposed)
+            if (_Disposed)
                 throw new ObjectDisposedException(nameof(TransactionScope));
-            if (_completed)
+            if (_Completed)
                 throw new InvalidOperationException("Transaction scope has already been completed");
 
-            _completed = true;
+            _Completed = true;
 
-            if (_ownsTransaction)
+            if (_OwnsTransaction)
             {
-                _transaction.Commit();
+                _Transaction.Commit();
             }
         }
 
         public async Task CompleteAsync(CancellationToken token = default)
         {
-            if (_disposed)
+            if (_Disposed)
                 throw new ObjectDisposedException(nameof(TransactionScope));
-            if (_completed)
+            if (_Completed)
                 throw new InvalidOperationException("Transaction scope has already been completed");
 
-            _completed = true;
+            _Completed = true;
 
-            if (_ownsTransaction)
+            if (_OwnsTransaction)
             {
-                await _transaction.CommitAsync(token);
+                await _Transaction.CommitAsync(token);
             }
         }
 
         public void Dispose()
         {
-            if (!_disposed)
+            if (!_Disposed)
             {
-                _current.Value = _parent!;
+                _Current.Value = _Parent!;
 
-                if (!_completed && _ownsTransaction)
+                if (!_Completed && _OwnsTransaction)
                 {
                     try
                     {
-                        _transaction.Rollback();
+                        _Transaction.Rollback();
                     }
                     catch
                     {
@@ -116,12 +116,12 @@ namespace Durable
                     }
                 }
 
-                if (_ownsTransaction)
+                if (_OwnsTransaction)
                 {
-                    _transaction?.Dispose();
+                    _Transaction?.Dispose();
                 }
 
-                _disposed = true;
+                _Disposed = true;
             }
         }
 

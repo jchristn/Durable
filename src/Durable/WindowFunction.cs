@@ -19,39 +19,4 @@ namespace Durable
             Parameters = new Dictionary<string, object>();
         }
     }
-
-    public class WindowFrame
-    {
-        public WindowFrameType Type { get; set; }
-        public WindowFrameBound StartBound { get; set; } = new WindowFrameBound();
-        public WindowFrameBound EndBound { get; set; } = new WindowFrameBound();
-    }
-
-    public enum WindowFrameType
-    {
-        Rows,
-        Range,
-        Groups
-    }
-
-    public class WindowFrameBound
-    {
-        public WindowFrameBoundType Type { get; set; }
-        public int? Offset { get; set; }
-    }
-
-    public enum WindowFrameBoundType
-    {
-        UnboundedPreceding,
-        UnboundedFollowing,
-        CurrentRow,
-        Preceding,
-        Following
-    }
-
-    public class WindowOrderByClause
-    {
-        public string Column { get; set; } = string.Empty;
-        public bool Ascending { get; set; }
-    }
 }

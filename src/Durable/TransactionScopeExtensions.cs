@@ -6,20 +6,6 @@ namespace Durable
 
     public static class TransactionScopeExtensions
     {
-        #region Public-Members
-
-        #endregion
-
-        #region Private-Members
-
-        #endregion
-
-        #region Constructors-and-Factories
-
-        #endregion
-
-        #region Public-Methods
-
         public static void ExecuteInTransactionScope<T>(this IRepository<T> repository, Action action) where T : class, new()
         {
             using TransactionScope scope = TransactionScope.Create(repository);
@@ -141,11 +127,6 @@ namespace Durable
                 throw;
             }
         }
-
-        #endregion
-
-        #region Private-Methods
-
-        #endregion
+        
     }
 }
