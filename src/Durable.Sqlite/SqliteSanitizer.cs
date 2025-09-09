@@ -16,7 +16,7 @@ namespace Durable.Sqlite
 
         #region Private-Members
 
-        private static readonly Regex SqlIdentifierPattern = new Regex(@"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
+        private static readonly Regex _SqlIdentifierPattern = new Regex(@"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
         #endregion
 
@@ -81,7 +81,7 @@ namespace Durable.Sqlite
                 throw new ArgumentException("Identifier cannot be null or empty", nameof(identifier));
             
             // Check if identifier contains only safe characters
-            if (SqlIdentifierPattern.IsMatch(identifier))
+            if (_SqlIdentifierPattern.IsMatch(identifier))
             {
                 return identifier;
             }
