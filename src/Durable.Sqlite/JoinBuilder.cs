@@ -14,8 +14,8 @@ namespace Durable.Sqlite
 
         #region Private-Members
 
-        private readonly ISanitizer _sanitizer;
-        private readonly IncludeProcessor _includeProcessor;
+        private readonly ISanitizer _Sanitizer;
+        private readonly IncludeProcessor _IncludeProcessor;
 
         #endregion
 
@@ -23,8 +23,8 @@ namespace Durable.Sqlite
 
         public JoinBuilder(ISanitizer sanitizer)
         {
-            _sanitizer = sanitizer;
-            _includeProcessor = new IncludeProcessor(sanitizer);
+            _Sanitizer = sanitizer;
+            _IncludeProcessor = new IncludeProcessor(sanitizer);
         }
 
         #endregion
@@ -62,7 +62,7 @@ namespace Durable.Sqlite
                 return result;
             }
 
-            List<IncludeInfo> includes = _includeProcessor.ParseIncludes<T>(includePaths);
+            List<IncludeInfo> includes = _IncludeProcessor.ParseIncludes<T>(includePaths);
             result.Includes = includes;
 
             StringBuilder selectBuilder = new StringBuilder();
@@ -71,7 +71,7 @@ namespace Durable.Sqlite
             string baseAlias = "t0";
             selectBuilder.Append($"{baseAlias}.*");
 
-            Dictionary<string, PropertyInfo> baseColumns = _includeProcessor.GetColumnMappings(typeof(T));
+            Dictionary<string, PropertyInfo> baseColumns = _IncludeProcessor.GetColumnMappings(typeof(T));
             List<ColumnMapping> baseMappings = new List<ColumnMapping>();
             foreach (KeyValuePair<string, PropertyInfo> kvp in baseColumns)
             {
@@ -118,14 +118,14 @@ namespace Durable.Sqlite
                     // Handle many-to-many relationships with junction table
                     string parentPkColumn = GetPrimaryKeyColumn(include.ForeignKeyProperty.DeclaringType);
 
-                    Dictionary<string, PropertyInfo> relatedColumns = _includeProcessor.GetColumnMappings(include.RelatedEntityType);
+                    Dictionary<string, PropertyInfo> relatedColumns = _IncludeProcessor.GetColumnMappings(include.RelatedEntityType);
                     List<ColumnMapping> mappings = new List<ColumnMapping>();
 
                     foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
                     {
                         string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
-                        string sanitizedColumn = _sanitizer.SanitizeIdentifier(kvp.Key);
-                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_sanitizer.SanitizeIdentifier(columnAlias)}");
+                        string sanitizedColumn = _Sanitizer.SanitizeIdentifier(kvp.Key);
+                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_Sanitizer.SanitizeIdentifier(columnAlias)}");
                         
                         mappings.Add(new ColumnMapping
                         {
@@ -141,12 +141,12 @@ namespace Durable.Sqlite
                     string relatedPkColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
 
                     joinBuilder.AppendLine();
-                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.JunctionTableName)} {include.JunctionAlias} ");
-                    joinBuilder.Append($"ON {parentAlias}.{_sanitizer.SanitizeIdentifier(parentPkColumn)} = {include.JunctionAlias}.{_sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, true))}");
+                    joinBuilder.Append($"LEFT JOIN {_Sanitizer.SanitizeIdentifier(include.JunctionTableName)} {include.JunctionAlias} ");
+                    joinBuilder.Append($"ON {parentAlias}.{_Sanitizer.SanitizeIdentifier(parentPkColumn)} = {include.JunctionAlias}.{_Sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, true))}");
 
                     joinBuilder.AppendLine();
-                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
-                    joinBuilder.Append($"ON {include.JunctionAlias}.{_sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, false))} = {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(relatedPkColumn)}");
+                    joinBuilder.Append($"LEFT JOIN {_Sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
+                    joinBuilder.Append($"ON {include.JunctionAlias}.{_Sanitizer.SanitizeIdentifier(GetJunctionForeignKeyColumn(include, false))} = {include.JoinAlias}.{_Sanitizer.SanitizeIdentifier(relatedPkColumn)}");
                 }
                 else
                 {
@@ -155,14 +155,14 @@ namespace Durable.Sqlite
                     PropertyAttribute fkPropAttr = include.ForeignKeyProperty.GetCustomAttribute<PropertyAttribute>();
                     string fkColumnName = fkPropAttr?.Name ?? include.ForeignKeyProperty.Name;
 
-                    Dictionary<string, PropertyInfo> relatedColumns = _includeProcessor.GetColumnMappings(include.RelatedEntityType);
+                    Dictionary<string, PropertyInfo> relatedColumns = _IncludeProcessor.GetColumnMappings(include.RelatedEntityType);
                     List<ColumnMapping> mappings = new List<ColumnMapping>();
 
                     foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
                     {
                         string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
-                        string sanitizedColumn = _sanitizer.SanitizeIdentifier(kvp.Key);
-                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_sanitizer.SanitizeIdentifier(columnAlias)}");
+                        string sanitizedColumn = _Sanitizer.SanitizeIdentifier(kvp.Key);
+                        selectBuilder.Append($", {include.JoinAlias}.{sanitizedColumn} AS {_Sanitizer.SanitizeIdentifier(columnAlias)}");
                         
                         mappings.Add(new ColumnMapping
                         {
@@ -178,8 +178,8 @@ namespace Durable.Sqlite
                     string referencedColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
 
                     joinBuilder.AppendLine();
-                    joinBuilder.Append($"LEFT JOIN {_sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
-                    joinBuilder.Append($"ON {parentAlias}.{_sanitizer.SanitizeIdentifier(fkColumnName)} = {include.JoinAlias}.{_sanitizer.SanitizeIdentifier(referencedColumn)}");
+                    joinBuilder.Append($"LEFT JOIN {_Sanitizer.SanitizeIdentifier(include.RelatedTableName)} {include.JoinAlias} ");
+                    joinBuilder.Append($"ON {parentAlias}.{_Sanitizer.SanitizeIdentifier(fkColumnName)} = {include.JoinAlias}.{_Sanitizer.SanitizeIdentifier(referencedColumn)}");
                 }
 
                 if (include.Children.Count > 0)
