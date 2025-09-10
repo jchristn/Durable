@@ -1,12 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Durable.Sqlite;
-using Test.Shared;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using Durable.Sqlite;
+    using Test.Shared;
+    
     public static class ProcessIncludesTest
     {
         public static void Main()

@@ -1,15 +1,15 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
-using Durable;
-using Durable.Sqlite;
-using Microsoft.Data.Sqlite;
-using Test.Shared;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Durable;
+    using Durable.Sqlite;
+    using Microsoft.Data.Sqlite;
+    using Test.Shared;
+    
     public static class BatchInsertTest
     {
         public static async Task RunBatchInsertTests()

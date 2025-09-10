@@ -1,10 +1,10 @@
-using System;
-using System.Reflection;
-using Durable;
-using Xunit;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Reflection;
+    using Durable;
+    using Xunit;
+
     public class VersionColumnInfoTests
     {
         [Fact]
@@ -331,8 +331,8 @@ namespace Test.Sqlite
         [Fact]
         public void GetSetValue_WorksCorrectly()
         {
-            TestEntity entity = new TestEntity();
-            PropertyInfo property = typeof(TestEntity).GetProperty(nameof(TestEntity.Version))!;
+            VersionTestEntity entity = new VersionTestEntity();
+            PropertyInfo property = typeof(VersionTestEntity).GetProperty(nameof(VersionTestEntity.Version))!;
             
             VersionColumnInfo versionInfo = new VersionColumnInfo
             {
@@ -349,7 +349,7 @@ namespace Test.Sqlite
         [Fact]
         public void GetValue_NullEntity_ReturnsNull()
         {
-            PropertyInfo property = typeof(TestEntity).GetProperty(nameof(TestEntity.Version))!;
+            PropertyInfo property = typeof(VersionTestEntity).GetProperty(nameof(VersionTestEntity.Version))!;
             VersionColumnInfo versionInfo = new VersionColumnInfo
             {
                 Property = property
@@ -362,7 +362,7 @@ namespace Test.Sqlite
         [Fact]
         public void SetValue_NullEntity_DoesNotThrow()
         {
-            PropertyInfo property = typeof(TestEntity).GetProperty(nameof(TestEntity.Version))!;
+            PropertyInfo property = typeof(VersionTestEntity).GetProperty(nameof(VersionTestEntity.Version))!;
             VersionColumnInfo versionInfo = new VersionColumnInfo
             {
                 Property = property
@@ -370,10 +370,5 @@ namespace Test.Sqlite
             
             versionInfo.SetValue(null, 42); // Should not throw
         }
-    }
-    
-    public class TestEntity
-    {
-        public int Version { get; set; }
     }
 }

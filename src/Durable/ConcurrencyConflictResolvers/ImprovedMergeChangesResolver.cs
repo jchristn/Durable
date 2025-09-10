@@ -1,20 +1,40 @@
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Threading.Tasks;
-
 namespace Durable.ConcurrencyConflictResolvers
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+    using System.Threading.Tasks;
+    
+    /// <summary>
+    /// An advanced concurrency conflict resolver that merges changes from different sources based on configurable conflict behavior.
+    /// Provides enhanced comparison capabilities including array and collection comparison.
+    /// </summary>
+    /// <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
     public class ImprovedMergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members
 
+        /// <summary>
+        /// Gets or sets the default strategy used for conflict resolution. Defaults to MergeChanges.
+        /// </summary>
         public ConflictResolutionStrategy DefaultStrategy { get; set; } = ConflictResolutionStrategy.MergeChanges;
 
+        /// <summary>
+        /// Defines the behavior when conflicts are detected between current and incoming changes.
+        /// </summary>
         public enum ConflictBehavior
         {
+            /// <summary>
+            /// The incoming value takes precedence in conflicts.
+            /// </summary>
             IncomingWins,
+            /// <summary>
+            /// The current value takes precedence in conflicts.
+            /// </summary>
             CurrentWins, 
+            /// <summary>
+            /// Throws an exception when conflicts are detected.
+            /// </summary>
             ThrowException
         }
 
@@ -22,23 +42,37 @@ namespace Durable.ConcurrencyConflictResolvers
 
         #region Private-Members
 
-        private readonly HashSet<string> _ignoredProperties;
-        private readonly ConflictBehavior _conflictBehavior;
+        private readonly HashSet<string> _IgnoredProperties;
+        private readonly ConflictBehavior _ConflictBehavior;
 
         #endregion
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the ImprovedMergeChangesResolver with specified conflict behavior and ignored properties.
+        /// </summary>
+        /// <param name="conflictBehavior">The behavior to use when conflicts are detected. Defaults to IncomingWins.</param>
+        /// <param name="ignoredProperties">Properties to ignore during merge operations.</param>
         public ImprovedMergeChangesResolver(ConflictBehavior conflictBehavior = ConflictBehavior.IncomingWins, params string[] ignoredProperties)
         {
-            _ignoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
-            _conflictBehavior = conflictBehavior;
+            _IgnoredProperties = new HashSet<string>(ignoredProperties ?? Array.Empty<string>());
+            _ConflictBehavior = conflictBehavior;
         }
 
         #endregion
 
         #region Public-Methods
 
+        /// <summary>
+        /// Resolves conflicts between current and incoming entities by merging changes based on the original entity state.
+        /// </summary>
+        /// <param name="currentEntity">The current entity state</param>
+        /// <param name="incomingEntity">The incoming entity state</param>
+        /// <param name="originalEntity">The original entity state used as baseline for change detection</param>
+        /// <param name="strategy">The conflict resolution strategy to use</param>
+        /// <returns>A merged entity with resolved conflicts</returns>
+        /// <exception cref="ArgumentNullException">Thrown when any of the entity parameters are null</exception>
         public T ResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             if (currentEntity == null || incomingEntity == null || originalEntity == null)
@@ -54,7 +88,7 @@ namespace Durable.ConcurrencyConflictResolvers
                 if (!property.CanRead || !property.CanWrite)
                     continue;
                     
-                if (_ignoredProperties.Contains(property.Name))
+                if (_IgnoredProperties.Contains(property.Name))
                 {
                     object? currentValue = property.GetValue(currentEntity);
                     property.SetValue(mergedEntity, currentValue);
@@ -94,12 +128,29 @@ namespace Durable.ConcurrencyConflictResolvers
             return mergedEntity;
         }
         
+        /// <summary>
+        /// Asynchronously resolves conflicts between current and incoming entities.
+        /// </summary>
+        /// <param name="currentEntity">The current entity state</param>
+        /// <param name="incomingEntity">The incoming entity state</param>
+        /// <param name="originalEntity">The original entity state used as baseline for change detection</param>
+        /// <param name="strategy">The conflict resolution strategy to use</param>
+        /// <returns>A task containing the merged entity with resolved conflicts</returns>
         public Task<T> ResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             T resolvedEntity = ResolveConflict(currentEntity, incomingEntity, originalEntity, strategy);
             return Task.FromResult(resolvedEntity);
         }
         
+        /// <summary>
+        /// Attempts to resolve conflicts between entities without throwing exceptions.
+        /// </summary>
+        /// <param name="currentEntity">The current entity state</param>
+        /// <param name="incomingEntity">The incoming entity state</param>
+        /// <param name="originalEntity">The original entity state used as baseline for change detection</param>
+        /// <param name="strategy">The conflict resolution strategy to use</param>
+        /// <param name="resolvedEntity">The resolved entity if successful, null otherwise</param>
+        /// <returns>True if conflict resolution succeeded, false otherwise</returns>
         public bool TryResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy, out T resolvedEntity)
         {
             try
@@ -114,16 +165,24 @@ namespace Durable.ConcurrencyConflictResolvers
             }
         }
         
-        public async Task<IConcurrencyConflictResolver<T>.TryResolveConflictResult> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        /// <summary>
+        /// Asynchronously attempts to resolve conflicts between entities without throwing exceptions.
+        /// </summary>
+        /// <param name="currentEntity">The current entity state</param>
+        /// <param name="incomingEntity">The incoming entity state</param>
+        /// <param name="originalEntity">The original entity state used as baseline for change detection</param>
+        /// <param name="strategy">The conflict resolution strategy to use</param>
+        /// <returns>A task containing the result of the conflict resolution attempt</returns>
+        public async Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             try
             {
                 T resolvedEntity = await ResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);
-                return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = true, ResolvedEntity = resolvedEntity };
+                return new TryResolveConflictResult<T> { Success = true, ResolvedEntity = resolvedEntity };
             }
             catch
             {
-                return new IConcurrencyConflictResolver<T>.TryResolveConflictResult { Success = false, ResolvedEntity = null! };
+                return new TryResolveConflictResult<T> { Success = false, ResolvedEntity = null! };
             }
         }
 
@@ -133,7 +192,7 @@ namespace Durable.ConcurrencyConflictResolvers
 
         private object? ResolvePropertyConflict(PropertyInfo property, object? currentValue, object? incomingValue, object? originalValue)
         {
-            switch (_conflictBehavior)
+            switch (_ConflictBehavior)
             {
                 case ConflictBehavior.CurrentWins:
                     return currentValue;

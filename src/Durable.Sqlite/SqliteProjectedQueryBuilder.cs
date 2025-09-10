@@ -11,14 +11,6 @@ namespace Durable.Sqlite
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
 
-    public class SelectMapping
-    {
-        public string ColumnName { get; set; }
-        public string Alias { get; set; }
-        public PropertyInfo SourceProperty { get; set; }
-        public PropertyInfo TargetProperty { get; set; }
-    }
-
     public class SqliteProjectedQueryBuilder<TEntity, TResult> : IQueryBuilder<TResult> 
         where TEntity : class, new()
         where TResult : class, new()

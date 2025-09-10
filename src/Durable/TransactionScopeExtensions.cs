@@ -4,22 +4,17 @@ namespace Durable
     using System.Threading;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// Extension methods for executing operations within transaction scopes.
+    /// </summary>
     public static class TransactionScopeExtensions
     {
-        #region Public-Members
-
-        #endregion
-
-        #region Private-Members
-
-        #endregion
-
-        #region Constructors-and-Factories
-
-        #endregion
-
-        #region Public-Methods
-
+        /// <summary>
+        /// Executes an action within a transaction scope for the specified repository.
+        /// </summary>
+        /// <typeparam name="T">The type of entity managed by the repository.</typeparam>
+        /// <param name="repository">The repository to create a transaction scope for.</param>
+        /// <param name="action">The action to execute within the transaction scope.</param>
         public static void ExecuteInTransactionScope<T>(this IRepository<T> repository, Action action) where T : class, new()
         {
             using TransactionScope scope = TransactionScope.Create(repository);
@@ -27,6 +22,14 @@ namespace Durable
             scope.Complete();
         }
 
+        /// <summary>
+        /// Executes a function within a transaction scope for the specified repository and returns the result.
+        /// </summary>
+        /// <typeparam name="T">The type of entity managed by the repository.</typeparam>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="repository">The repository to create a transaction scope for.</param>
+        /// <param name="func">The function to execute within the transaction scope.</param>
+        /// <returns>The result of the function execution.</returns>
         public static TResult ExecuteInTransactionScope<T, TResult>(this IRepository<T> repository, Func<TResult> func) where T : class, new()
         {
             using TransactionScope scope = TransactionScope.Create(repository);
@@ -35,6 +38,14 @@ namespace Durable
             return result;
         }
 
+        /// <summary>
+        /// Asynchronously executes a task within a transaction scope for the specified repository.
+        /// </summary>
+        /// <typeparam name="T">The type of entity managed by the repository.</typeparam>
+        /// <param name="repository">The repository to create a transaction scope for.</param>
+        /// <param name="func">The task function to execute within the transaction scope.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         public static async Task ExecuteInTransactionScopeAsync<T>(this IRepository<T> repository, Func<Task> func, CancellationToken token = default) where T : class, new()
         {
             using TransactionScope scope = await TransactionScope.CreateAsync(repository, token);
@@ -42,6 +53,15 @@ namespace Durable
             await scope.CompleteAsync(token);
         }
 
+        /// <summary>
+        /// Asynchronously executes a task function within a transaction scope for the specified repository and returns the result.
+        /// </summary>
+        /// <typeparam name="T">The type of entity managed by the repository.</typeparam>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="repository">The repository to create a transaction scope for.</param>
+        /// <param name="func">The task function to execute within the transaction scope.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the result.</returns>
         public static async Task<TResult> ExecuteInTransactionScopeAsync<T, TResult>(this IRepository<T> repository, Func<Task<TResult>> func, CancellationToken token = default) where T : class, new()
         {
             using TransactionScope scope = await TransactionScope.CreateAsync(repository, token);
@@ -50,6 +70,11 @@ namespace Durable
             return result;
         }
 
+        /// <summary>
+        /// Executes an action within a transaction scope for the specified transaction.
+        /// </summary>
+        /// <param name="transaction">The transaction to create a transaction scope for.</param>
+        /// <param name="action">The action to execute within the transaction scope.</param>
         public static void ExecuteInTransactionScope(this ITransaction transaction, Action action)
         {
             using TransactionScope scope = TransactionScope.Create(transaction);
@@ -57,6 +82,13 @@ namespace Durable
             scope.Complete();
         }
 
+        /// <summary>
+        /// Executes a function within a transaction scope for the specified transaction and returns the result.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="transaction">The transaction to create a transaction scope for.</param>
+        /// <param name="func">The function to execute within the transaction scope.</param>
+        /// <returns>The result of the function execution.</returns>
         public static TResult ExecuteInTransactionScope<TResult>(this ITransaction transaction, Func<TResult> func)
         {
             using TransactionScope scope = TransactionScope.Create(transaction);
@@ -65,6 +97,13 @@ namespace Durable
             return result;
         }
 
+        /// <summary>
+        /// Asynchronously executes a task within a transaction scope for the specified transaction.
+        /// </summary>
+        /// <param name="transaction">The transaction to create a transaction scope for.</param>
+        /// <param name="func">The task function to execute within the transaction scope.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         public static async Task ExecuteInTransactionScopeAsync(this ITransaction transaction, Func<Task> func, CancellationToken token = default)
         {
             using TransactionScope scope = TransactionScope.Create(transaction);
@@ -72,6 +111,14 @@ namespace Durable
             await scope.CompleteAsync(token);
         }
 
+        /// <summary>
+        /// Asynchronously executes a task function within a transaction scope for the specified transaction and returns the result.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="transaction">The transaction to create a transaction scope for.</param>
+        /// <param name="func">The task function to execute within the transaction scope.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the result.</returns>
         public static async Task<TResult> ExecuteInTransactionScopeAsync<TResult>(this ITransaction transaction, Func<Task<TResult>> func, CancellationToken token = default)
         {
             using TransactionScope scope = TransactionScope.Create(transaction);
@@ -80,6 +127,12 @@ namespace Durable
             return result;
         }
 
+        /// <summary>
+        /// Executes an action within a savepoint scope for the specified transaction.
+        /// </summary>
+        /// <param name="transaction">The transaction to create a savepoint for.</param>
+        /// <param name="action">The action to execute within the savepoint scope.</param>
+        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
         public static void ExecuteWithSavepoint(this ITransaction transaction, Action action, string? savepointName = null)
         {
             using ISavepoint savepoint = transaction.CreateSavepoint(savepointName);
@@ -95,6 +148,14 @@ namespace Durable
             }
         }
 
+        /// <summary>
+        /// Executes a function within a savepoint scope for the specified transaction and returns the result.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="transaction">The transaction to create a savepoint for.</param>
+        /// <param name="func">The function to execute within the savepoint scope.</param>
+        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
+        /// <returns>The result of the function execution.</returns>
         public static TResult ExecuteWithSavepoint<TResult>(this ITransaction transaction, Func<TResult> func, string? savepointName = null)
         {
             using ISavepoint savepoint = transaction.CreateSavepoint(savepointName);
@@ -111,6 +172,14 @@ namespace Durable
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a task within a savepoint scope for the specified transaction.
+        /// </summary>
+        /// <param name="transaction">The transaction to create a savepoint for.</param>
+        /// <param name="func">The task function to execute within the savepoint scope.</param>
+        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         public static async Task ExecuteWithSavepointAsync(this ITransaction transaction, Func<Task> func, string? savepointName = null, CancellationToken token = default)
         {
             using ISavepoint savepoint = await transaction.CreateSavepointAsync(savepointName, token);
@@ -126,6 +195,15 @@ namespace Durable
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a task function within a savepoint scope for the specified transaction and returns the result.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+        /// <param name="transaction">The transaction to create a savepoint for.</param>
+        /// <param name="func">The task function to execute within the savepoint scope.</param>
+        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the result.</returns>
         public static async Task<TResult> ExecuteWithSavepointAsync<TResult>(this ITransaction transaction, Func<Task<TResult>> func, string? savepointName = null, CancellationToken token = default)
         {
             using ISavepoint savepoint = await transaction.CreateSavepointAsync(savepointName, token);
@@ -141,11 +219,6 @@ namespace Durable
                 throw;
             }
         }
-
-        #endregion
-
-        #region Private-Methods
-
-        #endregion
+        
     }
 }

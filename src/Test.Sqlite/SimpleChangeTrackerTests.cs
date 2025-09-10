@@ -1,19 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using Durable;
-using Xunit;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+    using Durable;
+    using Xunit;
+    
     public class SimpleChangeTrackerTests
     {
-        private readonly SimpleChangeTracker<TestEntityForTracking> _changeTracker;
-        private readonly Dictionary<string, PropertyInfo> _columnMappings;
+        private readonly SimpleChangeTracker<TestEntityForTracking> ChangeTracker;
+        private readonly Dictionary<string, PropertyInfo> ColumnMappings;
 
         public SimpleChangeTrackerTests()
         {
-            _columnMappings = new Dictionary<string, PropertyInfo>
+            ColumnMappings = new Dictionary<string, PropertyInfo>
             {
                 ["id"] = typeof(TestEntityForTracking).GetProperty(nameof(TestEntityForTracking.Id))!,
                 ["name"] = typeof(TestEntityForTracking).GetProperty(nameof(TestEntityForTracking.Name))!,
@@ -21,7 +21,7 @@ namespace Test.Sqlite
                 ["is_active"] = typeof(TestEntityForTracking).GetProperty(nameof(TestEntityForTracking.IsActive))!,
                 ["description"] = typeof(TestEntityForTracking).GetProperty(nameof(TestEntityForTracking.Description))!
             };
-            _changeTracker = new SimpleChangeTracker<TestEntityForTracking>(_columnMappings);
+            ChangeTracker = new SimpleChangeTracker<TestEntityForTracking>(ColumnMappings);
         }
 
         [Fact]
@@ -42,9 +42,9 @@ namespace Test.Sqlite
                 Description = "Original description"
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
-            TestEntityForTracking original = _changeTracker.GetOriginalValues(entity);
+            TestEntityForTracking original = ChangeTracker.GetOriginalValues(entity);
             Assert.NotNull(original);
             Assert.Equal(1, original.Id);
             Assert.Equal("Test", original.Name);
@@ -69,17 +69,17 @@ namespace Test.Sqlite
                 Value = 100
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             // Update entity
             entity.Name = "Modified";
             entity.Value = 200;
 
             // Track again with updated values
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             // Original should reflect the new tracking state
-            TestEntityForTracking original = _changeTracker.GetOriginalValues(entity);
+            TestEntityForTracking original = ChangeTracker.GetOriginalValues(entity);
             Assert.Equal("Modified", original.Name);
             Assert.Equal(200, original.Value);
         }
@@ -87,7 +87,7 @@ namespace Test.Sqlite
         [Fact]
         public void GetOriginalValues_NullEntity_ReturnsNull()
         {
-            TestEntityForTracking result = _changeTracker.GetOriginalValues(null);
+            TestEntityForTracking result = ChangeTracker.GetOriginalValues(null);
             Assert.Null(result);
         }
 
@@ -95,14 +95,14 @@ namespace Test.Sqlite
         public void GetOriginalValues_UntrackedEntity_ReturnsNull()
         {
             TestEntityForTracking entity = new TestEntityForTracking { Id = 1, Name = "Test" };
-            TestEntityForTracking result = _changeTracker.GetOriginalValues(entity);
+            TestEntityForTracking result = ChangeTracker.GetOriginalValues(entity);
             Assert.Null(result);
         }
 
         [Fact]
         public void HasChanges_NullEntity_ReturnsFalse()
         {
-            bool result = _changeTracker.HasChanges(null);
+            bool result = ChangeTracker.HasChanges(null);
             Assert.False(result);
         }
 
@@ -110,7 +110,7 @@ namespace Test.Sqlite
         public void HasChanges_UntrackedEntity_ReturnsFalse()
         {
             TestEntityForTracking entity = new TestEntityForTracking { Id = 1, Name = "Test" };
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.False(result);
         }
 
@@ -125,9 +125,9 @@ namespace Test.Sqlite
                 IsActive = true
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.False(result);
         }
 
@@ -141,11 +141,11 @@ namespace Test.Sqlite
                 Value = 100
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Name = "Modified";
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -159,11 +159,11 @@ namespace Test.Sqlite
                 Value = 100
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Value = 200;
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -177,11 +177,11 @@ namespace Test.Sqlite
                 IsActive = true
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.IsActive = false;
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -195,11 +195,11 @@ namespace Test.Sqlite
                 Description = null
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Description = "New description";
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -213,11 +213,11 @@ namespace Test.Sqlite
                 Description = "Original description"
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Description = null;
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -231,11 +231,11 @@ namespace Test.Sqlite
                 Description = null
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             // Description remains null
             
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.False(result);
         }
 
@@ -249,11 +249,11 @@ namespace Test.Sqlite
                 Description = "Same value"
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Description = "Same value"; // Same value
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.False(result);
         }
 
@@ -268,13 +268,13 @@ namespace Test.Sqlite
                 IsActive = true
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
             entity.Name = "Modified";
             entity.Value = 200;
             entity.IsActive = false;
 
-            bool result = _changeTracker.HasChanges(entity);
+            bool result = ChangeTracker.HasChanges(entity);
             Assert.True(result);
         }
 
@@ -287,26 +287,26 @@ namespace Test.Sqlite
                 Name = "Test"
             };
 
-            _changeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity);
 
-            Assert.NotNull(_changeTracker.GetOriginalValues(entity));
+            Assert.NotNull(ChangeTracker.GetOriginalValues(entity));
 
-            _changeTracker.StopTracking(entity);
+            ChangeTracker.StopTracking(entity);
 
-            Assert.Null(_changeTracker.GetOriginalValues(entity));
+            Assert.Null(ChangeTracker.GetOriginalValues(entity));
         }
 
         [Fact]
         public void StopTracking_NullEntity_DoesNotThrow()
         {
-            _changeTracker.StopTracking(null); // Should not throw
+            ChangeTracker.StopTracking(null); // Should not throw
         }
 
         [Fact]
         public void StopTracking_UntrackedEntity_DoesNotThrow()
         {
             TestEntityForTracking entity = new TestEntityForTracking { Id = 1, Name = "Test" };
-            _changeTracker.StopTracking(entity); // Should not throw
+            ChangeTracker.StopTracking(entity); // Should not throw
         }
 
         [Fact]
@@ -318,13 +318,13 @@ namespace Test.Sqlite
             _changeTracker.TrackEntity(entity1);
             _changeTracker.TrackEntity(entity2);
 
-            Assert.NotNull(_changeTracker.GetOriginalValues(entity1));
-            Assert.NotNull(_changeTracker.GetOriginalValues(entity2));
+            Assert.NotNull(ChangeTracker.GetOriginalValues(entity1));
+            Assert.NotNull(ChangeTracker.GetOriginalValues(entity2));
 
-            _changeTracker.Clear();
+            ChangeTracker.Clear();
 
-            Assert.Null(_changeTracker.GetOriginalValues(entity1));
-            Assert.Null(_changeTracker.GetOriginalValues(entity2));
+            Assert.Null(ChangeTracker.GetOriginalValues(entity1));
+            Assert.Null(ChangeTracker.GetOriginalValues(entity2));
         }
 
         [Fact]
@@ -356,25 +356,10 @@ namespace Test.Sqlite
             };
 
             // Simulate concurrent tracking of the same entity
-            _changeTracker.TrackEntity(entity);
-            _changeTracker.TrackEntity(entity); // Should update, not fail
+            ChangeTracker.TrackEntity(entity);
+            ChangeTracker.TrackEntity(entity); // Should update, not fail
 
-            Assert.NotNull(_changeTracker.GetOriginalValues(entity));
+            Assert.NotNull(ChangeTracker.GetOriginalValues(entity));
         }
-    }
-
-    public class TestEntityForTracking
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int Value { get; set; }
-        public bool IsActive { get; set; }
-        public string? Description { get; set; }
-    }
-
-    public class TestEntityWithReadOnlyProperty
-    {
-        public int Id { get; set; }
-        public string ReadOnlyProperty { get; } = "Cannot be written";
     }
 }

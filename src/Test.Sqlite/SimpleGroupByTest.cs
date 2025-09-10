@@ -1,13 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Durable.Sqlite;
-using Microsoft.Data.Sqlite;
-using Test.Shared;
-
 namespace Test.Sqlite
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Durable.Sqlite;
+    using Microsoft.Data.Sqlite;
+    using Test.Shared;
+    
     public static class SimpleGroupByTest
     {
         public static async Task RunSimpleGroupByTest()
