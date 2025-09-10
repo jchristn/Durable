@@ -3,13 +3,28 @@ namespace Durable
     using System;
     using System.Reflection;
     
+    /// <summary>
+    /// Contains information about a version column property
+    /// </summary>
     public class VersionColumnInfo
     {
         #region Public-Members
 
+        /// <summary>
+        /// Gets or sets the database column name
+        /// </summary>
         public string ColumnName { get; set; } = null!;
+        /// <summary>
+        /// Gets or sets the property information
+        /// </summary>
         public PropertyInfo Property { get; set; } = null!;
+        /// <summary>
+        /// Gets or sets the version column type
+        /// </summary>
         public VersionColumnType Type { get; set; }
+        /// <summary>
+        /// Gets or sets the property type
+        /// </summary>
         public Type PropertyType { get; set; } = null!;
 
         #endregion
@@ -24,6 +39,11 @@ namespace Durable
 
         #region Public-Methods
 
+        /// <summary>
+        /// Gets the version value from the specified entity
+        /// </summary>
+        /// <param name="entity">The entity to get the version from</param>
+        /// <returns>The version value</returns>
         public object? GetValue(object entity)
         {
             if (entity == null)
@@ -32,6 +52,11 @@ namespace Durable
             return Property.GetValue(entity);
         }
         
+        /// <summary>
+        /// Sets the version value on the specified entity
+        /// </summary>
+        /// <param name="entity">The entity to set the version on</param>
+        /// <param name="value">The version value to set</param>
         public void SetValue(object entity, object value)
         {
             if (entity == null)
@@ -40,6 +65,11 @@ namespace Durable
             Property.SetValue(entity, value);
         }
         
+        /// <summary>
+        /// Increments the version value based on the version column type
+        /// </summary>
+        /// <param name="currentVersion">The current version value</param>
+        /// <returns>The incremented version value</returns>
         public object IncrementVersion(object currentVersion)
         {
             if (currentVersion == null)
@@ -85,6 +115,10 @@ namespace Durable
             return currentVersion;
         }
         
+        /// <summary>
+        /// Gets the default version value based on the version column type
+        /// </summary>
+        /// <returns>The default version value</returns>
         public object GetDefaultVersion()
         {
             switch (Type)
@@ -113,6 +147,11 @@ namespace Durable
             return null!;
         }
         
+        /// <summary>
+        /// Formats the version value for SQL queries
+        /// </summary>
+        /// <param name="version">The version value to format</param>
+        /// <returns>The SQL-formatted version string</returns>
         public string FormatVersionForSql(object version)
         {
             if (version == null)
