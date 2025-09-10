@@ -8,6 +8,9 @@ namespace Durable
     using System.Threading.Tasks;
     using System.Timers;
 
+    /// <summary>
+    /// Provides a thread-safe connection pool for database connections with automatic cleanup and connection validation.
+    /// </summary>
     public class ConnectionPool : IDisposable
     {
         #region Public-Members
@@ -29,6 +32,11 @@ namespace Durable
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the ConnectionPool class.
+        /// </summary>
+        /// <param name="connectionFactory">Factory function to create new database connections.</param>
+        /// <param name="options">Configuration options for the connection pool. If null, default options are used.</param>
         public ConnectionPool(Func<DbConnection> connectionFactory, ConnectionPoolOptions? options = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
@@ -48,6 +56,12 @@ namespace Durable
 
         #region Public-Methods
 
+        /// <summary>
+        /// Asynchronously retrieves a database connection from the pool.
+        /// </summary>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>A database connection from the pool.</returns>
+        /// <exception cref="TimeoutException">Thrown when no connection becomes available within the timeout period.</exception>
         public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
@@ -83,6 +97,11 @@ namespace Durable
             }
         }
 
+        /// <summary>
+        /// Synchronously retrieves a database connection from the pool.
+        /// </summary>
+        /// <returns>A database connection from the pool.</returns>
+        /// <exception cref="TimeoutException">Thrown when no connection becomes available within the timeout period.</exception>
         public DbConnection GetConnection()
         {
             ThrowIfDisposed();
@@ -118,6 +137,10 @@ namespace Durable
             }
         }
 
+        /// <summary>
+        /// Asynchronously returns a database connection to the pool.
+        /// </summary>
+        /// <param name="connection">The connection to return to the pool.</param>
         public async Task ReturnConnectionAsync(DbConnection connection)
         {
             if (connection == null || _Disposed)
@@ -142,6 +165,10 @@ namespace Durable
             _Semaphore.Release();
         }
 
+        /// <summary>
+        /// Synchronously returns a database connection to the pool.
+        /// </summary>
+        /// <param name="connection">The connection to return to the pool.</param>
         public void ReturnConnection(DbConnection connection)
         {
             if (connection == null || _Disposed)
@@ -166,6 +193,9 @@ namespace Durable
             _Semaphore.Release();
         }
 
+        /// <summary>
+        /// Releases all resources used by the ConnectionPool.
+        /// </summary>
         public void Dispose()
         {
             if (_Disposed)
