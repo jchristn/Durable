@@ -1,4 +1,4 @@
-# Durable ORM
+e# Durable ORM
 
 A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes.
 
@@ -548,6 +548,10 @@ var databaseWinsResolver = new DatabaseWinsResolver<Person>();
 var mergeResolver = new MergeChangesResolver<Person>();
 
 var repository = new SqliteRepository<Person>(connectionString, conflictResolver: mergeResolver);
+
+// Advanced merge resolver with configurable conflict behavior
+var advancedMergeResolver = new ImprovedMergeChangesResolver<Person>(ConflictBehavior.IncomingWins);
+// Supports ConflictBehavior options: IncomingWins, CurrentWins, ThrowException, and property ignoring
 
 // Custom conflict resolver
 public class CustomConflictResolver<T> : IConcurrencyConflictResolver<T>
