@@ -411,8 +411,14 @@ namespace Durable
 
         private static bool ShouldIncludeQuery<T>(IRepository<T> repository) where T : class, new()
         {
-            return DurableConfiguration.ShouldIncludeQuery ||
-                   (repository is ISqlTrackingConfiguration config && config.IncludeQueryInResults);
+            bool? instanceLevelSetting = null;
+            if (repository is ISqlTrackingConfiguration config)
+            {
+                instanceLevelSetting = config.IncludeQueryInResults;
+            }
+
+            (bool effectiveSetting, string source) = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
+            return effectiveSetting;
         }
 
         private static void EnableSqlCaptureTemporarily<T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()

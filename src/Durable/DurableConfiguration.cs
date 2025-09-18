@@ -50,5 +50,34 @@ namespace Durable
 
         #endregion
 
+        #region Public-Methods
+
+        /// <summary>
+        /// Resolves the effective SQL inclusion setting using explicit configuration hierarchy.
+        /// Precedence order (highest to lowest):
+        /// 1. Instance-level configuration (repository.IncludeQueryInResults)
+        /// 2. Thread-local configuration (ThreadLocalIncludeQuery)
+        /// 3. Global configuration (GlobalIncludeQuery)
+        /// </summary>
+        /// <param name="instanceLevelSetting">The instance-level setting from the repository, or null if not configured</param>
+        /// <returns>A tuple containing the effective setting and the source of that setting for debugging</returns>
+        /// <exception cref="ArgumentException">This method cannot throw exceptions as all inputs are valid</exception>
+        public static (bool EffectiveSetting, string Source) ResolveIncludeQuerySetting(bool? instanceLevelSetting)
+        {
+            if (instanceLevelSetting.HasValue)
+            {
+                return (instanceLevelSetting.Value, "Instance");
+            }
+
+            if (ThreadLocalIncludeQuery.HasValue)
+            {
+                return (ThreadLocalIncludeQuery.Value, "ThreadLocal");
+            }
+
+            return (GlobalIncludeQuery, "Global");
+        }
+
+        #endregion
+
     }
 }
