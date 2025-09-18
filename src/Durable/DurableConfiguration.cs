@@ -11,7 +11,7 @@ namespace Durable
 
         #region Private-Members
 
-        private static bool _GlobalIncludeQuery = false;
+        private static volatile bool _GlobalIncludeQuery = false;
         private static readonly AsyncLocal<bool?> _ThreadLocalOverride = new AsyncLocal<bool?>();
 
         #endregion
