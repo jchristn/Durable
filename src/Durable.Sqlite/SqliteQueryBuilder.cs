@@ -312,6 +312,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 using SqliteDataReader reader = connectionResult.Command.ExecuteReader();
 
                 List<TEntity> results;
@@ -362,6 +363,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 List<TEntity> results;
@@ -425,6 +427,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 while (await reader.ReadAsync(token))

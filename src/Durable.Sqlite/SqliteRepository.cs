@@ -15,9 +15,40 @@
     using Durable.ConcurrencyConflictResolvers;
 
 // SQLite Repository Implementation with Full Transaction Support and Connection Pooling
-    public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
+    public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, ISqlCapture, ISqlTrackingConfiguration, IDisposable where T : class, new()
     {
         #region Public-Members
+
+        /// <summary>
+        /// Gets the last SQL statement that was executed by this repository instance.
+        /// Returns null if no SQL has been executed or SQL capture is disabled.
+        /// </summary>
+        public string LastExecutedSql
+        {
+            get => _LastExecutedSql.Value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether SQL statements should be captured and stored.
+        /// Default value is false for performance reasons.
+        /// </summary>
+        public bool CaptureSql
+        {
+            get => _CaptureSql;
+            set => _CaptureSql = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether query results should automatically include the executed SQL statement.
+        /// When true, repository operations will return IDurableResult objects containing both results and SQL.
+        /// When false, repository operations return standard result types without SQL information.
+        /// Default value is false for performance and backward compatibility.
+        /// </summary>
+        public bool IncludeQueryInResults
+        {
+            get => _IncludeQueryInResults;
+            set => _IncludeQueryInResults = value;
+        }
 
         #endregion
 
@@ -36,6 +67,10 @@
         internal readonly VersionColumnInfo _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
+
+        private readonly AsyncLocal<string> _LastExecutedSql = new AsyncLocal<string>();
+        private bool _CaptureSql;
+        private bool _IncludeQueryInResults;
 
         #endregion
 
@@ -185,6 +220,7 @@
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 if (reader.Read())
@@ -207,6 +243,7 @@
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync(token);
                 if (await reader.ReadAsync(token))
@@ -239,6 +276,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -265,6 +303,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -295,6 +334,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -321,6 +361,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -351,6 +392,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
@@ -377,6 +419,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
@@ -407,6 +450,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return Convert.ToDecimal(result);
@@ -433,6 +477,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToDecimal(result);
@@ -458,6 +503,7 @@
                 string setPairs = parser.ParseUpdateExpression(updateExpression);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -476,6 +522,7 @@
                 string setPairs = parser.ParseUpdateExpression(updateExpression);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -509,6 +556,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 List<T> results = new List<T>();
@@ -535,6 +583,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -562,6 +611,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -589,6 +639,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 List<TResult> results = new List<TResult>();
@@ -615,6 +666,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery();
             }
@@ -634,6 +686,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync();
             }
@@ -672,6 +725,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
+                CaptureSqlFromCommand(command);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -687,6 +741,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -707,6 +762,7 @@
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -722,6 +778,7 @@
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -751,6 +808,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 return Convert.ToInt32(command.ExecuteScalar());
             }
             finally
@@ -774,6 +832,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToInt32(result);
             }
@@ -831,6 +890,7 @@
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                CaptureSqlFromCommand(command);
 
                 long insertedId = Convert.ToInt64(command.ExecuteScalar());
 
@@ -895,6 +955,7 @@
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                CaptureSqlFromCommand(command);
 
                 long insertedId = Convert.ToInt64(await command.ExecuteScalarAsync(token));
 
@@ -1086,6 +1147,7 @@
                 }
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
 
                 int rowsAffected = command.ExecuteNonQuery();
 
@@ -1183,6 +1245,7 @@
                 }
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
 
                 int rowsAffected = await command.ExecuteNonQueryAsync(token);
 
@@ -1353,6 +1416,7 @@
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 object convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
                 command.Parameters.AddWithValue("@value", convertedValue);
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery();
             }
@@ -1374,6 +1438,7 @@
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 object convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
                 command.Parameters.AddWithValue("@value", convertedValue);
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync(token);
             }
@@ -1407,6 +1472,7 @@
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery() > 0;
             }
@@ -1423,6 +1489,7 @@
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync(token) > 0;
             }
@@ -1443,6 +1510,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1458,6 +1526,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1476,6 +1545,7 @@
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1490,6 +1560,7 @@
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1537,6 +1608,7 @@
                 sql.Append(";");
 
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 command.ExecuteNonQuery();
 
                 return entity;
@@ -1581,6 +1653,7 @@
                 sql.Append(";");
 
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 await command.ExecuteNonQueryAsync(token);
 
                 return entity;
@@ -1747,6 +1820,7 @@
                     object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
                     command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 if (reader.Read())
@@ -1781,6 +1855,7 @@
                     object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
                     command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync(token);
                 if (await reader.ReadAsync(token))
@@ -2012,12 +2087,20 @@
                 string columnName = kvp.Key;
                 PropertyInfo property = kvp.Value;
 
-                int ordinal = reader.GetOrdinal(columnName);
-                if (!reader.IsDBNull(ordinal))
+                try
                 {
-                    object value = reader.GetValue(ordinal);
-                    object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
-                    property.SetValue(entity, convertedValue);
+                    int ordinal = reader.GetOrdinal(columnName);
+                    if (!reader.IsDBNull(ordinal))
+                    {
+                        object value = reader.GetValue(ordinal);
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        property.SetValue(entity, convertedValue);
+                    }
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    // Column not present in result set - skip this property
+                    continue;
                 }
             }
 
@@ -2244,6 +2327,7 @@
         
         private void ExecuteBatchInsert(SqliteCommand command, IList<T> entities)
         {
+            CaptureSqlFromCommand(command);
             int rowsAffected = command.ExecuteNonQuery();
             
             if (_PrimaryKeyProperty != null)
@@ -2252,6 +2336,7 @@
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    CaptureSqlFromCommand(idCommand);
                     long lastId = Convert.ToInt64(idCommand.ExecuteScalar());
                     
                     for (int i = entities.Count - 1; i >= 0; i--)
@@ -2265,6 +2350,7 @@
         
         private async Task ExecuteBatchInsertAsync(SqliteCommand command, IList<T> entities, CancellationToken token)
         {
+            CaptureSqlFromCommand(command);
             int rowsAffected = await command.ExecuteNonQueryAsync(token);
             
             if (_PrimaryKeyProperty != null)
@@ -2273,6 +2359,7 @@
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    CaptureSqlFromCommand(idCommand);
                     long lastId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(token));
                     
                     for (int i = entities.Count - 1; i >= 0; i--)
@@ -2281,6 +2368,22 @@
                         _PrimaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _PrimaryKeyProperty.PropertyType));
                     }
                 }
+            }
+        }
+
+        internal void CaptureSqlIfEnabled(string sql)
+        {
+            if (_CaptureSql && !string.IsNullOrEmpty(sql))
+            {
+                _LastExecutedSql.Value = sql;
+            }
+        }
+
+        private void CaptureSqlFromCommand(SqliteCommand command)
+        {
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql.Value = command.CommandText;
             }
         }
 
