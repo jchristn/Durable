@@ -281,7 +281,7 @@ namespace SimpleDemo
 
             // Test 8b: Query builder pattern (if available)
             var queryBuilderResults = repository.Query().Where(p => p.Salary > 70000).Take(3).Execute().ToList();
-            Console.WriteLine($"✓ Query().Where().Take().Execute() - Found {queryBuilderResults.Count} high earners");
+            Console.WriteLine($"✓ Query().Where().Take().Execute() - Found {queryBuilderResults.Count} high earners - Last SQL: {repository.LastExecutedSql}");
 
             // Test 8c: Batch operations with different conditions
             int batchDeleted = repository.BatchDelete(p => p.Department == "Intern");
