@@ -325,6 +325,9 @@ namespace SimpleDemo
             Console.WriteLine("✓ Field update operations capture SQL properly");
             Console.WriteLine("✓ Upsert operations capture SQL for both insert and update scenarios");
 
+            // Test parameter value capture
+            ParameterCaptureTest.TestParameterCapture();
+
             Console.WriteLine("\n🎉 SQL CAPTURE IMPLEMENTATION IS 100% COMPLETE! 🎉");
             Console.WriteLine("All 44 database operations now consistently capture SQL when enabled.");
         }

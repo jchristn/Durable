@@ -29,6 +29,16 @@
         }
 
         /// <summary>
+        /// Gets the last SQL statement with parameter values substituted that was executed by this repository instance.
+        /// This provides a fully executable SQL statement with actual parameter values for debugging purposes.
+        /// Returns null if no SQL has been executed or SQL capture is disabled.
+        /// </summary>
+        public string LastExecutedSqlWithParameters
+        {
+            get => _LastExecutedSqlWithParameters.Value;
+        }
+
+        /// <summary>
         /// Gets or sets whether SQL statements should be captured and stored.
         /// Default value is false for performance reasons.
         /// </summary>
@@ -69,6 +79,7 @@
         internal readonly IChangeTracker<T> _ChangeTracker;
 
         private readonly AsyncLocal<string> _LastExecutedSql = new AsyncLocal<string>();
+        private readonly AsyncLocal<string> _LastExecutedSqlWithParameters = new AsyncLocal<string>();
         private bool _CaptureSql;
         private bool _IncludeQueryInResults;
 
@@ -2376,6 +2387,7 @@
             if (_CaptureSql && !string.IsNullOrEmpty(sql))
             {
                 _LastExecutedSql.Value = sql;
+                _LastExecutedSqlWithParameters.Value = sql;
             }
         }
 
@@ -2384,7 +2396,54 @@
             if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
             {
                 _LastExecutedSql.Value = command.CommandText;
+                _LastExecutedSqlWithParameters.Value = BuildSqlWithParameters(command);
             }
+        }
+
+        private string BuildSqlWithParameters(SqliteCommand command)
+        {
+            if (command?.Parameters == null || command.Parameters.Count == 0)
+            {
+                return command?.CommandText;
+            }
+
+            string sql = command.CommandText;
+            foreach (SqliteParameter parameter in command.Parameters)
+            {
+                string parameterValue = FormatParameterValue(parameter.Value);
+                sql = sql.Replace(parameter.ParameterName, parameterValue);
+            }
+            return sql;
+        }
+
+        private string FormatParameterValue(object value)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return "NULL";
+            }
+
+            if (value is string stringValue)
+            {
+                return $"'{stringValue.Replace("'", "''")}'";
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return $"'{dateTime:yyyy-MM-dd HH:mm:ss}'";
+            }
+
+            if (value is bool boolValue)
+            {
+                return boolValue ? "1" : "0";
+            }
+
+            if (value is byte[] bytes)
+            {
+                return $"X'{Convert.ToHexString(bytes)}'";
+            }
+
+            return value.ToString();
         }
 
         #endregion
