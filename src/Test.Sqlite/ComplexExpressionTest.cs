@@ -7,10 +7,16 @@ namespace Test.Sqlite
     using Durable.Sqlite;
     using Test.Shared;
 
+    /// <summary>
+    /// Tests complex expression parsing and query building capabilities.
+    /// </summary>
     public class ComplexExpressionTest
     {
         private SqliteRepository<Person> _Repository;
 
+        /// <summary>
+        /// Initializes a new instance of the ComplexExpressionTest class.
+        /// </summary>
         public ComplexExpressionTest()
         {
             // Initialize repository for testing
@@ -18,6 +24,9 @@ namespace Test.Sqlite
             _Repository = new SqliteRepository<Person>(connectionFactory);
         }
 
+        /// <summary>
+        /// Executes all complex expression parsing tests.
+        /// </summary>
         public void RunAllTests()
         {
             Console.WriteLine("=== Running Complex Expression Tests ===");

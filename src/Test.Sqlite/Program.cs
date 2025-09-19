@@ -1118,5 +1118,12 @@
         }
     }
 
+    /// <summary>
+    /// Represents the result of a test execution with performance metrics and error information.
+    /// </summary>
+    /// <param name="Name">The name of the test that was executed.</param>
+    /// <param name="Success">Indicates whether the test passed (true) or failed (false).</param>
+    /// <param name="ElapsedMs">The execution time of the test in milliseconds.</param>
+    /// <param name="ErrorMessage">The error message if the test failed, or null if the test succeeded.</param>
     public record TestResult(string Name, bool Success, long ElapsedMs, string ErrorMessage);
 }

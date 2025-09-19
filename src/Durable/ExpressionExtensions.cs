@@ -101,8 +101,10 @@ namespace Durable
         /// <param name="value">The value to search for.</param>
         /// <param name="values">The array of values to search in.</param>
         /// <returns>true if the value is found in the array; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
         public static bool In<T>(this T value, params T[] values)
         {
+            if (values == null) throw new ArgumentNullException(nameof(values));
             return Array.IndexOf(values, value) >= 0;
         }
 
@@ -113,8 +115,10 @@ namespace Durable
         /// <param name="value">The value to search for.</param>
         /// <param name="values">The collection of values to search in.</param>
         /// <returns>true if the value is found in the collection; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
         public static bool In<T>(this T value, IEnumerable<T> values)
         {
+            if (values == null) throw new ArgumentNullException(nameof(values));
             return values.Contains(value);
         }
 
@@ -125,8 +129,10 @@ namespace Durable
         /// <param name="value">The value to search for.</param>
         /// <param name="values">The array of values to search in.</param>
         /// <returns>true if the value is not found in the array; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
         public static bool NotIn<T>(this T value, params T[] values)
         {
+            if (values == null) throw new ArgumentNullException(nameof(values));
             return Array.IndexOf(values, value) < 0;
         }
 
@@ -137,8 +143,10 @@ namespace Durable
         /// <param name="value">The value to search for.</param>
         /// <param name="values">The collection of values to search in.</param>
         /// <returns>true if the value is not found in the collection; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
         public static bool NotIn<T>(this T value, IEnumerable<T> values)
         {
+            if (values == null) throw new ArgumentNullException(nameof(values));
             return !values.Contains(value);
         }
 

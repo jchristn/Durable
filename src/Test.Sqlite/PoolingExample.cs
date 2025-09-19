@@ -7,8 +7,14 @@ namespace Test.Sqlite
     using Test.Shared;
     using Microsoft.Data.Sqlite;
 
+    /// <summary>
+    /// Demonstrates connection pooling functionality and performance comparisons.
+    /// </summary>
     public static class PoolingExample
     {
+        /// <summary>
+        /// Demonstrates connection pooling capabilities with performance monitoring.
+        /// </summary>
         public static void DemonstrateConnectionPooling()
         {
             Console.WriteLine("=== Connection Pooling Example ===");
@@ -72,6 +78,9 @@ namespace Test.Sqlite
             Console.WriteLine("Connection pooling example completed successfully!");
         }
 
+        /// <summary>
+        /// Compares performance between pooled and non-pooled connection strategies.
+        /// </summary>
         public static void ComparePerformance()
         {
             Console.WriteLine("=== Performance Comparison ===");

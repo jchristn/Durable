@@ -10,8 +10,15 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
     
+    /// <summary>
+    /// Provides tests for batch insert optimization performance comparisons.
+    /// </summary>
     public static class BatchInsertTest
     {
+        /// <summary>
+        /// Runs comprehensive batch insert performance tests comparing different optimization strategies.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task RunBatchInsertTests()
         {
             Console.WriteLine("\n=== BATCH INSERT OPTIMIZATION TESTS ===");

@@ -8,8 +8,15 @@ namespace Test.Sqlite
     using Durable.Sqlite;
     using Microsoft.Data.Sqlite;
     using Test.Shared;
+    /// <summary>
+    /// Tests query exposure functionality and SQL query generation.
+    /// </summary>
     public static class QueryExposureTest
     {
+        /// <summary>
+        /// Runs tests for query exposure and SQL generation functionality.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task RunQueryExposureTest()
         {
             Console.WriteLine("=== QUERY EXPOSURE TEST ===");

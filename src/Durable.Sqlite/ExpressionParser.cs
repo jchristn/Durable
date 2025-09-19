@@ -7,6 +7,11 @@
     using System.Reflection;
     using System.Text;
     using System.Threading.Tasks;
+    /// <summary>
+    /// Parses and converts LINQ expressions to SQLite-compatible SQL strings.
+    /// Provides support for complex expression trees including binary operations, method calls, and member access.
+    /// </summary>
+    /// <typeparam name="T">The entity type that the expressions operate on.</typeparam>
     public class ExpressionParser<T> where T : class
     {
         #region Public-Members
@@ -22,6 +27,12 @@
 
         #region Constructors-and-Factories
         
+        /// <summary>
+        /// Initializes a new instance of the ExpressionParser with the specified column mappings and sanitizer.
+        /// </summary>
+        /// <param name="columnMappings">A dictionary mapping property names to their corresponding database column names and PropertyInfo objects.</param>
+        /// <param name="sanitizer">The sanitizer to use for value formatting and SQL injection prevention. Defaults to SqliteSanitizer if null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when columnMappings is null.</exception>
         public ExpressionParser(Dictionary<string, PropertyInfo> columnMappings, ISanitizer sanitizer = null)
         {
             _ColumnMappings = columnMappings;
@@ -32,11 +43,23 @@
 
         #region Public-Methods
         
+        /// <summary>
+        /// Parses any expression tree and converts it to its SQLite SQL equivalent string representation.
+        /// </summary>
+        /// <param name="expression">The expression tree to parse and convert to SQL.</param>
+        /// <returns>A string containing the SQLite-compatible SQL representation of the expression.</returns>
+        /// <exception cref="NotSupportedException">Thrown when an unsupported expression type is encountered.</exception>
         public string ParseExpression(Expression expression)
         {
             return Visit(expression);
         }
 
+        /// <summary>
+        /// Extracts the database column name from a member expression that references an entity property.
+        /// </summary>
+        /// <param name="expression">The member expression representing a property access (e.g., p.FirstName).</param>
+        /// <returns>The corresponding database column name for the property.</returns>
+        /// <exception cref="ArgumentException">Thrown when the expression is not a valid member expression or the property is not mapped to a column.</exception>
         public string GetColumnFromExpression(Expression expression)
         {
             if (expression is MemberExpression memberExpr)
@@ -52,6 +75,13 @@
             throw new ArgumentException($"Cannot get column from expression: {expression}");
         }
 
+        /// <summary>
+        /// Parses an update expression that specifies how to modify entity properties and converts it to SQL SET clause format.
+        /// </summary>
+        /// <param name="updateExpression">A lambda expression defining the property updates using member initialization syntax (e.g., p => new Person { Name = "John", Age = 30 }).</param>
+        /// <returns>A string containing the SQL SET clause with column assignments (e.g., "Name = 'John', Age = 30").</returns>
+        /// <exception cref="ArgumentException">Thrown when the expression is not a member initialization expression.</exception>
+        /// <exception cref="NotSupportedException">Thrown when an unsupported expression type is encountered in the update values.</exception>
         public string ParseUpdateExpression(Expression<Func<T, T>> updateExpression)
         {
             if (updateExpression.Body is MemberInitExpression memberInit)
@@ -76,6 +106,13 @@
             throw new ArgumentException("Update expression must be a member initialization expression");
         }
 
+        /// <summary>
+        /// Parses a select expression that defines which properties to retrieve and how to map them, returning column mapping information.
+        /// Supports anonymous types, member initialization, single property selection, and identity projection.
+        /// </summary>
+        /// <typeparam name="TResult">The result type that the selector expression produces.</typeparam>
+        /// <param name="selector">A lambda expression defining the selection and projection logic (e.g., p => new { p.Name, p.Age } or p => p.Name).</param>
+        /// <returns>A list of SelectMapping objects containing column names, aliases, and property mapping information for building SELECT clauses.</returns>
         public List<SelectMapping> ParseSelectExpression<TResult>(Expression<Func<T, TResult>> selector)
         {
             List<SelectMapping> mappings = new List<SelectMapping>();

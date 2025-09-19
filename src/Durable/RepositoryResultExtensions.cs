@@ -135,7 +135,7 @@ namespace Durable
 
             EnableSqlCaptureTemporarily(repository, () =>
             {
-                T result = repository.Create(entity, transaction);
+                T result = repository.Create(entity, transaction!);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<T>(capturedSql ?? string.Empty, new T[] { result });
             }, out IDurableResult<T> durableResult);
@@ -161,7 +161,7 @@ namespace Durable
 
             return await EnableSqlCaptureTemporarilyAsync(repository, async () =>
             {
-                T result = await repository.CreateAsync(entity, transaction, token).ConfigureAwait(false);
+                T result = await repository.CreateAsync(entity, transaction!, token).ConfigureAwait(false);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<T>(capturedSql ?? string.Empty, new T[] { result });
             }).ConfigureAwait(false);
@@ -183,7 +183,7 @@ namespace Durable
 
             EnableSqlCaptureTemporarily(repository, () =>
             {
-                IEnumerable<T> result = repository.ReadMany(predicate, transaction);
+                IEnumerable<T> result = repository.ReadMany(predicate!, transaction!);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<T>(capturedSql ?? string.Empty, result);
             }, out IDurableResult<T> durableResult);
@@ -209,7 +209,7 @@ namespace Durable
             return await EnableSqlCaptureTemporarilyAsync(repository, async () =>
             {
                 List<T> result = new List<T>();
-                await foreach (T item in repository.ReadManyAsync(predicate, transaction, token).ConfigureAwait(false))
+                await foreach (T item in repository.ReadManyAsync(predicate!, transaction!, token).ConfigureAwait(false))
                 {
                     token.ThrowIfCancellationRequested();
                     result.Add(item);
@@ -236,7 +236,7 @@ namespace Durable
 
             EnableSqlCaptureTemporarily(repository, () =>
             {
-                T result = repository.Update(entity, transaction);
+                T result = repository.Update(entity, transaction!);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<T>(capturedSql ?? string.Empty, new T[] { result });
             }, out IDurableResult<T> durableResult);
@@ -262,7 +262,7 @@ namespace Durable
 
             return await EnableSqlCaptureTemporarilyAsync(repository, async () =>
             {
-                T result = await repository.UpdateAsync(entity, transaction, token).ConfigureAwait(false);
+                T result = await repository.UpdateAsync(entity, transaction!, token).ConfigureAwait(false);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<T>(capturedSql ?? string.Empty, new T[] { result });
             }).ConfigureAwait(false);
@@ -285,7 +285,7 @@ namespace Durable
 
             EnableSqlCaptureTemporarily(repository, () =>
             {
-                bool result = repository.Delete(entity, transaction);
+                bool result = repository.Delete(entity, transaction!);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<bool>(capturedSql ?? string.Empty, new bool[] { result });
             }, out IDurableResult<bool> durableResult);
@@ -311,7 +311,7 @@ namespace Durable
 
             return await EnableSqlCaptureTemporarilyAsync(repository, async () =>
             {
-                bool result = await repository.DeleteAsync(entity, transaction, token).ConfigureAwait(false);
+                bool result = await repository.DeleteAsync(entity, transaction!, token).ConfigureAwait(false);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<bool>(capturedSql ?? string.Empty, new bool[] { result });
             }).ConfigureAwait(false);
@@ -334,7 +334,7 @@ namespace Durable
 
             EnableSqlCaptureTemporarily(repository, () =>
             {
-                int result = repository.DeleteMany(predicate, transaction);
+                int result = repository.DeleteMany(predicate, transaction!);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<int>(capturedSql ?? string.Empty, new int[] { result });
             }, out IDurableResult<int> durableResult);
@@ -360,7 +360,7 @@ namespace Durable
 
             return await EnableSqlCaptureTemporarilyAsync(repository, async () =>
             {
-                int result = await repository.DeleteManyAsync(predicate, transaction, token).ConfigureAwait(false);
+                int result = await repository.DeleteManyAsync(predicate, transaction!, token).ConfigureAwait(false);
                 string? capturedSql = GetCapturedSql(repository);
                 return new DurableResult<int>(capturedSql ?? string.Empty, new int[] { result });
             }).ConfigureAwait(false);
@@ -384,7 +384,7 @@ namespace Durable
             if (ShouldIncludeQuery(repository))
                 return repository.CreateWithQuery(entity, transaction);
             else
-                return repository.Create(entity, transaction);
+                return repository.Create(entity, transaction!);
         }
 
         /// <summary>
@@ -406,7 +406,7 @@ namespace Durable
             if (ShouldIncludeQuery(repository))
                 return await repository.CreateWithQueryAsync(entity, transaction, token).ConfigureAwait(false);
             else
-                return await repository.CreateAsync(entity, transaction, token).ConfigureAwait(false);
+                return await repository.CreateAsync(entity, transaction!, token).ConfigureAwait(false);
         }
 
         private static bool ShouldIncludeQuery<T>(IRepository<T> repository) where T : class, new()
