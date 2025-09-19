@@ -984,7 +984,7 @@
             SqliteConnection connection = GetConnection();
             connection.Open();
             SqliteTransaction transaction = connection.BeginTransaction();
-            return new SqliteRepositoryTransaction(connection, transaction);
+            return new SqliteRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
         /// <summary>
@@ -1000,7 +1000,7 @@
             SqliteConnection connection = GetConnection();
             await connection.OpenAsync(token);
             SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
-            return new SqliteRepositoryTransaction(connection, transaction);
+            return new SqliteRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
         // Existence checks
@@ -1348,7 +1348,7 @@
                     connection = GetConnection();
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 List<T> results = new List<T>();
@@ -1414,7 +1414,7 @@
                     connection = await GetConnectionAsync(token);
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 List<T> results = new List<T>();
@@ -1698,7 +1698,7 @@
                     connection = GetConnection();
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 foreach (T entity in entities)
@@ -1760,7 +1760,7 @@
                     connection = GetConnection();
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 foreach (T entity in entities)
@@ -2160,7 +2160,7 @@
                     connection = GetConnection();
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 List<T> results = new List<T>();
@@ -2214,7 +2214,7 @@
                     connection = GetConnection();
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
-                    transaction = new SqliteRepositoryTransaction(connection, localTransaction);
+                    transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
 
                 List<T> results = new List<T>();

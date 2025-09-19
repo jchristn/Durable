@@ -24,6 +24,7 @@ namespace Durable.Sqlite
 
         private readonly SqliteConnection _Connection;
         private readonly SqliteTransaction _Transaction;
+        private readonly IConnectionFactory _ConnectionFactory;
         private bool _Disposed;
         private int _SavepointCounter;
 
@@ -31,10 +32,11 @@ namespace Durable.Sqlite
 
         #region Constructors-and-Factories
 
-        public SqliteRepositoryTransaction(SqliteConnection connection, SqliteTransaction transaction)
+        public SqliteRepositoryTransaction(SqliteConnection connection, SqliteTransaction transaction, IConnectionFactory connectionFactory)
         {
             _Connection = connection;
             _Transaction = transaction;
+            _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         }
 
         #endregion
@@ -93,7 +95,10 @@ namespace Durable.Sqlite
             if (!_Disposed)
             {
                 _Transaction?.Dispose();
-                _Connection?.Dispose();
+                if (_Connection != null)
+                {
+                    _ConnectionFactory.ReturnConnection(_Connection);
+                }
                 _Disposed = true;
             }
         }

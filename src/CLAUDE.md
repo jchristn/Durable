@@ -1,0 +1,46 @@
+In order to maximize consistency and maintainability of code, please ensure that any new files or changes you make explicitly follow these style and implementation rules:
+
+- The namespace declaration should always be at the top, and using statements should be contained INSIDE the namespace block
+- All Microsoft and standard system library usings should be first, in alphabetical order, followed by other using statements, in alphabetical order
+- Code files containing classes should always be organized with five regions: Public-Members, Private-Members, Constructors-and-Factories, Public-Methods, and Private-Methods.  There should always be an extra line break before and after region statements, unless the line before or after contains an opening or closing curly brace { or }
+- All public members, constructors, and public methods must have code documentation
+- No code documentation should be applied to private members or private methods
+- All public members should have explicit getters and setters using backing variables when value ranges require validation
+- Private class member variable names must start with an underscore and then be Pascal cased, i.e. not _fooBar, but rather, _FooBar
+- Do not use tuples unless absolutely, absolutely necessary.  I hate tuples
+- Async calls should use .ConfigureAwait(false) where appropriate
+- Every async method should accept a CancellationToken as an input property, unless the class has a CancellationToken as a class member or a CancellationTokenSource as a class member
+- Async calls should check whether or not cancellation has been requested at appropriate places
+- Do not make any assumptions about what class members or class methods exist on a class that is opaque to you.  Ask, and I will share the implementation of a class that is opaque to you
+- Do not use var when defining a variable.  Use its actual type
+- If my code uses manually prepared strings for SQL statements, there is probably a very good reason for it that you will eventually agree with should we discuss it.  Assume that I'm doing the right thing
+- If a README exists, analyze it and ensure it is accurate
+- If you have the ability, please compile the code and ensure it is free of errors and warnings to the best of your ability
+- Limit each file to containing exactly one class or exactly one enum.  Do not nest multiple classes or multiple enums in a single file
+- When implementing a method that returns an IEnumerable, also create an async variant of that same method that includes a CancellationToken
+- Avoid using constant values for things that a developer may later want to configure or otherwise change.  Instead use a public member with a backing private member set to a reasonable default
+- Where appropriate, ensure code documentation outlines default values, minimum values, and maximum values.  In such cases, specify what different values mean or what effect they may have
+- Use specific exception types rather than generic Exception
+- Always include meaningful error messages with context
+- Consider using custom exception types for domain-specific errors
+- Document which exceptions public methods can throw using /// <exception> tags
+- Use exception filters when appropriate: catch (SqlException ex) when (ex.Number == 2601)
+- Implement IDisposable/IAsyncDisposable when holding unmanaged resources or disposable objects
+- Use 'using' statements or 'using' declarations for IDisposable objects
+- Follow the full Dispose pattern with protected virtual void Dispose(bool disposing)
+- Always call base.Dispose() in derived classes
+- Use nullable reference types (enable <Nullable>enable</Nullable> in project files)
+- Validate input parameters with guard clauses at method start
+- Use ArgumentNullException.ThrowIfNull() for .NET 6+ or manual null checks
+- Consider using the Result pattern or Option/Maybe types for methods that can fail
+- Document nullability in XML comments
+- Document thread safety guarantees in XML comments
+- Use Interlocked operations for simple atomic operations
+- Prefer ReaderWriterLockSlim over lock for read-heavy scenarios
+- Prefer LINQ methods over manual loops when readability is not compromised
+- Use .Any() instead of .Count() > 0 for existence checks
+- Be aware of multiple enumeration issues - consider .ToList() when needed
+- Use .FirstOrDefault() with null checks rather than .First() when element might not exist
+- Proactively identify and eliminate any situations in code where null might cause exceptions to be thrown
+
+Your task is as follows.  Please complete it being mindful of the above style and immplementation rules:

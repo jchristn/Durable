@@ -1,4 +1,4 @@
-e# Durable ORM
+# Durable ORM
 
 A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes.
 

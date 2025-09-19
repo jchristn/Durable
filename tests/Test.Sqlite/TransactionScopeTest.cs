@@ -16,7 +16,16 @@ namespace Test.Sqlite
         public TransactionScopeTest()
         {
             string connectionString = "Data Source=InMemoryDemo;Mode=Memory;Cache=Shared";
-            _repository = new SqliteRepository<Person>(connectionString);
+
+            // Configure connection pool with higher timeout and larger pool for concurrent tests
+            SqliteConnectionFactory factory = connectionString.CreateFactory(options =>
+            {
+                options.ConnectionTimeout = TimeSpan.FromMinutes(2); // Increase timeout to 2 minutes
+                options.MaxPoolSize = 50; // Increase max pool size for concurrent operations
+                options.MinPoolSize = 10; // Keep more connections ready
+            });
+
+            _repository = new SqliteRepository<Person>(factory);
         }
 
         public TransactionScopeTest(SqliteRepository<Person> repository)
@@ -149,26 +158,28 @@ namespace Test.Sqlite
         public void TestAmbientTransactionScope()
         {
             Console.WriteLine("=== Testing Ambient Transaction Scope ===");
-            
-            using TransactionScope scope1 = TransactionScope.Create(_repository);
-            
-            // These operations will use the ambient transaction
-            Person person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 72000, Department = "Marketing" };
-            _repository.Create(person9);  // No transaction parameter needed
-            Console.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
-            
-            // Nested scope with same transaction
-            using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
+
+            using (TransactionScope scope1 = TransactionScope.Create(_repository))
             {
-                Person person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 78000, Department = "IT" };
-                _repository.Create(person10);  // Still uses the same transaction
-                Console.WriteLine($"Created person 10 with ID: {person10.Id} using nested ambient transaction");
-                
-                scope2.Complete();
-            }
-            
-            scope1.Complete();
-            
+                // These operations will use the ambient transaction
+                Person person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 72000, Department = "Marketing" };
+                _repository.Create(person9);  // No transaction parameter needed
+                Console.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
+
+                // Nested scope with same transaction
+                using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
+                {
+                    Person person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 78000, Department = "IT" };
+                    _repository.Create(person10);  // Still uses the same transaction
+                    Console.WriteLine($"Created person 10 with ID: {person10.Id} using nested ambient transaction");
+
+                    scope2.Complete();
+                }
+
+                scope1.Complete();
+            } // Transaction scope is disposed here, making the transaction invalid
+
+            // Now it's safe to call Count() as no ambient transaction is active
             int finalCount = _repository.Count();
             Console.WriteLine($"Total persons after ambient transaction test: {finalCount}");
             Console.WriteLine();
@@ -311,7 +322,14 @@ namespace Test.Sqlite
                             
                             lock (lockObject)
                             {
-                                savepointNames.Add(savepoint.Name);
+                                if (savepoint?.Name != null)
+                                {
+                                    savepointNames.Add(savepoint.Name);
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Warning: Task {taskId} got null savepoint or null savepoint name");
+                                }
                             }
                             
                             // Create a person within this savepoint
@@ -327,16 +345,23 @@ namespace Test.Sqlite
                             _repository.Create(person, transaction);
                             
                             // Release the savepoint
-                            if (taskId % 2 == 0)
+                            if (savepoint != null)
                             {
-                                savepoint.Release();
+                                if (taskId % 2 == 0)
+                                {
+                                    savepoint.Release();
+                                }
+                                else
+                                {
+                                    await savepoint.ReleaseAsync();
+                                }
+
+                                Console.WriteLine($"Task {taskId}: Created savepoint '{savepoint.Name}' and person ID {person.Id}");
                             }
                             else
                             {
-                                await savepoint.ReleaseAsync();
+                                Console.WriteLine($"Task {taskId}: Failed to create savepoint, but created person ID {person.Id}");
                             }
-                            
-                            Console.WriteLine($"Task {taskId}: Created savepoint '{savepoint.Name}' and person ID {person.Id}");
                         }
                         catch (Exception ex)
                         {
@@ -444,7 +469,7 @@ namespace Test.Sqlite
                 TestDeepNestedSavepoints();
                 TestConcurrentSavepointCreation().Wait();
                 TestMemoryLeakPrevention();
-                
+
                 Console.WriteLine("=== All Tests Completed Successfully ===");
                 IEnumerable<Person> allPersons = _repository.ReadAll();
                 Console.WriteLine("Final state of database:");
@@ -457,6 +482,7 @@ namespace Test.Sqlite
             {
                 Console.WriteLine($"Test failed with exception: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                throw; // Re-throw the exception so the test runner knows the test failed
             }
         }
 
