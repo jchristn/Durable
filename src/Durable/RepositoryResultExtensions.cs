@@ -31,7 +31,7 @@ namespace Durable
         /// <returns>The async enumerable data without the query information.</returns>
         public static IAsyncEnumerable<T> AsAsyncEnumerable<T>(this IAsyncDurableResult<T> result)
         {
-            return result?.Result ?? AsyncEnumerable.Empty<T>();
+            return result?.Result ?? AsyncEnumerableHelper.Empty<T>();
         }
 
         /// <summary>
@@ -42,7 +42,7 @@ namespace Durable
         /// <returns>An async enumerable of the data.</returns>
         public static async IAsyncEnumerable<T> AsAsyncEnumerable<T>(this Task<IAsyncDurableResult<T>> resultTask)
         {
-            var result = await resultTask;
+            IAsyncDurableResult<T> result = await resultTask;
             await foreach (var item in result.AsAsyncEnumerable())
             {
                 yield return item;
@@ -69,7 +69,7 @@ namespace Durable
         /// <returns>The first entity or default.</returns>
         public static async Task<T> AsEntity<T>(this Task<IDurableResult<T>> resultTask)
         {
-            var result = await resultTask;
+            IDurableResult<T> result = await resultTask;
             return result.AsEntity();
         }
 
@@ -93,7 +93,7 @@ namespace Durable
         /// <returns>The first value or default.</returns>
         public static async Task<T> AsValue<T>(this Task<IDurableResult<T>> resultTask)
         {
-            var result = await resultTask;
+            IDurableResult<T> result = await resultTask;
             return result.AsValue();
         }
 
@@ -114,7 +114,7 @@ namespace Durable
         /// <returns>The count value.</returns>
         public static async Task<int> AsCount(this Task<IDurableResult<int>> resultTask)
         {
-            var result = await resultTask;
+            IDurableResult<int> result = await resultTask;
             return result.AsCount();
         }
 
@@ -417,8 +417,8 @@ namespace Durable
                 instanceLevelSetting = config.IncludeQueryInResults;
             }
 
-            (bool effectiveSetting, string source) = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
-            return effectiveSetting;
+            (bool effectiveSetting, string source) effectiveSettingResult = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
+            return effectiveSettingResult.effectiveSetting;
         }
 
         private static void EnableSqlCaptureTemporarily<T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()
@@ -454,66 +454,6 @@ namespace Durable
         private static string? GetCapturedSql<T>(IRepository<T> repository) where T : class, new()
         {
             return repository is ISqlCapture sqlCapture ? sqlCapture.LastExecutedSql : null;
-        }
-    }
-
-    /// <summary>
-    /// Disposable helper class that temporarily enables SQL capture and restores the original setting when disposed.
-    /// </summary>
-    internal sealed class SqlCaptureScope : IDisposable
-    {
-        #region Private-Members
-
-        private readonly ISqlCapture _SqlCapture;
-        private readonly bool _OriginalCaptureSetting;
-        private bool _Disposed = false;
-
-        #endregion
-
-        #region Constructors-and-Factories
-
-        /// <summary>
-        /// Initializes a new instance of the SqlCaptureScope class.
-        /// </summary>
-        /// <param name="sqlCapture">The SQL capture instance to manage.</param>
-        /// <exception cref="ArgumentNullException">Thrown when sqlCapture is null.</exception>
-        public SqlCaptureScope(ISqlCapture sqlCapture)
-        {
-            ArgumentNullException.ThrowIfNull(sqlCapture);
-
-            _SqlCapture = sqlCapture;
-            _OriginalCaptureSetting = sqlCapture.CaptureSql;
-            sqlCapture.CaptureSql = true;
-        }
-
-        #endregion
-
-        #region Public-Methods
-
-        /// <summary>
-        /// Restores the original SQL capture setting.
-        /// </summary>
-        public void Dispose()
-        {
-            if (!_Disposed)
-            {
-                _SqlCapture.CaptureSql = _OriginalCaptureSetting;
-                _Disposed = true;
-            }
-        }
-
-        #endregion
-    }
-
-    /// <summary>
-    /// Helper class to provide empty async enumerables.
-    /// </summary>
-    internal static class AsyncEnumerable
-    {
-        public static async IAsyncEnumerable<T> Empty<T>()
-        {
-            await Task.CompletedTask;
-            yield break;
         }
     }
 }
