@@ -8,9 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Durable/Durable.csproj" />
-    <ProjectReference Include="../Durable.Sqlite/Durable.Sqlite.csproj" />
-    <ProjectReference Include="../Test.Shared/Test.Shared.csproj" />
+    <ProjectReference Include="../../src/Durable/Durable.csproj" />
+    <ProjectReference Include="../../src/Durable.Sqlite/Durable.Sqlite.csproj" />
+    <ProjectReference Include="../../tests/Test.Shared/Test.Shared.csproj" />
   </ItemGroup>
 
 </Project>

@@ -12,9 +12,9 @@ namespace TransactionScopeDemo
         {
             Console.WriteLine("=== Transaction Scope Demo ===\n");
 
-            // Setup file-based database for testing
-            string connectionString = "Data Source=transaction_demo.db";
-            
+            // Setup file-based database for testing with proper concurrency settings
+            string connectionString = "Data Source=transaction_demo.db;Cache=Shared;Pooling=true;";
+
             // Delete existing database if it exists
             if (System.IO.File.Exists("transaction_demo.db"))
             {
@@ -83,27 +83,97 @@ namespace TransactionScopeDemo
                 
                 Console.WriteLine($"Total persons after rollback: {repository.Count()}");
 
-                // Give SQLite a moment to release locks
-                await Task.Delay(100);
+                // Give SQLite more time to release locks and force garbage collection
+                await Task.Delay(500);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+
+                // For async operations, we need to ensure the database uses WAL mode for better concurrency
+                try
+                {
+                    repository.ExecuteSql("PRAGMA journal_mode=WAL;");
+                    Console.WriteLine("Enabled WAL mode for better async concurrency");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Could not enable WAL mode: {ex.Message}");
+                }
+
+                // Use a separate database file for async operations to avoid file locking issues
+                string asyncConnectionString = "Data Source=transaction_demo_async.db;Cache=Shared;Pooling=true;";
+                if (System.IO.File.Exists("transaction_demo_async.db"))
+                {
+                    System.IO.File.Delete("transaction_demo_async.db");
+                }
+
+                SqliteRepository<Person> asyncRepository = new SqliteRepository<Person>(asyncConnectionString);
+
+                // Create table in async database
+                asyncRepository.ExecuteSql(@"
+                    CREATE TABLE people (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        first VARCHAR(64) NOT NULL,
+                        last VARCHAR(64) NOT NULL,
+                        age INTEGER NOT NULL,
+                        email VARCHAR(128) NOT NULL,
+                        salary DECIMAL(10,2) NOT NULL,
+                        department VARCHAR(32) NOT NULL
+                    );
+                ");
+
+                // Copy existing data to async database
+                foreach (Person existingPerson in repository.ReadAll())
+                {
+                    asyncRepository.Create(new Person
+                    {
+                        FirstName = existingPerson.FirstName,
+                        LastName = existingPerson.LastName,
+                        Age = existingPerson.Age,
+                        Email = existingPerson.Email,
+                        Salary = existingPerson.Salary,
+                        Department = existingPerson.Department
+                    });
+                }
 
                 // Test 3: Async Transaction Scope
                 Console.WriteLine("\n=== Test 3: Async Transaction Scope ===");
-                string result = await repository.ExecuteInTransactionScopeAsync(async () =>
+
+                // First test basic async operations without transaction scope
+                Console.WriteLine("Testing basic async operations first...");
+                try
+                {
+                    Person testPerson = new Person { FirstName = "Test", LastName = "User", Age = 25, Email = "test@test.com", Salary = 50000, Department = "Test" };
+                    await asyncRepository.CreateAsync(testPerson);
+                    Console.WriteLine($"Basic async operation successful - Created test person with ID: {testPerson.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Basic async operation failed: {ex.Message}");
+                    throw;
+                }
+
+                // Test the fixed ExecuteInTransactionScopeAsync method
+                Console.WriteLine("Testing fixed ExecuteInTransactionScopeAsync...");
+                string result = await asyncRepository.ExecuteInTransactionScopeAsync(async () =>
                 {
                     Person person4 = new Person { FirstName = "Alice", LastName = "Wilson", Age = 28, Email = "alice@test.com", Salary = 52000, Department = "Marketing" };
                     Person person5 = new Person { FirstName = "Charlie", LastName = "Brown", Age = 32, Email = "charlie@test.com", Salary = 58000, Department = "Finance" };
-                    
-                    await repository.CreateAsync(person4);
-                    await repository.CreateAsync(person5);
-                    
+
+                    await asyncRepository.CreateAsync(person4);
+                    await asyncRepository.CreateAsync(person5);
+
                     Console.WriteLine($"Created person 4 with ID: {person4.Id}");
                     Console.WriteLine($"Created person 5 with ID: {person5.Id}");
-                    
-                    return "Successfully created 2 persons";
+
+                    return "Successfully created 2 persons with async transaction scope";
                 });
-                
+
                 Console.WriteLine($"Operation result: {result}");
-                Console.WriteLine($"Total persons after async transaction: {repository.Count()}");
+                
+                Console.WriteLine($"Total persons after async transaction: {asyncRepository.Count()}");
+
+                // Dispose the async repository
+                asyncRepository?.Dispose();
 
                 // Test 4: Nested Transaction with Savepoints
                 Console.WriteLine("\n=== Test 4: Nested Transactions with Savepoints ===");
@@ -154,25 +224,26 @@ namespace TransactionScopeDemo
 
                 // Test 5: Ambient Transaction Scope
                 Console.WriteLine("\n=== Test 5: Ambient Transaction Scope ===");
-                using TransactionScope scope1 = TransactionScope.Create(repository);
-                
-                // These operations will use the ambient transaction
-                Person person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 53000, Department = "Legal" };
-                repository.Create(person9);  // No transaction parameter needed
-                Console.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
-                
-                // Nested scope with same transaction
-                using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
+                using (TransactionScope scope1 = TransactionScope.Create(repository))
                 {
-                    Person person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 60000, Department = "Support" };
-                    repository.Create(person10);  // Still uses the same transaction
-                    Console.WriteLine($"Created person 10 with ID: {person10.Id} using nested ambient transaction");
-                    
-                    scope2.Complete();
+                    // These operations will use the ambient transaction
+                    Person person9 = new Person { FirstName = "Grace", LastName = "Taylor", Age = 29, Email = "grace@test.com", Salary = 53000, Department = "Legal" };
+                    repository.Create(person9);  // No transaction parameter needed
+                    Console.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
+
+                    // Nested scope with same transaction
+                    using (TransactionScope scope2 = TransactionScope.Create(scope1.Transaction))
+                    {
+                        Person person10 = new Person { FirstName = "Henry", LastName = "Davis", Age = 33, Email = "henry@test.com", Salary = 60000, Department = "Support" };
+                        repository.Create(person10);  // Still uses the same transaction
+                        Console.WriteLine($"Created person 10 with ID: {person10.Id} using nested ambient transaction");
+
+                        scope2.Complete();
+                    }
+
+                    scope1.Complete();
                 }
-                
-                scope1.Complete();
-                
+
                 Console.WriteLine($"Total persons after ambient transaction test: {repository.Count()}");
 
                 // Final Results
@@ -194,6 +265,7 @@ namespace TransactionScopeDemo
             finally
             {
                 repository?.Dispose();
+                // asyncRepository?.Dispose(); // Will be disposed by local scope
             }
         }
     }

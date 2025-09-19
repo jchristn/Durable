@@ -7,9 +7,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable", "Durable\Durable.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Sqlite", "Durable.Sqlite\Durable.Sqlite.csproj", "{FE7E8885-E5D2-42F2-9B27-877F168BD42D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Sqlite", "Test.Sqlite\Test.Sqlite.csproj", "{211A1AE1-7BDB-4B09-88B7-1E8219789447}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Sqlite", "..\tests\Test.Sqlite\Test.Sqlite.csproj", "{211A1AE1-7BDB-4B09-88B7-1E8219789447}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Shared", "Test.Shared\Test.Shared.csproj", "{5C44F130-BFBB-4F83-AAC9-0C1B2BE0F8F9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Shared", "..\tests\Test.Shared\Test.Shared.csproj", "{5C44F130-BFBB-4F83-AAC9-0C1B2BE0F8F9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

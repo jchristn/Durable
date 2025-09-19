@@ -80,10 +80,24 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token);
-            TResult result = await func();
-            await scope.CompleteAsync(token);
-            return result;
+            // Create the transaction manually and pass it explicitly to avoid async context issues
+            ITransaction transaction = await repository.BeginTransactionAsync(token);
+            try
+            {
+                using TransactionScope scope = TransactionScope.Create(transaction);
+                TResult result = await func();
+                await scope.CompleteAsync(token);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(token);
+                throw;
+            }
+            finally
+            {
+                transaction?.Dispose();
+            }
         }
 
         /// <summary>
