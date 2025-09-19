@@ -9,8 +9,15 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
     
+    /// <summary>
+    /// Provides simple batch insert and basic functionality tests.
+    /// </summary>
     public static class SimpleTest
     {
+        /// <summary>
+        /// Runs simple batch insert functionality tests.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task RunSimpleTest()
         {
             Console.WriteLine("=== SIMPLE BATCH INSERT TEST ===");

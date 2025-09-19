@@ -9,8 +9,15 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
     
+    /// <summary>
+    /// Tests data type conversion and mapping functionality.
+    /// </summary>
     public static class DataTypeConverterTest
     {
+        /// <summary>
+        /// Runs comprehensive data type conversion tests.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task RunDataTypeConverterTest()
         {
             Console.WriteLine("=== DATA TYPE CONVERTER TEST ===");

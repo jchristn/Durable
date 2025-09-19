@@ -8,6 +8,9 @@ namespace Test.Sqlite
     using Microsoft.Data.Sqlite;
     using Test.Shared;
     
+    /// <summary>
+    /// Tests include and join operations for related entity handling.
+    /// </summary>
     public class IncludeTest
     {
         private static string _ConnectionString = "Data Source=include_test.db";
@@ -16,6 +19,9 @@ namespace Test.Sqlite
         private static SqliteRepository<Author> _AuthorRepository;
         private static SqliteRepository<Company> _CompanyRepository;
 
+        /// <summary>
+        /// Executes include and join operation tests.
+        /// </summary>
         public static void Run()
         {
             Console.WriteLine("=== Include/Join Test ===");

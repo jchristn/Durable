@@ -7,8 +7,14 @@ namespace Test.Sqlite
     using Durable.ConcurrencyConflictResolvers;
     using Xunit;
     
+    /// <summary>
+    /// Integration tests for concurrency control and conflict resolution.
+    /// </summary>
     public class ConcurrencyIntegrationTest
     {
+        /// <summary>
+        /// Tests basic concurrency functionality with version column for create and update operations.
+        /// </summary>
         [Fact]
         public void BasicConcurrencyTest_CreateAndUpdate_WithVersionColumn()
         {
@@ -58,6 +64,9 @@ namespace Test.Sqlite
             }
         }
         
+        /// <summary>
+        /// Tests that concurrency conflicts throw appropriate exceptions.
+        /// </summary>
         [Fact]
         public void ConcurrencyConflict_ThrowsException()
         {
@@ -105,6 +114,9 @@ namespace Test.Sqlite
             }
         }
         
+        /// <summary>
+        /// Tests client wins conflict resolution strategy.
+        /// </summary>
         [Fact]
         public void ConflictResolution_ClientWins()
         {
@@ -150,6 +162,9 @@ namespace Test.Sqlite
             }
         }
         
+        /// <summary>
+        /// Tests database wins conflict resolution strategy.
+        /// </summary>
         [Fact]
         public void ConflictResolution_DatabaseWins()
         {
@@ -197,6 +212,9 @@ namespace Test.Sqlite
             }
         }
         
+        /// <summary>
+        /// Tests merge changes conflict resolution strategy.
+        /// </summary>
         [Fact]
         public void ConflictResolution_MergeChanges()
         {
@@ -249,6 +267,9 @@ namespace Test.Sqlite
             }
         }
         
+        /// <summary>
+        /// Tests that entities without version columns behave normally without concurrency control.
+        /// </summary>
         [Fact]
         public void NoVersionColumn_BehavesNormally()
         {

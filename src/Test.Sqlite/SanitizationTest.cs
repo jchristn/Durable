@@ -7,8 +7,15 @@ namespace Test.Sqlite
     using Durable.Sqlite;
     using Test.Shared;
     
+    /// <summary>
+    /// Tests SQL injection protection and input sanitization functionality.
+    /// </summary>
     public static class SanitizationTest
     {
+        /// <summary>
+        /// Runs comprehensive SQL injection protection tests.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task RunSanitizationTests()
         {
             Console.WriteLine("✓ Testing SQL injection protection");

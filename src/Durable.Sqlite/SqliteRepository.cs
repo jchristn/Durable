@@ -14,10 +14,56 @@
     using Microsoft.Data.Sqlite;
     using Durable.ConcurrencyConflictResolvers;
 
-// SQLite Repository Implementation with Full Transaction Support and Connection Pooling
-    public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, IDisposable where T : class, new()
+    /// <summary>
+    /// SQLite Repository Implementation with Full Transaction Support and Connection Pooling.
+    /// Provides comprehensive data access operations for entities with support for optimistic concurrency,
+    /// batch operations, SQL capture, and advanced querying capabilities.
+    /// </summary>
+    /// <typeparam name="T">The entity type that this repository manages. Must be a class with a parameterless constructor.</typeparam>
+    public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, ISqlCapture, ISqlTrackingConfiguration, IDisposable where T : class, new()
     {
         #region Public-Members
+
+        /// <summary>
+        /// Gets the last SQL statement that was executed by this repository instance.
+        /// Returns null if no SQL has been executed or SQL capture is disabled.
+        /// </summary>
+        public string LastExecutedSql
+        {
+            get => _LastExecutedSql.Value;
+        }
+
+        /// <summary>
+        /// Gets the last SQL statement with parameter values substituted that was executed by this repository instance.
+        /// This provides a fully executable SQL statement with actual parameter values for debugging purposes.
+        /// Returns null if no SQL has been executed or SQL capture is disabled.
+        /// </summary>
+        public string LastExecutedSqlWithParameters
+        {
+            get => _LastExecutedSqlWithParameters.Value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether SQL statements should be captured and stored.
+        /// Default value is false for performance reasons.
+        /// </summary>
+        public bool CaptureSql
+        {
+            get => _CaptureSql;
+            set => _CaptureSql = value;
+        }
+
+        /// <summary>
+        /// Gets or sets whether query results should automatically include the executed SQL statement.
+        /// When true, repository operations will return IDurableResult objects containing both results and SQL.
+        /// When false, repository operations return standard result types without SQL information.
+        /// Default value is false for performance and backward compatibility.
+        /// </summary>
+        public bool IncludeQueryInResults
+        {
+            get => _IncludeQueryInResults;
+            set => _IncludeQueryInResults = value;
+        }
 
         #endregion
 
@@ -37,10 +83,25 @@
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
 
+        private readonly AsyncLocal<string> _LastExecutedSql = new AsyncLocal<string>();
+        private readonly AsyncLocal<string> _LastExecutedSqlWithParameters = new AsyncLocal<string>();
+        private bool _CaptureSql;
+        private bool _IncludeQueryInResults;
+
         #endregion
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the SqliteRepository with a connection string and optional configuration.
+        /// Creates an internal SqliteConnectionFactory for connection management.
+        /// </summary>
+        /// <param name="connectionString">The SQLite connection string used to connect to the database.</param>
+        /// <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+        /// <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+        /// <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key).</exception>
         public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
             _ConnectionFactory = new SqliteConnectionFactory(connectionString);
@@ -57,6 +118,16 @@
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
         }
 
+        /// <summary>
+        /// Initializes a new instance of the SqliteRepository with a provided connection factory and optional configuration.
+        /// Allows for shared connection pooling and factory management across multiple repository instances.
+        /// </summary>
+        /// <param name="connectionFactory">The connection factory to use for database connections.</param>
+        /// <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+        /// <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+        /// <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionFactory is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key).</exception>
         public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
@@ -78,6 +149,12 @@
         #region Public-Methods
 
         // Read operations
+        /// <summary>
+        /// Reads the first entity that matches the specified predicate, or the first entity if no predicate is provided.
+        /// </summary>
+        /// <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <returns>The first matching entity, or null if no entities match the criteria.</returns>
         public T ReadFirst(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
@@ -85,6 +162,14 @@
             return query.Take(1).Execute().FirstOrDefault();
         }
 
+        /// <summary>
+        /// Asynchronously reads the first entity that matches the specified predicate, or the first entity if no predicate is provided.
+        /// </summary>
+        /// <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <param name="token">Cancellation token to cancel the operation if needed.</param>
+        /// <returns>A task representing the asynchronous operation that returns the first matching entity, or null if no entities match the criteria.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> ReadFirstAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             IQueryBuilder<T> query = Query(transaction);
@@ -95,16 +180,36 @@
             return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Reads the first entity that matches the specified predicate, or returns default if no match is found.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The first entity that matches the predicate, or default(T) if no match is found.</returns>
         public T ReadFirstOrDefault(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             return ReadFirst(predicate, transaction);
         }
 
+        /// <summary>
+        /// Asynchronously reads the first entity that matches the specified predicate, or returns default if no match is found.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate, or default(T) if no match is found.</returns>
         public Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             return ReadFirstAsync(predicate, transaction, token);
         }
 
+        /// <summary>
+        /// Reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The single entity that matches the predicate.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
         public T ReadSingle(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
             List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
@@ -113,6 +218,14 @@
             return results[0];
         }
 
+        /// <summary>
+        /// Asynchronously reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
         public async Task<T> ReadSingleAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
             List<T> results = new List<T>();
@@ -129,6 +242,13 @@
             return results[0];
         }
 
+        /// <summary>
+        /// Reads a single entity that matches the specified predicate, or returns default if no match is found. Throws an exception if more than one entity is found.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The single entity that matches the predicate, or default(T) if no match is found.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
         public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
             List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
@@ -137,6 +257,14 @@
             return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Asynchronously reads a single entity that matches the specified predicate, or returns default if no match is found. Throws an exception if more than one entity is found.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate, or default(T) if no match is found.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
         public async Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
             List<T> results = new List<T>();
@@ -150,6 +278,12 @@
             return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Reads multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, returns all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>An enumerable collection of entities that match the predicate.</returns>
         public IEnumerable<T> ReadMany(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
@@ -157,6 +291,13 @@
             return query.Execute();
         }
 
+        /// <summary>
+        /// Asynchronously reads multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, returns all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>An async enumerable collection of entities that match the predicate.</returns>
         public async IAsyncEnumerable<T> ReadManyAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default)
         {
             IQueryBuilder<T> query = Query(transaction);
@@ -168,16 +309,34 @@
             }
         }
 
+        /// <summary>
+        /// Reads all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>An enumerable collection of all entities.</returns>
         public IEnumerable<T> ReadAll(ITransaction transaction = null)
         {
             return ReadMany(null, transaction);
         }
 
+        /// <summary>
+        /// Asynchronously reads all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>An async enumerable collection of all entities.</returns>
         public IAsyncEnumerable<T> ReadAllAsync(ITransaction transaction = null, CancellationToken token = default)
         {
             return ReadManyAsync(null, transaction, token);
         }
 
+        /// <summary>
+        /// Reads an entity by its primary key value.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to retrieve.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <returns>The entity with the specified primary key, or null if not found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public T ReadById(object id, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
@@ -185,6 +344,7 @@
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 if (reader.Read())
@@ -200,6 +360,15 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously reads an entity by its primary key value.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to retrieve.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <param name="token">Cancellation token to cancel the operation if needed.</param>
+        /// <returns>A task representing the asynchronous operation that returns the entity with the specified primary key, or null if not found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
@@ -207,6 +376,7 @@
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync(token);
                 if (await reader.ReadAsync(token))
@@ -223,6 +393,14 @@
         }
 
         // Aggregate operations
+        /// <summary>
+        /// Finds the maximum value of the specified property across entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the maximum of.</typeparam>
+        /// <param name="selector">Expression that selects the property to find the maximum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The maximum value of the selected property.</returns>
         public TResult Max<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -239,6 +417,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -249,6 +428,15 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously finds the maximum value of the specified property across entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the maximum of.</typeparam>
+        /// <param name="selector">Expression that selects the property to find the maximum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the maximum value of the selected property.</returns>
         public async Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -265,6 +453,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -279,6 +468,14 @@
             }
         }
 
+        /// <summary>
+        /// Finds the minimum value of the specified property across entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the minimum of.</typeparam>
+        /// <param name="selector">Expression that selects the property to find the minimum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The minimum value of the selected property.</returns>
         public TResult Min<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -295,6 +492,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -305,6 +503,15 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously finds the minimum value of the specified property across entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the minimum of.</typeparam>
+        /// <param name="selector">Expression that selects the property to find the minimum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the minimum value of the selected property.</returns>
         public async Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -321,6 +528,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
@@ -335,6 +543,13 @@
             }
         }
 
+        /// <summary>
+        /// Calculates the average value of the specified decimal property across entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression that selects the decimal property to calculate the average of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The average value of the selected property.</returns>
         public decimal Average(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -351,6 +566,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
@@ -361,6 +577,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously calculates the average value of the specified decimal property across entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression that selects the decimal property to calculate the average of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the average value of the selected property.</returns>
         public async Task<decimal> AverageAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -377,6 +601,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
@@ -391,6 +616,13 @@
             }
         }
 
+        /// <summary>
+        /// Calculates the sum of the specified decimal property across entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression that selects the decimal property to calculate the sum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The sum of the selected property.</returns>
         public decimal Sum(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -407,6 +639,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = command.ExecuteScalar();
                 return Convert.ToDecimal(result);
@@ -417,6 +650,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously calculates the sum of the specified decimal property across entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression that selects the decimal property to calculate the sum of.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the sum of the selected property.</returns>
         public async Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -433,6 +674,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
 
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToDecimal(result);
@@ -448,6 +690,13 @@
         }
 
         // Batch operations
+        /// <summary>
+        /// Performs a batch update operation on entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="updateExpression">Expression that defines how to update the entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
         public int BatchUpdate(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -458,6 +707,7 @@
                 string setPairs = parser.ParseUpdateExpression(updateExpression);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -466,6 +716,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously performs a batch update operation on entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="updateExpression">Expression that defines how to update the entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
         public async Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -476,6 +734,7 @@
                 string setPairs = parser.ParseUpdateExpression(updateExpression);
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setPairs} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -488,17 +747,37 @@
             }
         }
 
+        /// <summary>
+        /// Performs a batch delete operation on entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for deletion.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were deleted.</returns>
         public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
             return DeleteMany(predicate, transaction);
         }
 
+        /// <summary>
+        /// Asynchronously performs a batch delete operation on entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for deletion.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
         public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
             return DeleteManyAsync(predicate, transaction, token);
         }
 
         // Raw SQL operations
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An enumerable collection of entities returned by the query.</returns>
         public IEnumerable<T> FromSql(string sql, ITransaction transaction = null, params object[] parameters)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -509,6 +788,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 List<T> results = new List<T>();
@@ -525,6 +805,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An async enumerable collection of entities returned by the query.</returns>
         public async IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
@@ -535,6 +823,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -552,6 +841,15 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An async enumerable collection of entities of the specified type returned by the query.</returns>
         public async IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters) where TResult : new()
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
@@ -562,6 +860,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -579,6 +878,14 @@
             }
         }
 
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An enumerable collection of entities of the specified type returned by the query.</returns>
         public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction transaction = null, params object[] parameters) where TResult : new()
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -589,6 +896,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 List<TResult> results = new List<TResult>();
@@ -605,6 +913,13 @@
             }
         }
 
+        /// <summary>
+        /// Executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL command.</param>
+        /// <returns>The number of rows affected by the command.</returns>
         public int ExecuteSql(string sql, ITransaction transaction = null, params object[] parameters)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -615,6 +930,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery();
             }
@@ -624,6 +940,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL command.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of rows affected by the command.</returns>
         public async Task<int> ExecuteSqlAsync(string sql, ITransaction transaction = null, CancellationToken token = default, params object[] parameters)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
@@ -634,6 +958,7 @@
                 {
                     command.Parameters.AddWithValue($"@p{i}", parameters[i] ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync();
             }
@@ -648,6 +973,12 @@
         }
 
         // Transaction support
+        /// <summary>
+        /// Begins a new database transaction for executing multiple operations atomically.
+        /// The transaction must be committed or rolled back explicitly.
+        /// </summary>
+        /// <returns>A transaction object that can be used to execute multiple operations atomically.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when unable to create a database connection or transaction.</exception>
         public ITransaction BeginTransaction()
         {
             SqliteConnection connection = GetConnection();
@@ -656,6 +987,14 @@
             return new SqliteRepositoryTransaction(connection, transaction);
         }
 
+        /// <summary>
+        /// Asynchronously begins a new database transaction for executing multiple operations atomically.
+        /// The transaction must be committed or rolled back explicitly.
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation if needed.</param>
+        /// <returns>A task representing the asynchronous operation that returns a transaction object.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when unable to create a database connection or transaction.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
             SqliteConnection connection = GetConnection();
@@ -665,6 +1004,12 @@
         }
 
         // Existence checks
+        /// <summary>
+        /// Determines whether any entity exists that matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to test entities against.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if any entity matches the predicate; otherwise, false.</returns>
         public bool Exists(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -672,6 +1017,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
+                CaptureSqlFromCommand(command);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -680,6 +1026,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously determines whether any entity exists that matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to test entities against.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing true if any entity matches the predicate; otherwise, false.</returns>
         public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -687,6 +1040,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -700,6 +1054,12 @@
             }
         }
 
+        /// <summary>
+        /// Determines whether an entity with the specified primary key exists.
+        /// </summary>
+        /// <param name="id">The primary key value to search for.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if an entity with the specified primary key exists; otherwise, false.</returns>
         public bool ExistsById(object id, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -707,6 +1067,7 @@
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
                 return Convert.ToBoolean(command.ExecuteScalar());
             }
             finally
@@ -715,6 +1076,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously determines whether an entity with the specified primary key exists.
+        /// </summary>
+        /// <param name="id">The primary key value to search for.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing true if an entity with the specified primary key exists; otherwise, false.</returns>
         public async Task<bool> ExistsByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -722,6 +1090,7 @@
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToBoolean(result);
             }
@@ -736,6 +1105,12 @@
         }
 
         // Count operations
+        /// <summary>
+        /// Counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that match the predicate.</returns>
         public int Count(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -751,6 +1126,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 return Convert.ToInt32(command.ExecuteScalar());
             }
             finally
@@ -759,6 +1135,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that match the predicate.</returns>
         public async Task<int> CountAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -774,6 +1157,7 @@
 
                 sql.Append(";");
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 object result = await command.ExecuteScalarAsync(token);
                 return Convert.ToInt32(result);
             }
@@ -788,6 +1172,15 @@
         }
 
         // Create operations
+        /// <summary>
+        /// Creates a new entity in the database. Auto-increment primary keys will be set on the entity after creation.
+        /// Version columns will be initialized with default values if not already set.
+        /// </summary>
+        /// <param name="entity">The entity to create in the database.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <returns>The created entity with any auto-generated values (like primary keys) populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity violates database constraints.</exception>
         public T Create(T entity, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -831,6 +1224,7 @@
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                CaptureSqlFromCommand(command);
 
                 long insertedId = Convert.ToInt64(command.ExecuteScalar());
 
@@ -852,6 +1246,17 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously creates a new entity in the database. Auto-increment primary keys will be set on the entity after creation.
+        /// Version columns will be initialized with default values if not already set.
+        /// </summary>
+        /// <param name="entity">The entity to create in the database.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <param name="token">Cancellation token to cancel the operation if needed.</param>
+        /// <returns>A task representing the asynchronous operation that returns the created entity with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity violates database constraints.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> CreateAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -895,6 +1300,7 @@
                 }
 
                 command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                CaptureSqlFromCommand(command);
 
                 long insertedId = Convert.ToInt64(await command.ExecuteScalarAsync(token));
 
@@ -920,6 +1326,12 @@
             }
         }
 
+        /// <summary>
+        /// Creates multiple entities in the repository using batch insert operations for optimal performance.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entities with any generated values (like auto-increment IDs) populated.</returns>
         public IEnumerable<T> CreateMany(IEnumerable<T> entities, ITransaction transaction = null)
         {
             List<T> entitiesList = entities.ToList();
@@ -979,6 +1391,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously creates multiple entities in the repository using batch insert operations for optimal performance.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the created entities with any generated values (like auto-increment IDs) populated.</returns>
         public async Task<IEnumerable<T>> CreateManyAsync(IEnumerable<T> entities, ITransaction transaction = null, CancellationToken token = default)
         {
             List<T> entitiesList = entities.ToList();
@@ -1039,6 +1458,16 @@
         }
 
         // Update operations
+        /// <summary>
+        /// Updates an existing entity in the database. Supports optimistic concurrency control through version columns.
+        /// If a concurrency conflict occurs, the configured conflict resolver will attempt to resolve it automatically.
+        /// </summary>
+        /// <param name="entity">The entity to update in the database.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <returns>The updated entity with incremented version column if applicable.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when no rows are affected by the update operation.</exception>
+        /// <exception cref="OptimisticConcurrencyException">Thrown when a concurrency conflict cannot be resolved automatically.</exception>
         public T Update(T entity, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -1086,6 +1515,7 @@
                 }
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
 
                 int rowsAffected = command.ExecuteNonQuery();
 
@@ -1136,6 +1566,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously updates an existing entity in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to update with new values.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the updated entity.</returns>
         public async Task<T> UpdateAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -1183,6 +1620,7 @@
                 }
 
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
 
                 int rowsAffected = await command.ExecuteNonQueryAsync(token);
 
@@ -1237,6 +1675,13 @@
             }
         }
 
+        /// <summary>
+        /// Updates multiple entities that match the specified predicate by applying an update action to each entity.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="updateAction">The action to apply to each matching entity for updating.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
         public int UpdateMany(Expression<Func<T, bool>> predicate, Action<T> updateAction, ITransaction transaction = null)
         {
             // For simplicity, fetch and update each entity individually
@@ -1287,6 +1732,14 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously updates multiple entities that match the specified predicate by applying an async update action to each entity.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="updateAction">The async action to apply to each matching entity for updating.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
         public async Task<int> UpdateManyAsync(Expression<Func<T, bool>> predicate, Func<T, Task> updateAction, ITransaction transaction = null, CancellationToken token = default)
         {
             // Fetch all entities matching the predicate
@@ -1341,6 +1794,15 @@
             }
         }
 
+        /// <summary>
+        /// Updates a specific field for all entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field being updated.</typeparam>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="field">Expression that selects the field to update.</param>
+        /// <param name="value">The new value for the field.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
         public int UpdateField<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -1353,6 +1815,7 @@
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 object convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
                 command.Parameters.AddWithValue("@value", convertedValue);
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery();
             }
@@ -1362,6 +1825,16 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously updates a specific field for all entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field being updated.</typeparam>
+        /// <param name="predicate">The predicate to filter entities for updating.</param>
+        /// <param name="field">Expression that selects the field to update.</param>
+        /// <param name="value">The new value for the field.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
         public async Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -1374,6 +1847,7 @@
                 command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause};";
                 object convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), propertyInfo);
                 command.Parameters.AddWithValue("@value", convertedValue);
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync(token);
             }
@@ -1388,18 +1862,38 @@
         }
 
         // Delete operations
+        /// <summary>
+        /// Deletes an entity from the database by its primary key value.
+        /// </summary>
+        /// <param name="entity">The entity to delete from the database.</param>
+        /// <param name="transaction">Optional transaction to execute the operation within.</param>
+        /// <returns>True if the entity was deleted successfully, false if the entity was not found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public bool Delete(T entity, ITransaction transaction = null)
         {
             object idValue = GetPrimaryKeyValue(entity);
             return DeleteById(idValue, transaction);
         }
 
+        /// <summary>
+        /// Asynchronously deletes an entity from the repository.
+        /// </summary>
+        /// <param name="entity">The entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing true if the entity was deleted; otherwise, false.</returns>
         public async Task<bool> DeleteAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
             object idValue = GetPrimaryKeyValue(entity);
             return await DeleteByIdAsync(idValue, transaction, token);
         }
 
+        /// <summary>
+        /// Deletes an entity by its primary key.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted; otherwise, false.</returns>
         public bool DeleteById(object id, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -1407,6 +1901,7 @@
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 return command.ExecuteNonQuery() > 0;
             }
@@ -1416,6 +1911,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously deletes an entity by its primary key.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing true if the entity was deleted; otherwise, false.</returns>
         public async Task<bool> DeleteByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -1423,6 +1925,7 @@
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
                 command.Parameters.AddWithValue("@id", id);
+                CaptureSqlFromCommand(command);
 
                 return await command.ExecuteNonQueryAsync(token) > 0;
             }
@@ -1436,6 +1939,12 @@
             }
         }
 
+        /// <summary>
+        /// Deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for deletion.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were deleted.</returns>
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -1443,6 +1952,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1451,6 +1961,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities for deletion.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
         public async Task<int> DeleteManyAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -1458,6 +1975,7 @@
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1470,12 +1988,18 @@
             }
         }
 
+        /// <summary>
+        /// Deletes all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were deleted.</returns>
         public int DeleteAll(ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
+                CaptureSqlFromCommand(command);
                 return command.ExecuteNonQuery();
             }
             finally
@@ -1484,12 +2008,19 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously deletes all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
         public async Task<int> DeleteAllAsync(ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
+                CaptureSqlFromCommand(command);
                 return await command.ExecuteNonQueryAsync(token);
             }
             finally
@@ -1503,6 +2034,12 @@
         }
 
         // Upsert operations
+        /// <summary>
+        /// Inserts or updates an entity depending on whether it already exists in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The entity after the upsert operation, with any generated values populated.</returns>
         public T Upsert(T entity, ITransaction transaction = null)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
@@ -1537,6 +2074,7 @@
                 sql.Append(";");
 
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 command.ExecuteNonQuery();
 
                 return entity;
@@ -1547,6 +2085,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously inserts or updates an entity depending on whether it already exists in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the entity after the upsert operation, with any generated values populated.</returns>
         public async Task<T> UpsertAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
@@ -1581,6 +2126,7 @@
                 sql.Append(";");
 
                 command.CommandText = sql.ToString();
+                CaptureSqlFromCommand(command);
                 await command.ExecuteNonQueryAsync(token);
 
                 return entity;
@@ -1595,6 +2141,12 @@
             }
         }
 
+        /// <summary>
+        /// Inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// </summary>
+        /// <param name="entities">The collection of entities to insert or update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The entities after the upsert operation, with any generated values populated.</returns>
         public IEnumerable<T> UpsertMany(IEnumerable<T> entities, ITransaction transaction = null)
         {
             bool ownTransaction = transaction == null;
@@ -1642,6 +2194,13 @@
             }
         }
 
+        /// <summary>
+        /// Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// </summary>
+        /// <param name="entities">The collection of entities to insert or update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the entities after the upsert operation, with any generated values populated.</returns>
         public async Task<IEnumerable<T>> UpsertManyAsync(IEnumerable<T> entities, ITransaction transaction = null, CancellationToken token = default)
         {
             bool ownTransaction = transaction == null;
@@ -1690,17 +2249,43 @@
         }
 
         // Query builder
+        /// <summary>
+        /// Creates a new query builder for constructing complex queries against the entity table.
+        /// Provides a fluent interface for building SELECT, WHERE, ORDER BY, and other SQL clauses.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute the query within.</param>
+        /// <returns>A query builder instance for constructing and executing complex queries.</returns>
         public IQueryBuilder<T> Query(ITransaction transaction = null)
         {
             return new SqliteQueryBuilder<T>(this, transaction);
         }
 
         // IBatchInsertConfiguration implementation
+        /// <summary>
+        /// Gets the maximum number of rows to include in a single batch operation.
+        /// </summary>
+        /// <value>The maximum number of rows per batch. Default is typically 1000.</value>
         public int MaxRowsPerBatch => _BatchConfig.MaxRowsPerBatch;
+        /// <summary>
+        /// Gets the maximum number of parameters allowed per SQL statement.
+        /// </summary>
+        /// <value>The maximum number of parameters per statement. Default is typically 999 for SQLite.</value>
         public int MaxParametersPerStatement => _BatchConfig.MaxParametersPerStatement;
+        /// <summary>
+        /// Gets a value indicating whether prepared statement reuse is enabled for improved performance.
+        /// </summary>
+        /// <value>True if prepared statement reuse is enabled; otherwise, false.</value>
         public bool EnablePreparedStatementReuse => _BatchConfig.EnablePreparedStatementReuse;
+        /// <summary>
+        /// Gets a value indicating whether multi-row insert statements are enabled for batch operations.
+        /// </summary>
+        /// <value>True if multi-row insert is enabled; otherwise, false.</value>
         public bool EnableMultiRowInsert => _BatchConfig.EnableMultiRowInsert;
 
+        /// <summary>
+        /// Disposes of the repository and releases all managed resources including the connection factory.
+        /// After disposal, the repository instance should not be used for any operations.
+        /// </summary>
         public void Dispose()
         {
             _ConnectionFactory?.Dispose();
@@ -1747,6 +2332,7 @@
                     object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
                     command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 using DbDataReader reader = command.ExecuteReader();
                 if (reader.Read())
@@ -1781,6 +2367,7 @@
                     object convertedVersion = _DataTypeConverter.ConvertToDatabase(version, _VersionColumnInfo.PropertyType, _VersionColumnInfo.Property);
                     command.Parameters.AddWithValue("@version", convertedVersion ?? DBNull.Value);
                 }
+                CaptureSqlFromCommand(command);
 
                 await using DbDataReader reader = await command.ExecuteReaderAsync(token);
                 if (await reader.ReadAsync(token))
@@ -1796,12 +2383,21 @@
             }
         }
 
-        protected SqliteConnection GetConnection()
+        /// <summary>
+        /// Gets a connection to the SQLite database from the connection factory.
+        /// </summary>
+        /// <returns>A SQLite database connection.</returns>
+        public SqliteConnection GetConnection()
         {
             return (SqliteConnection)_ConnectionFactory.GetConnection();
         }
 
-        protected async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Asynchronously gets a connection to the SQLite database from the connection factory.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token to cancel the operation.</param>
+        /// <returns>A task that represents the asynchronous operation containing a SQLite database connection.</returns>
+        public async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             return (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken);
         }
@@ -1874,7 +2470,12 @@
             }
         }
 
-        protected string GetEntityName()
+        /// <summary>
+        /// Gets the entity name (table name) for the current entity type from the Entity attribute.
+        /// </summary>
+        /// <returns>The name of the database table for this entity type.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type does not have an Entity attribute.</exception>
+        public string GetEntityName()
         {
             EntityAttribute entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
             if (entityAttr == null)
@@ -1882,7 +2483,12 @@
             return entityAttr.Name;
         }
 
-        protected (string columnName, PropertyInfo property) GetPrimaryKeyInfo()
+        /// <summary>
+        /// Gets the primary key column information for the current entity type.
+        /// </summary>
+        /// <returns>A tuple containing the column name and PropertyInfo for the primary key.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type does not have a primary key column.</exception>
+        public (string columnName, PropertyInfo property) GetPrimaryKeyInfo()
         {
             foreach (PropertyInfo prop in typeof(T).GetProperties())
             {
@@ -1896,7 +2502,11 @@
             throw new InvalidOperationException($"Type {typeof(T).Name} must have a primary key column");
         }
 
-        protected Dictionary<string, PropertyInfo> GetColumnMappings()
+        /// <summary>
+        /// Gets the column mappings for the current entity type, mapping database column names to entity properties.
+        /// </summary>
+        /// <returns>A dictionary mapping column names to their corresponding PropertyInfo objects.</returns>
+        public Dictionary<string, PropertyInfo> GetColumnMappings()
         {
             Dictionary<string, PropertyInfo> mappings = new Dictionary<string, PropertyInfo>();
 
@@ -1912,7 +2522,11 @@
             return mappings;
         }
 
-        protected Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
+        /// <summary>
+        /// Gets the foreign key relationships for the current entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping properties to their foreign key attributes.</returns>
+        public Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
         {
             Dictionary<PropertyInfo, ForeignKeyAttribute> foreignKeys = new Dictionary<PropertyInfo, ForeignKeyAttribute>();
 
@@ -1928,7 +2542,11 @@
             return foreignKeys;
         }
 
-        protected Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
+        /// <summary>
+        /// Gets the navigation properties for the current entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping properties to their navigation property attributes.</returns>
+        public Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
         {
             Dictionary<PropertyInfo, NavigationPropertyAttribute> navProps = new Dictionary<PropertyInfo, NavigationPropertyAttribute>();
 
@@ -1944,7 +2562,11 @@
             return navProps;
         }
 
-        protected VersionColumnInfo GetVersionColumnInfo()
+        /// <summary>
+        /// Gets the version column information for optimistic concurrency control.
+        /// </summary>
+        /// <returns>Version column information, or null if no version column is defined.</returns>
+        public VersionColumnInfo GetVersionColumnInfo()
         {
             foreach (PropertyInfo prop in typeof(T).GetProperties())
             {
@@ -1971,7 +2593,12 @@
             return null;
         }
 
-        protected object GetPrimaryKeyValue(T entity)
+        /// <summary>
+        /// Gets the primary key value from the specified entity.
+        /// </summary>
+        /// <param name="entity">The entity to get the primary key value from.</param>
+        /// <returns>The primary key value of the entity.</returns>
+        public object GetPrimaryKeyValue(T entity)
         {
             return _PrimaryKeyProperty.GetValue(entity);
         }
@@ -2012,19 +2639,33 @@
                 string columnName = kvp.Key;
                 PropertyInfo property = kvp.Value;
 
-                int ordinal = reader.GetOrdinal(columnName);
-                if (!reader.IsDBNull(ordinal))
+                try
                 {
-                    object value = reader.GetValue(ordinal);
-                    object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
-                    property.SetValue(entity, convertedValue);
+                    int ordinal = reader.GetOrdinal(columnName);
+                    if (!reader.IsDBNull(ordinal))
+                    {
+                        object value = reader.GetValue(ordinal);
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        property.SetValue(entity, convertedValue);
+                    }
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    // Column not present in result set - skip this property
+                    continue;
                 }
             }
 
             return entity;
         }
 
-        protected TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
+        /// <summary>
+        /// Maps an IDataReader to an instance of the specified result type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the reader data to. Must have a parameterless constructor.</typeparam>
+        /// <param name="reader">The data reader containing the data to map.</param>
+        /// <returns>An instance of TResult with properties populated from the reader data.</returns>
+        public TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
         {
             TResult result = new TResult();
             Type resultType = typeof(TResult);
@@ -2244,6 +2885,7 @@
         
         private void ExecuteBatchInsert(SqliteCommand command, IList<T> entities)
         {
+            CaptureSqlFromCommand(command);
             int rowsAffected = command.ExecuteNonQuery();
             
             if (_PrimaryKeyProperty != null)
@@ -2252,6 +2894,7 @@
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    CaptureSqlFromCommand(idCommand);
                     long lastId = Convert.ToInt64(idCommand.ExecuteScalar());
                     
                     for (int i = entities.Count - 1; i >= 0; i--)
@@ -2265,6 +2908,7 @@
         
         private async Task ExecuteBatchInsertAsync(SqliteCommand command, IList<T> entities, CancellationToken token)
         {
+            CaptureSqlFromCommand(command);
             int rowsAffected = await command.ExecuteNonQueryAsync(token);
             
             if (_PrimaryKeyProperty != null)
@@ -2273,6 +2917,7 @@
                 if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
                 {
                     using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
+                    CaptureSqlFromCommand(idCommand);
                     long lastId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(token));
                     
                     for (int i = entities.Count - 1; i >= 0; i--)
@@ -2282,6 +2927,70 @@
                     }
                 }
             }
+        }
+
+        internal void CaptureSqlIfEnabled(string sql)
+        {
+            if (_CaptureSql && !string.IsNullOrEmpty(sql))
+            {
+                _LastExecutedSql.Value = sql;
+                _LastExecutedSqlWithParameters.Value = sql;
+            }
+        }
+
+        private void CaptureSqlFromCommand(SqliteCommand command)
+        {
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql.Value = command.CommandText;
+                _LastExecutedSqlWithParameters.Value = BuildSqlWithParameters(command);
+            }
+        }
+
+        private string BuildSqlWithParameters(SqliteCommand command)
+        {
+            if (command?.Parameters == null || command.Parameters.Count == 0)
+            {
+                return command?.CommandText;
+            }
+
+            string sql = command.CommandText;
+            foreach (SqliteParameter parameter in command.Parameters)
+            {
+                string parameterValue = FormatParameterValue(parameter.Value);
+                sql = sql.Replace(parameter.ParameterName, parameterValue);
+            }
+            return sql;
+        }
+
+        private string FormatParameterValue(object value)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return "NULL";
+            }
+
+            if (value is string stringValue)
+            {
+                return $"'{stringValue.Replace("'", "''")}'";
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return $"'{dateTime:yyyy-MM-dd HH:mm:ss}'";
+            }
+
+            if (value is bool boolValue)
+            {
+                return boolValue ? "1" : "0";
+            }
+
+            if (value is byte[] bytes)
+            {
+                return $"X'{Convert.ToHexString(bytes)}'";
+            }
+
+            return value.ToString();
         }
 
         #endregion

@@ -369,6 +369,94 @@ var summaries = await repository
     .ToListAsync();
 ```
 
+### 9. SQL Capture and Debugging
+
+The Durable ORM provides built-in SQL capture capabilities for debugging and monitoring executed queries. Repositories that implement the `ISqlCapture` interface can track and expose the actual SQL statements being executed.
+
+#### Basic SQL Capture
+
+```csharp
+// Enable SQL capture on a repository that supports it
+if (repository is ISqlCapture sqlCapture)
+{
+    sqlCapture.CaptureSql = true;
+
+    // Execute some operations
+    var people = await repository.ReadManyAsync(p => p.Age > 25).ToListAsync();
+    var person = await repository.ReadByIdAsync(1);
+
+    // Get the last executed SQL
+    Console.WriteLine("Last SQL: " + sqlCapture.LastExecutedSql);
+    Console.WriteLine("Last SQL with parameters: " + sqlCapture.LastExecutedSqlWithParameters);
+}
+```
+
+#### Automatic Query Results with SQL
+
+For repositories that implement `ISqlTrackingConfiguration`, you can configure automatic inclusion of SQL in query results:
+
+```csharp
+// Enable automatic query inclusion
+if (repository is ISqlTrackingConfiguration trackingConfig)
+{
+    trackingConfig.IncludeQueryInResults = true;
+
+    // Now all operations return results with SQL information
+    var result = await repository
+        .Query()
+        .Where(p => p.Salary > 75000)
+        .ExecuteWithQueryAsync();
+
+    Console.WriteLine($"Executed SQL: {result.Query}");
+    foreach (var person in result.Results)
+    {
+        Console.WriteLine($"{person.FirstName} {person.LastName}");
+    }
+}
+```
+
+#### Working with DurableResult Objects
+
+When SQL tracking is enabled, repository operations return `IDurableResult<T>` objects that contain both the query results and the executed SQL:
+
+```csharp
+// Query with automatic SQL capture
+var durableResult = await repository.SelectWithQueryAsync(p => p.Department == "Engineering");
+
+// Access the results
+foreach (var engineer in durableResult.Result)
+{
+    Console.WriteLine($"{engineer.FirstName} - {engineer.Salary:C}");
+}
+
+// Access the SQL that was executed
+Console.WriteLine($"Query executed: {durableResult.Query}");
+
+// Convert back to regular enumerable for backward compatibility
+IEnumerable<Person> regularResults = durableResult.AsEnumerable();
+```
+
+#### Async Enumerable with SQL Tracking
+
+```csharp
+// Get async enumerable with query information
+var asyncResult = repository.SelectAsyncWithQuery(p => p.Age >= 30);
+
+Console.WriteLine($"Starting to process query: {asyncResult.Query}");
+
+await foreach (var person in asyncResult.Result)
+{
+    Console.WriteLine($"Processing: {person.FirstName} {person.LastName}");
+}
+```
+
+#### Performance Considerations
+
+- SQL capture is **disabled by default** for optimal performance
+- Only enable SQL capture during development or when debugging is needed
+- The `LastExecutedSqlWithParameters` property performs parameter substitution, which has additional overhead
+- When `IncludeQueryInResults` is enabled, all repository operations return wrapped result objects
+
 ## Building Your Own Repository Implementation
 
 The generic architecture makes it easy to create repository implementations for different databases:

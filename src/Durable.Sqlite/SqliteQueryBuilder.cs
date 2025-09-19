@@ -10,6 +10,11 @@
     using System.Threading;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// SQLite-specific implementation of IQueryBuilder that provides fluent query building capabilities for SQLite databases.
+    /// Supports advanced features like CTEs, window functions, set operations, and includes.
+    /// </summary>
+    /// <typeparam name="TEntity">The entity type being queried</typeparam>
     public class SqliteQueryBuilder<TEntity> : IQueryBuilder<TEntity> where TEntity : class, new()
     {
         #region Public-Members
@@ -45,6 +50,12 @@
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the SqliteQueryBuilder class.
+        /// </summary>
+        /// <param name="repository">The SQLite repository instance for data access operations</param>
+        /// <param name="transaction">Optional transaction to execute queries within. Default is null</param>
+        /// <exception cref="ArgumentNullException">Thrown when repository is null</exception>
         public SqliteQueryBuilder(SqliteRepository<TEntity> repository, ITransaction transaction = null)
         {
             _Repository = repository;
@@ -56,6 +67,12 @@
 
         #region Public-Methods
 
+        /// <summary>
+        /// Adds a WHERE clause condition to the query using a lambda expression.
+        /// </summary>
+        /// <param name="predicate">Lambda expression representing the WHERE condition</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
         public IQueryBuilder<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
         {
             string whereClause = _Repository.BuildWhereClause(predicate);
@@ -63,6 +80,13 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds an ORDER BY clause to sort results in ascending order by the specified property.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to sort by</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to sort by</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
         public IQueryBuilder<TEntity> OrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -70,6 +94,13 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds an ORDER BY clause to sort results in descending order by the specified property.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to sort by</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to sort by</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
         public IQueryBuilder<TEntity> OrderByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -77,6 +108,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a secondary sort condition in ascending order. Must be used after OrderBy or OrderByDescending.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to sort by</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to sort by</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending</exception>
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             if (_OrderByClauses.Count == 0)
@@ -87,6 +126,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a secondary sort condition in descending order. Must be used after OrderBy or OrderByDescending.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to sort by</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to sort by</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending</exception>
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             if (_OrderByClauses.Count == 0)
@@ -97,29 +144,59 @@
             return this;
         }
 
+        /// <summary>
+        /// Skips the specified number of records from the beginning of the result set.
+        /// </summary>
+        /// <param name="count">Number of records to skip. Must be non-negative</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when count is negative</exception>
         public IQueryBuilder<TEntity> Skip(int count)
         {
             _SkipCount = count;
             return this;
         }
 
+        /// <summary>
+        /// Limits the result set to the specified number of records.
+        /// </summary>
+        /// <param name="count">Maximum number of records to return. Must be positive</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when count is non-positive</exception>
         public IQueryBuilder<TEntity> Take(int count)
         {
             _TakeCount = count;
             return this;
         }
 
+        /// <summary>
+        /// Ensures that only distinct (unique) records are returned in the result set.
+        /// </summary>
+        /// <returns>The current query builder instance for method chaining</returns>
         public IQueryBuilder<TEntity> Distinct()
         {
             _Distinct = true;
             return this;
         }
 
+        /// <summary>
+        /// Projects the query results into a different type using the specified selector expression.
+        /// </summary>
+        /// <typeparam name="TResult">The target type for projection</typeparam>
+        /// <param name="selector">Lambda expression defining the projection</param>
+        /// <returns>A new query builder for the projected type</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
             return new SqliteProjectedQueryBuilder<TEntity, TResult>(_Repository, selector, this, _Transaction);
         }
 
+        /// <summary>
+        /// Includes related entities in the query results through eager loading.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the navigation property</typeparam>
+        /// <param name="navigationProperty">Lambda expression selecting the navigation property to include</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null</exception>
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
         {
             // Store include information for later processing
@@ -128,6 +205,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Includes nested related entities through the previously included navigation property.
+        /// </summary>
+        /// <typeparam name="TPreviousProperty">The type of the previously included property</typeparam>
+        /// <typeparam name="TProperty">The type of the nested navigation property</typeparam>
+        /// <param name="navigationProperty">Lambda expression selecting the nested navigation property</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null</exception>
         public IQueryBuilder<TEntity> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
             // Store nested include information
@@ -139,6 +224,13 @@
             return this;
         }
 
+        /// <summary>
+        /// Groups query results by the specified key selector expression.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the grouping key</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the grouping key</param>
+        /// <returns>A grouped query builder for aggregate operations</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -146,6 +238,13 @@
             return new SqliteGroupedQueryBuilder<TEntity, TKey>(_Repository, this, keySelector);
         }
 
+        /// <summary>
+        /// Adds a HAVING clause condition for grouped queries. Can only be used with GROUP BY.
+        /// </summary>
+        /// <param name="predicate">Lambda expression representing the HAVING condition</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when called without a GROUP BY clause</exception>
         public IQueryBuilder<TEntity> Having(Expression<Func<TEntity, bool>> predicate)
         {
             if (_GroupByColumns.Count == 0)
@@ -160,6 +259,12 @@
         }
 
         // Set operations
+        /// <summary>
+        /// Combines the current query with another query using UNION operation, removing duplicates.
+        /// </summary>
+        /// <param name="other">The other query builder to union with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Union(IQueryBuilder<TEntity> other)
         {
             _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Union, other));
@@ -167,6 +272,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Combines the current query with another query using UNION ALL operation, including duplicates.
+        /// </summary>
+        /// <param name="other">The other query builder to union with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> UnionAll(IQueryBuilder<TEntity> other)
         {
             _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.UnionAll, other));
@@ -174,6 +285,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Returns only records that exist in both the current query and the other query.
+        /// </summary>
+        /// <param name="other">The other query builder to intersect with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Intersect(IQueryBuilder<TEntity> other)
         {
             _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Intersect, other));
@@ -181,6 +298,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Returns records from the current query that do not exist in the other query.
+        /// </summary>
+        /// <param name="other">The other query builder to except against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Except(IQueryBuilder<TEntity> other)
         {
             _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Except, other));
@@ -189,6 +312,14 @@
         }
 
         // Subquery support
+        /// <summary>
+        /// Adds a WHERE IN clause using a subquery to filter results.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the key being compared</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to compare</param>
+        /// <param name="subquery">The subquery providing values for the IN clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -198,6 +329,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT IN clause using a subquery to filter results.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the key being compared</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to compare</param>
+        /// <param name="subquery">The subquery providing values for the NOT IN clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -207,6 +346,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE IN clause using raw SQL for the subquery.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the key being compared</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to compare</param>
+        /// <param name="subquerySql">Raw SQL string for the subquery</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null</exception>
         public IQueryBuilder<TEntity> WhereInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -215,6 +362,14 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT IN clause using raw SQL for the subquery.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the key being compared</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to compare</param>
+        /// <param name="subquerySql">Raw SQL string for the subquery</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null</exception>
         public IQueryBuilder<TEntity> WhereNotInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
             string column = _Repository.GetColumnFromExpression(keySelector.Body);
@@ -223,6 +378,13 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE EXISTS clause using a subquery.
+        /// </summary>
+        /// <typeparam name="TOther">The entity type of the subquery</typeparam>
+        /// <param name="subquery">The subquery for the EXISTS clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
             string subquerySql = subquery.BuildSql().TrimEnd(';');
@@ -231,6 +393,13 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT EXISTS clause using a subquery.
+        /// </summary>
+        /// <typeparam name="TOther">The entity type of the subquery</typeparam>
+        /// <param name="subquery">The subquery for the NOT EXISTS clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
             string subquerySql = subquery.BuildSql().TrimEnd(';');
@@ -240,12 +409,29 @@
         }
 
         // Window functions
+        /// <summary>
+        /// Adds a window function to the query with optional partitioning and ordering.
+        /// </summary>
+        /// <param name="functionName">The name of the window function (e.g., ROW_NUMBER, RANK, LAG)</param>
+        /// <param name="partitionBy">Optional partition clause for the window function. Default is null</param>
+        /// <param name="orderBy">Optional order clause for the window function. Default is null</param>
+        /// <returns>A windowed query builder for additional window function configuration</returns>
+        /// <exception cref="ArgumentNullException">Thrown when functionName is null</exception>
+        /// <exception cref="ArgumentException">Thrown when functionName is empty or whitespace</exception>
         public IWindowedQueryBuilder<TEntity> WithWindowFunction(string functionName, string partitionBy = null, string orderBy = null)
         {
             return new SqliteWindowedQueryBuilder<TEntity>(this, _Repository, _Transaction, functionName, partitionBy, orderBy);
         }
 
         // CTEs
+        /// <summary>
+        /// Adds a Common Table Expression (CTE) to the query.
+        /// </summary>
+        /// <param name="cteName">The name for the CTE</param>
+        /// <param name="cteQuery">The SQL query defining the CTE</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName or cteQuery is null</exception>
+        /// <exception cref="ArgumentException">Thrown when cteName or cteQuery is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WithCte(string cteName, string cteQuery)
         {
             _CteDefinitions.Add(new CteDefinition(cteName, cteQuery));
@@ -253,6 +439,15 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a recursive Common Table Expression (CTE) to the query.
+        /// </summary>
+        /// <param name="cteName">The name for the recursive CTE</param>
+        /// <param name="anchorQuery">The anchor (base) query for the recursive CTE</param>
+        /// <param name="recursiveQuery">The recursive query that references the CTE</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName, anchorQuery, or recursiveQuery is null</exception>
+        /// <exception cref="ArgumentException">Thrown when cteName, anchorQuery, or recursiveQuery is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery)
         {
             _CteDefinitions.Add(new CteDefinition(cteName, anchorQuery, recursiveQuery));
@@ -261,6 +456,13 @@
         }
 
         // Custom SQL fragments
+        /// <summary>
+        /// Adds a raw SQL WHERE clause with optional parameters.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the WHERE condition</param>
+        /// <param name="parameters">Optional parameters to format into the SQL string</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
         public IQueryBuilder<TEntity> WhereRaw(string sql, params object[] parameters)
         {
             if (parameters != null && parameters.Length > 0)
@@ -272,6 +474,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Sets a custom raw SQL SELECT clause, overriding the default column selection.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the SELECT clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
         public IQueryBuilder<TEntity> SelectRaw(string sql)
         {
             _CustomSelectClause = sql;
@@ -279,6 +487,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Sets a custom raw SQL FROM clause, overriding the default table name.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the FROM clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
         public IQueryBuilder<TEntity> FromRaw(string sql)
         {
             _CustomFromClause = sql;
@@ -286,6 +500,12 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a custom raw SQL JOIN clause to the query.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the JOIN clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
         public IQueryBuilder<TEntity> JoinRaw(string sql)
         {
             _CustomJoinClauses.Add(sql);
@@ -294,6 +514,10 @@
         }
 
         // CASE WHEN expressions
+        /// <summary>
+        /// Creates a CASE expression builder for conditional logic in SELECT clauses.
+        /// </summary>
+        /// <returns>A case expression builder for constructing conditional expressions</returns>
         public ICaseExpressionBuilder<TEntity> SelectCase()
         {
             return new SqliteCaseExpressionBuilder<TEntity>(this, _Repository);
@@ -305,6 +529,12 @@
             return _CustomSelectClause;
         }
 
+        /// <summary>
+        /// Executes the query synchronously and returns the results as an enumerable collection.
+        /// </summary>
+        /// <returns>An enumerable collection of entities matching the query criteria</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
         public IEnumerable<TEntity> Execute()
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
@@ -312,6 +542,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 using SqliteDataReader reader = connectionResult.Command.ExecuteReader();
 
                 List<TEntity> results;
@@ -355,6 +586,14 @@
             }
         }
 
+        /// <summary>
+        /// Executes the query asynchronously and returns the results as an enumerable collection.
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+        /// <returns>A task representing the asynchronous operation with an enumerable collection of entities</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
@@ -362,6 +601,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 List<TEntity> results;
@@ -418,6 +658,14 @@
             }
         }
 
+        /// <summary>
+        /// Executes the query asynchronously and returns the results as an async enumerable for streaming large result sets.
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+        /// <returns>An async enumerable collection of entities for streaming results</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
             (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
@@ -425,6 +673,7 @@
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
+                _Repository.CaptureSqlIfEnabled(connectionResult.Command.CommandText);
                 await using SqliteDataReader reader = await connectionResult.Command.ExecuteReaderAsync(token);
 
                 while (await reader.ReadAsync(token))
@@ -442,6 +691,10 @@
             }
         }
 
+        /// <summary>
+        /// Gets the generated SQL query string. The query is cached after first access.
+        /// </summary>
+        /// <value>The complete SQL query string for this query builder</value>
         public string Query
         {
             get
@@ -452,6 +705,12 @@
             }
         }
 
+        /// <summary>
+        /// Executes the query synchronously and returns both the generated SQL query and the results.
+        /// </summary>
+        /// <returns>A durable result containing both the SQL query and the enumerable collection of entities</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
         public IDurableResult<TEntity> ExecuteWithQuery()
         {
             string query = Query;
@@ -459,6 +718,14 @@
             return new DurableResult<TEntity>(query, results);
         }
 
+        /// <summary>
+        /// Executes the query asynchronously and returns both the generated SQL query and the results.
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+        /// <returns>A task representing the asynchronous operation with a durable result containing both the SQL query and the enumerable collection of entities</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
         {
             string query = Query;
@@ -466,6 +733,14 @@
             return new DurableResult<TEntity>(query, results);
         }
 
+        /// <summary>
+        /// Executes the query asynchronously and returns both the generated SQL query and an async enumerable of results.
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+        /// <returns>An async durable result containing both the SQL query and the async enumerable collection of entities</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query cannot be executed</exception>
+        /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
         {
             string query = Query;
@@ -473,6 +748,11 @@
             return new AsyncDurableResult<TEntity>(query, results);
         }
 
+        /// <summary>
+        /// Builds and returns the complete SQL query string without executing it.
+        /// </summary>
+        /// <returns>The generated SQL query string</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the query configuration is invalid</exception>
         public string BuildSql()
         {
             StringBuilder sql = new StringBuilder();
