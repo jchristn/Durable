@@ -1223,19 +1223,13 @@
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
 
-                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}) RETURNING *;";
                 CaptureSqlFromCommand(command);
 
-                long insertedId = Convert.ToInt64(command.ExecuteScalar());
-
-                // Set the ID back on the entity if it's auto-increment
-                if (_PrimaryKeyProperty != null)
+                using SqliteDataReader reader = command.ExecuteReader();
+                if (reader.Read())
                 {
-                    PropertyAttribute columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
-                    if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
-                    {
-                        _PrimaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _PrimaryKeyProperty.PropertyType));
-                    }
+                    return MapReaderToEntity(reader);
                 }
 
                 return entity;
@@ -1299,19 +1293,13 @@
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
 
-                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}); SELECT last_insert_rowid();";
+                command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters)}) RETURNING *;";
                 CaptureSqlFromCommand(command);
 
-                long insertedId = Convert.ToInt64(await command.ExecuteScalarAsync(token));
-
-                // Set the ID back on the entity if it's auto-increment
-                if (_PrimaryKeyProperty != null)
+                using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+                if (await reader.ReadAsync(token))
                 {
-                    PropertyAttribute columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
-                    if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
-                    {
-                        _PrimaryKeyProperty.SetValue(entity, Convert.ChangeType(insertedId, _PrimaryKeyProperty.PropertyType));
-                    }
+                    return MapReaderToEntity(reader);
                 }
 
                 return entity;
@@ -1514,12 +1502,15 @@
                     whereClause += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @current_version";
                 }
 
-                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause} RETURNING *;";
                 CaptureSqlFromCommand(command);
 
-                int rowsAffected = command.ExecuteNonQuery();
-
-                if (rowsAffected == 0)
+                using SqliteDataReader reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    return MapReaderToEntity(reader);
+                }
+                else
                 {
                     if (_VersionColumnInfo != null)
                     {
@@ -1528,18 +1519,18 @@
                         {
                             throw new InvalidOperationException($"Entity with {_PrimaryKeyColumn} = {idValue} not found in database");
                         }
-                        
+
                         object actualVersion = _VersionColumnInfo.GetValue(currentDbEntity);
-                        
+
                         // Create original entity by copying incoming entity but with the expected version
                         // This represents the entity state as the user originally loaded it
                         T originalEntity = CreateCopyOfEntity(entity);
                         _VersionColumnInfo.SetValue(originalEntity, currentVersion);
-                        
+
                         // Try to resolve the conflict
                         ConflictResolutionStrategy strategy = _ConflictResolver.DefaultStrategy;
                         bool resolved = _ConflictResolver.TryResolveConflict(currentDbEntity, entity, originalEntity, strategy, out T resolvedEntity);
-                        
+
                         if (resolved && resolvedEntity != null)
                         {
                             // Copy the current version from the database to the resolved entity
@@ -1557,8 +1548,6 @@
                         throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
                     }
                 }
-
-                return entity;
             }
             finally
             {
@@ -1619,12 +1608,15 @@
                     whereClause += $" AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @current_version";
                 }
 
-                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause};";
+                command.CommandText = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {whereClause} RETURNING *;";
                 CaptureSqlFromCommand(command);
 
-                int rowsAffected = await command.ExecuteNonQueryAsync(token);
-
-                if (rowsAffected == 0)
+                using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+                if (await reader.ReadAsync(token))
+                {
+                    return MapReaderToEntity(reader);
+                }
+                else
                 {
                     if (_VersionColumnInfo != null)
                     {
@@ -1662,8 +1654,6 @@
                         throw new InvalidOperationException($"No rows were updated for entity with {_PrimaryKeyColumn} = {idValue}");
                     }
                 }
-
-                return entity;
             }
             finally
             {
@@ -2071,11 +2061,16 @@
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
                 sql.Append($"ON CONFLICT({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
-                sql.Append(";");
+                sql.Append(" RETURNING *;");
 
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
-                command.ExecuteNonQuery();
+
+                using SqliteDataReader reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    return MapReaderToEntity(reader);
+                }
 
                 return entity;
             }
@@ -2123,11 +2118,16 @@
                 sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
                 sql.Append($"ON CONFLICT({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET ");
                 sql.Append(string.Join(", ", updatePairs));
-                sql.Append(";");
+                sql.Append(" RETURNING *;");
 
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
-                await command.ExecuteNonQueryAsync(token);
+
+                using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+                if (await reader.ReadAsync(token))
+                {
+                    return MapReaderToEntity(reader);
+                }
 
                 return entity;
             }
@@ -2862,7 +2862,7 @@
                 valuesList.Add($"({string.Join(", ", parameters)})");
             }
             
-            command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", sanitizedColumns)}) VALUES {string.Join(", ", valuesList)};";
+            command.CommandText = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", sanitizedColumns)}) VALUES {string.Join(", ", valuesList)} RETURNING *;";
             AddParametersForBatch(command, entities);
         }
         
@@ -2886,46 +2886,44 @@
         private void ExecuteBatchInsert(SqliteCommand command, IList<T> entities)
         {
             CaptureSqlFromCommand(command);
-            int rowsAffected = command.ExecuteNonQuery();
-            
-            if (_PrimaryKeyProperty != null)
+            using SqliteDataReader reader = command.ExecuteReader();
+
+            int index = 0;
+            while (reader.Read() && index < entities.Count)
             {
-                PropertyAttribute columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
-                if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
+                T updatedEntity = MapReaderToEntity(reader);
+
+                // Copy all properties from the returned entity to the original entity
+                foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
                 {
-                    using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
-                    CaptureSqlFromCommand(idCommand);
-                    long lastId = Convert.ToInt64(idCommand.ExecuteScalar());
-                    
-                    for (int i = entities.Count - 1; i >= 0; i--)
-                    {
-                        long id = lastId - (entities.Count - 1 - i);
-                        _PrimaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _PrimaryKeyProperty.PropertyType));
-                    }
+                    PropertyInfo property = kvp.Value;
+                    object value = property.GetValue(updatedEntity);
+                    property.SetValue(entities[index], value);
                 }
+
+                index++;
             }
         }
         
         private async Task ExecuteBatchInsertAsync(SqliteCommand command, IList<T> entities, CancellationToken token)
         {
             CaptureSqlFromCommand(command);
-            int rowsAffected = await command.ExecuteNonQueryAsync(token);
-            
-            if (_PrimaryKeyProperty != null)
+            using SqliteDataReader reader = await command.ExecuteReaderAsync(token);
+
+            int index = 0;
+            while (await reader.ReadAsync(token) && index < entities.Count)
             {
-                PropertyAttribute columnAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
-                if (columnAttr != null && (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement)
+                T updatedEntity = MapReaderToEntity(reader);
+
+                // Copy all properties from the returned entity to the original entity
+                foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
                 {
-                    using SqliteCommand idCommand = new SqliteCommand("SELECT last_insert_rowid();", command.Connection, command.Transaction);
-                    CaptureSqlFromCommand(idCommand);
-                    long lastId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(token));
-                    
-                    for (int i = entities.Count - 1; i >= 0; i--)
-                    {
-                        long id = lastId - (entities.Count - 1 - i);
-                        _PrimaryKeyProperty.SetValue(entities[i], Convert.ChangeType(id, _PrimaryKeyProperty.PropertyType));
-                    }
+                    PropertyInfo property = kvp.Value;
+                    object value = property.GetValue(updatedEntity);
+                    property.SetValue(entities[index], value);
                 }
+
+                index++;
             }
         }
 
