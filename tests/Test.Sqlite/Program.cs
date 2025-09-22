@@ -66,7 +66,7 @@
 
             // Run connection pooling demonstrations
             Console.WriteLine("\n========== CONNECTION POOLING TESTS ==========");
-            await RunTest("Connection Pooling", () => 
+            await RunTest("Connection Pooling", () =>
             {
                 PoolingExample.DemonstrateConnectionPooling();
             });
