@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MySqlConnector" Version="2.3.7" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable\Durable.csproj" />
+	</ItemGroup>
+
+</Project>
