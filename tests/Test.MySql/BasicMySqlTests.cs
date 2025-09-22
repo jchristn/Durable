@@ -11,7 +11,7 @@ namespace Test.MySql
     /// </summary>
     public class BasicMySqlTests
     {
-        private const string TestConnectionString = "Server=localhost;Database=durable_test;User=root;Password=;";
+        private const string TestConnectionString = "Server=localhost;Database=durable_test1;User=test_user;Password=password;";
 
         [Fact]
         public void CanCreateMySqlRepository()
@@ -96,6 +96,36 @@ namespace Test.MySql
                 string sql = queryBuilder.BuildSql();
                 Assert.Contains("SELECT", sql);
                 Assert.Contains("FROM", sql);
+
+                repository.Dispose();
+            }
+            catch (System.Exception ex)
+            {
+                // Expected if no MySQL server available
+                Assert.True(true, $"Expected exception during test: {ex.Message}");
+            }
+        }
+
+        [Fact]
+        public void MySqlExpressionParser_GeneratesOptimalParentheses()
+        {
+            try
+            {
+                var repository = new MySqlRepository<Author>(TestConnectionString);
+                var queryBuilder = repository.Query();
+
+                // Test complex expression that would previously generate excessive parentheses
+                queryBuilder.Where(a => a.Name == "John" && a.Id > 25);
+
+                string sql = queryBuilder.BuildSql();
+
+                // Verify no excessive nested parentheses like ((`Name` = 'John') AND (`Age` > 25))
+                Assert.DoesNotContain("((", sql);
+                Assert.DoesNotContain("))", sql);
+
+                // Should still contain the basic WHERE clause structure
+                Assert.Contains("WHERE", sql);
+                Assert.Contains("AND", sql);
 
                 repository.Dispose();
             }

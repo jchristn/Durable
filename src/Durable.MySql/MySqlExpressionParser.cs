@@ -275,14 +275,14 @@ namespace Durable.MySql
                     {
                         string left = Visit(methodCall.Object);
                         string right = Visit(methodCall.Arguments[0]);
-                        return $"({left} = {right})";
+                        return $"{left} = {right}";
                     }
                     else if (methodCall.Arguments.Count == 2)
                     {
                         // Static Equals method
                         string left = Visit(methodCall.Arguments[0]);
                         string right = Visit(methodCall.Arguments[1]);
-                        return $"({left} = {right})";
+                        return $"{left} = {right}";
                     }
                     break;
 
@@ -380,10 +380,10 @@ namespace Durable.MySql
             {
                 case ExpressionType.Not:
                     string operand = Visit(unary.Operand);
-                    return $"NOT ({operand})";
+                    return $"NOT {operand}";
                 case ExpressionType.Negate:
                     string negateOperand = Visit(unary.Operand);
-                    return $"-({negateOperand})";
+                    return $"-{negateOperand}";
                 case ExpressionType.Convert:
                 case ExpressionType.ConvertChecked:
                     // Handle type conversions by visiting the operand
@@ -476,7 +476,7 @@ namespace Durable.MySql
                 string min = Visit(methodCall.Arguments[1]);
                 string max = Visit(methodCall.Arguments[2]);
 
-                return $"({value} BETWEEN {min} AND {max})";
+                return $"{value} BETWEEN {min} AND {max}";
             }
 
             throw new NotSupportedException("Between method requires exactly 3 arguments: value.Between(min, max). Example: p.Age.Between(18, 65)");
@@ -687,7 +687,7 @@ namespace Durable.MySql
                 return $"COALESCE({left}, {right})";
             }
 
-            return $"({left} {op} {right})";
+            return $"{left} {op} {right}";
         }
 
         private string ParseUpdateUnaryExpression(UnaryExpression unary)
@@ -697,7 +697,7 @@ namespace Durable.MySql
                 case ExpressionType.Negate:
                 case ExpressionType.NegateChecked:
                     string negateOperand = ParseUpdateValue(unary.Operand);
-                    return $"-({negateOperand})";
+                    return $"-{negateOperand}";
 
                 case ExpressionType.Convert:
                 case ExpressionType.ConvertChecked:

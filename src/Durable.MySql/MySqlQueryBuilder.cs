@@ -29,7 +29,11 @@ namespace Durable.MySql
         private readonly ITransaction? _Transaction;
         private readonly List<string> _WhereClauses = new List<string>();
         private readonly List<string> _OrderByClauses = new List<string>();
+        private readonly List<string> _IncludePaths = new List<string>();
+        private readonly List<string> _GroupByColumns = new List<string>();
         private readonly MySqlExpressionParser<TEntity> _ExpressionParser;
+        private readonly MySqlJoinBuilder _JoinBuilder;
+        private readonly MySqlEntityMapper<TEntity> _EntityMapper;
         private int? _SkipCount;
         private int? _TakeCount;
         private bool _Distinct;
@@ -49,6 +53,8 @@ namespace Durable.MySql
             _Repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _Transaction = transaction;
             _ExpressionParser = new MySqlExpressionParser<TEntity>(_Repository._ColumnMappings, _Repository._Sanitizer);
+            _JoinBuilder = new MySqlJoinBuilder(_Repository._Sanitizer);
+            _EntityMapper = new MySqlEntityMapper<TEntity>(_Repository._DataTypeConverter, _Repository._ColumnMappings, _Repository._Sanitizer);
         }
 
         #endregion
@@ -222,17 +228,55 @@ namespace Durable.MySql
 
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
         {
-            throw new NotImplementedException("Coming soon");
+            if (navigationProperty == null) throw new ArgumentNullException(nameof(navigationProperty));
+
+            string propertyPath = ExtractPropertyPath(navigationProperty);
+            _IncludePaths.Add(propertyPath);
+            return this;
         }
 
         public IQueryBuilder<TEntity> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
-            throw new NotImplementedException("Coming soon");
+            if (navigationProperty == null) throw new ArgumentNullException(nameof(navigationProperty));
+
+            // For ThenInclude, we need to append to the last include path
+            if (_IncludePaths.Count == 0)
+            {
+                throw new InvalidOperationException("ThenInclude can only be used after Include");
+            }
+
+            string propertyPath = ExtractPropertyPath(navigationProperty);
+            string lastIncludePath = _IncludePaths[_IncludePaths.Count - 1];
+            string combinedPath = $"{lastIncludePath}.{propertyPath}";
+
+            // Replace the last include path with the combined path
+            _IncludePaths[_IncludePaths.Count - 1] = combinedPath;
+            return this;
         }
 
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            throw new NotImplementedException("Coming soon");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+
+            // Extract the column name from the key selector expression
+            string groupColumn = GetColumnFromExpression(keySelector.Body);
+            _GroupByColumns.Add(_Repository._Sanitizer.SanitizeIdentifier(groupColumn));
+
+            // Create advanced entity mapper for enhanced type handling
+            MySqlEntityMapper<TEntity> entityMapper = new MySqlEntityMapper<TEntity>(
+                _Repository._DataTypeConverter,
+                _Repository._ColumnMappings,
+                _Repository._Sanitizer);
+
+            // Return the advanced grouped query builder with full EntityMapper integration
+            return new MySqlGroupedQueryBuilder<TEntity, TKey>(
+                _Repository,
+                this,
+                keySelector,
+                entityMapper,
+                _Repository._DataTypeConverter,
+                _Repository._Sanitizer);
         }
 
         public IQueryBuilder<TEntity> Having(Expression<Func<TEntity, bool>> predicate)
@@ -330,14 +374,37 @@ namespace Durable.MySql
             throw new NotImplementedException("Coming soon");
         }
 
-        public Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously executes the query and returns the results using advanced entity mapping.
+        /// </summary>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The query results with properly mapped entities including navigation properties</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+
+            string sql = BuildSql();
+            return await ExecuteSqlInternalAsync(sql, token).ConfigureAwait(false);
         }
 
-        public IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable(CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously executes the query and returns the results as an async enumerable with advanced entity mapping.
+        /// </summary>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>An async enumerable of query results with properly mapped entities</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+
+            IEnumerable<TEntity> results = await ExecuteAsync(token).ConfigureAwait(false);
+
+            foreach (TEntity entity in results)
+            {
+                token.ThrowIfCancellationRequested();
+                yield return entity;
+            }
         }
 
         public IDurableResult<TEntity> ExecuteWithQuery()
@@ -457,6 +524,172 @@ namespace Durable.MySql
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Gets the current GROUP BY columns for grouped query operations.
+        /// </summary>
+        /// <returns>A list of GROUP BY column names</returns>
+        internal List<string> GetGroupByColumns()
+        {
+            return new List<string>(_GroupByColumns);
+        }
+
+        /// <summary>
+        /// Gets the current WHERE clauses for query filtering.
+        /// </summary>
+        /// <returns>A list of WHERE clause conditions</returns>
+        internal List<string> GetWhereClauses()
+        {
+            return new List<string>(_WhereClauses);
+        }
+
+        /// <summary>
+        /// Gets the current include paths for navigation property loading.
+        /// </summary>
+        /// <returns>A list of include paths</returns>
+        internal List<string> GetIncludePaths()
+        {
+            return new List<string>(_IncludePaths);
+        }
+
+        /// <summary>
+        /// Extracts column name from an expression using the MySQL expression parser.
+        /// </summary>
+        /// <param name="expression">The expression to extract the column name from</param>
+        /// <returns>The column name</returns>
+        internal string GetColumnFromExpression(Expression expression)
+        {
+            return _ExpressionParser.GetColumnFromExpression(expression);
+        }
+
+        /// <summary>
+        /// Asynchronously executes SQL and returns mapped entities using advanced EntityMapper.
+        /// </summary>
+        /// <param name="sql">The SQL query to execute</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The mapped entities with navigation properties</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        private async Task<IEnumerable<TEntity>> ExecuteSqlInternalAsync(string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (_Transaction != null)
+            {
+                // Use existing transaction connection
+                return await ExecuteWithConnectionAsync(_Transaction.Connection, sql, token).ConfigureAwait(false);
+            }
+            else
+            {
+                // Get connection from factory
+                using var connection = _Repository._ConnectionFactory.GetConnection();
+                return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously executes SQL with a specific connection using advanced entity mapping.
+        /// </summary>
+        /// <param name="connection">The database connection to use</param>
+        /// <param name="sql">The SQL query to execute</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The mapped entities with navigation properties</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        private async Task<IEnumerable<TEntity>> ExecuteWithConnectionAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await connection.OpenAsync(token).ConfigureAwait(false);
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (_Transaction != null)
+            {
+                command.Transaction = _Transaction.Transaction;
+            }
+
+            // Capture SQL if enabled
+            if (_Repository.CaptureSql)
+            {
+                _Repository.SetLastExecutedSql(sql);
+            }
+
+            try
+            {
+                using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+
+                // Check if we have includes that require advanced mapping
+                if (_IncludePaths.Count > 0)
+                {
+                    // Use advanced EntityMapper for complex scenarios with navigation properties
+                    List<MySqlIncludeInfo> includeInfos = ProcessIncludePaths();
+                    MySqlJoinBuilder.MySqlJoinResult joinResult = _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
+
+                    _EntityMapper.ClearProcessingCache();
+                    return await _EntityMapper.MapJoinedResultsAsync(reader, joinResult, includeInfos, token).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Use simple mapping for basic queries
+                    return await _EntityMapper.MapSimpleResultsAsync(reader, token).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing SQL: {sql}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes include paths into MySqlIncludeInfo objects for advanced entity mapping.
+        /// </summary>
+        /// <returns>A list of include information objects</returns>
+        private List<MySqlIncludeInfo> ProcessIncludePaths()
+        {
+            try
+            {
+                MySqlIncludeProcessor processor = new MySqlIncludeProcessor(_Repository._Sanitizer);
+                return processor.ParseIncludes<TEntity>(_IncludePaths);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error processing include paths: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Extracts the property path from a navigation property expression.
+        /// </summary>
+        /// <typeparam name="TSource">The source type</typeparam>
+        /// <typeparam name="TProperty">The property type</typeparam>
+        /// <param name="expression">The navigation property expression</param>
+        /// <returns>The property path as a string</returns>
+        /// <exception cref="ArgumentNullException">Thrown when expression is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when expression is not a valid property access</exception>
+        private string ExtractPropertyPath<TSource, TProperty>(Expression<Func<TSource, TProperty>> expression)
+        {
+            if (expression == null)
+                throw new ArgumentNullException(nameof(expression));
+
+            if (expression.Body is MemberExpression memberExpression)
+            {
+                List<string> propertyNames = new List<string>();
+                MemberExpression current = memberExpression;
+
+                while (current != null)
+                {
+                    propertyNames.Insert(0, current.Member.Name);
+                    current = current.Expression as MemberExpression;
+                }
+
+                return string.Join(".", propertyNames);
+            }
+
+            throw new InvalidOperationException("Expression must be a property access expression");
         }
 
         #endregion
