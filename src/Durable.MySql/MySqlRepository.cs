@@ -30,7 +30,7 @@ namespace Durable.MySql
         /// </summary>
         public string? LastExecutedSql
         {
-            get => _LastExecutedSql.Value;
+            get => _LastExecutedSql;
         }
 
         /// <summary>
@@ -40,12 +40,13 @@ namespace Durable.MySql
         /// </summary>
         public string? LastExecutedSqlWithParameters
         {
-            get => _LastExecutedSqlWithParameters.Value;
+            get => _LastExecutedSqlWithParameters;
         }
 
         /// <summary>
         /// Gets or sets whether SQL statements should be captured and stored.
         /// Default value is false for performance reasons.
+        /// This property is thread-safe and can be safely accessed from multiple threads.
         /// </summary>
         public bool CaptureSql
         {
@@ -58,6 +59,7 @@ namespace Durable.MySql
         /// When true, repository operations will return IDurableResult objects containing both results and SQL.
         /// When false, repository operations return standard result types without SQL information.
         /// Default value is false for performance and backward compatibility.
+        /// This property is thread-safe and can be safely accessed from multiple threads.
         /// </summary>
         public bool IncludeQueryInResults
         {
@@ -107,10 +109,11 @@ namespace Durable.MySql
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
 
-        private readonly AsyncLocal<string?> _LastExecutedSql = new AsyncLocal<string?>();
-        private readonly AsyncLocal<string?> _LastExecutedSqlWithParameters = new AsyncLocal<string?>();
-        private bool _CaptureSql;
-        private bool _IncludeQueryInResults;
+        private volatile string? _LastExecutedSql;
+        private volatile string? _LastExecutedSqlWithParameters;
+        private readonly bool _OwnsConnectionFactory;
+        private volatile bool _CaptureSql;
+        private volatile bool _IncludeQueryInResults;
 
         #endregion
 
@@ -129,6 +132,7 @@ namespace Durable.MySql
         public MySqlRepository(string connectionString, IBatchInsertConfiguration? batchConfig = null, IDataTypeConverter? dataTypeConverter = null, IConcurrencyConflictResolver<T>? conflictResolver = null)
         {
             _ConnectionFactory = new MySqlConnectionFactory(connectionString);
+            _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new MySqlSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
@@ -155,6 +159,7 @@ namespace Durable.MySql
         public MySqlRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration? batchConfig = null, IDataTypeConverter? dataTypeConverter = null, IConcurrencyConflictResolver<T>? conflictResolver = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _OwnsConnectionFactory = false; // External factory, we don't own it
             _Sanitizer = new MySqlSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
@@ -179,7 +184,7 @@ namespace Durable.MySql
         /// <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
         /// <param name="transaction">Optional transaction to execute the operation within.</param>
         /// <returns>The first matching entity, or null if no entities match the criteria.</returns>
-        public T? ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
             if (predicate != null) query = query.Where(predicate);
@@ -192,7 +197,7 @@ namespace Durable.MySql
         /// <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no match is found.</returns>
-        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             return ReadFirst(predicate, transaction);
         }
@@ -219,7 +224,7 @@ namespace Durable.MySql
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The single entity that matches the predicate, or default(T) if no match is found.</returns>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
-        public T? ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
+        public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
             if (results.Count > 1)
@@ -256,7 +261,7 @@ namespace Durable.MySql
         /// <param name="id">The identifier of the entity to read.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The entity with the specified identifier.</returns>
-        public T? ReadById(object id, ITransaction? transaction = null)
+        public T ReadById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             return Query(transaction).Where(BuildIdPredicate(id)).Execute().FirstOrDefault();
@@ -279,12 +284,7 @@ namespace Durable.MySql
         public ITransaction BeginTransaction()
         {
             MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
-
-            if (connection.State != ConnectionState.Open)
-            {
-                connection.Open();
-            }
-
+            EnsureConnectionOpen(connection);
             MySqlTransaction transaction = connection.BeginTransaction();
             return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
@@ -297,12 +297,7 @@ namespace Durable.MySql
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
             MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false);
-
-            if (connection.State != ConnectionState.Open)
-            {
-                await connection.OpenAsync(token).ConfigureAwait(false);
-            }
-
+            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
             MySqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
             return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
@@ -314,7 +309,95 @@ namespace Durable.MySql
 
         #region Private-Methods
 
-        private string GetEntityName()
+        /// <summary>
+        /// Ensures the connection is open in a thread-safe manner.
+        /// Handles race conditions where connection state might change between check and open operations.
+        /// </summary>
+        /// <param name="connection">The database connection to ensure is open</param>
+        private static void EnsureConnectionOpen(System.Data.Common.DbConnection connection)
+        {
+            if (connection.State == ConnectionState.Open)
+                return;
+
+            try
+            {
+                connection.Open();
+            }
+            catch (InvalidOperationException)
+            {
+                // Connection might already be open due to race condition, verify state
+                if (connection.State != ConnectionState.Open)
+                    throw;
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously ensures the connection is open in a thread-safe manner.
+        /// Handles race conditions where connection state might change between check and open operations.
+        /// </summary>
+        /// <param name="connection">The database connection to ensure is open</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        private static async Task EnsureConnectionOpenAsync(System.Data.Common.DbConnection connection, CancellationToken token = default)
+        {
+            if (connection.State == ConnectionState.Open)
+                return;
+
+            try
+            {
+                await connection.OpenAsync(token).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Connection might already be open due to race condition, verify state
+                if (connection.State != ConnectionState.Open)
+                    throw;
+            }
+        }
+
+        /// <summary>
+        /// Safely converts a database result to the specified type using the data type converter.
+        /// Handles type conversion failures gracefully with detailed error messages.
+        /// </summary>
+        /// <typeparam name="TResult">The target type to convert to</typeparam>
+        /// <param name="result">The database result to convert</param>
+        /// <returns>The converted result</returns>
+        /// <exception cref="InvalidCastException">Thrown when the conversion fails with detailed type information</exception>
+        private TResult SafeConvertDatabaseResult<TResult>(object? result)
+        {
+            if (result == DBNull.Value || result == null)
+                return default(TResult)!;
+
+            try
+            {
+                object? converted = _DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+
+                if (converted == null && !typeof(TResult).IsClass && Nullable.GetUnderlyingType(typeof(TResult)) == null)
+                {
+                    throw new InvalidCastException($"Cannot convert null to non-nullable value type '{typeof(TResult).Name}'");
+                }
+
+                if (converted != null && !typeof(TResult).IsAssignableFrom(converted.GetType()))
+                {
+                    throw new InvalidCastException($"Cannot cast '{converted.GetType().Name}' to '{typeof(TResult).Name}'. DataTypeConverter returned incompatible type.");
+                }
+
+                return (TResult)converted!;
+            }
+            catch (InvalidCastException)
+            {
+                throw; // Re-throw our own InvalidCastExceptions
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidCastException($"Failed to convert database result of type '{result?.GetType().Name ?? "null"}' to '{typeof(TResult).Name}'. Original error: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Gets the entity name (table name) for this repository.
+        /// </summary>
+        /// <returns>The table name</returns>
+        public string GetEntityName()
         {
             EntityAttribute? entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
             if (entityAttr == null)
@@ -335,7 +418,11 @@ namespace Durable.MySql
             return (attr!.Name, pkProperty);
         }
 
-        private Dictionary<string, PropertyInfo> GetColumnMappings()
+        /// <summary>
+        /// Gets the column mappings dictionary for this repository.
+        /// </summary>
+        /// <returns>A dictionary mapping column names to PropertyInfo objects</returns>
+        public Dictionary<string, PropertyInfo> GetColumnMappings()
         {
             Dictionary<string, PropertyInfo> mappings = new Dictionary<string, PropertyInfo>();
             PropertyInfo[] properties = typeof(T).GetProperties();
@@ -349,10 +436,14 @@ namespace Durable.MySql
                 }
             }
 
-            return mappings;
+            return new Dictionary<string, PropertyInfo>(mappings);
         }
 
-        private Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
+        /// <summary>
+        /// Gets all foreign key properties for this entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping PropertyInfo to ForeignKeyAttribute</returns>
+        public Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
         {
             Dictionary<PropertyInfo, ForeignKeyAttribute> foreignKeys = new Dictionary<PropertyInfo, ForeignKeyAttribute>();
             PropertyInfo[] properties = typeof(T).GetProperties();
@@ -369,7 +460,11 @@ namespace Durable.MySql
             return foreignKeys;
         }
 
-        private Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
+        /// <summary>
+        /// Gets all navigation properties for this entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping PropertyInfo to NavigationPropertyAttribute</returns>
+        public Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
         {
             Dictionary<PropertyInfo, NavigationPropertyAttribute> navigationProps = new Dictionary<PropertyInfo, NavigationPropertyAttribute>();
             PropertyInfo[] properties = typeof(T).GetProperties();
@@ -386,7 +481,11 @@ namespace Durable.MySql
             return navigationProps;
         }
 
-        private VersionColumnInfo GetVersionColumnInfo()
+        /// <summary>
+        /// Gets the version column information for this entity type.
+        /// </summary>
+        /// <returns>VersionColumnInfo if entity has versioning, null otherwise</returns>
+        public VersionColumnInfo? GetVersionColumnInfo()
         {
             PropertyInfo[] properties = typeof(T).GetProperties();
             foreach (PropertyInfo property in properties)
@@ -408,7 +507,7 @@ namespace Durable.MySql
                 }
             }
 
-            return new VersionColumnInfo(); // No version column
+            return null; // No version column
         }
 
         private Expression<Func<T, bool>> BuildIdPredicate(object id)
@@ -464,10 +563,7 @@ namespace Durable.MySql
 
         private int ExecuteNonQueryWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params (string name, object? value)[] parameters)
         {
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                connection.Open();
-            }
+            EnsureConnectionOpen(connection);
 
             using var command = connection.CreateCommand();
             command.CommandText = sql;
@@ -501,10 +597,7 @@ namespace Durable.MySql
 
         private TResult ExecuteScalarWithConnection<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params (string name, object? value)[] parameters)
         {
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                connection.Open();
-            }
+            EnsureConnectionOpen(connection);
 
             using var command = connection.CreateCommand();
             command.CommandText = sql;
@@ -556,11 +649,7 @@ namespace Durable.MySql
         private async Task<TResult> ExecuteScalarWithConnectionAsync<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
         {
             token.ThrowIfCancellationRequested();
-
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                await connection.OpenAsync(token).ConfigureAwait(false);
-            }
+            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
             using var command = connection.CreateCommand();
             command.CommandText = sql;
@@ -611,11 +700,7 @@ namespace Durable.MySql
         private async Task<int> ExecuteNonQueryWithConnectionAsync(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
         {
             token.ThrowIfCancellationRequested();
-
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                await connection.OpenAsync(token).ConfigureAwait(false);
-            }
+            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
             using var command = connection.CreateCommand();
             command.CommandText = sql;
@@ -655,19 +740,23 @@ namespace Durable.MySql
         {
             if (CaptureSql)
             {
-                _LastExecutedSql.Value = sql;
+                _LastExecutedSql = sql;
                 // For now, just set the same value for both properties
                 // In a full implementation, this would substitute parameter values
-                _LastExecutedSqlWithParameters.Value = sql;
+                _LastExecutedSqlWithParameters = sql;
             }
         }
 
         /// <summary>
         /// Disposes the repository and releases associated resources.
+        /// Only disposes the connection factory if this repository created it internally.
         /// </summary>
         public void Dispose()
         {
-            _ConnectionFactory?.Dispose();
+            if (_OwnsConnectionFactory)
+            {
+                _ConnectionFactory?.Dispose();
+            }
         }
 
         #endregion
@@ -867,27 +956,27 @@ namespace Durable.MySql
             return await ExistsAsync(BuildIdPredicate(id), transaction, token).ConfigureAwait(false);
         }
 
-        public int Count(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
+        public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             string sql = $"SELECT COUNT(*) FROM `{_TableName}`";
+            List<(string name, object? value)> parameters = new List<(string, object?)>();
 
-            // For now, use the simple approach since we don't have expression parsing yet
-            // In a full implementation, this would parse the predicate into a WHERE clause
             if (predicate != null)
             {
-                var query = Query(transaction).Where(predicate);
-                return query.Execute().Count();
+                MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
+                sql += $" WHERE {whereClause}";
+                parameters.AddRange(parser.GetParameters());
             }
 
-            // Execute COUNT(*) SQL for better performance when no predicate
             if (transaction != null)
             {
-                return ExecuteScalarWithConnection<int>(transaction.Connection, sql, transaction.Transaction);
+                return ExecuteScalarWithConnection<int>(transaction.Connection, sql, transaction.Transaction, parameters.ToArray());
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteScalarWithConnection<int>(connection, sql, null);
+                return ExecuteScalarWithConnection<int>(connection, sql, null, parameters.ToArray());
             }
         }
 
@@ -899,7 +988,7 @@ namespace Durable.MySql
         /// <param name="token">Cancellation token for the async operation</param>
         /// <returns>The number of entities that match the predicate</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<int> CountAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
+        public async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
@@ -909,8 +998,9 @@ namespace Durable.MySql
             if (predicate != null)
             {
                 MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql += $" WHERE {whereClause}";
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
@@ -934,7 +1024,7 @@ namespace Durable.MySql
         /// <returns>The maximum value of the selected property</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public TResult Max<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
+        public TResult Max<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -942,32 +1032,27 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT MAX(`{column}`) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT MAX({column}) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
             {
                 object? result = ExecuteScalarWithConnection<object>(transaction.Connection, sql.ToString(), transaction.Transaction, parameters.ToArray());
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
         }
 
@@ -981,7 +1066,7 @@ namespace Durable.MySql
         /// <returns>The minimum value of the selected property</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public TResult Min<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
+        public TResult Min<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -989,32 +1074,27 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT MIN(`{column}`) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT MIN({column}) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
             {
                 object? result = ExecuteScalarWithConnection<object>(transaction.Connection, sql.ToString(), transaction.Transaction, parameters.ToArray());
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
         }
 
@@ -1027,7 +1107,7 @@ namespace Durable.MySql
         /// <returns>The average value of the selected property</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public decimal Average(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
+        public decimal Average(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1036,14 +1116,15 @@ namespace Durable.MySql
             string column = parser.GetColumnFromExpression(selector.Body);
 
             // MySQL doesn't need explicit casting like SQLite, AVG function works with numeric types
-            StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG(`{column}`), 0) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG({column}), 0) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
@@ -1068,7 +1149,7 @@ namespace Durable.MySql
         /// <returns>The sum of the selected property</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public decimal Sum(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
+        public decimal Sum(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1076,14 +1157,15 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM(`{column}`), 0) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
@@ -1111,7 +1193,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public async Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
+        public async Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1121,32 +1203,27 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT MAX(`{column}`) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT MAX({column}) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
             {
                 object? result = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql.ToString(), transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
         }
 
@@ -1162,7 +1239,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public async Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
+        public async Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1172,32 +1249,27 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT MIN(`{column}`) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT MIN({column}) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
             {
                 object? result = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql.ToString(), transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                if (result == DBNull.Value || result == null)
-                    return default(TResult)!;
-
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return SafeConvertDatabaseResult<TResult>(result);
             }
         }
 
@@ -1212,7 +1284,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public async Task<decimal> AverageAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
+        public async Task<decimal> AverageAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1222,14 +1294,15 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG(`{column}`), 0) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG({column}), 0) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
@@ -1256,7 +1329,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when selector is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
-        public async Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
+        public async Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
                 throw new ArgumentNullException(nameof(selector));
@@ -1266,14 +1339,15 @@ namespace Durable.MySql
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string column = parser.GetColumnFromExpression(selector.Body);
 
-            StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM(`{column}`), 0) FROM `{_TableName}`");
+            StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM `{_TableName}`");
 
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
             if (predicate != null)
             {
-                string whereClause = parser.ParseExpression(predicate.Body);
+                string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
+                parameters.AddRange(parser.GetParameters());
             }
 
             if (transaction != null)
@@ -1583,49 +1657,415 @@ namespace Durable.MySql
             return entity;
         }
 
+        /// <summary>
+        /// Updates multiple entities that match the specified predicate by applying an update action to each entity.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="updateAction">The action to apply to each entity before updating</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateAction is null</exception>
         public int UpdateMany(Expression<Func<T, bool>> predicate, Action<T> updateAction, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (updateAction == null) throw new ArgumentNullException(nameof(updateAction));
+
+            // Read entities that match the predicate
+            List<T> entities = new List<T>();
+            foreach (T entity in ReadMany(predicate, transaction))
+            {
+                entities.Add(entity);
+            }
+
+            if (entities.Count == 0)
+                return 0;
+
+            int updatedCount = 0;
+            foreach (T entity in entities)
+            {
+                // Apply the update action to the entity
+                updateAction(entity);
+
+                // Update the modified entity
+                Update(entity, transaction);
+                updatedCount++;
+            }
+
+            return updatedCount;
         }
 
+        /// <summary>
+        /// Updates a specific field for multiple entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field being updated</typeparam>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="field">Expression selecting the field to update</param>
+        /// <param name="value">The new value to set for the field</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or field is null</exception>
         public int UpdateField<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (field == null) throw new ArgumentNullException(nameof(field));
+
+            MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+
+            // Build WHERE clause with parameters
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters();
+
+            // Get column name from field expression
+            string columnName = parser.GetColumnFromExpression(field.Body);
+
+            // Build UPDATE SQL
+            string sql = $"UPDATE `{_TableName}` SET {columnName} = @value WHERE {whereClause}";
+
+            // Convert value to database format
+            PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            parameters.Add(("@value", convertedValue));
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, parameters.ToArray());
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+            }
+
+            return rowsAffected;
         }
 
-        public Task<T> UpdateAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously updates an entity in the database.
+        /// </summary>
+        /// <param name="entity">The entity to update</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The updated entity</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when entity has null primary key or no rows were affected</exception>
+        /// <exception cref="OptimisticConcurrencyException">Thrown when version-based concurrency conflict occurs</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<T> UpdateAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            token.ThrowIfCancellationRequested();
+
+            List<string> setPairs = new List<string>();
+            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            object? idValue = null;
+            object? currentVersion = null;
+
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                string columnName = kvp.Key;
+                PropertyInfo property = kvp.Value;
+                object? value = property.GetValue(entity);
+
+                if (columnName == _PrimaryKeyColumn)
+                {
+                    idValue = value;
+                }
+                else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                {
+                    currentVersion = value;
+                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion);
+                    setPairs.Add($"`{columnName}` = @new_version");
+                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion, _VersionColumnInfo.PropertyType, property);
+                    parameters.Add(("@new_version", convertedNewVersion));
+                    _VersionColumnInfo.SetValue(entity, newVersion);
+                }
+                else
+                {
+                    setPairs.Add($"`{columnName}` = @{columnName}");
+                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    parameters.Add(($"@{columnName}", convertedValue));
+                }
+            }
+
+            if (idValue == null)
+                throw new InvalidOperationException("Cannot update entity with null primary key");
+
+            parameters.Add(("@id", idValue));
+
+            string sql;
+            if (_VersionColumnInfo != null)
+            {
+                sql = $"UPDATE `{_TableName}` SET {string.Join(", ", setPairs)} WHERE `{_PrimaryKeyColumn}` = @id AND `{_VersionColumnInfo.ColumnName}` = @current_version";
+                parameters.Add(("@current_version", currentVersion));
+            }
+            else
+            {
+                sql = $"UPDATE `{_TableName}` SET {string.Join(", ", setPairs)} WHERE `{_PrimaryKeyColumn}` = @id";
+            }
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+
+            if (rowsAffected == 0)
+            {
+                if (_VersionColumnInfo != null)
+                {
+                    throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue}");
+                }
+                else
+                {
+                    throw new InvalidOperationException($"No rows were affected during update for entity with ID {idValue}");
+                }
+            }
+
+            return entity;
         }
 
-        public Task<int> UpdateManyAsync(Expression<Func<T, bool>> predicate, Func<T, Task> updateAction, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously updates multiple entities that match the specified predicate by applying an update action to each entity.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="updateAction">The async action to apply to each entity before updating</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateAction is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<int> UpdateManyAsync(Expression<Func<T, bool>> predicate, Func<T, Task> updateAction, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (updateAction == null) throw new ArgumentNullException(nameof(updateAction));
+            token.ThrowIfCancellationRequested();
+
+            // Read entities that match the predicate
+            List<T> entities = new List<T>();
+            await foreach (T entity in ReadManyAsync(predicate, transaction, token).ConfigureAwait(false))
+            {
+                token.ThrowIfCancellationRequested();
+                entities.Add(entity);
+            }
+
+            if (entities.Count == 0)
+                return 0;
+
+            int updatedCount = 0;
+            foreach (T entity in entities)
+            {
+                token.ThrowIfCancellationRequested();
+
+                // Apply the update action to the entity
+                await updateAction(entity).ConfigureAwait(false);
+
+                // Update the modified entity
+                await UpdateAsync(entity, transaction, token).ConfigureAwait(false);
+                updatedCount++;
+            }
+
+            return updatedCount;
         }
 
-        public Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously updates a specific field for multiple entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field being updated</typeparam>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="field">Expression selecting the field to update</param>
+        /// <param name="value">The new value to set for the field</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or field is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (field == null) throw new ArgumentNullException(nameof(field));
+            token.ThrowIfCancellationRequested();
+
+            MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+
+            // Build WHERE clause with parameters
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters();
+
+            // Get column name from field expression
+            string columnName = parser.GetColumnFromExpression(field.Body);
+
+            // Build UPDATE SQL
+            string sql = $"UPDATE `{_TableName}` SET {columnName} = @value WHERE {whereClause}";
+
+            // Convert value to database format
+            PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            parameters.Add(("@value", convertedValue));
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
+        /// <summary>
+        /// Updates multiple entities that match the specified predicate using an expression-based update.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="updateExpression">Expression defining how to update the entity (e.g., x => new Entity { Name = "NewName", Status = x.Status })</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateExpression is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when updateExpression format is not supported</exception>
         public int BatchUpdate(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (updateExpression == null) throw new ArgumentNullException(nameof(updateExpression));
+
+            // For now, fall back to entity-by-entity updates since expression parsing for object initialization is complex
+            // A full implementation would parse MemberInitExpression or NewExpression to generate SET clauses directly
+            return UpdateMany(predicate, entity =>
+            {
+                // Compile and execute the update expression
+                var compiledUpdate = updateExpression.Compile();
+                T updatedEntity = compiledUpdate(entity);
+
+                // Copy updated values back to the original entity
+                foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+                {
+                    PropertyInfo property = kvp.Value;
+                    if (property.CanWrite)
+                    {
+                        object? newValue = property.GetValue(updatedEntity);
+                        property.SetValue(entity, newValue);
+                    }
+                }
+            }, transaction);
         }
 
+        /// <summary>
+        /// Deletes multiple entities that match the specified predicate using a single SQL statement.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The number of entities that were deleted</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
         public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+
+            MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+
+            // Build WHERE clause with parameters
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters();
+
+            // Build DELETE SQL
+            string sql = $"DELETE FROM `{_TableName}` WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, parameters.ToArray());
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+            }
+
+            return rowsAffected;
         }
 
-        public Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously updates multiple entities that match the specified predicate using an expression-based update.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update</param>
+        /// <param name="updateExpression">Expression defining how to update the entity (e.g., x => new Entity { Name = "NewName", Status = x.Status })</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were updated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateExpression is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        /// <exception cref="InvalidOperationException">Thrown when updateExpression format is not supported</exception>
+        public async Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            if (updateExpression == null) throw new ArgumentNullException(nameof(updateExpression));
+            token.ThrowIfCancellationRequested();
+
+            // For now, fall back to entity-by-entity updates since expression parsing for object initialization is complex
+            // A full implementation would parse MemberInitExpression or NewExpression to generate SET clauses directly
+            return await UpdateManyAsync(predicate, async entity =>
+            {
+                token.ThrowIfCancellationRequested();
+
+                // Compile and execute the update expression
+                var compiledUpdate = updateExpression.Compile();
+                T updatedEntity = compiledUpdate(entity);
+
+                // Copy updated values back to the original entity
+                foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+                {
+                    PropertyInfo property = kvp.Value;
+                    if (property.CanWrite)
+                    {
+                        object? newValue = property.GetValue(updatedEntity);
+                        property.SetValue(entity, newValue);
+                    }
+                }
+            }, transaction, token).ConfigureAwait(false);
         }
 
-        public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously deletes multiple entities that match the specified predicate using a single SQL statement.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were deleted</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            token.ThrowIfCancellationRequested();
+
+            MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+
+            // Build WHERE clause with parameters
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters();
+
+            // Build DELETE SQL
+            string sql = $"DELETE FROM `{_TableName}` WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
         public bool Delete(T entity, ITransaction? transaction = null)
@@ -1690,74 +2130,842 @@ namespace Durable.MySql
             }
         }
 
-        public Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously deletes an entity from the database.
+        /// </summary>
+        /// <param name="entity">The entity to delete</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>True if the entity was deleted, false if no rows were affected</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when entity has null primary key</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            token.ThrowIfCancellationRequested();
+
+            object? id = _PrimaryKeyProperty.GetValue(entity);
+            if (id == null) throw new InvalidOperationException("Cannot delete entity with null primary key");
+
+            return await DeleteByIdAsync(id, transaction, token).ConfigureAwait(false);
         }
 
-        public Task<bool> DeleteByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously deletes an entity by its primary key.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to delete</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>True if the entity was deleted, false if no rows were affected</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<bool> DeleteByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            token.ThrowIfCancellationRequested();
+
+            string sql = $"DELETE FROM `{_TableName}` WHERE `{_PrimaryKeyColumn}` = @id";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, ("@id", id)).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+            }
+
+            return rowsAffected > 0;
         }
 
-        public Task<int> DeleteManyAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were deleted</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<int> DeleteManyAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            token.ThrowIfCancellationRequested();
+
+            // Get entities that match the predicate and delete them individually
+            // This approach ensures proper entity lifecycle and validation
+            List<T> entitiesToDelete = new List<T>();
+            await foreach (T entity in ReadManyAsync(predicate, transaction, token).ConfigureAwait(false))
+            {
+                token.ThrowIfCancellationRequested();
+                entitiesToDelete.Add(entity);
+            }
+
+            int count = 0;
+            foreach (T entity in entitiesToDelete)
+            {
+                token.ThrowIfCancellationRequested();
+                if (await DeleteAsync(entity, transaction, token).ConfigureAwait(false))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
-        public Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously deletes all entities from the table.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token for the async operation</param>
+        /// <returns>The number of entities that were deleted</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+
+            string sql = $"DELETE FROM `{_TableName}`";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
+        /// <summary>
+        /// Inserts or updates an entity depending on whether it already exists in the repository.
+        /// Uses MySQL's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The entity after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
         public T Upsert(T entity, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
+
+            if (transaction != null)
+            {
+                return UpsertWithConnection(transaction.Connection, entity, transaction.Transaction);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return UpsertWithConnection(connection, entity, null);
+            }
         }
 
+        private T UpsertWithConnection(System.Data.Common.DbConnection connection, T entity, System.Data.Common.DbTransaction? transaction)
+        {
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            List<string> columns = new List<string>();
+            List<string> parameters = new List<string>();
+            List<string> updatePairs = new List<string>();
+            List<(string name, object? value)> parameterValues = new List<(string, object?)>();
+
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                string columnName = kvp.Key;
+                PropertyInfo property = kvp.Value;
+                object? value = property.GetValue(entity);
+
+                columns.Add($"`{columnName}`");
+                parameters.Add($"@{columnName}");
+
+                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                parameterValues.Add((columnName, convertedValue));
+
+                // For UPDATE part - exclude primary key from updates
+                if (columnName != _PrimaryKeyColumn)
+                {
+                    updatePairs.Add($"`{columnName}` = VALUES(`{columnName}`)");
+                }
+            }
+
+            StringBuilder sql = new StringBuilder();
+            sql.Append($"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) ");
+            sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
+            sql.Append("ON DUPLICATE KEY UPDATE ");
+            sql.Append(string.Join(", ", updatePairs));
+
+            command.CommandText = sql.ToString();
+
+            // Add parameters
+            foreach (var (name, value) in parameterValues)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@{name}", value ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                int rowsAffected = command.ExecuteNonQuery();
+
+                // Handle auto-generated primary key for new insertions
+                if (_PrimaryKeyProperty != null && _PrimaryKeyProperty.GetValue(entity) == null)
+                {
+                    object? insertedId = ExecuteScalarWithConnection<object>(connection, "SELECT LAST_INSERT_ID()", transaction);
+                    if (insertedId != null && insertedId != DBNull.Value)
+                    {
+                        object? convertedId = _DataTypeConverter.ConvertFromDatabase(insertedId, _PrimaryKeyProperty.PropertyType, _PrimaryKeyProperty);
+                        _PrimaryKeyProperty.SetValue(entity, convertedId);
+                    }
+                }
+
+                return entity;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing upsert operation: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// Uses MySQL's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+        /// </summary>
+        /// <param name="entities">The entities to insert or update</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <returns>The entities after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
         public IEnumerable<T> UpsertMany(IEnumerable<T> entities, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (entities == null)
+                throw new ArgumentNullException(nameof(entities));
+
+            IList<T> entitiesList = entities.ToList();
+            if (!entitiesList.Any())
+                return Enumerable.Empty<T>();
+
+            bool ownTransaction = transaction == null;
+            MySqlConnector.MySqlConnection? connection = null;
+            MySqlConnector.MySqlTransaction? localTransaction = null;
+
+            try
+            {
+                if (ownTransaction)
+                {
+                    connection = (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
+                    connection.Open();
+                    localTransaction = connection.BeginTransaction();
+                    transaction = new MySqlRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
+                }
+
+                List<T> results = new List<T>();
+                foreach (T entity in entitiesList)
+                {
+                    results.Add(Upsert(entity, transaction));
+                }
+
+                if (ownTransaction)
+                {
+                    localTransaction?.Commit();
+                }
+
+                return results;
+            }
+            catch
+            {
+                if (ownTransaction)
+                {
+                    localTransaction?.Rollback();
+                }
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                {
+                    localTransaction?.Dispose();
+                    if (connection != null)
+                    {
+                        _ConnectionFactory.ReturnConnection(connection);
+                    }
+                }
+            }
         }
 
-        public Task<T> UpsertAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously inserts or updates an entity depending on whether it already exists in the repository.
+        /// Uses MySQL's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <returns>A task that represents the asynchronous operation containing the entity after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<T> UpsertAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
+
+            token.ThrowIfCancellationRequested();
+
+            if (transaction != null)
+            {
+                return await UpsertAsyncWithConnection(transaction.Connection, entity, transaction.Transaction, token).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return await UpsertAsyncWithConnection(connection, entity, null, token).ConfigureAwait(false);
+            }
         }
 
-        public Task<IEnumerable<T>> UpsertManyAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default)
+        private async Task<T> UpsertAsyncWithConnection(System.Data.Common.DbConnection connection, T entity, System.Data.Common.DbTransaction? transaction, CancellationToken token)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            List<string> columns = new List<string>();
+            List<string> parameters = new List<string>();
+            List<string> updatePairs = new List<string>();
+            List<(string name, object? value)> parameterValues = new List<(string, object?)>();
+
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                string columnName = kvp.Key;
+                PropertyInfo property = kvp.Value;
+                object? value = property.GetValue(entity);
+
+                columns.Add($"`{columnName}`");
+                parameters.Add($"@{columnName}");
+
+                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                parameterValues.Add((columnName, convertedValue));
+
+                // For UPDATE part - exclude primary key from updates
+                if (columnName != _PrimaryKeyColumn)
+                {
+                    updatePairs.Add($"`{columnName}` = VALUES(`{columnName}`)");
+                }
+            }
+
+            StringBuilder sql = new StringBuilder();
+            sql.Append($"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) ");
+            sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
+            sql.Append("ON DUPLICATE KEY UPDATE ");
+            sql.Append(string.Join(", ", updatePairs));
+
+            command.CommandText = sql.ToString();
+
+            // Add parameters
+            foreach (var (name, value) in parameterValues)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@{name}", value ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                int rowsAffected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                // Handle auto-generated primary key for new insertions
+                if (_PrimaryKeyProperty != null && _PrimaryKeyProperty.GetValue(entity) == null)
+                {
+                    object? insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, "SELECT LAST_INSERT_ID()", transaction, token).ConfigureAwait(false);
+                    if (insertedId != null && insertedId != DBNull.Value)
+                    {
+                        object? convertedId = _DataTypeConverter.ConvertFromDatabase(insertedId, _PrimaryKeyProperty.PropertyType, _PrimaryKeyProperty);
+                        _PrimaryKeyProperty.SetValue(entity, convertedId);
+                    }
+                }
+
+                return entity;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing upsert operation: {ex.Message}", ex);
+            }
         }
 
+        /// <summary>
+        /// Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// Uses MySQL's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+        /// </summary>
+        /// <param name="entities">The entities to insert or update</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <returns>A task that represents the asynchronous operation containing the entities after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<IEnumerable<T>> UpsertManyAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            if (entities == null)
+                throw new ArgumentNullException(nameof(entities));
+
+            token.ThrowIfCancellationRequested();
+
+            IList<T> entitiesList = entities.ToList();
+            if (!entitiesList.Any())
+                return Enumerable.Empty<T>();
+
+            bool ownTransaction = transaction == null;
+            MySqlConnector.MySqlConnection? connection = null;
+            MySqlConnector.MySqlTransaction? localTransaction = null;
+
+            try
+            {
+                if (ownTransaction)
+                {
+                    connection = (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
+                    await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
+                    localTransaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
+                    transaction = new MySqlRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
+                }
+
+                List<T> results = new List<T>();
+                foreach (T entity in entitiesList)
+                {
+                    token.ThrowIfCancellationRequested();
+                    results.Add(await UpsertAsync(entity, transaction, token).ConfigureAwait(false));
+                }
+
+                if (ownTransaction)
+                {
+                    await localTransaction!.CommitAsync(token).ConfigureAwait(false);
+                }
+
+                return results;
+            }
+            catch
+            {
+                if (ownTransaction)
+                {
+                    if (localTransaction != null)
+                        await localTransaction.RollbackAsync(token).ConfigureAwait(false);
+                }
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                {
+                    if (localTransaction != null)
+                        await localTransaction.DisposeAsync().ConfigureAwait(false);
+                    if (connection != null)
+                        await connection.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="parameters">Parameters for the SQL query</param>
+        /// <returns>An enumerable collection of entities returned by the query</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails</exception>
         public IEnumerable<T> FromSql(string sql, ITransaction? transaction = null, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                return ExecuteFromSqlWithConnection(transaction.Connection, sql, transaction.Transaction, parameters);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return ExecuteFromSqlWithConnection(connection, sql, null, parameters);
+            }
         }
 
+        private List<T> ExecuteFromSqlWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params object[] parameters)
+        {
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                using var reader = (MySqlConnector.MySqlDataReader)command.ExecuteReader();
+                List<T> results = new List<T>();
+                while (reader.Read())
+                {
+                    results.Add(MapReaderToEntity(reader));
+                }
+                return results;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing raw SQL query: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor</typeparam>
+        /// <param name="sql">The raw SQL query to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="parameters">Parameters for the SQL query</param>
+        /// <returns>An enumerable collection of entities of the specified type returned by the query</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails</exception>
         public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object[] parameters) where TResult : new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                return ExecuteFromSqlWithConnection<TResult>(transaction.Connection, sql, transaction.Transaction, parameters);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return ExecuteFromSqlWithConnection<TResult>(connection, sql, null, parameters);
+            }
         }
 
+        private List<TResult> ExecuteFromSqlWithConnection<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params object[] parameters) where TResult : new()
+        {
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                using var reader = (MySqlConnector.MySqlDataReader)command.ExecuteReader();
+                List<TResult> results = new List<TResult>();
+                while (reader.Read())
+                {
+                    results.Add(MapReaderToType<TResult>(reader));
+                }
+                return results;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing raw SQL query: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="parameters">Parameters for the SQL command</param>
+        /// <returns>The number of rows affected by the command</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when command execution fails</exception>
         public int ExecuteSql(string sql, ITransaction? transaction = null, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                return ExecuteSqlWithConnection(transaction.Connection, sql, transaction.Transaction, parameters);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return ExecuteSqlWithConnection(connection, sql, null, parameters);
+            }
         }
 
-        public IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters)
+        private int ExecuteSqlWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                return command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing raw SQL command: {ex.Message}", ex);
+            }
         }
 
-        public IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters) where TResult : new()
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <param name="parameters">Parameters for the SQL query</param>
+        /// <returns>An async enumerable collection of entities returned by the query</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails</exception>
+        public async IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                await foreach (var item in ExecuteFromSqlAsyncWithConnection(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
+                {
+                    yield return item;
+                }
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                await foreach (var item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
+                {
+                    yield return item;
+                }
+            }
         }
 
-        public Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters)
+        private async IAsyncEnumerable<T> ExecuteFromSqlAsyncWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, [EnumeratorCancellation] CancellationToken token, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+            while (await reader.ReadAsync(token).ConfigureAwait(false))
+            {
+                token.ThrowIfCancellationRequested();
+                yield return MapReaderToEntity(reader);
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor</typeparam>
+        /// <param name="sql">The raw SQL query to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <param name="parameters">Parameters for the SQL query</param>
+        /// <returns>An async enumerable collection of entities of the specified type returned by the query</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails</exception>
+        public async IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters) where TResult : new()
+        {
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
+                {
+                    yield return item;
+                }
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        private async IAsyncEnumerable<TResult> ExecuteFromSqlAsyncWithConnection<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, [EnumeratorCancellation] CancellationToken token, params object[] parameters) where TResult : new()
+        {
+            token.ThrowIfCancellationRequested();
+
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+            while (await reader.ReadAsync(token).ConfigureAwait(false))
+            {
+                token.ThrowIfCancellationRequested();
+                yield return MapReaderToType<TResult>(reader);
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <param name="parameters">Parameters for the SQL command</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of rows affected by the command</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when command execution fails</exception>
+        public async Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters)
+        {
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentNullException(nameof(sql));
+
+            if (transaction != null)
+            {
+                return await ExecuteSqlAsyncWithConnection(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                return await ExecuteSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false);
+            }
+        }
+
+        private async Task<int> ExecuteSqlAsyncWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params object[] parameters)
+        {
+            token.ThrowIfCancellationRequested();
+
+            EnsureConnectionOpen(connection);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (transaction != null)
+                command.Transaction = transaction;
+
+            // Add parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@p{i}", parameters[i] ?? DBNull.Value);
+                command.Parameters.Add(parameter);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
+            }
+
+            try
+            {
+                return await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing raw SQL command: {ex.Message}", ex);
+            }
         }
 
         #endregion
@@ -1949,6 +3157,20 @@ namespace Durable.MySql
         }
 
         /// <summary>
+        /// Gets the PropertyInfo from a member expression.
+        /// </summary>
+        /// <param name="expression">The expression to extract PropertyInfo from</param>
+        /// <returns>The PropertyInfo or null if not found</returns>
+        private PropertyInfo? GetPropertyFromExpression(Expression expression)
+        {
+            if (expression is MemberExpression memberExpr && memberExpr.Member is PropertyInfo prop)
+            {
+                return prop;
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Builds a MySQL multi-row INSERT command for a batch of entities.
         /// </summary>
         /// <param name="command">The command to configure</param>
@@ -2005,8 +3227,8 @@ namespace Durable.MySql
             // Capture SQL for tracking
             if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
             {
-                _LastExecutedSql.Value = command.CommandText;
-                _LastExecutedSqlWithParameters.Value = BuildSqlWithParameters(command);
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
             }
 
             try
@@ -2034,8 +3256,8 @@ namespace Durable.MySql
             // Capture SQL for tracking
             if (_CaptureSql && command != null && !string.IsNullOrEmpty(command.CommandText))
             {
-                _LastExecutedSql.Value = command.CommandText;
-                _LastExecutedSqlWithParameters.Value = BuildSqlWithParameters(command);
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
             }
 
             try
@@ -2044,6 +3266,33 @@ namespace Durable.MySql
                 if (rowsAffected != entities.Count)
                 {
                     throw new InvalidOperationException($"Expected to insert {entities.Count} rows, but {rowsAffected} were affected");
+                }
+
+                // If primary key is auto-increment, populate the IDs
+                if (_PrimaryKeyProperty != null)
+                {
+                    var pkAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
+                    bool hasAutoIncrement = pkAttr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true;
+
+                    if (hasAutoIncrement)
+                    {
+                        // Get the first auto-generated ID
+                        using var idCommand = new MySqlConnector.MySqlCommand("SELECT LAST_INSERT_ID()", (MySqlConnector.MySqlConnection)command.Connection, command.Transaction);
+                        object? firstIdResult = await idCommand.ExecuteScalarAsync(token).ConfigureAwait(false);
+
+                        if (firstIdResult != null && firstIdResult != DBNull.Value)
+                        {
+                            long firstId = Convert.ToInt64(firstIdResult);
+
+                            // Assign consecutive IDs to each entity
+                            for (int i = 0; i < entities.Count; i++)
+                            {
+                                long entityId = firstId + i;
+                                object? convertedId = _DataTypeConverter.ConvertFromDatabase(entityId, _PrimaryKeyProperty.PropertyType, _PrimaryKeyProperty);
+                                _PrimaryKeyProperty.SetValue(entities[i], convertedId);
+                            }
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -2101,6 +3350,125 @@ namespace Durable.MySql
             }
 
             return value.ToString() ?? "NULL";
+        }
+
+        /// <summary>
+        /// Maps a data reader to an entity of type T.
+        /// </summary>
+        /// <param name="reader">The data reader containing the data to map</param>
+        /// <returns>An instance of T with properties populated from the reader data</returns>
+        internal T MapReaderToEntity(IDataReader reader)
+        {
+            T entity = new T();
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                string columnName = kvp.Key;
+                PropertyInfo property = kvp.Value;
+                try
+                {
+                    int ordinal = reader.GetOrdinal(columnName);
+                    if (!reader.IsDBNull(ordinal))
+                    {
+                        object value = reader.GetValue(ordinal);
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        property.SetValue(entity, convertedValue);
+                    }
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    // Column doesn't exist in the result set, which is fine for Raw SQL scenarios
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Error mapping column '{columnName}' to property '{property.Name}': {ex.Message}", ex);
+                }
+            }
+            return entity;
+        }
+
+        /// <summary>
+        /// Maps a data reader to an instance of the specified result type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the reader data to</typeparam>
+        /// <param name="reader">The data reader containing the data to map</param>
+        /// <returns>An instance of TResult with properties populated from the reader data</returns>
+        public TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
+        {
+            TResult result = new TResult();
+            Type resultType = typeof(TResult);
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                string columnName = reader.GetName(i);
+                PropertyInfo? property = resultType.GetProperty(columnName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (property != null && !reader.IsDBNull(i))
+                {
+                    object value = reader.GetValue(i);
+                    try
+                    {
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        property.SetValue(result, convertedValue);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Error mapping column '{columnName}' to property '{property.Name}': {ex.Message}", ex);
+                    }
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Gets the column name corresponding to the specified expression.
+        /// </summary>
+        /// <param name="expression">The expression to analyze.</param>
+        /// <returns>The sanitized column name for the expression.</returns>
+        internal string GetColumnFromExpression(Expression expression)
+        {
+            MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            string columnName = parser.GetColumnFromExpression(expression);
+            return _Sanitizer.SanitizeIdentifier(columnName);
+        }
+
+        #endregion
+
+        #region Public-Utility-Methods
+
+        /// <summary>
+        /// Gets the primary key value from an entity instance.
+        /// </summary>
+        /// <param name="entity">The entity to extract the primary key from</param>
+        /// <returns>The primary key value</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        public object? GetPrimaryKeyValue(T entity)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            return _PrimaryKeyProperty.GetValue(entity);
+        }
+
+        /// <summary>
+        /// Gets a connection from the connection factory.
+        /// Note: The caller is responsible for disposing the connection.
+        /// </summary>
+        /// <returns>A MySQL connection</returns>
+        public MySqlConnector.MySqlConnection GetConnection()
+        {
+            return (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
+        }
+
+        /// <summary>
+        /// Asynchronously gets a connection from the connection factory.
+        /// Note: The caller is responsible for disposing the connection.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the async operation</param>
+        /// <returns>A MySQL connection</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<MySqlConnector.MySqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // For now, delegate to synchronous method since connection factory doesn't have async GetConnection
+            // In a full implementation, this could be enhanced if the connection factory supports async connection creation
+            return await Task.FromResult(GetConnection()).ConfigureAwait(false);
         }
 
         #endregion

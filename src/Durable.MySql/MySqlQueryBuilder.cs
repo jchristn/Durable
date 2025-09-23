@@ -2,10 +2,14 @@ namespace Durable.MySql
 {
     using System;
     using System.Collections.Generic;
+    using System.Data;
+    using System.Data.Common;
     using System.Linq;
     using System.Linq.Expressions;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
+    using MySqlConnector;
 
     /// <summary>
     /// MySQL-specific implementation of IQueryBuilder that provides fluent query building capabilities for MySQL databases.
@@ -31,12 +35,30 @@ namespace Durable.MySql
         private readonly List<string> _OrderByClauses = new List<string>();
         private readonly List<string> _IncludePaths = new List<string>();
         private readonly List<string> _GroupByColumns = new List<string>();
+        private readonly List<string> _HavingClauses = new List<string>();
         private readonly MySqlExpressionParser<TEntity> _ExpressionParser;
         private readonly MySqlJoinBuilder _JoinBuilder;
         private readonly MySqlEntityMapper<TEntity> _EntityMapper;
         private int? _SkipCount;
         private int? _TakeCount;
         private bool _Distinct;
+
+        // Window functions support
+        internal readonly List<WindowFunction> _WindowFunctions = new List<WindowFunction>();
+
+        // CTE support
+        private readonly List<CteDefinition> _CteDefinitions = new List<CteDefinition>();
+
+        // Set operations support
+        private readonly List<SetOperation<TEntity>> _SetOperations = new List<SetOperation<TEntity>>();
+
+        // CASE expressions support
+        private readonly List<string> _CaseExpressions = new List<string>();
+
+        // Raw SQL support
+        private string? _CustomSelectClause;
+        private string? _CustomFromClause;
+        private readonly List<string> _CustomJoinClauses = new List<string>();
 
         #endregion
 
@@ -180,19 +202,111 @@ namespace Durable.MySql
         {
             List<string> sqlParts = new List<string>();
 
+            // Handle CTEs first
+            if (_CteDefinitions.Count > 0)
+            {
+                StringBuilder cteBuilder = new StringBuilder();
+                cteBuilder.Append("WITH ");
+
+                if (_CteDefinitions.Any(c => c.IsRecursive))
+                {
+                    cteBuilder.Append("RECURSIVE ");
+                }
+
+                List<string> cteStrings = new List<string>();
+                foreach (CteDefinition cte in _CteDefinitions)
+                {
+                    if (cte.IsRecursive)
+                    {
+                        cteStrings.Add($"`{cte.Name}` AS ({cte.AnchorQuery} UNION ALL {cte.RecursiveQuery})");
+                    }
+                    else
+                    {
+                        cteStrings.Add($"`{cte.Name}` AS ({cte.Query})");
+                    }
+                }
+
+                cteBuilder.Append(string.Join(", ", cteStrings));
+                sqlParts.Add(cteBuilder.ToString());
+            }
+
             // SELECT clause
-            if (_Distinct)
-                sqlParts.Add("SELECT DISTINCT *");
+            if (!string.IsNullOrWhiteSpace(_CustomSelectClause))
+            {
+                // Use custom SELECT clause
+                if (_Distinct)
+                    sqlParts.Add($"SELECT DISTINCT {_CustomSelectClause}");
+                else
+                    sqlParts.Add($"SELECT {_CustomSelectClause}");
+            }
+            else if (_WindowFunctions.Count > 0 || _CaseExpressions.Count > 0)
+            {
+                List<string> selectParts = new List<string>();
+                selectParts.Add("t0.*");
+
+                foreach (WindowFunction windowFunc in _WindowFunctions)
+                {
+                    selectParts.Add(BuildWindowFunctionSql(windowFunc));
+                }
+
+                foreach (string caseExpr in _CaseExpressions)
+                {
+                    selectParts.Add(caseExpr);
+                }
+
+                if (_Distinct)
+                    sqlParts.Add($"SELECT DISTINCT {string.Join(", ", selectParts)}");
+                else
+                    sqlParts.Add($"SELECT {string.Join(", ", selectParts)}");
+            }
             else
-                sqlParts.Add("SELECT *");
+            {
+                if (_Distinct)
+                    sqlParts.Add("SELECT DISTINCT *");
+                else
+                    sqlParts.Add("SELECT *");
+            }
 
             // FROM clause
-            sqlParts.Add($"FROM `{_Repository._TableName}`");
+            if (!string.IsNullOrWhiteSpace(_CustomFromClause))
+            {
+                // Use custom FROM clause
+                sqlParts.Add($"FROM {_CustomFromClause}");
+            }
+            else if (_WindowFunctions.Count > 0 || _CaseExpressions.Count > 0)
+            {
+                sqlParts.Add($"FROM `{_Repository._TableName}` t0");
+            }
+            else
+            {
+                sqlParts.Add($"FROM `{_Repository._TableName}`");
+            }
+
+            // JOIN clauses (custom joins)
+            if (_CustomJoinClauses.Any())
+            {
+                foreach (string joinClause in _CustomJoinClauses)
+                {
+                    sqlParts.Add(joinClause);
+                }
+            }
 
             // WHERE clause
             if (_WhereClauses.Any())
             {
                 sqlParts.Add($"WHERE {string.Join(" AND ", _WhereClauses)}");
+            }
+
+            // GROUP BY clause
+            if (_GroupByColumns.Any())
+            {
+                sqlParts.Add($"GROUP BY {string.Join(", ", _GroupByColumns)}");
+            }
+
+            // HAVING clause
+            if (_HavingClauses.Any())
+            {
+                sqlParts.Add($"HAVING {string.Join(" AND ", _HavingClauses)}");
             }
 
             // ORDER BY clause
@@ -212,6 +326,49 @@ namespace Durable.MySql
                     sqlParts.Add($"LIMIT {_SkipCount.Value}, 18446744073709551615"); // Max value for MySQL
             }
 
+            // Handle set operations
+            if (_SetOperations.Count > 0)
+            {
+                StringBuilder setOperationSql = new StringBuilder();
+                setOperationSql.Append("(");
+                setOperationSql.Append(string.Join(" ", sqlParts));
+                setOperationSql.Append(")");
+
+                foreach (SetOperation<TEntity> setOp in _SetOperations)
+                {
+                    switch (setOp.Type)
+                    {
+                        case SetOperationType.Union:
+                            setOperationSql.Append(" UNION ");
+                            break;
+                        case SetOperationType.UnionAll:
+                            setOperationSql.Append(" UNION ALL ");
+                            break;
+                        case SetOperationType.Intersect:
+                            // MySQL doesn't support INTERSECT natively, so we implement it using INNER JOIN
+                            {
+                                string baseQuery = string.Join(" ", sqlParts);
+                                string otherQuerySql = setOp.OtherQuery.BuildSql().TrimEnd(';');
+                                string primaryKey = _Repository._PrimaryKeyColumn;
+                                return $"SELECT DISTINCT t1.* FROM ({baseQuery}) t1 INNER JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}`";
+                            }
+                        case SetOperationType.Except:
+                            // MySQL doesn't support EXCEPT natively, so we implement it using LEFT JOIN with NULL check
+                            {
+                                string baseQuery = string.Join(" ", sqlParts);
+                                string otherQuerySql = setOp.OtherQuery.BuildSql().TrimEnd(';');
+                                string primaryKey = _Repository._PrimaryKeyColumn;
+                                return $"SELECT t1.* FROM ({baseQuery}) t1 LEFT JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}` WHERE t2.`{primaryKey}` IS NULL";
+                            }
+                    }
+                    setOperationSql.Append("(");
+                    setOperationSql.Append(setOp.OtherQuery.BuildSql());
+                    setOperationSql.Append(")");
+                }
+
+                return setOperationSql.ToString();
+            }
+
             return string.Join(" ", sqlParts);
         }
 
@@ -223,7 +380,10 @@ namespace Durable.MySql
 
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (selector == null)
+                throw new ArgumentNullException(nameof(selector));
+
+            return new MySqlProjectedQueryBuilder<TEntity, TResult>(_Repository, selector, this, null);
         }
 
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
@@ -279,99 +439,369 @@ namespace Durable.MySql
                 _Repository._Sanitizer);
         }
 
+        /// <summary>
+        /// Adds a HAVING clause to filter grouped results. Can only be used with GROUP BY.
+        /// </summary>
+        /// <param name="predicate">Expression representing the HAVING condition</param>
+        /// <returns>The current query builder for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when used without GROUP BY</exception>
         public IQueryBuilder<TEntity> Having(Expression<Func<TEntity, bool>> predicate)
         {
-            throw new NotImplementedException("Coming soon");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            if (_GroupByColumns.Count == 0)
+            {
+                throw new InvalidOperationException("HAVING clause can only be used with GROUP BY");
+            }
+
+            string havingClause = _ExpressionParser.ParseExpression(predicate.Body);
+            _HavingClauses.Add(havingClause);
+            return this;
         }
 
+        /// <summary>
+        /// Performs a UNION operation with another query, combining results and removing duplicates.
+        /// </summary>
+        /// <param name="other">The other query builder to union with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Union(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Coming soon");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Union, other));
+            return this;
         }
 
+        /// <summary>
+        /// Performs a UNION ALL operation with another query, combining results including duplicates.
+        /// </summary>
+        /// <param name="other">The other query builder to union with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> UnionAll(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Coming soon");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.UnionAll, other));
+            return this;
         }
 
+        /// <summary>
+        /// Performs an INTERSECT operation with another query, returning only common results.
+        /// Implemented using INNER JOIN since MySQL does not natively support INTERSECT.
+        /// </summary>
+        /// <param name="other">The other query builder to intersect with</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Intersect(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Coming soon");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Intersect, other));
+            return this;
         }
 
+        /// <summary>
+        /// Performs an EXCEPT operation with another query, returning results not in the other query.
+        /// Implemented using LEFT JOIN with NULL check since MySQL does not natively support EXCEPT.
+        /// </summary>
+        /// <param name="other">The other query builder to except against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Except(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Coming soon");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Except, other));
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE IN clause to the query using a subquery to check if the specified property value exists in the subquery results.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to check</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to check</param>
+        /// <param name="subquery">The subquery that returns values to check against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+
+            string column = GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"`{column}` IN ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT IN clause to the query using a subquery to check if the specified property value does not exist in the subquery results.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to check</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to check</param>
+        /// <param name="subquery">The subquery that returns values to check against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+
+            string column = GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"`{column}` NOT IN ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE IN clause to the query using raw SQL for the subquery.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to check</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to check</param>
+        /// <param name="subquerySql">The raw SQL subquery string that returns values to check against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="ArgumentException">Thrown when subquerySql is null, empty, or whitespace</exception>
         public IQueryBuilder<TEntity> WhereInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
-            throw new NotImplementedException("Coming soon");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (string.IsNullOrWhiteSpace(subquerySql))
+                throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
+
+            string column = GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"`{column}` IN ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT IN clause to the query using raw SQL for the subquery.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the property to check</typeparam>
+        /// <param name="keySelector">Lambda expression selecting the property to check</param>
+        /// <param name="subquerySql">The raw SQL subquery string that returns values to check against</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="ArgumentException">Thrown when subquerySql is null, empty, or whitespace</exception>
         public IQueryBuilder<TEntity> WhereNotInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
-            throw new NotImplementedException("Coming soon");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (string.IsNullOrWhiteSpace(subquerySql))
+                throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
+
+            string column = GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"`{column}` NOT IN ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE EXISTS clause to the query using a subquery.
+        /// </summary>
+        /// <typeparam name="TOther">The entity type of the subquery</typeparam>
+        /// <param name="subquery">The subquery to check for existence</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"EXISTS ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a WHERE NOT EXISTS clause to the query using a subquery.
+        /// </summary>
+        /// <typeparam name="TOther">The entity type of the subquery</typeparam>
+        /// <param name="subquery">The subquery to check for non-existence</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
-            throw new NotImplementedException("Coming soon");
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"NOT EXISTS ({subquerySql})");
+            return this;
         }
 
+        /// <summary>
+        /// Adds a window function to the query with optional partitioning and ordering.
+        /// </summary>
+        /// <param name="functionName">The name of the window function (e.g., ROW_NUMBER, RANK, LAG)</param>
+        /// <param name="partitionBy">Optional partition clause for the window function. Default is null</param>
+        /// <param name="orderBy">Optional order clause for the window function. Default is null</param>
+        /// <returns>A windowed query builder for additional window function configuration</returns>
+        /// <exception cref="ArgumentNullException">Thrown when functionName is null</exception>
+        /// <exception cref="ArgumentException">Thrown when functionName is empty or whitespace</exception>
         public IWindowedQueryBuilder<TEntity> WithWindowFunction(string functionName, string? partitionBy = null, string? orderBy = null)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(functionName))
+                throw new ArgumentException("Function name cannot be null or empty", nameof(functionName));
+
+            return new MySqlWindowedQueryBuilder<TEntity>(this, _Repository, _Transaction, functionName, partitionBy, orderBy);
         }
 
+        /// <summary>
+        /// Adds a configured window function to the query. This method is called internally by MySqlWindowedQueryBuilder.
+        /// </summary>
+        /// <param name="windowFunction">The window function configuration to add</param>
+        /// <exception cref="ArgumentNullException">Thrown when windowFunction is null</exception>
+        internal void AddWindowFunction(WindowFunction windowFunction)
+        {
+            if (windowFunction == null)
+                throw new ArgumentNullException(nameof(windowFunction));
+
+            _WindowFunctions.Add(windowFunction);
+        }
+
+        /// <summary>
+        /// Adds a CASE expression to the SELECT clause. This method is called internally by MySqlCaseExpressionBuilder.
+        /// </summary>
+        /// <param name="caseExpressionSql">The complete CASE expression SQL string to add</param>
+        /// <exception cref="ArgumentNullException">Thrown when caseExpressionSql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when caseExpressionSql is empty or whitespace</exception>
+        internal void AddCaseExpression(string caseExpressionSql)
+        {
+            if (string.IsNullOrWhiteSpace(caseExpressionSql))
+                throw new ArgumentException("CASE expression SQL cannot be null or empty", nameof(caseExpressionSql));
+
+            _CaseExpressions.Add(caseExpressionSql);
+        }
+
+        /// <summary>
+        /// Adds a Common Table Expression (CTE) to the query.
+        /// </summary>
+        /// <param name="cteName">The name for the CTE</param>
+        /// <param name="cteQuery">The SQL query defining the CTE</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName or cteQuery is null</exception>
+        /// <exception cref="ArgumentException">Thrown when cteName or cteQuery is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WithCte(string cteName, string cteQuery)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(cteName))
+                throw new ArgumentException("CTE name cannot be null or empty", nameof(cteName));
+            if (string.IsNullOrWhiteSpace(cteQuery))
+                throw new ArgumentException("CTE query cannot be null or empty", nameof(cteQuery));
+
+            _CteDefinitions.Add(new CteDefinition(cteName, cteQuery));
+            return this;
         }
 
+        /// <summary>
+        /// Adds a recursive Common Table Expression (CTE) to the query.
+        /// </summary>
+        /// <param name="cteName">The name for the recursive CTE</param>
+        /// <param name="anchorQuery">The anchor (base) query for the recursive CTE</param>
+        /// <param name="recursiveQuery">The recursive query that references the CTE</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName, anchorQuery, or recursiveQuery is null</exception>
+        /// <exception cref="ArgumentException">Thrown when cteName, anchorQuery, or recursiveQuery is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(cteName))
+                throw new ArgumentException("CTE name cannot be null or empty", nameof(cteName));
+            if (string.IsNullOrWhiteSpace(anchorQuery))
+                throw new ArgumentException("Anchor query cannot be null or empty", nameof(anchorQuery));
+            if (string.IsNullOrWhiteSpace(recursiveQuery))
+                throw new ArgumentException("Recursive query cannot be null or empty", nameof(recursiveQuery));
+
+            _CteDefinitions.Add(new CteDefinition(cteName, anchorQuery, recursiveQuery));
+            return this;
         }
 
+        /// <summary>
+        /// Adds a raw SQL WHERE clause with optional parameters.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the WHERE condition</param>
+        /// <param name="parameters">Optional parameters to format into the SQL string</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when sql is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WhereRaw(string sql, params object[] parameters)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("Raw SQL cannot be null or empty", nameof(sql));
+
+            if (parameters != null && parameters.Length > 0)
+            {
+                sql = string.Format(sql, parameters.Select(p => _Repository._Sanitizer.FormatValue(p)).ToArray());
+            }
+            _WhereClauses.Add(sql);
+            return this;
         }
 
+        /// <summary>
+        /// Sets a custom raw SQL SELECT clause, overriding the default column selection.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the SELECT clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when sql is empty or whitespace</exception>
         public IQueryBuilder<TEntity> SelectRaw(string sql)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("Raw SQL cannot be null or empty", nameof(sql));
+
+            _CustomSelectClause = sql;
+            return this;
         }
 
+        /// <summary>
+        /// Sets a custom raw SQL FROM clause, overriding the default table name.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the FROM clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when sql is empty or whitespace</exception>
         public IQueryBuilder<TEntity> FromRaw(string sql)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("Raw SQL cannot be null or empty", nameof(sql));
+
+            _CustomFromClause = sql;
+            return this;
         }
 
+        /// <summary>
+        /// Adds a custom raw SQL JOIN clause to the query.
+        /// </summary>
+        /// <param name="sql">Raw SQL string for the JOIN clause</param>
+        /// <returns>The current query builder instance for method chaining</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when sql is empty or whitespace</exception>
         public IQueryBuilder<TEntity> JoinRaw(string sql)
         {
-            throw new NotImplementedException("Coming soon");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("Raw SQL cannot be null or empty", nameof(sql));
+
+            _CustomJoinClauses.Add(sql);
+            return this;
         }
 
+        /// <summary>
+        /// Creates a CASE expression builder for conditional logic in SELECT statements.
+        /// </summary>
+        /// <returns>A CASE expression builder instance for building conditional SQL expressions</returns>
         public ICaseExpressionBuilder<TEntity> SelectCase()
         {
-            throw new NotImplementedException("Coming soon");
+            return new MySqlCaseExpressionBuilder<TEntity>(this, _Repository);
         }
 
         /// <summary>
@@ -441,11 +871,11 @@ namespace Durable.MySql
             }
         }
 
-        private IEnumerable<TEntity> ExecuteWithConnection(System.Data.Common.DbConnection connection, string sql)
+        private IEnumerable<TEntity> ExecuteWithConnection(DbConnection connection, string sql)
         {
             List<TEntity> results = new List<TEntity>();
 
-            if (connection.State != System.Data.ConnectionState.Open)
+            if (connection.State != ConnectionState.Open)
             {
                 connection.Open();
             }
@@ -466,8 +896,23 @@ namespace Durable.MySql
 
             try
             {
-                using var reader = command.ExecuteReader();
-                results = MapResults(reader).ToList();
+                using var reader = (MySqlDataReader)command.ExecuteReader();
+
+                // Check if we have includes that require advanced mapping
+                if (_IncludePaths.Count > 0)
+                {
+                    // Use advanced EntityMapper for complex scenarios with navigation properties
+                    List<MySqlIncludeInfo> includeInfos = ProcessIncludePaths();
+                    MySqlJoinBuilder.MySqlJoinResult joinResult = _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
+
+                    _EntityMapper.ClearProcessingCache();
+                    results = _EntityMapper.MapJoinedResults(reader, joinResult, includeInfos).ToList();
+                }
+                else
+                {
+                    // Use simple mapping for basic queries
+                    results = _EntityMapper.MapSimpleResults(reader).ToList();
+                }
             }
             catch (Exception ex)
             {
@@ -477,54 +922,6 @@ namespace Durable.MySql
             return results;
         }
 
-        private IEnumerable<TEntity> MapResults(System.Data.Common.DbDataReader reader)
-        {
-            // This is a basic implementation - in a full implementation this would use
-            // a proper entity mapper similar to SQLite's EntityMapper
-            while (reader.Read())
-            {
-                var entity = new TEntity();
-
-                // Map columns to entity properties using the repository's column mappings
-                foreach (var mapping in _Repository._ColumnMappings)
-                {
-                    string columnName = mapping.Key;
-                    var property = mapping.Value;
-
-                    try
-                    {
-                        if (HasColumn(reader, columnName))
-                        {
-                            object? value = reader[columnName];
-                            if (value != DBNull.Value && value != null)
-                            {
-                                // Convert value to property type
-                                object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
-                                property.SetValue(entity, convertedValue);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new InvalidOperationException($"Error mapping column '{columnName}' to property '{property.Name}'", ex);
-                    }
-                }
-
-                yield return entity;
-            }
-        }
-
-        private static bool HasColumn(System.Data.Common.DbDataReader reader, string columnName)
-        {
-            for (int i = 0; i < reader.FieldCount; i++)
-            {
-                if (reader.GetName(i).Equals(columnName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
 
         /// <summary>
         /// Gets the current GROUP BY columns for grouped query operations.
@@ -599,7 +996,7 @@ namespace Durable.MySql
         {
             token.ThrowIfCancellationRequested();
 
-            if (connection.State != System.Data.ConnectionState.Open)
+            if (connection.State != ConnectionState.Open)
             {
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
@@ -690,6 +1087,159 @@ namespace Durable.MySql
             }
 
             throw new InvalidOperationException("Expression must be a property access expression");
+        }
+
+        private string BuildWindowFunctionSql(WindowFunction windowFunc)
+        {
+            StringBuilder funcSql = new StringBuilder();
+
+            funcSql.Append(windowFunc.FunctionName);
+            funcSql.Append("(");
+
+            // Handle special functions with parameters like LEAD/LAG
+            if (windowFunc.FunctionName == "LEAD" || windowFunc.FunctionName == "LAG")
+            {
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    funcSql.Append($"`{windowFunc.Column}`");
+                }
+
+                if (windowFunc.Parameters.ContainsKey("offset"))
+                {
+                    funcSql.Append(", ");
+                    funcSql.Append(windowFunc.Parameters["offset"]);
+
+                    if (windowFunc.Parameters.ContainsKey("default"))
+                    {
+                        funcSql.Append(", ");
+                        object? defaultValue = windowFunc.Parameters["default"];
+                        if (defaultValue is string)
+                        {
+                            funcSql.Append($"'{defaultValue}'");
+                        }
+                        else
+                        {
+                            funcSql.Append(defaultValue);
+                        }
+                    }
+                }
+            }
+            else if (windowFunc.FunctionName == "NTH_VALUE")
+            {
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    funcSql.Append($"`{windowFunc.Column}`");
+                }
+
+                if (windowFunc.Parameters.ContainsKey("n"))
+                {
+                    funcSql.Append(", ");
+                    funcSql.Append(windowFunc.Parameters["n"]);
+                }
+            }
+            else
+            {
+                // Regular window functions
+                if (!string.IsNullOrEmpty(windowFunc.Column))
+                {
+                    if (windowFunc.Column == "*")
+                        funcSql.Append("*");
+                    else
+                        funcSql.Append($"`{windowFunc.Column}`");
+                }
+            }
+
+            funcSql.Append(") OVER (");
+
+            // PARTITION BY clause
+            if (windowFunc.PartitionByColumns.Count > 0)
+            {
+                funcSql.Append("PARTITION BY ");
+                List<string> partitions = new List<string>();
+                foreach (string partition in windowFunc.PartitionByColumns)
+                {
+                    partitions.Add($"`{partition}`");
+                }
+                funcSql.Append(string.Join(", ", partitions));
+            }
+
+            // ORDER BY clause
+            if (windowFunc.OrderByColumns.Count > 0)
+            {
+                if (windowFunc.PartitionByColumns.Count > 0)
+                    funcSql.Append(" ");
+
+                funcSql.Append("ORDER BY ");
+                List<string> orderBys = new List<string>();
+                foreach (WindowOrderByClause orderBy in windowFunc.OrderByColumns)
+                {
+                    orderBys.Add($"`{orderBy.Column}` {(orderBy.Ascending ? "ASC" : "DESC")}");
+                }
+                funcSql.Append(string.Join(", ", orderBys));
+            }
+
+            // Window frame specification
+            if (windowFunc.Frame != null)
+            {
+                if (windowFunc.PartitionByColumns.Count > 0 || windowFunc.OrderByColumns.Count > 0)
+                    funcSql.Append(" ");
+
+                funcSql.Append(windowFunc.Frame.Type.ToString().ToUpper());
+
+                if (windowFunc.Frame.StartBound != null || windowFunc.Frame.EndBound != null)
+                {
+                    funcSql.Append(" BETWEEN ");
+
+                    if (windowFunc.Frame.StartBound != null)
+                    {
+                        funcSql.Append(FormatWindowFrameBound(windowFunc.Frame.StartBound));
+                    }
+                    else
+                    {
+                        funcSql.Append("UNBOUNDED PRECEDING");
+                    }
+
+                    funcSql.Append(" AND ");
+
+                    if (windowFunc.Frame.EndBound != null)
+                    {
+                        funcSql.Append(FormatWindowFrameBound(windowFunc.Frame.EndBound));
+                    }
+                    else
+                    {
+                        funcSql.Append("CURRENT ROW");
+                    }
+                }
+            }
+
+            funcSql.Append(")");
+
+            // Add alias
+            if (!string.IsNullOrEmpty(windowFunc.Alias))
+            {
+                funcSql.Append($" AS `{windowFunc.Alias}`");
+            }
+
+            return funcSql.ToString();
+        }
+
+        private string FormatWindowFrameBound(WindowFrameBound bound)
+        {
+            switch (bound.Type)
+            {
+                case WindowFrameBoundType.UnboundedPreceding:
+                    return "UNBOUNDED PRECEDING";
+                case WindowFrameBoundType.UnboundedFollowing:
+                    return "UNBOUNDED FOLLOWING";
+                case WindowFrameBoundType.CurrentRow:
+                    return "CURRENT ROW";
+                case WindowFrameBoundType.Preceding:
+                    return $"{bound.Offset} PRECEDING";
+                case WindowFrameBoundType.Following:
+                    return $"{bound.Offset} FOLLOWING";
+                default:
+                    return "CURRENT ROW";
+            }
         }
 
         #endregion

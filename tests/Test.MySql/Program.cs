@@ -22,7 +22,7 @@ namespace Test.MySql
         #region Private-Members
 
         private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static readonly string _ConnectionString = "Server=localhost;Database=durable_test;User=root;Password=;AllowUserVariables=true;";
+        private static readonly string _ConnectionString = "Server=localhost;Database=durable_integration_test;User=test_user;Password=test_password;AllowUserVariables=true;";
 
         #endregion
 
@@ -33,7 +33,23 @@ namespace Test.MySql
             try
             {
                 Console.WriteLine("Starting MySQL ORM Test Program...");
+                Console.WriteLine($"Arguments received: {args.Length}");
+                if (args.Length > 0)
+                {
+                    Console.WriteLine($"First argument: '{args[0]}'");
+                }
+
+                // Check command line arguments for test mode
+                if (args.Length > 0 && args[0].ToLower() == "integration")
+                {
+                    Console.WriteLine("=== MySQL Integration Test Suite ===\n");
+                    await MySqlTestRunner.RunAllTests();
+                    return;
+                }
+
                 Console.WriteLine("=== MySQL Repository Pattern Demo - Sync & Async ===\n");
+                Console.WriteLine("💡 Tip: Run with 'integration' argument to execute comprehensive integration tests");
+                Console.WriteLine("   Example: dotnet run integration\n");
 
                 // Check if MySQL is available
                 if (!await IsMyServerAvailable())
@@ -121,10 +137,10 @@ namespace Test.MySql
 
                 // Create test database if it doesn't exist
                 string createDbSql = @"
-                    CREATE DATABASE IF NOT EXISTS durable_test
+                    CREATE DATABASE IF NOT EXISTS durable_integration_test
                     CHARACTER SET utf8mb4
                     COLLATE utf8mb4_unicode_ci;
-                    USE durable_test;";
+                    USE durable_integration_test;";
 
                 using var command = new MySqlCommand(createDbSql, connection);
                 await command.ExecuteNonQueryAsync();

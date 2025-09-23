@@ -6,6 +6,7 @@ namespace Durable.MySql
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
+    using System.Runtime.CompilerServices;
     using System.Text;
 
     /// <summary>
@@ -23,10 +24,15 @@ namespace Durable.MySql
 
         private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
         private readonly ISanitizer _Sanitizer;
+        private readonly List<(string name, object? value)> _Parameters;
+        private int _ParameterCounter;
+        private bool _UseParameterizedQueries;
 
-        // Static cache for compiled expressions to avoid repeated compilation overhead
-        // Using WeakReference to allow garbage collection of unused expressions
-        private static readonly ConcurrentDictionary<Expression, WeakReference<Func<object?>>> _CompiledExpressions = new ConcurrentDictionary<Expression, WeakReference<Func<object?>>>();
+        // Type-specific static cache for compiled expressions to avoid repeated compilation overhead
+        // IMPORTANT: This static field is unique per generic type T (e.g., MySqlExpressionParser<User> has
+        // a separate cache from MySqlExpressionParser<Product>), preventing cross-type pollution
+        // Using ConditionalWeakTable to allow garbage collection of both keys and values
+        private static readonly ConditionalWeakTable<Expression, Func<object?>> _CompiledExpressions = new ConditionalWeakTable<Expression, Func<object?>>();
 
         #endregion
 
@@ -42,6 +48,9 @@ namespace Durable.MySql
         {
             _ColumnMappings = columnMappings ?? throw new ArgumentNullException(nameof(columnMappings));
             _Sanitizer = sanitizer ?? new MySqlSanitizer();
+            _Parameters = new List<(string name, object? value)>();
+            _ParameterCounter = 0;
+            _UseParameterizedQueries = false;
         }
 
         #endregion
@@ -58,6 +67,35 @@ namespace Durable.MySql
         {
             if (expression == null) throw new ArgumentNullException(nameof(expression));
             return Visit(expression);
+        }
+
+        /// <summary>
+        /// Parses an expression tree and converts it to parameterized MySQL SQL with extracted parameters.
+        /// This method clears any existing parameters before parsing.
+        /// </summary>
+        /// <param name="expression">The expression tree to parse and convert to SQL.</param>
+        /// <param name="useParameterizedQueries">If true, extracts values as parameters; if false, embeds values directly (for backward compatibility).</param>
+        /// <returns>A string containing the MySQL-compatible SQL representation of the expression.</returns>
+        /// <exception cref="NotSupportedException">Thrown when an unsupported expression type is encountered.</exception>
+        public string ParseExpressionWithParameters(Expression expression, bool useParameterizedQueries = true)
+        {
+            if (expression == null) throw new ArgumentNullException(nameof(expression));
+
+            // Clear existing parameters for fresh parsing
+            _Parameters.Clear();
+            _ParameterCounter = 0;
+            _UseParameterizedQueries = useParameterizedQueries;
+
+            return Visit(expression);
+        }
+
+        /// <summary>
+        /// Gets the parameters that were collected during the last call to ParseExpressionWithParameters.
+        /// </summary>
+        /// <returns>A list of parameter name-value pairs extracted from the expression.</returns>
+        public List<(string name, object? value)> GetParameters()
+        {
+            return new List<(string name, object? value)>(_Parameters);
         }
 
         /// <summary>
@@ -134,6 +172,25 @@ namespace Durable.MySql
                 return string.Join(", ", setPairs);
             }
             throw new ArgumentException("Update expression must be a member initialization expression (e.g., p => new Person { Name = \"John\", Age = 30 })", nameof(updateExpression));
+        }
+
+        /// <summary>
+        /// Gets the count of cached compiled expressions for this specific T type.
+        /// This method is useful for testing and verifying cache isolation between different entity types.
+        /// </summary>
+        /// <returns>The number of expressions currently cached for this type T</returns>
+        public static int GetCacheCount()
+        {
+            return _CompiledExpressions.Count();
+        }
+
+        /// <summary>
+        /// Clears the expression cache for this specific T type.
+        /// This method is useful for testing and debugging cache behavior.
+        /// </summary>
+        public static void ClearCache()
+        {
+            _CompiledExpressions.Clear();
         }
 
         #endregion
@@ -442,9 +499,10 @@ namespace Durable.MySql
                     string column = Visit(methodCall.Object);
                     object? value = GetConstantValue(methodCall.Arguments[0]);
                     string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
-                    // Remove quotes and add % around the value
-                    string innerValue = sanitizedValue.Trim('\'');
-                    return $"{column} LIKE '%{innerValue}%'";
+                    // Keep the sanitizer's quotes and use CONCAT for safe wildcard addition
+                    // Remove outer quotes, add wildcards, then re-quote safely
+                    string innerValue = sanitizedValue.Substring(1, sanitizedValue.Length - 2);
+                    return $"{column} LIKE CONCAT('%', {_Sanitizer.SanitizeString(innerValue)}, '%')";
                 }
             }
             else if (methodCall.Arguments.Count == 2)
@@ -895,14 +953,23 @@ namespace Durable.MySql
 
         private string FormatValue(object? value)
         {
-            return _Sanitizer.FormatValue(value!);
+            // If we're not using parameterized queries, format value directly (backward compatibility)
+            if (!_UseParameterizedQueries)
+            {
+                return _Sanitizer.FormatValue(value!);
+            }
+
+            // Generate parameter name and add to collection
+            string parameterName = $"@p{_ParameterCounter++}";
+            _Parameters.Add((parameterName, value));
+            return parameterName;
         }
 
         private Func<object?> GetCachedCompiledExpression(Expression expression)
         {
-            // Try to get existing cached expression
-            if (_CompiledExpressions.TryGetValue(expression, out WeakReference<Func<object?>>? weakRef) &&
-                weakRef.TryGetTarget(out Func<object?>? cachedGetter))
+            // Try to get existing cached expression using ConditionalWeakTable
+            // This allows both keys and values to be garbage collected when no longer referenced
+            if (_CompiledExpressions.TryGetValue(expression, out Func<object?>? cachedGetter))
             {
                 return cachedGetter;
             }
@@ -912,12 +979,18 @@ namespace Durable.MySql
             Expression<Func<object>> getterLambda = Expression.Lambda<Func<object>>(objectMember);
             Func<object?> compiledGetter = getterLambda.Compile();
 
-            // Cache with weak reference to allow garbage collection
-            _CompiledExpressions.AddOrUpdate(expression,
-                new WeakReference<Func<object?>>(compiledGetter),
-                (key, oldWeakRef) => new WeakReference<Func<object?>>(compiledGetter));
-
-            return compiledGetter;
+            // Cache using thread-safe Add operation
+            // The ConditionalWeakTable automatically removes entries when the key (Expression) is garbage collected
+            try
+            {
+                _CompiledExpressions.Add(expression, compiledGetter);
+                return compiledGetter;
+            }
+            catch (ArgumentException)
+            {
+                // Key already exists (race condition), return existing value
+                return _CompiledExpressions.TryGetValue(expression, out cachedGetter) ? cachedGetter : compiledGetter;
+            }
         }
 
         private bool ContainsParameterReference(Expression? expression)
