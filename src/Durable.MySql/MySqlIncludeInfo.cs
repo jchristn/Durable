@@ -28,6 +28,11 @@ namespace Durable.MySql
         public PropertyInfo? ForeignKeyProperty { get; set; }
 
         /// <summary>
+        /// Gets or sets the name of the inverse foreign key property for collection navigation properties.
+        /// </summary>
+        public string? InverseForeignKeyProperty { get; set; }
+
+        /// <summary>
         /// Gets or sets the type of the related entity being included.
         /// </summary>
         public Type RelatedEntityType { get; set; } = null!;

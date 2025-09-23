@@ -242,8 +242,24 @@ namespace Durable.MySql
             if (inverseAttr != null)
             {
                 includeInfo.IsCollection = true;
-                // The foreign key is on the related entity, pointing back to this entity
-                // We would need to find the foreign key property on the related entity
+
+                // For inverse navigation, the foreign key is on the related entity
+                Type relatedEntityType = includeInfo.RelatedEntityType;
+                PropertyInfo? inverseForeignKeyProperty = relatedEntityType.GetProperty(inverseAttr.InverseForeignKeyProperty);
+
+                if (inverseForeignKeyProperty == null)
+                {
+                    throw new InvalidOperationException($"Inverse foreign key property '{inverseAttr.InverseForeignKeyProperty}' not found on type '{relatedEntityType.Name}'");
+                }
+
+                ForeignKeyAttribute? fkAttr = inverseForeignKeyProperty.GetCustomAttribute<ForeignKeyAttribute>();
+                if (fkAttr == null)
+                {
+                    throw new InvalidOperationException($"Inverse foreign key property '{inverseAttr.InverseForeignKeyProperty}' is not marked with ForeignKeyAttribute");
+                }
+
+                includeInfo.ForeignKeyProperty = inverseForeignKeyProperty;
+                includeInfo.InverseForeignKeyProperty = inverseAttr.InverseForeignKeyProperty;
             }
         }
 

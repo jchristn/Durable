@@ -132,14 +132,17 @@ namespace Durable.MySql
         {
             try
             {
+                Console.WriteLine($"DEBUG: MySqlGroupedQueryBuilder.Execute() called, _HavingClauses.Count = {_HavingClauses.Count}");
                 if (_HavingClauses.Count > 0)
                 {
+                    Console.WriteLine("DEBUG: Using ExecuteWithSqlGroupBy() path");
                     // When HAVING clauses exist, use SQL GROUP BY to filter groups
                     // then fetch entities for the qualifying groups with full mapping
                     return ExecuteWithSqlGroupBy();
                 }
                 else
                 {
+                    Console.WriteLine("DEBUG: Using in-memory grouping path");
                     // Without HAVING clauses, fetch all entities with advanced mapping
                     // and group in memory to preserve full entity data
                     IEnumerable<TEntity> allEntities = ExecuteWithAdvancedMapping();
@@ -601,7 +604,7 @@ namespace Durable.MySql
 
         private async Task<IEnumerable<TEntity>> ExecuteWithAdvancedMappingAsync(CancellationToken token)
         {
-            IEnumerable<TEntity> results = await _QueryBuilder.ExecuteAsync(token).ConfigureAwait(false);
+            IEnumerable<TEntity> results = await _QueryBuilder.ExecuteWithoutGroupByAsync(token).ConfigureAwait(false);
             List<TEntity> resultsList = results.ToList();
 
             // If the query builder has includes, we need to use advanced mapping
@@ -624,8 +627,10 @@ namespace Durable.MySql
 
         private IEnumerable<IGrouping<TKey, TEntity>> ExecuteWithSqlGroupBy()
         {
+            Console.WriteLine("DEBUG: ExecuteWithSqlGroupBy() called");
             // First, get the qualifying group keys using SQL GROUP BY with HAVING
             HashSet<TKey> qualifyingKeys = GetQualifyingGroupKeys();
+            Console.WriteLine($"DEBUG: Got {qualifyingKeys.Count} qualifying keys");
 
             if (qualifyingKeys.Count == 0)
             {
@@ -662,6 +667,7 @@ namespace Durable.MySql
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
+            Console.WriteLine("DEBUG: GetQualifyingGroupKeys() called");
             using var connection = _Repository._ConnectionFactory.GetConnection();
             if (connection.State != ConnectionState.Open)
             {
@@ -670,6 +676,7 @@ namespace Durable.MySql
 
             using var command = connection.CreateCommand();
             command.CommandText = BuildGroupKeysSql();
+            Console.WriteLine($"DEBUG: Group keys SQL: {command.CommandText}");
 
             _Repository.SetLastExecutedSql(command.CommandText);
 
@@ -738,6 +745,7 @@ namespace Durable.MySql
 
         private string BuildGroupKeysSql()
         {
+            Console.WriteLine("DEBUG: BuildGroupKeysSql() called");
             StringBuilder sql = new StringBuilder();
             List<string> groupByColumns = _QueryBuilder.GetGroupByColumns();
 
@@ -856,6 +864,11 @@ namespace Durable.MySql
                         string column = GetColumnFromExpression(lambda.Body);
                         return $"SUM({_Sanitizer.SanitizeIdentifier(column)})";
                     }
+                    else if (methodCall.Arguments[1] is LambdaExpression directLambda)
+                    {
+                        string column = GetColumnFromExpression(directLambda.Body);
+                        return $"SUM({_Sanitizer.SanitizeIdentifier(column)})";
+                    }
                     break;
 
                 case "Average" when methodCall.Arguments.Count == 2:
@@ -863,6 +876,11 @@ namespace Durable.MySql
                         unary2.Operand is LambdaExpression lambda2)
                     {
                         string column = GetColumnFromExpression(lambda2.Body);
+                        return $"AVG({_Sanitizer.SanitizeIdentifier(column)})";
+                    }
+                    else if (methodCall.Arguments[1] is LambdaExpression directLambda)
+                    {
+                        string column = GetColumnFromExpression(directLambda.Body);
                         return $"AVG({_Sanitizer.SanitizeIdentifier(column)})";
                     }
                     break;
@@ -874,6 +892,11 @@ namespace Durable.MySql
                         string column = GetColumnFromExpression(lambda3.Body);
                         return $"MAX({_Sanitizer.SanitizeIdentifier(column)})";
                     }
+                    else if (methodCall.Arguments[1] is LambdaExpression directLambda)
+                    {
+                        string column = GetColumnFromExpression(directLambda.Body);
+                        return $"MAX({_Sanitizer.SanitizeIdentifier(column)})";
+                    }
                     break;
 
                 case "Min" when methodCall.Arguments.Count == 2:
@@ -881,6 +904,11 @@ namespace Durable.MySql
                         unary4.Operand is LambdaExpression lambda4)
                     {
                         string column = GetColumnFromExpression(lambda4.Body);
+                        return $"MIN({_Sanitizer.SanitizeIdentifier(column)})";
+                    }
+                    else if (methodCall.Arguments[1] is LambdaExpression directLambda)
+                    {
+                        string column = GetColumnFromExpression(directLambda.Body);
                         return $"MIN({_Sanitizer.SanitizeIdentifier(column)})";
                     }
                     break;

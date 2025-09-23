@@ -35,12 +35,40 @@ namespace Test.MySql
             failedTests += integrationResults.FailedTests;
             skippedTests += integrationResults.SkippedTests;
 
-            // Run advanced feature tests (temporarily disabled due to compilation issues)
-            // var advancedResults = await RunTestClass<MySqlAdvancedFeatureTests>("MySQL Advanced Feature Tests");
-            // totalTests += advancedResults.TotalTests;
-            // passedTests += advancedResults.PassedTests;
-            // failedTests += advancedResults.FailedTests;
-            // skippedTests += advancedResults.SkippedTests;
+            // Run advanced query builder tests
+            var advancedResults = await RunTestClass<MySqlAdvancedQueryBuilderTests>("MySQL Advanced Query Builder Tests");
+            totalTests += advancedResults.TotalTests;
+            passedTests += advancedResults.PassedTests;
+            failedTests += advancedResults.FailedTests;
+            skippedTests += advancedResults.SkippedTests;
+
+            // Run include/join functionality tests
+            var includeResults = await RunTestClass<MySqlIncludeTests>("MySQL Include/Join Tests");
+            totalTests += includeResults.TotalTests;
+            passedTests += includeResults.PassedTests;
+            failedTests += includeResults.FailedTests;
+            skippedTests += includeResults.SkippedTests;
+
+            // Run GROUP BY functionality tests
+            var groupByResults = await RunTestClass<MySqlGroupByTests>("MySQL GROUP BY Tests");
+            totalTests += groupByResults.TotalTests;
+            passedTests += groupByResults.PassedTests;
+            failedTests += groupByResults.FailedTests;
+            skippedTests += groupByResults.SkippedTests;
+
+            // Run projection functionality tests
+            var projectionResults = await RunTestClass<MySqlProjectionTests>("MySQL Projection Tests");
+            totalTests += projectionResults.TotalTests;
+            passedTests += projectionResults.PassedTests;
+            failedTests += projectionResults.FailedTests;
+            skippedTests += projectionResults.SkippedTests;
+
+            // Run complex expression functionality tests
+            var expressionResults = await RunTestClass<MySqlComplexExpressionTests>("MySQL Complex Expression Tests");
+            totalTests += expressionResults.TotalTests;
+            passedTests += expressionResults.PassedTests;
+            failedTests += expressionResults.FailedTests;
+            skippedTests += expressionResults.SkippedTests;
 
             // Summary
             Console.WriteLine();

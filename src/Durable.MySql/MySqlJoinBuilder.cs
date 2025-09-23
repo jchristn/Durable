@@ -141,7 +141,7 @@ namespace Durable.MySql
             }
             result.ColumnMappingsByAlias[baseAlias] = baseMappings;
 
-            BuildJoinForIncludes(includes, baseAlias, baseTableName, selectBuilder, joinBuilder, result.ColumnMappingsByAlias);
+            BuildJoinForIncludes(includes, baseAlias, baseTableName, selectBuilder, joinBuilder, result.ColumnMappingsByAlias, typeof(T));
 
             result.SelectClause = selectBuilder.ToString();
             result.JoinClause = joinBuilder.ToString();
@@ -159,15 +159,13 @@ namespace Durable.MySql
             string baseTableName,
             StringBuilder selectBuilder,
             StringBuilder joinBuilder,
-            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias)
+            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias,
+            Type baseEntityType)
         {
             foreach (MySqlIncludeInfo include in includes)
             {
-                if (include.IsCollection)
-                {
-                    // Collections require special handling and are not supported in this basic implementation
-                    continue;
-                }
+                // Collections can be handled with LEFT JOINs, though they may create duplicate rows
+                // The entity mapper will need to handle grouping the results
 
                 // Build JOIN clause
                 string parentAlias = include.Parent?.JoinAlias ?? baseAlias;
@@ -176,18 +174,18 @@ namespace Durable.MySql
                 if (include.IsManyToMany)
                 {
                     // Many-to-many requires junction table join
-                    BuildManyToManyJoin(include, parentAlias, parentTable, selectBuilder, joinBuilder, columnMappingsByAlias);
+                    BuildManyToManyJoin(include, parentAlias, parentTable, selectBuilder, joinBuilder, columnMappingsByAlias, baseEntityType);
                 }
                 else
                 {
                     // Standard one-to-one or one-to-many join
-                    BuildStandardJoin(include, parentAlias, parentTable, selectBuilder, joinBuilder, columnMappingsByAlias);
+                    BuildStandardJoin(include, parentAlias, parentTable, selectBuilder, joinBuilder, columnMappingsByAlias, baseEntityType);
                 }
 
                 // Recursively build joins for nested includes
                 if (include.Children.Count > 0)
                 {
-                    BuildJoinForIncludes(include.Children, baseAlias, baseTableName, selectBuilder, joinBuilder, columnMappingsByAlias);
+                    BuildJoinForIncludes(include.Children, baseAlias, baseTableName, selectBuilder, joinBuilder, columnMappingsByAlias, baseEntityType);
                 }
             }
         }
@@ -198,20 +196,25 @@ namespace Durable.MySql
             string parentTable,
             StringBuilder selectBuilder,
             StringBuilder joinBuilder,
-            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias)
+            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias,
+            Type baseEntityType)
         {
             string sanitizedRelatedTable = _Sanitizer.SanitizeIdentifier(include.RelatedTableName);
             string sanitizedJoinAlias = _Sanitizer.SanitizeIdentifier(include.JoinAlias);
 
-            // Add columns to SELECT clause
+            // Add columns to SELECT clause with explicit aliases
             Dictionary<string, PropertyInfo> relatedColumns = _IncludeProcessor.GetColumnMappings(include.RelatedEntityType);
-            selectBuilder.Append($", {sanitizedJoinAlias}.*");
 
             // Build column mappings for the related table
             List<MySqlColumnMapping> relatedMappings = new List<MySqlColumnMapping>();
+            List<string> selectColumns = new List<string>();
+
             foreach (KeyValuePair<string, PropertyInfo> kvp in relatedColumns)
             {
                 string columnAlias = $"{include.JoinAlias}_{kvp.Key}";
+                string sanitizedColumnName = _Sanitizer.SanitizeIdentifier(kvp.Key);
+                selectColumns.Add($"{sanitizedJoinAlias}.{sanitizedColumnName} AS {columnAlias}");
+
                 relatedMappings.Add(new MySqlColumnMapping
                 {
                     ColumnName = kvp.Key,
@@ -220,6 +223,8 @@ namespace Durable.MySql
                     TableAlias = include.JoinAlias
                 });
             }
+
+            selectBuilder.Append($", {string.Join(", ", selectColumns)}");
             columnMappingsByAlias[include.JoinAlias] = relatedMappings;
 
             // Build JOIN clause
@@ -228,12 +233,27 @@ namespace Durable.MySql
                 string foreignKeyColumn = GetColumnNameForProperty(include.ForeignKeyProperty);
                 string sanitizedForeignKeyColumn = _Sanitizer.SanitizeIdentifier(foreignKeyColumn);
 
-                // Determine the primary key column of the related table
-                string primaryKeyColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
-                string sanitizedPrimaryKeyColumn = _Sanitizer.SanitizeIdentifier(primaryKeyColumn);
-
                 joinBuilder.AppendLine();
-                joinBuilder.Append($"LEFT JOIN {sanitizedRelatedTable} {sanitizedJoinAlias} ON {parentAlias}.{sanitizedForeignKeyColumn} = {sanitizedJoinAlias}.{sanitizedPrimaryKeyColumn}");
+
+                if (!string.IsNullOrEmpty(include.InverseForeignKeyProperty))
+                {
+                    // For inverse navigation properties (collections), the foreign key is on the related table
+                    // JOIN condition: related_table.foreign_key = parent_table.primary_key
+                    Type parentEntityType = include.Parent?.RelatedEntityType ?? baseEntityType;
+                    string parentPrimaryKeyColumn = GetPrimaryKeyColumn(parentEntityType);
+                    string sanitizedParentPrimaryKeyColumn = _Sanitizer.SanitizeIdentifier(parentPrimaryKeyColumn);
+
+                    joinBuilder.Append($"LEFT JOIN {sanitizedRelatedTable} {sanitizedJoinAlias} ON {sanitizedJoinAlias}.{sanitizedForeignKeyColumn} = {parentAlias}.{sanitizedParentPrimaryKeyColumn}");
+                }
+                else
+                {
+                    // For regular navigation properties, the foreign key is on the parent table
+                    // JOIN condition: parent_table.foreign_key = related_table.primary_key
+                    string primaryKeyColumn = GetPrimaryKeyColumn(include.RelatedEntityType);
+                    string sanitizedPrimaryKeyColumn = _Sanitizer.SanitizeIdentifier(primaryKeyColumn);
+
+                    joinBuilder.Append($"LEFT JOIN {sanitizedRelatedTable} {sanitizedJoinAlias} ON {parentAlias}.{sanitizedForeignKeyColumn} = {sanitizedJoinAlias}.{sanitizedPrimaryKeyColumn}");
+                }
             }
         }
 
@@ -243,7 +263,8 @@ namespace Durable.MySql
             string parentTable,
             StringBuilder selectBuilder,
             StringBuilder joinBuilder,
-            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias)
+            Dictionary<string, List<MySqlColumnMapping>> columnMappingsByAlias,
+            Type baseEntityType)
         {
             if (string.IsNullOrEmpty(include.JunctionTableName) || string.IsNullOrEmpty(include.JunctionAlias))
             {
