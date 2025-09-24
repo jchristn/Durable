@@ -5,6 +5,7 @@ namespace Test.Sqlite
     using Durable;
     using Durable.Sqlite;
     using Durable.ConcurrencyConflictResolvers;
+    using Test.Shared;
     using Xunit;
     
     /// <summary>

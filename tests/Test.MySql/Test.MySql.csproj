@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<IsPackable>false</IsPackable>
+		<OutputType>Exe</OutputType>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MySqlConnector" Version="2.3.7" />
+		<PackageReference Include="xunit" Version="2.6.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Durable.MySql\Durable.MySql.csproj" />
+		<ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+	</ItemGroup>
+
+</Project>
