@@ -1,11 +1,11 @@
-namespace Test.Sqlite
+namespace Test.Shared
 {
     using Durable;
 
     /// <summary>
     /// Represents an author entity with optimistic concurrency control using a version column
     /// </summary>
-    [Entity("authors")]
+    [Entity("authors_with_version")]
     public class AuthorWithVersion
     {
         /// <summary>
@@ -31,6 +31,6 @@ namespace Test.Sqlite
         /// </summary>
         [Property("version")]
         [VersionColumn(VersionColumnType.Integer)]
-        public int Version { get; set; }
+        public int Version { get; set; } = 1;
     }
 }

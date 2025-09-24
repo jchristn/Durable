@@ -22,8 +22,16 @@ namespace Durable
             if (action == null) throw new ArgumentNullException(nameof(action));
 
             using TransactionScope scope = TransactionScope.Create(repository);
-            action();
-            scope.Complete();
+            try
+            {
+                action();
+                scope.Complete();
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -41,9 +49,17 @@ namespace Durable
             if (func == null) throw new ArgumentNullException(nameof(func));
 
             using TransactionScope scope = TransactionScope.Create(repository);
-            TResult result = func();
-            scope.Complete();
-            return result;
+            try
+            {
+                TResult result = func();
+                scope.Complete();
+                return result;
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -61,8 +77,16 @@ namespace Durable
             if (func == null) throw new ArgumentNullException(nameof(func));
 
             using TransactionScope scope = await TransactionScope.CreateAsync(repository, token);
-            await func();
-            await scope.CompleteAsync(token);
+            try
+            {
+                await func();
+                await scope.CompleteAsync(token);
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -112,8 +136,16 @@ namespace Durable
             if (action == null) throw new ArgumentNullException(nameof(action));
 
             using TransactionScope scope = TransactionScope.Create(transaction);
-            action();
-            scope.Complete();
+            try
+            {
+                action();
+                scope.Complete();
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -130,9 +162,17 @@ namespace Durable
             if (func == null) throw new ArgumentNullException(nameof(func));
 
             using TransactionScope scope = TransactionScope.Create(transaction);
-            TResult result = func();
-            scope.Complete();
-            return result;
+            try
+            {
+                TResult result = func();
+                scope.Complete();
+                return result;
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -149,8 +189,16 @@ namespace Durable
             if (func == null) throw new ArgumentNullException(nameof(func));
 
             using TransactionScope scope = TransactionScope.Create(transaction);
-            await func();
-            await scope.CompleteAsync(token);
+            try
+            {
+                await func();
+                await scope.CompleteAsync(token);
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>
@@ -168,9 +216,17 @@ namespace Durable
             if (func == null) throw new ArgumentNullException(nameof(func));
 
             using TransactionScope scope = TransactionScope.Create(transaction);
-            TResult result = await func();
-            await scope.CompleteAsync(token);
-            return result;
+            try
+            {
+                TResult result = await func();
+                await scope.CompleteAsync(token);
+                return result;
+            }
+            catch
+            {
+                // Don't complete the scope on exception - let it dispose and rollback
+                throw;
+            }
         }
 
         /// <summary>

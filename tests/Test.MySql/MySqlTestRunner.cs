@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.MySql
 {
@@ -70,6 +71,24 @@ namespace Test.MySql
             failedTests += expressionResults.FailedTests;
             skippedTests += expressionResults.SkippedTests;
 
+            var transactionResults = await RunTestClass<MySqlTransactionScopeTests>("MySQL Transaction Scope Tests");
+            totalTests += transactionResults.TotalTests;
+            passedTests += transactionResults.PassedTests;
+            failedTests += transactionResults.FailedTests;
+            skippedTests += transactionResults.SkippedTests;
+
+            var concurrencyResults = await RunTestClass<MySqlConcurrencyIntegrationTests>("MySQL Concurrency Control Tests");
+            totalTests += concurrencyResults.TotalTests;
+            passedTests += concurrencyResults.PassedTests;
+            failedTests += concurrencyResults.FailedTests;
+            skippedTests += concurrencyResults.SkippedTests;
+
+            var dataTypeResults = await RunTestClass<MySqlDataTypeConverterTests>("MySQL Data Type Converter Tests");
+            totalTests += dataTypeResults.TotalTests;
+            passedTests += dataTypeResults.PassedTests;
+            failedTests += dataTypeResults.FailedTests;
+            skippedTests += dataTypeResults.SkippedTests;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("====================================================");
@@ -104,14 +123,34 @@ namespace Test.MySql
         /// <typeparam name="T">The test class type</typeparam>
         /// <param name="testClassName">Name of the test class for reporting</param>
         /// <returns>Test results containing counts of passed, failed, and skipped tests</returns>
-        private static async Task<TestResults> RunTestClass<T>(string testClassName) where T : new()
+        private static async Task<TestResults> RunTestClass<T>(string testClassName)
         {
             Console.WriteLine($"Running {testClassName}...");
             Console.WriteLine(new string('-', testClassName.Length + 11));
 
             var results = new TestResults();
-            var testInstance = new T();
             var testType = typeof(T);
+
+            // Try to create test instance with ITestOutputHelper constructor first, then parameterless
+            T testInstance;
+            try
+            {
+                var outputHelperConstructor = testType.GetConstructor(new[] { typeof(ITestOutputHelper) });
+                if (outputHelperConstructor != null)
+                {
+                    testInstance = (T)outputHelperConstructor.Invoke(new object[] { new TestOutputHelper() });
+                }
+                else
+                {
+                    testInstance = (T)Activator.CreateInstance(testType);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to create test instance: {ex.Message}");
+                return results;
+            }
+
             var methods = testType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
 
             foreach (var method in methods)
@@ -182,6 +221,22 @@ namespace Test.MySql
         public class SkipException : Exception
         {
             public SkipException(string reason) : base(reason) { }
+        }
+
+        /// <summary>
+        /// Simple implementation of ITestOutputHelper for the test runner.
+        /// </summary>
+        private class TestOutputHelper : ITestOutputHelper
+        {
+            public void WriteLine(string message)
+            {
+                Console.WriteLine($"     {message}");
+            }
+
+            public void WriteLine(string format, params object[] args)
+            {
+                Console.WriteLine($"     {string.Format(format, args)}");
+            }
         }
 
         /// <summary>

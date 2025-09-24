@@ -1,11 +1,11 @@
-namespace Test.Sqlite
+namespace Test.Shared
 {
     using Durable;
 
     /// <summary>
     /// Represents an author entity without version-based optimistic concurrency control
     /// </summary>
-    [Entity("authors")]
+    [Entity("authors_without_version")]
     public class AuthorWithoutVersion
     {
         /// <summary>

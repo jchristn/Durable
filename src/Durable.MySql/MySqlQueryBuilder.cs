@@ -196,6 +196,17 @@ namespace Durable.MySql
         }
 
         /// <summary>
+        /// Executes the query without GROUP BY clause and returns the results.
+        /// Used by MySqlGroupedQueryBuilder for entity fetching after group filtering.
+        /// </summary>
+        /// <returns>An enumerable of query results</returns>
+        internal IEnumerable<TEntity> ExecuteWithoutGroupBy()
+        {
+            string sql = BuildSql(false);
+            return ExecuteSqlInternal(sql);
+        }
+
+        /// <summary>
         /// Builds and returns the SQL query string for debugging purposes.
         /// </summary>
         /// <returns>The SQL query string.</returns>
@@ -457,14 +468,12 @@ namespace Durable.MySql
                 // Remove backticks if present to store raw column name
                 string rawColumn = groupColumn.Trim('`');
                 _GroupByColumns.Add(rawColumn);
-                Console.WriteLine($"DEBUG: Added GROUP BY column: {rawColumn}");
             }
             catch (ArgumentException ex)
             {
                 // Complex expression that can't be translated to SQL column
                 // MySqlGroupedQueryBuilder will handle this with in-memory grouping
                 // Don't add anything to _GroupByColumns so SQL GROUP BY is skipped
-                Console.WriteLine($"DEBUG: Skipping GROUP BY for complex expression: {ex.Message}");
             }
 
             // Create advanced entity mapper for enhanced type handling
@@ -863,16 +872,19 @@ namespace Durable.MySql
         }
 
         /// <summary>
-        /// Internal method for MySqlGroupedQueryBuilder to execute without GROUP BY clause.
-        /// Used when grouping will be done in memory.
+        /// Executes the query without GROUP BY clause and returns the results asynchronously.
+        /// Used by MySqlGroupedQueryBuilder for entity fetching after group filtering.
         /// </summary>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>An enumerable of query results</returns>
         internal async Task<IEnumerable<TEntity>> ExecuteWithoutGroupByAsync(CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
-            string sql = BuildSql(false); // Exclude GROUP BY
+            string sql = BuildSql(false);
             return await ExecuteSqlInternalAsync(sql, token).ConfigureAwait(false);
         }
+
 
         /// <summary>
         /// Asynchronously executes the query and returns the results as an async enumerable with advanced entity mapping.
@@ -984,11 +996,6 @@ namespace Durable.MySql
         /// <returns>A list of GROUP BY column names</returns>
         internal List<string> GetGroupByColumns()
         {
-            Console.WriteLine($"DEBUG: GetGroupByColumns() called, _GroupByColumns.Count = {_GroupByColumns.Count}");
-            foreach (string col in _GroupByColumns)
-            {
-                Console.WriteLine($"DEBUG: GROUP BY Column: '{col}'");
-            }
             return new List<string>(_GroupByColumns);
         }
 

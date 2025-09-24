@@ -355,6 +355,55 @@ namespace Durable.MySql
         }
 
         /// <summary>
+        /// Creates an approximation of the original entity state for MergeChangesResolver.
+        /// This is needed because the repository doesn't track original entity state.
+        /// </summary>
+        /// <param name="currentEntity">The current entity state from the database</param>
+        /// <param name="incomingEntity">The incoming entity from the client</param>
+        /// <returns>An approximated original entity for merge operations</returns>
+        private T CreateOriginalEntityApproximation(T currentEntity, T incomingEntity)
+        {
+            try
+            {
+                // Create a new instance for the original entity approximation
+                T originalEntity = (T)Activator.CreateInstance(typeof(T))!;
+                PropertyInfo[] properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+                foreach (PropertyInfo property in properties)
+                {
+                    if (property.CanRead && property.CanWrite)
+                    {
+                        // For version column, use the incoming entity's version (what client originally had)
+                        if (property.Name == "Version" ||
+                            (_VersionColumnInfo != null && property.Name == _VersionColumnInfo.Property.Name))
+                        {
+                            property.SetValue(originalEntity, property.GetValue(incomingEntity));
+                        }
+                        else
+                        {
+                            // For merge scenarios, we create a hybrid approach:
+                            // - If current and incoming values are different, use current (assuming server won)
+                            // - If they're the same, use that value
+                            object? currentValue = property.GetValue(currentEntity);
+                            object? incomingValue = property.GetValue(incomingEntity);
+
+                            // Use current entity's value as baseline - this assumes current represents
+                            // a more recent state that we want to preserve during merge operations
+                            property.SetValue(originalEntity, currentValue);
+                        }
+                    }
+                }
+
+                return originalEntity;
+            }
+            catch (Exception)
+            {
+                // If we can't create the approximation, fall back to using the incoming entity
+                return incomingEntity;
+            }
+        }
+
+        /// <summary>
         /// Safely converts a database result to the specified type using the data type converter.
         /// Handles type conversion failures gracefully with detailed error messages.
         /// </summary>
@@ -958,6 +1007,9 @@ namespace Durable.MySql
 
         public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
+            // Use ambient transaction if no explicit transaction provided
+            transaction ??= TransactionScope.Current?.Transaction;
+
             string sql = $"SELECT COUNT(*) FROM `{_TableName}`";
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
@@ -991,6 +1043,9 @@ namespace Durable.MySql
         public async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
+
+            // Use ambient transaction if no explicit transaction provided
+            transaction ??= TransactionScope.Current?.Transaction;
 
             string sql = $"SELECT COUNT(*) FROM `{_TableName}`";
             List<(string name, object? value)> parameters = new List<(string, object?)>();
@@ -1367,6 +1422,9 @@ namespace Durable.MySql
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
 
+            // Use ambient transaction if no explicit transaction provided
+            transaction ??= TransactionScope.Current?.Transaction;
+
             List<string> columns = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
@@ -1474,6 +1532,9 @@ namespace Durable.MySql
                 throw new ArgumentNullException(nameof(entity));
 
             token.ThrowIfCancellationRequested();
+
+            // Use ambient transaction if no explicit transaction provided
+            transaction ??= TransactionScope.Current?.Transaction;
 
             List<string> columns = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
@@ -1646,7 +1707,52 @@ namespace Durable.MySql
             {
                 if (_VersionColumnInfo != null)
                 {
-                    throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue}");
+                    // Optimistic concurrency conflict detected - attempt resolution
+                    try
+                    {
+                        // Read the current entity from database to get its current state
+                        T? currentEntity = ReadById(idValue, transaction);
+
+                        if (currentEntity == null)
+                        {
+                            // Entity was deleted - throw appropriate exception
+                            throw new OptimisticConcurrencyException($"Entity with ID {idValue} was deleted by another process");
+                        }
+
+                        // Attempt to resolve the conflict using the configured resolver
+                        // For MergeChangesResolver, we create an original entity by taking the current entity's values
+                        // but with the incoming entity's version - this approximates the original state the client had
+                        T originalEntity = entity;
+
+                        if (_ConflictResolver is MergeChangesResolver<T> merger)
+                        {
+                            // Create a better approximation of the original entity for merge operations
+                            // We'll assume the current entity represents the state before the concurrent modification
+                            // but with the incoming entity's version to match what the client originally fetched
+                            originalEntity = CreateOriginalEntityApproximation(currentEntity, entity);
+                        }
+
+                        if (_ConflictResolver.TryResolveConflict(currentEntity, entity, originalEntity, _ConflictResolver.DefaultStrategy, out T resolvedEntity))
+                        {
+                            // Conflict resolved successfully - retry the update with resolved entity
+                            return Update(resolvedEntity, transaction);
+                        }
+                        else
+                        {
+                            // Resolver couldn't resolve the conflict
+                            throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue} and could not be resolved");
+                        }
+                    }
+                    catch (OptimisticConcurrencyException)
+                    {
+                        // Re-throw concurrency exceptions as-is
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Wrap other exceptions in concurrency exception
+                        throw new OptimisticConcurrencyException($"Error during conflict resolution for entity with ID {idValue}: {ex.Message}", ex);
+                    }
                 }
                 else
                 {
@@ -1819,7 +1925,52 @@ namespace Durable.MySql
             {
                 if (_VersionColumnInfo != null)
                 {
-                    throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue}");
+                    // Optimistic concurrency conflict detected - attempt resolution
+                    try
+                    {
+                        // Read the current entity from database to get its current state
+                        T? currentEntity = await ReadByIdAsync(idValue, transaction, token).ConfigureAwait(false);
+
+                        if (currentEntity == null)
+                        {
+                            // Entity was deleted - throw appropriate exception
+                            throw new OptimisticConcurrencyException($"Entity with ID {idValue} was deleted by another process");
+                        }
+
+                        // Attempt to resolve the conflict using the configured resolver
+                        // For MergeChangesResolver, we create an original entity by taking the current entity's values
+                        // but with the incoming entity's version - this approximates the original state the client had
+                        T originalEntity = entity;
+
+                        if (_ConflictResolver is MergeChangesResolver<T> merger)
+                        {
+                            // Create a better approximation of the original entity for merge operations
+                            originalEntity = CreateOriginalEntityApproximation(currentEntity, entity);
+                        }
+
+                        var resolveResult = await _ConflictResolver.TryResolveConflictAsync(currentEntity, entity, originalEntity, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
+
+                        if (resolveResult.Success && resolveResult.ResolvedEntity != null)
+                        {
+                            // Conflict resolved successfully - retry the update with resolved entity
+                            return await UpdateAsync(resolveResult.ResolvedEntity, transaction, token).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            // Resolver couldn't resolve the conflict
+                            throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue} and could not be resolved");
+                        }
+                    }
+                    catch (OptimisticConcurrencyException)
+                    {
+                        // Re-throw concurrency exceptions as-is
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Wrap other exceptions in concurrency exception
+                        throw new OptimisticConcurrencyException($"Error during conflict resolution for entity with ID {idValue}: {ex.Message}", ex);
+                    }
                 }
                 else
                 {
@@ -2075,7 +2226,46 @@ namespace Durable.MySql
             object? id = _PrimaryKeyProperty.GetValue(entity);
             if (id == null) throw new InvalidOperationException("Cannot delete entity with null primary key");
 
-            return DeleteById(id, transaction);
+            // If the entity has a version column, use optimistic concurrency control
+            if (_VersionColumnInfo != null)
+            {
+                object? version = _VersionColumnInfo.GetValue(entity);
+                string sql = $"DELETE FROM `{_TableName}` WHERE `{_PrimaryKeyColumn}` = @id AND `{_VersionColumnInfo.ColumnName}` = @version";
+
+                int rowsAffected;
+                if (transaction != null)
+                {
+                    rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, ("@id", id), ("@version", version));
+                }
+                else
+                {
+                    using var connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id), ("@version", version));
+                }
+
+                if (rowsAffected == 0)
+                {
+                    // Check if entity still exists
+                    T? currentEntity = ReadById(id, transaction);
+                    if (currentEntity == null)
+                    {
+                        // Entity was already deleted by another process
+                        throw new OptimisticConcurrencyException($"Entity with ID {id} was deleted by another process");
+                    }
+                    else
+                    {
+                        // Entity exists but version doesn't match
+                        throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected during delete for entity with ID {id}");
+                    }
+                }
+
+                return rowsAffected > 0;
+            }
+            else
+            {
+                // No version column, use simple delete by ID
+                return DeleteById(id, transaction);
+            }
         }
 
         public bool DeleteById(object id, ITransaction? transaction = null)
@@ -2148,7 +2338,46 @@ namespace Durable.MySql
             object? id = _PrimaryKeyProperty.GetValue(entity);
             if (id == null) throw new InvalidOperationException("Cannot delete entity with null primary key");
 
-            return await DeleteByIdAsync(id, transaction, token).ConfigureAwait(false);
+            // If the entity has a version column, use optimistic concurrency control
+            if (_VersionColumnInfo != null)
+            {
+                object? version = _VersionColumnInfo.GetValue(entity);
+                string sql = $"DELETE FROM `{_TableName}` WHERE `{_PrimaryKeyColumn}` = @id AND `{_VersionColumnInfo.ColumnName}` = @version";
+
+                int rowsAffected;
+                if (transaction != null)
+                {
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                }
+                else
+                {
+                    using var connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                }
+
+                if (rowsAffected == 0)
+                {
+                    // Check if entity still exists
+                    T? currentEntity = await ReadByIdAsync(id, transaction, token).ConfigureAwait(false);
+                    if (currentEntity == null)
+                    {
+                        // Entity was already deleted by another process
+                        throw new OptimisticConcurrencyException($"Entity with ID {id} was deleted by another process");
+                    }
+                    else
+                    {
+                        // Entity exists but version doesn't match
+                        throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected during delete for entity with ID {id}");
+                    }
+                }
+
+                return rowsAffected > 0;
+            }
+            else
+            {
+                // No version column, use simple delete by ID
+                return await DeleteByIdAsync(id, transaction, token).ConfigureAwait(false);
+            }
         }
 
         /// <summary>
@@ -3425,8 +3654,8 @@ namespace Durable.MySql
         internal string GetColumnFromExpression(Expression expression)
         {
             MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
-            string columnName = parser.GetColumnFromExpression(expression);
-            return _Sanitizer.SanitizeIdentifier(columnName);
+            // The parser's GetColumnFromExpression already returns sanitized column names with backticks
+            return parser.GetColumnFromExpression(expression);
         }
 
         #endregion

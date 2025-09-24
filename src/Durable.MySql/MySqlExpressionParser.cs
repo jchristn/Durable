@@ -112,19 +112,9 @@ namespace Durable.MySql
                 PropertyInfo? propInfo = memberExpr.Member as PropertyInfo;
                 if (propInfo != null)
                 {
-                    Console.WriteLine($"DEBUG: Looking for property: {propInfo.Name} in {_ColumnMappings.Count} mappings");
-                    foreach (var kvp in _ColumnMappings)
-                    {
-                        Console.WriteLine($"DEBUG: Mapping: {kvp.Key} -> {kvp.Value.Name}");
-                    }
-
                     KeyValuePair<string, PropertyInfo> mapping = _ColumnMappings.FirstOrDefault(m => m.Value == propInfo);
                     if (mapping.Key != null)
-                    {
-                        Console.WriteLine($"DEBUG: Found mapping: {propInfo.Name} -> {mapping.Key}");
                         return $"`{mapping.Key}`";
-                    }
-                    Console.WriteLine($"DEBUG: No mapping found for property: {propInfo.Name}");
                 }
             }
             throw new ArgumentException($"Expression is not a valid member expression or property is not mapped to a column: {expression}", nameof(expression));
@@ -258,6 +248,9 @@ namespace Durable.MySql
                 ExpressionType.Divide => "/",
                 ExpressionType.Modulo => "%",
 
+                // Coalesce operator - handled specially below
+                ExpressionType.Coalesce => "COALESCE",
+
                 _ => throw new NotSupportedException($"Binary operator '{binary.NodeType}' is not supported in MySQL expressions")
             };
 
@@ -268,6 +261,11 @@ namespace Durable.MySql
                 if (op == "!=") return $"{left} IS NOT NULL";
             }
 
+            // Handle null coalescing operator (MySQL uses COALESCE function)
+            if (binary.NodeType == ExpressionType.Coalesce)
+            {
+                return $"COALESCE({left}, {right})";
+            }
 
             // Handle string concatenation (MySQL uses CONCAT function)
             if (binary.NodeType == ExpressionType.Add &&
@@ -435,6 +433,7 @@ namespace Durable.MySql
                 case "ToLower":
                 case "Trim":
                 case "Length":
+                case "Substring":
                     return HandleStringFunction(methodCall);
 
                 // Custom Between method (extension method)
@@ -662,11 +661,35 @@ namespace Durable.MySql
                     "ToLower" => $"LOWER({stringColumn})",
                     "Trim" => $"TRIM({stringColumn})",
                     "Length" when methodCall.Method.DeclaringType == typeof(string) => $"CHAR_LENGTH({stringColumn})",
+                    "Substring" => HandleSubstring(methodCall, stringColumn),
                     _ => throw new NotSupportedException($"String method {methodCall.Method.Name} is not supported")
                 };
             }
 
             throw new NotSupportedException($"String method {methodCall.Method.Name} call not supported in this context");
+        }
+
+        private string HandleSubstring(MethodCallExpression methodCall, string stringColumn)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                // Substring(startIndex) - from start index to end
+                string startIndex = Visit(methodCall.Arguments[0]);
+                // MySQL SUBSTRING is 1-based, C# is 0-based, so we add 1 to the start index
+                return $"SUBSTRING({stringColumn}, {startIndex} + 1)";
+            }
+            else if (methodCall.Arguments.Count == 2)
+            {
+                // Substring(startIndex, length) - specific length from start index
+                string startIndex = Visit(methodCall.Arguments[0]);
+                string length = Visit(methodCall.Arguments[1]);
+                // MySQL SUBSTRING is 1-based, C# is 0-based, so we add 1 to the start index
+                return $"SUBSTRING({stringColumn}, {startIndex} + 1, {length})";
+            }
+            else
+            {
+                throw new NotSupportedException($"Substring method with {methodCall.Arguments.Count} arguments is not supported");
+            }
         }
 
         private string ParseUpdateValue(Expression expression)

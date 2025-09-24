@@ -681,7 +681,34 @@ namespace Durable.MySql
                 return _Repository.GetColumnFromExpression(memberExpression);
             }
 
-            throw new NotSupportedException($"Expression type {expression.GetType().Name} is not supported in projections");
+            // Handle UnaryExpression (typically nullable conversions like (decimal?)p.Salary)
+            if (expression is UnaryExpression unaryExpression && unaryExpression.Operand is MemberExpression unaryMember)
+            {
+                return _Repository.GetColumnFromExpression(unaryMember);
+            }
+
+            // For complex expressions (like string concatenation, method calls, etc.),
+            // parse them into SQL using the expression parser
+            try
+            {
+                MySqlExpressionParser<TEntity> parser = new MySqlExpressionParser<TEntity>(_Repository._ColumnMappings, _Repository._Sanitizer);
+                return parser.ParseExpression(expression);
+            }
+            catch (NotSupportedException ex) when (ex.Message.Contains("Method") && ex.Message.Contains("is not supported"))
+            {
+                // Provide better error message for unsupported methods in projections
+                throw new NotSupportedException(
+                    $"The expression '{expression}' contains method calls that cannot be translated to SQL in projections. " +
+                    $"{ex.Message} " +
+                    $"Consider using simpler expressions or supported methods (Contains, StartsWith, ToUpper, ToLower, etc.), " +
+                    $"or perform the calculation after retrieving the data from the database.");
+            }
+            catch (Exception ex)
+            {
+                throw new NotSupportedException(
+                    $"Expression type {expression.GetType().Name} is not supported in projections: {ex.Message} " +
+                    $"Projections must use simple property access or expressions that can be translated to SQL.");
+            }
         }
 
         /// <summary>
@@ -724,7 +751,7 @@ namespace Durable.MySql
             if (_Distinct)
                 sql.Append("DISTINCT ");
 
-            List<string> selectColumns = _SelectMappings.Select(m => $"`{m.SourceColumn}`").ToList();
+            List<string> selectColumns = _SelectMappings.Select(m => m.SourceColumn).ToList();
             sql.Append(string.Join(", ", selectColumns));
 
             // FROM clause
@@ -748,7 +775,7 @@ namespace Durable.MySql
             if (_OrderByClauses.Count > 0)
             {
                 sql.Append(" ORDER BY ");
-                List<string> orderByParts = _OrderByClauses.Select(o => $"`{o.Column}` {(o.Ascending ? "ASC" : "DESC")}").ToList();
+                List<string> orderByParts = _OrderByClauses.Select(o => $"{o.Column} {(o.Ascending ? "ASC" : "DESC")}").ToList();
                 sql.Append(string.Join(", ", orderByParts));
             }
 
