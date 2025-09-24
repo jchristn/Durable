@@ -89,6 +89,18 @@ namespace Test.MySql
             failedTests += dataTypeResults.FailedTests;
             skippedTests += dataTypeResults.SkippedTests;
 
+            var batchInsertResults = await RunTestClass<MySqlBatchInsertTests>("MySQL Performance & Configuration Tests");
+            totalTests += batchInsertResults.TotalTests;
+            passedTests += batchInsertResults.PassedTests;
+            failedTests += batchInsertResults.FailedTests;
+            skippedTests += batchInsertResults.SkippedTests;
+
+            var entityRelationshipResults = await RunTestClass<MySqlEntityRelationshipTests>("MySQL Entity Relationships & Complex Models Tests");
+            totalTests += entityRelationshipResults.TotalTests;
+            passedTests += entityRelationshipResults.PassedTests;
+            failedTests += entityRelationshipResults.FailedTests;
+            skippedTests += entityRelationshipResults.SkippedTests;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("====================================================");

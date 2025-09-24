@@ -3274,7 +3274,8 @@ namespace Durable.MySql
         /// <returns>The created entities with any auto-generated values populated</returns>
         private async Task<IEnumerable<T>> CreateManyOptimizedAsync(IList<T> entities, ITransaction? transaction, CancellationToken token)
         {
-            using var connection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
+            DbConnection connection = (DbConnection)(transaction?.Connection ?? _ConnectionFactory.GetConnection());
+            bool shouldDisposeConnection = transaction == null;
             List<T> results = new List<T>();
 
             try
