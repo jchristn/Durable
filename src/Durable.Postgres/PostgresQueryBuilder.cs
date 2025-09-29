@@ -245,9 +245,43 @@ namespace Durable.Postgres
         /// <typeparam name="TKey">The type of the grouping key.</typeparam>
         /// <param name="keySelector">The expression to extract the grouping key.</param>
         /// <returns>A grouped query builder for further operations.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            throw new NotImplementedException("GroupBy is not yet implemented");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+
+            // Try to extract column name from the key selector expression
+            // For complex expressions (anonymous types, computed fields), we'll skip SQL GROUP BY
+            // and let PostgresGroupedQueryBuilder handle it in-memory
+            try
+            {
+                string groupColumn = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+                // Remove double quotes if present to store raw column name
+                string rawColumn = groupColumn.Trim('"');
+                _GroupByColumns.Add(rawColumn);
+            }
+            catch (ArgumentException)
+            {
+                // Complex expression that can't be translated to SQL column
+                // PostgresGroupedQueryBuilder will handle this with in-memory grouping
+                // Don't add anything to _GroupByColumns so SQL GROUP BY is skipped
+            }
+
+            // Create advanced entity mapper for enhanced type handling
+            PostgresEntityMapper<TEntity> entityMapper = new PostgresEntityMapper<TEntity>(
+                _Repository._DataTypeConverter,
+                _Repository._ColumnMappings,
+                _Repository._Sanitizer);
+
+            // Return the advanced grouped query builder with full EntityMapper integration
+            return new PostgresGroupedQueryBuilder<TEntity, TKey>(
+                _Repository,
+                this,
+                keySelector,
+                entityMapper,
+                _Repository._DataTypeConverter,
+                _Repository._Sanitizer);
         }
 
         /// <summary>
@@ -436,37 +470,66 @@ namespace Durable.Postgres
 
         /// <summary>
         /// Adds a window function to the query.
+        /// PostgreSQL has excellent support for window functions with sophisticated frame specifications.
         /// </summary>
         /// <param name="functionName">The name of the window function.</param>
         /// <param name="partitionBy">Optional PARTITION BY clause.</param>
         /// <param name="orderBy">Optional ORDER BY clause for the window.</param>
         /// <returns>A windowed query builder for further window operations.</returns>
+        /// <exception cref="ArgumentException">Thrown when functionName is null or empty</exception>
         public IWindowedQueryBuilder<TEntity> WithWindowFunction(string functionName, string? partitionBy = null, string? orderBy = null)
         {
-            throw new NotImplementedException("WithWindowFunction is not yet implemented");
+            if (string.IsNullOrWhiteSpace(functionName))
+                throw new ArgumentException("Function name cannot be null or empty", nameof(functionName));
+
+            return new PostgresWindowedQueryBuilder<TEntity>(
+                this,
+                _Repository,
+                null, // Transaction will be handled by the repository
+                functionName,
+                partitionBy,
+                orderBy);
         }
 
         /// <summary>
         /// Adds a Common Table Expression (CTE) to the query.
+        /// PostgreSQL has excellent support for CTEs including recursive CTEs.
         /// </summary>
         /// <param name="cteName">The name of the CTE.</param>
         /// <param name="cteQuery">The SQL query for the CTE.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentException">Thrown when cteName or cteQuery is null or empty</exception>
         public IQueryBuilder<TEntity> WithCte(string cteName, string cteQuery)
         {
-            throw new NotImplementedException("WithCte is not yet implemented");
+            if (string.IsNullOrWhiteSpace(cteName))
+                throw new ArgumentException("CTE name cannot be null or empty", nameof(cteName));
+            if (string.IsNullOrWhiteSpace(cteQuery))
+                throw new ArgumentException("CTE query cannot be null or empty", nameof(cteQuery));
+
+            _CteDefinitions.Add(new CteDefinition(cteName, cteQuery));
+            return this;
         }
 
         /// <summary>
         /// Adds a recursive Common Table Expression (CTE) to the query.
+        /// PostgreSQL has excellent support for recursive CTEs for hierarchical data processing.
         /// </summary>
         /// <param name="cteName">The name of the recursive CTE.</param>
         /// <param name="anchorQuery">The anchor query for the recursive CTE.</param>
         /// <param name="recursiveQuery">The recursive query for the CTE.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentException">Thrown when cteName, anchorQuery, or recursiveQuery is null or empty</exception>
         public IQueryBuilder<TEntity> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery)
         {
-            throw new NotImplementedException("WithRecursiveCte is not yet implemented");
+            if (string.IsNullOrWhiteSpace(cteName))
+                throw new ArgumentException("CTE name cannot be null or empty", nameof(cteName));
+            if (string.IsNullOrWhiteSpace(anchorQuery))
+                throw new ArgumentException("Anchor query cannot be null or empty", nameof(anchorQuery));
+            if (string.IsNullOrWhiteSpace(recursiveQuery))
+                throw new ArgumentException("Recursive query cannot be null or empty", nameof(recursiveQuery));
+
+            _CteDefinitions.Add(new CteDefinition(cteName, anchorQuery, recursiveQuery));
+            return this;
         }
 
         /// <summary>
@@ -475,9 +538,16 @@ namespace Durable.Postgres
         /// <param name="sql">The raw SQL condition.</param>
         /// <param name="parameters">Optional parameters for the SQL.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentException">Thrown when sql is empty or whitespace</exception>
         public IQueryBuilder<TEntity> WhereRaw(string sql, params object[] parameters)
         {
-            if (string.IsNullOrWhiteSpace(sql)) throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("Raw SQL cannot be null or empty", nameof(sql));
+
+            if (parameters != null && parameters.Length > 0)
+            {
+                sql = string.Format(sql, parameters.Select(p => _Repository._Sanitizer.FormatValue(p)).ToArray());
+            }
             _WhereClauses.Add(sql);
             return this;
         }
@@ -491,6 +561,15 @@ namespace Durable.Postgres
         {
             _CustomSelectClause = sql;
             return this;
+        }
+
+        /// <summary>
+        /// Begins building a CASE expression for conditional logic in the SELECT clause.
+        /// </summary>
+        /// <returns>A case expression builder for constructing WHEN/THEN/ELSE logic</returns>
+        public ICaseExpressionBuilder<TEntity> SelectCase()
+        {
+            return new PostgresCaseExpressionBuilder<TEntity>(this, _Repository);
         }
 
         /// <summary>
@@ -616,6 +695,32 @@ namespace Durable.Postgres
             List<string> sqlParts = new List<string>();
             PostgresJoinBuilder.PostgresJoinResult? joinResult = null;
 
+            // CTEs (Common Table Expressions) at the beginning
+            if (_CteDefinitions.Count > 0)
+            {
+                List<string> cteDeclarations = new List<string>();
+                bool hasRecursiveCte = _CteDefinitions.Any(c => c.IsRecursive);
+
+                // Use WITH RECURSIVE if any CTE is recursive
+                string withKeyword = hasRecursiveCte ? "WITH RECURSIVE" : "WITH";
+
+                foreach (CteDefinition cte in _CteDefinitions)
+                {
+                    if (cte.IsRecursive)
+                    {
+                        string cteSql = $"{_Repository._Sanitizer.SanitizeIdentifier(cte.Name)} AS ({cte.AnchorQuery} UNION ALL {cte.RecursiveQuery})";
+                        cteDeclarations.Add(cteSql);
+                    }
+                    else
+                    {
+                        string cteSql = $"{_Repository._Sanitizer.SanitizeIdentifier(cte.Name)} AS ({cte.Query})";
+                        cteDeclarations.Add(cteSql);
+                    }
+                }
+
+                sqlParts.Add($"{withKeyword} {string.Join(", ", cteDeclarations)}");
+            }
+
             // Pre-calculate join result if includes are present
             if (_IncludePaths.Count > 0)
             {
@@ -623,19 +728,46 @@ namespace Durable.Postgres
                 _CachedJoinResult = joinResult; // Cache for later use in Execute()
             }
 
-            // SELECT clause
+            // SELECT clause with window functions
             if (!string.IsNullOrEmpty(_CustomSelectClause))
             {
-                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{_CustomSelectClause}");
+                string selectClause = _CustomSelectClause;
+                if (_WindowFunctions.Count > 0)
+                {
+                    selectClause += ", " + BuildWindowFunctionsClause();
+                }
+                if (_CaseExpressions.Count > 0)
+                {
+                    selectClause += ", " + BuildCaseExpressionsClause();
+                }
+                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{selectClause}");
             }
             else if (joinResult != null)
             {
-                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{joinResult.SelectClause}");
+                string selectClause = joinResult.SelectClause;
+                if (_WindowFunctions.Count > 0)
+                {
+                    selectClause += ", " + BuildWindowFunctionsClause();
+                }
+                if (_CaseExpressions.Count > 0)
+                {
+                    selectClause += ", " + BuildCaseExpressionsClause();
+                }
+                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{selectClause}");
             }
             else
             {
                 string tableName = _Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName);
-                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{tableName}.*");
+                string selectClause = $"{tableName}.*";
+                if (_WindowFunctions.Count > 0)
+                {
+                    selectClause += ", " + BuildWindowFunctionsClause();
+                }
+                if (_CaseExpressions.Count > 0)
+                {
+                    selectClause += ", " + BuildCaseExpressionsClause();
+                }
+                sqlParts.Add($"SELECT {(_Distinct ? "DISTINCT " : "")}{selectClause}");
             }
 
             // FROM clause
@@ -869,6 +1001,219 @@ namespace Durable.Postgres
         internal List<string> GetGroupByColumns()
         {
             return new List<string>(_GroupByColumns);
+        }
+
+        /// <summary>
+        /// Gets the current include paths for navigation property loading.
+        /// Used by PostgresGroupedQueryBuilder for entity fetching after group filtering.
+        /// </summary>
+        /// <returns>A list of include paths</returns>
+        internal List<string> GetIncludePaths()
+        {
+            return new List<string>(_IncludePaths);
+        }
+
+        /// <summary>
+        /// Executes the query without GROUP BY clauses for grouped query operations.
+        /// Used by PostgresGroupedQueryBuilder for entity fetching after group filtering.
+        /// </summary>
+        /// <returns>An enumerable of query results</returns>
+        internal IEnumerable<TEntity> ExecuteWithoutGroupBy()
+        {
+            string sql = BuildSql(false);
+            return ExecuteSqlInternal(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously executes the query without GROUP BY clauses for grouped query operations.
+        /// Used by PostgresGroupedQueryBuilder for entity fetching after group filtering.
+        /// </summary>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>An enumerable of query results</returns>
+        internal async Task<IEnumerable<TEntity>> ExecuteWithoutGroupByAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            string sql = BuildSql(false);
+            return await ExecuteSqlInternalAsync(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Adds a window function to the query.
+        /// Used by PostgresWindowedQueryBuilder to register window functions.
+        /// </summary>
+        /// <param name="windowFunction">The window function to add</param>
+        /// <exception cref="ArgumentNullException">Thrown when windowFunction is null</exception>
+        internal void AddWindowFunction(WindowFunction windowFunction)
+        {
+            if (windowFunction == null)
+                throw new ArgumentNullException(nameof(windowFunction));
+
+            _WindowFunctions.Add(windowFunction);
+        }
+
+        /// <summary>
+        /// Adds a CASE expression to the query.
+        /// Used by PostgresCaseExpressionBuilder to register CASE expressions.
+        /// </summary>
+        /// <param name="caseExpressionSql">The complete CASE expression SQL string to add</param>
+        /// <exception cref="ArgumentNullException">Thrown when caseExpressionSql is null</exception>
+        /// <exception cref="ArgumentException">Thrown when caseExpressionSql is empty or whitespace</exception>
+        internal void AddCaseExpression(string caseExpressionSql)
+        {
+            if (string.IsNullOrWhiteSpace(caseExpressionSql))
+                throw new ArgumentException("CASE expression SQL cannot be null or empty", nameof(caseExpressionSql));
+
+            _CaseExpressions.Add(caseExpressionSql);
+        }
+
+        private string BuildWindowFunctionsClause()
+        {
+            List<string> windowFunctionsSql = new List<string>();
+
+            foreach (WindowFunction wf in _WindowFunctions)
+            {
+                string functionSql = BuildWindowFunctionSql(wf);
+                windowFunctionsSql.Add(functionSql);
+            }
+
+            return string.Join(", ", windowFunctionsSql);
+        }
+
+        private string BuildCaseExpressionsClause()
+        {
+            return string.Join(", ", _CaseExpressions);
+        }
+
+        private string BuildWindowFunctionSql(WindowFunction wf)
+        {
+            StringBuilder sql = new StringBuilder();
+
+            // Function name and column
+            if (!string.IsNullOrEmpty(wf.Column) && wf.Column != "*")
+            {
+                if (wf.FunctionName == "LEAD" || wf.FunctionName == "LAG")
+                {
+                    // LEAD/LAG with parameters
+                    string columnName = _Repository._Sanitizer.SanitizeIdentifier(wf.Column);
+                    sql.Append($"{wf.FunctionName}({columnName}");
+
+                    if (wf.Parameters.ContainsKey("offset"))
+                    {
+                        sql.Append($", {wf.Parameters["offset"]}");
+                    }
+                    if (wf.Parameters.ContainsKey("default"))
+                    {
+                        sql.Append($", {FormatParameterValue(wf.Parameters["default"])}");
+                    }
+                    sql.Append(")");
+                }
+                else if (wf.FunctionName == "NTH_VALUE")
+                {
+                    // NTH_VALUE with position parameter
+                    string columnName = _Repository._Sanitizer.SanitizeIdentifier(wf.Column);
+                    int n = (int)wf.Parameters["n"];
+                    sql.Append($"{wf.FunctionName}({columnName}, {n})");
+                }
+                else
+                {
+                    // Regular functions with column
+                    string columnName = _Repository._Sanitizer.SanitizeIdentifier(wf.Column);
+                    sql.Append($"{wf.FunctionName}({columnName})");
+                }
+            }
+            else if (wf.FunctionName == "ROW_NUMBER" || wf.FunctionName == "RANK" || wf.FunctionName == "DENSE_RANK")
+            {
+                // Ranking functions without parameters
+                sql.Append($"{wf.FunctionName}()");
+            }
+            else
+            {
+                // COUNT(*) and similar
+                sql.Append($"{wf.FunctionName}(*)");
+            }
+
+            // OVER clause
+            sql.Append(" OVER (");
+
+            List<string> overClauses = new List<string>();
+
+            // PARTITION BY
+            if (wf.PartitionByColumns.Count > 0)
+            {
+                List<string> partitionColumns = wf.PartitionByColumns
+                    .Select(col => _Repository._Sanitizer.SanitizeIdentifier(col))
+                    .ToList();
+                overClauses.Add($"PARTITION BY {string.Join(", ", partitionColumns)}");
+            }
+
+            // ORDER BY
+            if (wf.OrderByColumns.Count > 0)
+            {
+                List<string> orderColumns = wf.OrderByColumns
+                    .Select(col => $"{_Repository._Sanitizer.SanitizeIdentifier(col.Column)} {(col.Ascending ? "ASC" : "DESC")}")
+                    .ToList();
+                overClauses.Add($"ORDER BY {string.Join(", ", orderColumns)}");
+            }
+
+            // Frame specification (only add if bounds are explicitly set)
+            if (wf.Frame.StartBound != null && wf.Frame.EndBound != null &&
+                (wf.Frame.StartBound.Type != WindowFrameBoundType.CurrentRow ||
+                 wf.Frame.EndBound.Type != WindowFrameBoundType.CurrentRow))
+            {
+                overClauses.Add(BuildWindowFrameClause(wf.Frame));
+            }
+
+            sql.Append(string.Join(" ", overClauses));
+            sql.Append(")");
+
+            // Alias
+            if (!string.IsNullOrEmpty(wf.Alias))
+            {
+                sql.Append($" AS {_Repository._Sanitizer.SanitizeIdentifier(wf.Alias)}");
+            }
+
+            return sql.ToString();
+        }
+
+        private string BuildWindowFrameClause(WindowFrame frame)
+        {
+            string frameType = frame.Type == WindowFrameType.Rows ? "ROWS" : "RANGE";
+
+            if (frame.StartBound != null && frame.EndBound != null)
+            {
+                string startBound = FormatWindowFrameBound(frame.StartBound);
+                string endBound = FormatWindowFrameBound(frame.EndBound);
+                return $"{frameType} BETWEEN {startBound} AND {endBound}";
+            }
+            else if (frame.StartBound != null)
+            {
+                string startBound = FormatWindowFrameBound(frame.StartBound);
+                return $"{frameType} {startBound}";
+            }
+
+            return "";
+        }
+
+        private string FormatWindowFrameBound(WindowFrameBound bound)
+        {
+            return bound.Type switch
+            {
+                WindowFrameBoundType.UnboundedPreceding => "UNBOUNDED PRECEDING",
+                WindowFrameBoundType.UnboundedFollowing => "UNBOUNDED FOLLOWING",
+                WindowFrameBoundType.CurrentRow => "CURRENT ROW",
+                WindowFrameBoundType.Preceding => $"{bound.Offset} PRECEDING",
+                WindowFrameBoundType.Following => $"{bound.Offset} FOLLOWING",
+                _ => "CURRENT ROW"
+            };
+        }
+
+        private string FormatParameterValue(object value)
+        {
+            if (value == null) return "NULL";
+            if (value is string str) return $"'{str.Replace("'", "''")}'";
+            if (value is DateTime dt) return $"'{dt:yyyy-MM-dd HH:mm:ss}'";
+            if (value is bool b) return b ? "true" : "false";
+            return value.ToString() ?? "NULL";
         }
 
         #endregion

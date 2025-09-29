@@ -441,6 +441,15 @@ namespace Durable.Postgres
             // For now, we'll skip this complex functionality
         }
 
+        /// <summary>
+        /// Clears the internal entity processing cache. Call this between different query executions
+        /// to prevent issues with entity identity tracking.
+        /// </summary>
+        public void ClearProcessingCache()
+        {
+            _ProcessedEntities.Clear();
+        }
+
         #endregion
     }
 }
