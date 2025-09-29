@@ -221,7 +221,22 @@ namespace Durable.Postgres
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
-            throw new NotImplementedException("ThenInclude is not yet implemented");
+            if (navigationProperty == null) throw new ArgumentNullException(nameof(navigationProperty));
+
+            // For ThenInclude, we need to append to the last include path
+            if (_IncludePaths.Count == 0)
+            {
+                throw new InvalidOperationException("ThenInclude can only be used after Include");
+            }
+
+            string propertyPath = ExtractPropertyPath(navigationProperty);
+            string lastIncludePath = _IncludePaths[_IncludePaths.Count - 1];
+            string combinedPath = $"{lastIncludePath}.{propertyPath}";
+
+            // Replace the last include path with the combined path
+            _IncludePaths[_IncludePaths.Count - 1] = combinedPath;
+
+            return this;
         }
 
         /// <summary>
@@ -254,9 +269,13 @@ namespace Durable.Postgres
         /// </summary>
         /// <param name="other">The other query builder to union with.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Union(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Union is not yet implemented");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Union, other));
+            return this;
         }
 
         /// <summary>
@@ -264,29 +283,43 @@ namespace Durable.Postgres
         /// </summary>
         /// <param name="other">The other query builder to union with.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> UnionAll(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("UnionAll is not yet implemented");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.UnionAll, other));
+            return this;
         }
 
         /// <summary>
         /// Performs an INTERSECT operation with another query, returning only common results.
+        /// PostgreSQL natively supports INTERSECT operations.
         /// </summary>
         /// <param name="other">The other query builder to intersect with.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Intersect(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Intersect is not yet implemented");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Intersect, other));
+            return this;
         }
 
         /// <summary>
         /// Performs an EXCEPT operation with another query, returning results not in the other query.
+        /// PostgreSQL natively supports EXCEPT operations.
         /// </summary>
         /// <param name="other">The other query builder to except with.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null</exception>
         public IQueryBuilder<TEntity> Except(IQueryBuilder<TEntity> other)
         {
-            throw new NotImplementedException("Except is not yet implemented");
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            _SetOperations.Add(new SetOperation<TEntity>(SetOperationType.Except, other));
+            return this;
         }
 
         /// <summary>
@@ -296,9 +329,17 @@ namespace Durable.Postgres
         /// <param name="keySelector">The expression to extract the key from the main query.</param>
         /// <param name="subquery">The subquery to check membership against.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
-            throw new NotImplementedException("WhereIn is not yet implemented");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -308,9 +349,17 @@ namespace Durable.Postgres
         /// <param name="keySelector">The expression to extract the key from the main query.</param>
         /// <param name="subquery">The subquery to check membership against.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotIn<TKey>(Expression<Func<TEntity, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new()
         {
-            throw new NotImplementedException("WhereNotIn is not yet implemented");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -320,9 +369,17 @@ namespace Durable.Postgres
         /// <param name="keySelector">The expression to extract the key from the main query.</param>
         /// <param name="subquerySql">The raw SQL subquery string.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="ArgumentException">Thrown when subquerySql is null, empty, or whitespace</exception>
         public IQueryBuilder<TEntity> WhereInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
-            throw new NotImplementedException("WhereInRaw is not yet implemented");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (string.IsNullOrWhiteSpace(subquerySql))
+                throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -332,9 +389,17 @@ namespace Durable.Postgres
         /// <param name="keySelector">The expression to extract the key from the main query.</param>
         /// <param name="subquerySql">The raw SQL subquery string.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null</exception>
+        /// <exception cref="ArgumentException">Thrown when subquerySql is null, empty, or whitespace</exception>
         public IQueryBuilder<TEntity> WhereNotInRaw<TKey>(Expression<Func<TEntity, TKey>> keySelector, string subquerySql)
         {
-            throw new NotImplementedException("WhereNotInRaw is not yet implemented");
+            if (keySelector == null)
+                throw new ArgumentNullException(nameof(keySelector));
+            if (string.IsNullOrWhiteSpace(subquerySql))
+                throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -343,9 +408,14 @@ namespace Durable.Postgres
         /// <typeparam name="TOther">The type of the subquery entity.</typeparam>
         /// <param name="subquery">The subquery to check for existence.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
-            throw new NotImplementedException("WhereExists is not yet implemented");
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"EXISTS ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -354,9 +424,14 @@ namespace Durable.Postgres
         /// <typeparam name="TOther">The type of the subquery entity.</typeparam>
         /// <param name="subquery">The subquery to check for non-existence.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null</exception>
         public IQueryBuilder<TEntity> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new()
         {
-            throw new NotImplementedException("WhereNotExists is not yet implemented");
+            if (subquery == null)
+                throw new ArgumentNullException(nameof(subquery));
+            string subquerySql = subquery.BuildSql().TrimEnd(';');
+            _WhereClauses.Add($"NOT EXISTS ({subquerySql})");
+            return this;
         }
 
         /// <summary>
@@ -619,6 +694,37 @@ namespace Durable.Postgres
             if (_SkipCount.HasValue)
             {
                 sqlParts.Add($"OFFSET {_SkipCount.Value}");
+            }
+
+            // Handle set operations (UNION, INTERSECT, EXCEPT)
+            if (_SetOperations.Count > 0)
+            {
+                string baseQuery = string.Join(" ", sqlParts);
+                StringBuilder setOperationSql = new StringBuilder(baseQuery);
+
+                foreach (SetOperation<TEntity> setOp in _SetOperations)
+                {
+                    switch (setOp.Type)
+                    {
+                        case SetOperationType.Union:
+                            setOperationSql.Append(" UNION ");
+                            break;
+                        case SetOperationType.UnionAll:
+                            setOperationSql.Append(" UNION ALL ");
+                            break;
+                        case SetOperationType.Intersect:
+                            setOperationSql.Append(" INTERSECT ");
+                            break;
+                        case SetOperationType.Except:
+                            setOperationSql.Append(" EXCEPT ");
+                            break;
+                    }
+
+                    string otherQuerySql = setOp.OtherQuery.BuildSql().TrimEnd(';');
+                    setOperationSql.Append($"({otherQuerySql})");
+                }
+
+                return setOperationSql.ToString();
             }
 
             return string.Join(" ", sqlParts);
