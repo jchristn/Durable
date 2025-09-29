@@ -1998,6 +1998,32 @@ namespace Durable.Postgres
             throw new ArgumentException($"Expression must be a property accessor, but was {expression.NodeType}");
         }
 
+        /// <summary>
+        /// Gets a connection from the connection factory.
+        /// Note: The caller is responsible for disposing the connection.
+        /// </summary>
+        /// <returns>A PostgreSQL connection</returns>
+        public NpgsqlConnection GetConnection()
+        {
+            return (NpgsqlConnection)_ConnectionFactory.GetConnection();
+        }
+
+        /// <summary>
+        /// Asynchronously gets a connection from the connection factory.
+        /// Note: The caller is responsible for disposing the connection.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the async operation</param>
+        /// <returns>A PostgreSQL connection</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task<NpgsqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // For now, delegate to synchronous method since connection factory doesn't have async GetConnection
+            // In a full implementation, this could be enhanced if the connection factory supports async connection creation
+            return await Task.FromResult(GetConnection()).ConfigureAwait(false);
+        }
+
         #endregion
 
         #region Private-Methods

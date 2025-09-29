@@ -594,14 +594,6 @@ namespace Durable.Postgres
             return this;
         }
 
-        /// <summary>
-        /// Creates a CASE WHEN expression builder for conditional selections.
-        /// </summary>
-        /// <returns>A case expression builder for building conditional logic.</returns>
-        public ICaseExpressionBuilder<TEntity> SelectCase()
-        {
-            throw new NotImplementedException("SelectCase is not yet implemented");
-        }
 
         /// <summary>
         /// Executes the query and returns the results.
