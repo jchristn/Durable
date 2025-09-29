@@ -135,7 +135,7 @@ namespace Durable.Postgres
             _ConnectionFactory = new PostgresConnectionFactory(connectionString);
             _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new PostgresSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new PostgresDataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -162,7 +162,7 @@ namespace Durable.Postgres
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
             _OwnsConnectionFactory = false; // External factory, we don't own it
             _Sanitizer = new PostgresSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new PostgresDataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -181,24 +181,69 @@ namespace Durable.Postgres
         // For now, we'll create stub implementations that throw NotImplementedException
         // This allows the code to compile and build while we work on the full implementation
 
+        /// <summary>
+        /// Returns the first entity that matches the specified predicate, or throws an exception if no entity is found.
+        /// </summary>
+        /// <param name="predicate">Optional expression to filter entities. If null, returns the first entity in the table.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>The first entity that matches the predicate.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no entities match the predicate.</exception>
         public T ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            IQueryBuilder<T> query = Query(transaction);
+            if (predicate != null) query = query.Where(predicate);
+            return query.Take(1).Execute().FirstOrDefault() ?? throw new InvalidOperationException("Sequence contains no elements");
         }
 
+        /// <summary>
+        /// Returns the first entity that matches the specified predicate, or default if no entity is found.
+        /// </summary>
+        /// <param name="predicate">Optional expression to filter entities. If null, returns the first entity in the table.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>The first entity that matches the predicate, or default(T) if no entity is found.</returns>
         public T ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            IQueryBuilder<T> query = Query(transaction);
+            if (predicate != null) query = query.Where(predicate);
+            return query.Take(1).Execute().FirstOrDefault();
         }
 
+        /// <summary>
+        /// Returns the only entity that matches the specified predicate, and throws an exception if there is not exactly one entity.
+        /// </summary>
+        /// <param name="predicate">Expression to filter entities. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>The single entity that matches the predicate.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
         public T ReadSingle(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
+            if (results.Count != 1)
+                throw new InvalidOperationException($"Expected exactly 1 result but found {results.Count}");
+            return results[0];
         }
 
+        /// <summary>
+        /// Returns the only entity that matches the specified predicate, or default if no such entity exists; this method throws an exception if more than one entity matches the predicate.
+        /// </summary>
+        /// <param name="predicate">Expression to filter entities. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>The single entity that matches the predicate, or default(T) if no entity is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
         public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
+            if (results.Count > 1)
+                throw new InvalidOperationException($"Expected 0 or 1 result but found {results.Count}");
+            return results.FirstOrDefault();
         }
 
         public IEnumerable<T> ReadMany(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
@@ -224,31 +269,48 @@ namespace Durable.Postgres
         }
 
         // Async read methods
-        public Task<T> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously returns the first entity that matches the specified predicate, or throws an exception if no entity is found.
+        /// </summary>
+        /// <param name="predicate">Optional expression to filter entities. If null, returns the first entity in the table.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no entities match the predicate.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        public async Task<T> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            token.ThrowIfCancellationRequested();
+
+            IQueryBuilder<T> query = Query(transaction);
+            if (predicate != null) query = query.Where(predicate);
+
+            IAsyncEnumerable<T> results = query.Take(1).ExecuteAsyncEnumerable(token);
+            await foreach (T result in results.WithCancellation(token).ConfigureAwait(false))
+            {
+                return result;
+            }
+
+            throw new InvalidOperationException("Sequence contains no elements");
         }
 
+        /// <summary>
+        /// Asynchronously returns the first entity that matches the specified predicate, or default if no entity is found.
+        /// </summary>
+        /// <param name="predicate">Optional expression to filter entities. If null, returns the first entity in the table.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate, or default(T) if no entity is found.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
-            string sql;
-            object[] parameters = Array.Empty<object>();
+            IQueryBuilder<T> query = Query(transaction);
+            if (predicate != null) query = query.Where(predicate);
 
-            if (predicate == null)
-            {
-                sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} LIMIT 1";
-            }
-            else
-            {
-                var expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-                string whereClause = expressionParser.ParseExpression(predicate);
-                sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1";
-                parameters = expressionParser.GetParameters().Cast<object>().ToArray();
-            }
-
-            await foreach (T result in FromSqlAsync(sql, transaction, token, parameters))
+            IAsyncEnumerable<T> results = query.Take(1).ExecuteAsyncEnumerable(token);
+            await foreach (T result in results.WithCancellation(token).ConfigureAwait(false))
             {
                 return result;
             }
@@ -256,14 +318,64 @@ namespace Durable.Postgres
             return default(T)!;
         }
 
-        public Task<T> ReadSingleAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously returns the only entity that matches the specified predicate, and throws an exception if there is not exactly one entity.
+        /// </summary>
+        /// <param name="predicate">Expression to filter entities. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        public async Task<T> ReadSingleAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            token.ThrowIfCancellationRequested();
+
+            List<T> results = new List<T>();
+            IAsyncEnumerable<T> queryResults = Query(transaction).Where(predicate).Take(2).ExecuteAsyncEnumerable(token);
+
+            await foreach (T result in queryResults.WithCancellation(token).ConfigureAwait(false))
+            {
+                results.Add(result);
+            }
+
+            if (results.Count != 1)
+                throw new InvalidOperationException($"Expected exactly 1 result but found {results.Count}");
+            return results[0];
         }
 
-        public Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously returns the only entity that matches the specified predicate, or default if no such entity exists; this method throws an exception if more than one entity matches the predicate.
+        /// </summary>
+        /// <param name="predicate">Expression to filter entities. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate, or default(T) if no entity is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        public async Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            token.ThrowIfCancellationRequested();
+
+            List<T> results = new List<T>();
+            IAsyncEnumerable<T> queryResults = Query(transaction).Where(predicate).Take(2).ExecuteAsyncEnumerable(token);
+
+            await foreach (T result in queryResults.WithCancellation(token).ConfigureAwait(false))
+            {
+                results.Add(result);
+            }
+
+            if (results.Count > 1)
+                throw new InvalidOperationException($"Expected 0 or 1 result but found {results.Count}");
+            return results.FirstOrDefault();
         }
 
         public async IAsyncEnumerable<T> ReadManyAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
@@ -306,14 +418,34 @@ namespace Durable.Postgres
         }
 
         // Existence checks
+        /// <summary>
+        /// Determines whether any entity matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Expression to filter entities. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>True if any entity matches the predicate; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         public bool Exists(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            return ExistsAsync(predicate, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Determines whether an entity with the specified primary key exists.
+        /// </summary>
+        /// <param name="id">The primary key value to search for. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <returns>True if an entity with the specified primary key exists; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool ExistsById(object id, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (id == null)
+                throw new ArgumentNullException(nameof(id));
+
+            return ExistsByIdAsync(id, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
@@ -341,15 +473,67 @@ namespace Durable.Postgres
             }
         }
 
-        public Task<bool> ExistsByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously determines whether an entity with the specified primary key exists.
+        /// </summary>
+        /// <param name="id">The primary key value to search for. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing true if an entity with the specified primary key exists; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        public async Task<bool> ExistsByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (id == null)
+                throw new ArgumentNullException(nameof(id));
+
+            token.ThrowIfCancellationRequested();
+
+            string sql = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id)";
+            (string, object?)[] parameters = { ("@id", id) };
+
+            if (transaction != null)
+            {
+                object? result = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false);
+                return Convert.ToBoolean(result);
+            }
+            else
+            {
+                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters).ConfigureAwait(false);
+                return Convert.ToBoolean(result);
+            }
         }
 
         // Count operations
         public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            string sql;
+            object[] parameters = Array.Empty<object>();
+
+            if (predicate == null)
+            {
+                sql = $"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}";
+            }
+            else
+            {
+                PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+                string whereClause = expressionParser.ParseExpression(predicate);
+                sql = $"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
+                parameters = expressionParser.GetParameters().Cast<object>().ToArray();
+            }
+
+            if (transaction != null)
+            {
+                object? result = ExecuteScalarWithConnection<object>(transaction.Connection, sql, transaction.Transaction, parameters.Cast<(string, object?)>().ToArray());
+                return Convert.ToInt32(result);
+            }
+            else
+            {
+                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
+                object? result = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                return Convert.ToInt32(result);
+            }
         }
 
         public async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
@@ -820,7 +1004,35 @@ namespace Durable.Postgres
 
         public int UpdateField<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+            if (field == null)
+                throw new ArgumentNullException(nameof(field));
+
+            PostgresExpressionParser<T> parser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters().ToList();
+
+            string columnName = parser.GetColumnFromExpression(field.Body);
+            PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+
+            parameters.Add(("@value", convertedValue));
+
+            string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, parameters.ToArray());
+            }
+            else
+            {
+                using var connection = _ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+            }
+
+            return rowsAffected;
         }
 
         public async Task<T> UpdateAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
@@ -914,30 +1126,158 @@ namespace Durable.Postgres
             return updatedCount;
         }
 
-        public Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+            if (field == null)
+                throw new ArgumentNullException(nameof(field));
+
+            token.ThrowIfCancellationRequested();
+
+            PostgresExpressionParser<T> parser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
+            List<(string name, object? value)> parameters = parser.GetParameters().ToList();
+
+            string columnName = parser.GetColumnFromExpression(field.Body);
+            PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+
+            parameters.Add(("@value", convertedValue));
+
+            string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {columnName} = @value WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
         // Batch operations
         public int BatchUpdate(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+            if (updateExpression == null)
+                throw new ArgumentNullException(nameof(updateExpression));
+
+            // For now, fall back to UpdateMany pattern like MySQL implementation
+            // Full expression parsing for MemberInitExpression/NewExpression is complex
+            // TODO: Implement proper expression parsing for direct SQL SET clauses
+
+            // Read entities matching the predicate
+            IEnumerable<T> entitiesToUpdate = ReadMany(predicate, transaction);
+
+            // Convert updateExpression to an Action for UpdateMany
+            Func<T, T> updateFunc = updateExpression.Compile();
+            Action<T> updateAction = entity =>
+            {
+                T updatedEntity = updateFunc(entity);
+                // Copy properties from updated entity back to original
+                foreach (var kvp in _ColumnMappings)
+                {
+                    PropertyInfo property = kvp.Value;
+                    if (property.CanWrite && kvp.Key != _PrimaryKeyColumn)
+                    {
+                        object? newValue = property.GetValue(updatedEntity);
+                        property.SetValue(entity, newValue);
+                    }
+                }
+            };
+
+            return UpdateMany(predicate, updateAction, transaction);
         }
 
         public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            string whereClause = expressionParser.ParseExpression(predicate);
+            string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
+            object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection((DbConnection)transaction.Connection, sql, (DbTransaction?)transaction.Transaction, parameters.Cast<(string, object?)>().ToArray());
+            }
+            else
+            {
+                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+            }
+
+            return rowsAffected;
         }
 
-        public Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+            if (updateExpression == null)
+                throw new ArgumentNullException(nameof(updateExpression));
+
+            token.ThrowIfCancellationRequested();
+
+            // For now, fall back to UpdateManyAsync pattern like MySQL implementation
+            // Full expression parsing for MemberInitExpression/NewExpression is complex
+            // TODO: Implement proper expression parsing for direct SQL SET clauses
+
+            // Convert updateExpression to a Func for UpdateManyAsync
+            Func<T, T> updateFunc = updateExpression.Compile();
+            Func<T, Task> updateAction = async entity =>
+            {
+                T updatedEntity = updateFunc(entity);
+                // Copy properties from updated entity back to original
+                foreach (var kvp in _ColumnMappings)
+                {
+                    PropertyInfo property = kvp.Value;
+                    if (property.CanWrite && kvp.Key != _PrimaryKeyColumn)
+                    {
+                        object? newValue = property.GetValue(updatedEntity);
+                        property.SetValue(entity, newValue);
+                    }
+                }
+                await Task.CompletedTask; // Sync operation wrapped in Task
+            };
+
+            return await UpdateManyAsync(predicate, updateAction, transaction, token).ConfigureAwait(false);
         }
 
-        public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+
+            token.ThrowIfCancellationRequested();
+
+            PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            string whereClause = expressionParser.ParseExpression(predicate);
+            string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
+            object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
         // Delete operations
@@ -952,7 +1292,23 @@ namespace Durable.Postgres
 
         public bool DeleteById(object id, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (id == null)
+                throw new ArgumentNullException(nameof(id));
+
+            string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection((DbConnection)transaction.Connection, sql, (DbTransaction?)transaction.Transaction, ("@id", id));
+            }
+            else
+            {
+                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id));
+            }
+
+            return rowsAffected > 0;
         }
 
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
@@ -978,7 +1334,20 @@ namespace Durable.Postgres
 
         public int DeleteAll(ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = ExecuteNonQueryWithConnection((DbConnection)transaction.Connection, sql, (DbTransaction?)transaction.Transaction);
+            }
+            else
+            {
+                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
+                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null);
+            }
+
+            return rowsAffected;
         }
 
         public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
@@ -1047,33 +1416,47 @@ namespace Durable.Postgres
             return count;
         }
 
-        public Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            token.ThrowIfCancellationRequested();
+
+            string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)}";
+
+            int rowsAffected;
+            if (transaction != null)
+            {
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+            }
+
+            return rowsAffected;
         }
 
         // Upsert operations
+        /// <summary>
+        /// Inserts a new entity or updates an existing entity if it already exists in the repository.
+        /// Uses PostgreSQL's INSERT ... ON CONFLICT DO UPDATE syntax for atomic upsert operations.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation. If null, the operation runs in its own transaction.</param>
+        /// <returns>The entity after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
         public T Upsert(T entity, ITransaction? transaction = null)
-        {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
-        }
-
-        public IEnumerable<T> UpsertMany(IEnumerable<T> entities, ITransaction? transaction = null)
-        {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
-        }
-
-        public async Task<T> UpsertAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (entity == null)
                 throw new ArgumentNullException(nameof(entity));
-
-            token.ThrowIfCancellationRequested();
 
             List<string> columns = new List<string>();
             List<string> values = new List<string>();
             List<string> updatePairs = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
+
+            bool skipPrimaryKeyInInsert = false;
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -1082,6 +1465,16 @@ namespace Durable.Postgres
                 object? value = property.GetValue(entity);
 
                 PropertyAttribute? attr = property.GetCustomAttribute<PropertyAttribute>();
+
+                // Skip primary key in INSERT if it's auto-increment and has default value (0 for int)
+                if (columnName == _PrimaryKeyColumn && attr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true)
+                {
+                    if (value == null || (value is int intValue && intValue == 0) || (value is long longValue && longValue == 0))
+                    {
+                        skipPrimaryKeyInInsert = true;
+                        continue; // Skip including this column in the INSERT
+                    }
+                }
 
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                 values.Add($"@{columnName}");
@@ -1094,25 +1487,212 @@ namespace Durable.Postgres
                 }
             }
 
-            // PostgreSQL UPSERT using ON CONFLICT DO UPDATE
-            string sql = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)}) ON CONFLICT ({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET {string.Join(", ", updatePairs)}";
+            // PostgreSQL UPSERT using ON CONFLICT DO UPDATE with RETURNING clause to get the ID
+            string sql = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)}) ON CONFLICT ({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET {string.Join(", ", updatePairs)} RETURNING {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}";
 
+            object? returnedId;
             if (transaction != null)
             {
-                await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+                returnedId = ExecuteScalarWithConnection<object>(transaction.Connection, sql, transaction.Transaction, parameters.ToArray());
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                using var connection = _ConnectionFactory.GetConnection();
+                returnedId = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.ToArray());
+            }
+
+            // Set the primary key if it was returned and the entity doesn't have one
+            if (_PrimaryKeyProperty != null && returnedId != null && returnedId != DBNull.Value)
+            {
+                object? convertedId = _DataTypeConverter.ConvertFromDatabase(returnedId, _PrimaryKeyProperty.PropertyType, _PrimaryKeyProperty);
+                _PrimaryKeyProperty.SetValue(entity, convertedId);
             }
 
             return entity;
         }
 
-        public Task<IEnumerable<T>> UpsertManyAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// Uses PostgreSQL's INSERT ... ON CONFLICT DO UPDATE syntax within a transaction for consistency.
+        /// </summary>
+        /// <param name="entities">The collection of entities to insert or update. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation. If null, a new transaction is created for the operation.</param>
+        /// <returns>The entities after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
+        public IEnumerable<T> UpsertMany(IEnumerable<T> entities, ITransaction? transaction = null)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (entities == null)
+                throw new ArgumentNullException(nameof(entities));
+
+            List<T> entitiesList = entities.ToList();
+            if (entitiesList.Count == 0)
+                return entitiesList;
+
+            List<T> results = new List<T>();
+
+            if (transaction != null)
+            {
+                // Use provided transaction
+                foreach (T entity in entitiesList)
+                {
+                    results.Add(Upsert(entity, transaction));
+                }
+            }
+            else
+            {
+                // Create our own transaction
+                using var localTransaction = BeginTransaction();
+                try
+                {
+                    foreach (T entity in entitiesList)
+                    {
+                        results.Add(Upsert(entity, localTransaction));
+                    }
+                    localTransaction.Commit();
+                }
+                catch
+                {
+                    localTransaction.Rollback();
+                    throw;
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Asynchronously inserts a new entity or updates an existing entity if it already exists in the repository.
+        /// Uses PostgreSQL's INSERT ... ON CONFLICT DO UPDATE syntax for atomic upsert operations.
+        /// </summary>
+        /// <param name="entity">The entity to insert or update. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation. If null, the operation runs in its own transaction.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the entity after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        public async Task<T> UpsertAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
+
+            token.ThrowIfCancellationRequested();
+
+            List<string> columns = new List<string>();
+            List<string> values = new List<string>();
+            List<string> updatePairs = new List<string>();
+            List<(string name, object? value)> parameters = new List<(string, object?)>();
+
+            bool skipPrimaryKeyInInsert = false;
+
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                string columnName = kvp.Key;
+                PropertyInfo property = kvp.Value;
+                object? value = property.GetValue(entity);
+
+                PropertyAttribute? attr = property.GetCustomAttribute<PropertyAttribute>();
+
+                // Skip primary key in INSERT if it's auto-increment and has default value (0 for int)
+                if (columnName == _PrimaryKeyColumn && attr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true)
+                {
+                    if (value == null || (value is int intValue && intValue == 0) || (value is long longValue && longValue == 0))
+                    {
+                        skipPrimaryKeyInInsert = true;
+                        continue; // Skip including this column in the INSERT
+                    }
+                }
+
+                columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
+                values.Add($"@{columnName}");
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+
+                // Don't update primary key or auto-increment columns in the UPDATE part
+                if (columnName != _PrimaryKeyColumn && !attr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true)
+                {
+                    updatePairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = EXCLUDED.{_Sanitizer.SanitizeIdentifier(columnName)}");
+                }
+            }
+
+            // PostgreSQL UPSERT using ON CONFLICT DO UPDATE with RETURNING clause to get the ID
+            string sql = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)}) ON CONFLICT ({_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}) DO UPDATE SET {string.Join(", ", updatePairs)} RETURNING {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)}";
+
+            object? returnedId;
+            if (transaction != null)
+            {
+                returnedId = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                returnedId = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+
+            // Set the primary key if it was returned and the entity doesn't have one
+            if (_PrimaryKeyProperty != null && returnedId != null && returnedId != DBNull.Value)
+            {
+                object? convertedId = _DataTypeConverter.ConvertFromDatabase(returnedId, _PrimaryKeyProperty.PropertyType, _PrimaryKeyProperty);
+                _PrimaryKeyProperty.SetValue(entity, convertedId);
+            }
+
+            return entity;
+        }
+
+        /// <summary>
+        /// Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
+        /// Uses PostgreSQL's INSERT ... ON CONFLICT DO UPDATE syntax within a transaction for consistency.
+        /// </summary>
+        /// <param name="entities">The collection of entities to insert or update. Cannot be null.</param>
+        /// <param name="transaction">Optional transaction context for the operation. If null, a new transaction is created for the operation.</param>
+        /// <param name="token">Cancellation token to support operation cancellation.</param>
+        /// <returns>A task that represents the asynchronous operation containing the entities after the upsert operation, with any generated values populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the upsert operation fails</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        public async Task<IEnumerable<T>> UpsertManyAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            if (entities == null)
+                throw new ArgumentNullException(nameof(entities));
+
+            token.ThrowIfCancellationRequested();
+
+            List<T> entitiesList = entities.ToList();
+            if (entitiesList.Count == 0)
+                return entitiesList;
+
+            List<T> results = new List<T>();
+
+            if (transaction != null)
+            {
+                // Use provided transaction
+                foreach (T entity in entitiesList)
+                {
+                    token.ThrowIfCancellationRequested();
+                    results.Add(await UpsertAsync(entity, transaction, token).ConfigureAwait(false));
+                }
+            }
+            else
+            {
+                // Create our own transaction
+                using var localTransaction = await BeginTransactionAsync(token).ConfigureAwait(false);
+                try
+                {
+                    foreach (T entity in entitiesList)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        results.Add(await UpsertAsync(entity, localTransaction, token).ConfigureAwait(false));
+                    }
+                    await localTransaction.CommitAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    await localTransaction.RollbackAsync().ConfigureAwait(false);
+                    throw;
+                }
+            }
+
+            return results;
         }
 
         // Raw SQL operations
@@ -1169,12 +1749,75 @@ namespace Durable.Postgres
 
         public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object[] parameters) where TResult : new()
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
+
+            List<TResult> results = new List<TResult>();
+
+            NpgsqlConnection connection;
+            NpgsqlTransaction? sqlTransaction = null;
+            bool shouldDisposeConnection = false;
+
+            if (transaction != null)
+            {
+                connection = (NpgsqlConnection)transaction.Connection;
+                sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+            }
+            else
+            {
+                connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                shouldDisposeConnection = true;
+            }
+
+            try
+            {
+                if (connection.State != System.Data.ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+
+                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                AddParametersToCommand(command, parameters);
+
+                // Capture SQL if enabled
+                if (_CaptureSql)
+                {
+                    _LastExecutedSql = command.CommandText;
+                    _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+                }
+
+                using var reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    results.Add(MapReaderToType<TResult>(reader));
+                }
+            }
+            finally
+            {
+                if (shouldDisposeConnection)
+                {
+                    connection?.Dispose();
+                }
+            }
+
+            return results;
         }
 
         public int ExecuteSql(string sql, ITransaction? transaction = null, params object[] parameters)
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
+
+            if (transaction != null)
+            {
+                return ExecuteNonQueryWithConnection((DbConnection)transaction.Connection, sql, (DbTransaction?)transaction.Transaction, parameters.Cast<(string, object?)>().ToArray());
+            }
+            else
+            {
+                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
+                return ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+            }
         }
 
         public async IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters)
@@ -1224,9 +1867,57 @@ namespace Durable.Postgres
             }
         }
 
-        public IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters) where TResult : new()
+        public async IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters) where TResult : new()
         {
-            throw new NotImplementedException("PostgresRepository is not yet fully implemented");
+            if (string.IsNullOrWhiteSpace(sql))
+                throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
+
+            token.ThrowIfCancellationRequested();
+
+            NpgsqlConnection connection;
+            NpgsqlTransaction? sqlTransaction = null;
+            bool shouldDisposeConnection = false;
+
+            if (transaction != null)
+            {
+                connection = (NpgsqlConnection)transaction.Connection;
+                sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+            }
+            else
+            {
+                connection = (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                shouldDisposeConnection = true;
+            }
+
+            try
+            {
+                await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
+
+                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                AddParametersToCommand(command, parameters);
+
+                // Capture SQL if enabled
+                if (_CaptureSql)
+                {
+                    _LastExecutedSql = command.CommandText;
+                    _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+                }
+
+                using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+
+                while (await reader.ReadAsync(token).ConfigureAwait(false))
+                {
+                    token.ThrowIfCancellationRequested();
+                    yield return MapReaderToType<TResult>(reader);
+                }
+            }
+            finally
+            {
+                if (shouldDisposeConnection)
+                {
+                    await connection.DisposeAsync().ConfigureAwait(false);
+                }
+            }
         }
 
         public async Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters)
@@ -1290,6 +1981,21 @@ namespace Durable.Postgres
             {
                 _ConnectionFactory?.Dispose();
             }
+        }
+
+        private PropertyInfo? GetPropertyFromExpression(Expression expression)
+        {
+            if (expression is MemberExpression memberExpr)
+            {
+                return memberExpr.Member as PropertyInfo;
+            }
+
+            if (expression is UnaryExpression unaryExpr && unaryExpr.NodeType == ExpressionType.Convert)
+            {
+                return GetPropertyFromExpression(unaryExpr.Operand);
+            }
+
+            throw new ArgumentException($"Expression must be a property accessor, but was {expression.NodeType}");
         }
 
         #endregion
@@ -1363,20 +2069,7 @@ namespace Durable.Postgres
             }
         }
 
-        private async Task<int> ExecuteNonQueryWithConnectionAsync(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
-        {
-            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
-
-            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
-            foreach (var (name, value) in parameters)
-            {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
-            }
-
-            return await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
-        }
-
-        private T? ExecuteScalarWithConnection<T>(DbConnection connection, string sql, DbTransaction? transaction, params (string name, object? value)[] parameters)
+        private int ExecuteNonQueryWithConnection(DbConnection connection, string sql, DbTransaction? transaction, params (string name, object? value)[] parameters)
         {
             if (connection.State != ConnectionState.Open)
                 connection.Open();
@@ -1387,14 +2080,17 @@ namespace Durable.Postgres
                 command.Parameters.AddWithValue(name, value ?? DBNull.Value);
             }
 
-            object? result = command.ExecuteScalar();
-            if (result == null || result == DBNull.Value)
-                return default(T);
+            // Capture SQL if enabled
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+            }
 
-            return (T)result;
+            return command.ExecuteNonQuery();
         }
 
-        private async Task<T?> ExecuteScalarWithConnectionAsync<T>(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
+        private async Task<int> ExecuteNonQueryWithConnectionAsync(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
         {
             await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
 
@@ -1404,11 +2100,63 @@ namespace Durable.Postgres
                 command.Parameters.AddWithValue(name, value ?? DBNull.Value);
             }
 
+            // Capture SQL if enabled
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+            }
+
+            return await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+        }
+
+        private TResult? ExecuteScalarWithConnection<TResult>(DbConnection connection, string sql, DbTransaction? transaction, params (string name, object? value)[] parameters)
+        {
+            if (connection.State != ConnectionState.Open)
+                connection.Open();
+
+            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach (var (name, value) in parameters)
+            {
+                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+            }
+
+            object? result = command.ExecuteScalar();
+            if (result == null || result == DBNull.Value)
+                return default(TResult);
+
+            return (TResult)result;
+        }
+
+        private async Task<TResult?> ExecuteScalarWithConnectionAsync<TResult>(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
+        {
+            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
+
+            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach (var (name, value) in parameters)
+            {
+                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            }
+
+            // Capture SQL if enabled
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+            }
+
             object? result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
             if (result == null || result == DBNull.Value)
-                return default(T);
+                return default(TResult);
 
-            return (T)result;
+            return (TResult)result;
         }
 
         private TResult SafeConvertDatabaseResult<TResult>(object? result)
@@ -1579,6 +2327,99 @@ namespace Durable.Postgres
         private VersionColumnInfo GetVersionColumnInfo()
         {
             return new VersionColumnInfo();
+        }
+
+        private TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
+        {
+            TResult result = new TResult();
+            Type resultType = typeof(TResult);
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                string columnName = reader.GetName(i);
+                PropertyInfo? property = resultType.GetProperty(columnName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (property != null && !reader.IsDBNull(i))
+                {
+                    object value = reader.GetValue(i);
+                    try
+                    {
+                        object? convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        property.SetValue(result, convertedValue);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Error mapping column '{columnName}' to property '{property.Name}': {ex.Message}", ex);
+                    }
+                }
+            }
+            return result;
+        }
+
+        private string BuildSqlWithParameters(NpgsqlCommand command)
+        {
+            if (command?.Parameters == null || command.Parameters.Count == 0)
+            {
+                return command?.CommandText ?? string.Empty;
+            }
+
+            string sql = command.CommandText;
+            foreach (NpgsqlParameter parameter in command.Parameters)
+            {
+                string parameterValue = FormatParameterValue(parameter.Value);
+                sql = sql.Replace(parameter.ParameterName, parameterValue);
+            }
+            return sql;
+        }
+
+        private string FormatParameterValue(object? value)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return "NULL";
+            }
+
+            if (value is string stringValue)
+            {
+                return $"'{stringValue.Replace("'", "''")}'";
+            }
+
+            if (value is DateTime dateTimeValue)
+            {
+                return $"'{dateTimeValue:yyyy-MM-dd HH:mm:ss}'";
+            }
+
+            if (value is DateTimeOffset dateTimeOffsetValue)
+            {
+                return $"'{dateTimeOffsetValue:yyyy-MM-dd HH:mm:ss zzz}'";
+            }
+
+            if (value is bool boolValue)
+            {
+                return boolValue ? "true" : "false";
+            }
+
+            if (value is Guid guidValue)
+            {
+                return $"'{guidValue}'";
+            }
+
+            return value.ToString() ?? "NULL";
+        }
+
+        internal string GetColumnFromExpression(Expression expression)
+        {
+            PostgresExpressionParser<T> parser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            // The parser's GetColumnFromExpression already returns sanitized column names with double quotes
+            return parser.GetColumnFromExpression(expression);
+        }
+
+        internal void SetLastExecutedSql(string sql)
+        {
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = sql;
+                // BuildSqlWithParameters requires a command, so we'll keep it simple for now
+                _LastExecutedSqlWithParameters = sql;
+            }
         }
 
         #endregion

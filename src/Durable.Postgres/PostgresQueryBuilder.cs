@@ -194,7 +194,7 @@ namespace Durable.Postgres
         /// <returns>A new query builder for the projected type.</returns>
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
-            throw new NotImplementedException("Select projection is not yet implemented");
+            return new PostgresProjectedQueryBuilder<TEntity, TResult>(_Repository, selector, this, _Transaction);
         }
 
         /// <summary>
@@ -713,12 +713,56 @@ namespace Durable.Postgres
 
         private string GetIncludePathFromExpression<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
         {
-            // Simplified implementation - full version would properly parse navigation property paths
-            if (navigationProperty.Body is MemberExpression member)
+            if (navigationProperty == null)
+                throw new ArgumentNullException(nameof(navigationProperty));
+
+            if (navigationProperty.Body is MemberExpression memberExpression)
             {
-                return member.Member.Name;
+                List<string> propertyNames = new List<string>();
+                MemberExpression current = memberExpression;
+
+                while (current != null)
+                {
+                    propertyNames.Insert(0, current.Member.Name);
+                    current = current.Expression as MemberExpression;
+                }
+
+                return string.Join(".", propertyNames);
             }
-            throw new ArgumentException("Invalid navigation property expression", nameof(navigationProperty));
+
+            throw new InvalidOperationException("Expression must be a property access expression");
+        }
+
+        private string ExtractPropertyPath<TSource, TProperty>(Expression<Func<TSource, TProperty>> expression)
+        {
+            if (expression == null)
+                throw new ArgumentNullException(nameof(expression));
+
+            if (expression.Body is MemberExpression memberExpression)
+            {
+                List<string> propertyNames = new List<string>();
+                MemberExpression current = memberExpression;
+
+                while (current != null)
+                {
+                    propertyNames.Insert(0, current.Member.Name);
+                    current = current.Expression as MemberExpression;
+                }
+
+                return string.Join(".", propertyNames);
+            }
+
+            throw new InvalidOperationException("Expression must be a property access expression");
+        }
+
+        internal List<string> GetWhereClauses()
+        {
+            return new List<string>(_WhereClauses);
+        }
+
+        internal List<string> GetGroupByColumns()
+        {
+            return new List<string>(_GroupByColumns);
         }
 
         #endregion

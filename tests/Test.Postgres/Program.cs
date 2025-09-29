@@ -79,7 +79,47 @@ namespace Test.Postgres
                 Console.WriteLine("✅ Collection operations cancellation test passed");
 
                 Console.WriteLine();
-                Console.WriteLine("🎉 All PostgreSQL tests passed including advanced aggregations and collection operations!");
+                Console.WriteLine("Testing PostgreSQL specialized update operations...");
+                await integrationTests.PostgresSpecializedUpdateOperationsWorkCorrectly();
+                Console.WriteLine("✅ Specialized update operations test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL specialized update operations with transactions...");
+                await integrationTests.PostgresSpecializedUpdateOperationsWorkWithTransactions();
+                Console.WriteLine("✅ Specialized update operations with transactions test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL specialized update operations error handling...");
+                await integrationTests.PostgresSpecializedUpdateOperationsHandleErrorsCorrectly();
+                Console.WriteLine("✅ Specialized update operations error handling test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL upsert operations...");
+                await integrationTests.PostgresUpsertOperationsWorkCorrectly();
+                Console.WriteLine("✅ Upsert operations test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL upsert operations with transactions...");
+                await integrationTests.PostgresUpsertOperationsWorkWithTransactions();
+                Console.WriteLine("✅ Upsert operations with transactions test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL upsert operations error handling...");
+                await integrationTests.PostgresUpsertOperationsHandleErrorsCorrectly();
+                Console.WriteLine("✅ Upsert operations error handling test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL Select projections...");
+                await integrationTests.PostgresSelectProjectionsWorkCorrectly();
+                Console.WriteLine("✅ Select projections test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("Testing PostgreSQL Include operations...");
+                await integrationTests.PostgresIncludeOperationsWorkCorrectly();
+                Console.WriteLine("✅ Include operations test passed");
+
+                Console.WriteLine();
+                Console.WriteLine("🎉 All PostgreSQL tests passed including advanced aggregations, collection operations, specialized update operations, upsert operations, Select projections, and Include operations!");
 
                 integrationTests.Dispose();
                 return 0;
