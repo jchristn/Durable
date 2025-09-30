@@ -2024,13 +2024,29 @@ namespace Durable.Postgres
             return await Task.FromResult(GetConnection()).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Gets the primary key value from an entity instance.
+        /// </summary>
+        /// <param name="entity">The entity to extract the primary key from</param>
+        /// <returns>The primary key value</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null</exception>
+        public object? GetPrimaryKeyValue(T entity)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            return _PrimaryKeyProperty.GetValue(entity);
+        }
+
         #endregion
 
         #region Private-Methods
 
         // These are placeholder methods that would contain the actual reflection logic
         // from the MySQL implementation
-        private string GetEntityName()
+        /// <summary>
+        /// Gets the name of the entity/table for this repository.
+        /// </summary>
+        /// <returns>The entity name or table name</returns>
+        public string GetEntityName()
         {
             var entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
             return entityAttr?.Name ?? typeof(T).Name.ToLowerInvariant();
@@ -2050,7 +2066,11 @@ namespace Durable.Postgres
             throw new InvalidOperationException($"No primary key property found for entity type {typeof(T).Name}");
         }
 
-        private Dictionary<string, PropertyInfo> GetColumnMappings()
+        /// <summary>
+        /// Gets the column-to-property mappings for this entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping column names to PropertyInfo objects</returns>
+        public Dictionary<string, PropertyInfo> GetColumnMappings()
         {
             var mappings = new Dictionary<string, PropertyInfo>();
             var properties = typeof(T).GetProperties();
@@ -2340,22 +2360,40 @@ namespace Durable.Postgres
             return CreateManyOptimizedAsync(entities, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        private Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
+        /// <summary>
+        /// Gets the foreign key relationships for this entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping properties to their foreign key attributes</returns>
+        public Dictionary<PropertyInfo, ForeignKeyAttribute> GetForeignKeys()
         {
             return new Dictionary<PropertyInfo, ForeignKeyAttribute>();
         }
 
-        private Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
+        /// <summary>
+        /// Gets the navigation properties for this entity type.
+        /// </summary>
+        /// <returns>A dictionary mapping properties to their navigation property attributes</returns>
+        public Dictionary<PropertyInfo, NavigationPropertyAttribute> GetNavigationProperties()
         {
             return new Dictionary<PropertyInfo, NavigationPropertyAttribute>();
         }
 
-        private VersionColumnInfo GetVersionColumnInfo()
+        /// <summary>
+        /// Gets the version column information for optimistic concurrency control.
+        /// </summary>
+        /// <returns>Version column information or null if not available</returns>
+        public VersionColumnInfo? GetVersionColumnInfo()
         {
             return new VersionColumnInfo();
         }
 
-        private TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
+        /// <summary>
+        /// Maps a database reader to a specific result type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map to</typeparam>
+        /// <param name="reader">The database reader containing the data</param>
+        /// <returns>A mapped instance of the result type</returns>
+        public TResult MapReaderToType<TResult>(IDataReader reader) where TResult : new()
         {
             TResult result = new TResult();
             Type resultType = typeof(TResult);

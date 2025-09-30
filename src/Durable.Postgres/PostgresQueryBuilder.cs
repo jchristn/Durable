@@ -140,7 +140,9 @@ namespace Durable.Postgres
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            return OrderBy(keySelector); // For now, same as OrderBy - full implementation would track order precedence
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add($"{column} ASC");
+            return this;
         }
 
         /// <summary>
@@ -151,7 +153,9 @@ namespace Durable.Postgres
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            return OrderByDescending(keySelector); // For now, same as OrderByDescending
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add($"{column} DESC");
+            return this;
         }
 
         /// <summary>
@@ -641,7 +645,9 @@ namespace Durable.Postgres
         /// <returns>A durable result containing both query and results.</returns>
         public IDurableResult<TEntity> ExecuteWithQuery()
         {
-            throw new NotImplementedException("ExecuteWithQuery is not yet implemented");
+            string sql = BuildSql();
+            IEnumerable<TEntity> results = ExecuteSqlInternal(sql);
+            return new DurableResult<TEntity>(sql, results);
         }
 
         /// <summary>
@@ -649,9 +655,12 @@ namespace Durable.Postgres
         /// </summary>
         /// <param name="token">The cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with durable result.</returns>
-        public Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
+        public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
         {
-            throw new NotImplementedException("ExecuteWithQueryAsync is not yet implemented");
+            token.ThrowIfCancellationRequested();
+            string sql = BuildSql();
+            IEnumerable<TEntity> results = await ExecuteSqlInternalAsync(sql, token).ConfigureAwait(false);
+            return new DurableResult<TEntity>(sql, results);
         }
 
         /// <summary>
@@ -661,7 +670,9 @@ namespace Durable.Postgres
         /// <returns>An asynchronous durable result containing both query and streaming results.</returns>
         public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
         {
-            throw new NotImplementedException("ExecuteAsyncEnumerableWithQuery is not yet implemented");
+            string sql = BuildSql();
+            IAsyncEnumerable<TEntity> results = ExecuteAsyncEnumerable(token);
+            return new AsyncDurableResult<TEntity>(sql, results);
         }
 
         /// <summary>

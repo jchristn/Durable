@@ -139,7 +139,9 @@ namespace Durable.MySql
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            return OrderBy(keySelector); // TODO: Implement proper ThenBy logic
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add($"`{column}` ASC");
+            return this;
         }
 
         /// <summary>
@@ -150,7 +152,9 @@ namespace Durable.MySql
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            return OrderByDescending(keySelector); // TODO: Implement proper ThenByDescending logic
+            string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
+            _OrderByClauses.Add($"`{column}` DESC");
+            return this;
         }
 
         /// <summary>
@@ -907,17 +911,24 @@ namespace Durable.MySql
 
         public IDurableResult<TEntity> ExecuteWithQuery()
         {
-            throw new NotImplementedException("Coming soon");
+            string sql = BuildSql();
+            IEnumerable<TEntity> results = ExecuteSqlInternal(sql);
+            return new DurableResult<TEntity>(sql, results);
         }
 
-        public Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
+        public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            token.ThrowIfCancellationRequested();
+            string sql = BuildSql();
+            IEnumerable<TEntity> results = await ExecuteSqlInternalAsync(sql, token).ConfigureAwait(false);
+            return new DurableResult<TEntity>(sql, results);
         }
 
         public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
         {
-            throw new NotImplementedException("Coming soon");
+            string sql = BuildSql();
+            IAsyncEnumerable<TEntity> results = ExecuteAsyncEnumerable(token);
+            return new AsyncDurableResult<TEntity>(sql, results);
         }
 
         #endregion
