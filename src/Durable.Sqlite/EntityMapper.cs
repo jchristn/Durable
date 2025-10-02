@@ -8,6 +8,11 @@ namespace Durable.Sqlite
     using System.Reflection;
     using System.Text;
 
+    /// <summary>
+    /// Maps SQLite query results to entity objects, handling joined tables and related entities.
+    /// Supports complex object graphs with navigation properties.
+    /// </summary>
+    /// <typeparam name="T">The primary entity type being mapped</typeparam>
     internal class EntityMapper<T> where T : class, new()
     {
         #region Public-Members
@@ -24,6 +29,12 @@ namespace Durable.Sqlite
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the EntityMapper class.
+        /// </summary>
+        /// <param name="dataTypeConverter">The data type converter for database values</param>
+        /// <param name="baseColumnMappings">The column mappings for the primary entity</param>
+        /// <exception cref="ArgumentNullException">Thrown when required parameters are null</exception>
         public EntityMapper(
             IDataTypeConverter dataTypeConverter,
             Dictionary<string, PropertyInfo> baseColumnMappings)
@@ -37,6 +48,14 @@ namespace Durable.Sqlite
 
         #region Public-Methods
 
+        /// <summary>
+        /// Maps joined query results to a list of entities with related navigation properties populated.
+        /// </summary>
+        /// <param name="reader">The data reader containing the query results</param>
+        /// <param name="joinResult">The join information from the query builder</param>
+        /// <param name="includes">The list of navigation properties to include</param>
+        /// <returns>A list of entities with related data populated</returns>
+        /// <exception cref="ArgumentNullException">Thrown when required parameters are null</exception>
         public List<T> MapJoinedResults(
             SqliteDataReader reader,
             JoinBuilder.JoinResult joinResult,

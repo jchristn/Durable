@@ -8,6 +8,11 @@ namespace Durable.Sqlite
     using System.Reflection;
     using System.Text;
 
+    /// <summary>
+    /// Handles loading of collection navigation properties for SQLite entities.
+    /// Supports both one-to-many and many-to-many relationships with efficient batch loading.
+    /// </summary>
+    /// <typeparam name="T">The entity type that contains collection navigation properties</typeparam>
     internal class CollectionLoader<T> where T : class, new()
     {
         #region Public-Members
@@ -23,6 +28,12 @@ namespace Durable.Sqlite
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the CollectionLoader class.
+        /// </summary>
+        /// <param name="sanitizer">The sanitizer for SQL identifiers</param>
+        /// <param name="dataTypeConverter">The data type converter for database values</param>
+        /// <exception cref="ArgumentNullException">Thrown when sanitizer or dataTypeConverter is null</exception>
         public CollectionLoader(ISanitizer sanitizer, IDataTypeConverter dataTypeConverter)
         {
             _Sanitizer = sanitizer;
@@ -33,6 +44,14 @@ namespace Durable.Sqlite
 
         #region Public-Methods
 
+        /// <summary>
+        /// Loads collection navigation properties for a list of entities.
+        /// </summary>
+        /// <param name="entities">The entities to load collections for</param>
+        /// <param name="includes">The include information for navigation properties</param>
+        /// <param name="connection">The SQLite connection to use</param>
+        /// <param name="transaction">Optional transaction to execute within</param>
+        /// <exception cref="ArgumentNullException">Thrown when required parameters are null</exception>
         public void LoadCollections(
             List<T> entities,
             List<IncludeInfo> includes,

@@ -106,7 +106,7 @@ namespace Durable.Postgres
         internal readonly IBatchInsertConfiguration _BatchConfig;
         internal readonly ISanitizer _Sanitizer;
         internal readonly IDataTypeConverter _DataTypeConverter;
-        internal readonly VersionColumnInfo _VersionColumnInfo;
+        internal readonly VersionColumnInfo? _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
 
@@ -246,6 +246,12 @@ namespace Durable.Postgres
             return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Reads multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities. If null, returns all entities.</param>
+        /// <param name="transaction">The transaction to use for the operation.</param>
+        /// <returns>A collection of entities that match the predicate.</returns>
         public IEnumerable<T> ReadMany(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
@@ -254,11 +260,22 @@ namespace Durable.Postgres
             return query.Execute();
         }
 
+        /// <summary>
+        /// Reads all entities from the database.
+        /// </summary>
+        /// <param name="transaction">The transaction to use for the operation.</param>
+        /// <returns>A collection of all entities.</returns>
         public IEnumerable<T> ReadAll(ITransaction? transaction = null)
         {
             return Query(transaction).Execute();
         }
 
+        /// <summary>
+        /// Reads an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The identifier of the entity to read.</param>
+        /// <param name="transaction">The transaction to use for the operation.</param>
+        /// <returns>The entity with the specified identifier.</returns>
         public T ReadById(object id, ITransaction? transaction = null)
         {
             if (id == null)
@@ -278,7 +295,7 @@ namespace Durable.Postgres
         /// <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no entities match the predicate.</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public async Task<T> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
@@ -291,7 +308,7 @@ namespace Durable.Postgres
                 return result;
             }
 
-            throw new InvalidOperationException("Sequence contains no elements");
+            return default(T);
         }
 
         /// <summary>
@@ -302,7 +319,7 @@ namespace Durable.Postgres
         /// <param name="token">Cancellation token to support operation cancellation.</param>
         /// <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate, or default(T) if no entity is found.</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public async Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
@@ -315,7 +332,7 @@ namespace Durable.Postgres
                 return result;
             }
 
-            return default(T)!;
+            return default(T);
         }
 
         /// <summary>
@@ -358,7 +375,7 @@ namespace Durable.Postgres
         /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public async Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
                 throw new ArgumentNullException(nameof(predicate));
@@ -378,6 +395,14 @@ namespace Durable.Postgres
             return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Asynchronously reads multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, returns all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>An async enumerable of entities that match the predicate.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async IAsyncEnumerable<T> ReadManyAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
@@ -395,12 +420,28 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously reads all entities from the database.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>An async enumerable of all entities.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public IAsyncEnumerable<T> ReadAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
             return ReadManyAsync(null, transaction, token);
         }
 
-        public async Task<T> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
+        /// <summary>
+        /// Asynchronously reads an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to read.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The entity with the specified identifier, or null if not found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<T?> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (id == null)
                 throw new ArgumentNullException(nameof(id));
@@ -414,7 +455,7 @@ namespace Durable.Postgres
                 return result;
             }
 
-            return null!;
+            return null;
         }
 
         // Existence checks
@@ -448,6 +489,15 @@ namespace Durable.Postgres
             return ExistsByIdAsync(id, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Asynchronously determines whether any entity matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to test entities against.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>True if any entity matches the predicate, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -506,6 +556,12 @@ namespace Durable.Postgres
         }
 
         // Count operations
+        /// <summary>
+        /// Counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that match the predicate.</returns>
         public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             string sql;
@@ -536,6 +592,14 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that match the predicate.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
@@ -569,6 +633,16 @@ namespace Durable.Postgres
         }
 
         // Aggregation operations
+        /// <summary>
+        /// Finds the maximum value of the specified property among entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the maximum value for.</typeparam>
+        /// <param name="selector">Expression selecting the property to find the maximum value for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The maximum value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public TResult Max<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
@@ -600,6 +674,16 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Finds the minimum value of the specified property among entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the minimum value for.</typeparam>
+        /// <param name="selector">Expression selecting the property to find the minimum value for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The minimum value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public TResult Min<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
@@ -631,6 +715,15 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Calculates the average value of the specified decimal property among entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression selecting the decimal property to calculate the average for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The average value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public decimal Average(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
@@ -662,6 +755,15 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Calculates the sum of the specified decimal property among entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression selecting the decimal property to calculate the sum for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The sum of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public decimal Sum(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             if (selector == null)
@@ -694,6 +796,18 @@ namespace Durable.Postgres
         }
 
         // Async aggregation operations
+        /// <summary>
+        /// Asynchronously finds the maximum value of the specified property among entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the maximum value for.</typeparam>
+        /// <param name="selector">Expression selecting the property to find the maximum value for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The maximum value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public async Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
@@ -727,6 +841,18 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously finds the minimum value of the specified property among entities that match the predicate.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the property to find the minimum value for.</typeparam>
+        /// <param name="selector">Expression selecting the property to find the minimum value for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The minimum value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public async Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
@@ -760,6 +886,17 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously calculates the average value of the specified decimal property among entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression selecting the decimal property to calculate the average for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The average value of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public async Task<decimal> AverageAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
@@ -793,6 +930,17 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously calculates the sum of the specified decimal property among entities that match the predicate.
+        /// </summary>
+        /// <param name="selector">Expression selecting the decimal property to calculate the sum for.</param>
+        /// <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The sum of the selected property.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when SQL execution fails.</exception>
         public async Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (selector == null)
@@ -827,6 +975,13 @@ namespace Durable.Postgres
         }
 
         // Create operations
+        /// <summary>
+        /// Creates a new entity in the database.
+        /// </summary>
+        /// <param name="entity">The entity to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entity with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Create(T entity, ITransaction? transaction = null)
         {
             if (entity == null)
@@ -836,6 +991,13 @@ namespace Durable.Postgres
             return CreateAsync(entity, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Creates multiple entities in the database.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entities with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
         public IEnumerable<T> CreateMany(IEnumerable<T> entities, ITransaction? transaction = null)
         {
             if (entities == null)
@@ -864,6 +1026,15 @@ namespace Durable.Postgres
             return results;
         }
 
+        /// <summary>
+        /// Asynchronously creates a new entity in the database.
+        /// </summary>
+        /// <param name="entity">The entity to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The created entity with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<T> CreateAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (entity == null)
@@ -930,6 +1101,15 @@ namespace Durable.Postgres
             return entity;
         }
 
+        /// <summary>
+        /// Asynchronously creates multiple entities in the database.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The created entities with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<IEnumerable<T>> CreateManyAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (entities == null)
@@ -962,6 +1142,13 @@ namespace Durable.Postgres
         }
 
         // Update operations
+        /// <summary>
+        /// Updates an existing entity in the database.
+        /// </summary>
+        /// <param name="entity">The entity to update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The updated entity.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Update(T entity, ITransaction? transaction = null)
         {
             if (entity == null)
@@ -971,6 +1158,14 @@ namespace Durable.Postgres
             return UpdateAsync(entity, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Updates multiple entities that match the specified predicate by applying an update action to each.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="updateAction">The action to apply to each entity before updating.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateAction is null.</exception>
         public int UpdateMany(Expression<Func<T, bool>> predicate, Action<T> updateAction, ITransaction? transaction = null)
         {
             if (predicate == null)
@@ -1002,6 +1197,16 @@ namespace Durable.Postgres
             return updatedCount;
         }
 
+        /// <summary>
+        /// Updates a specific field for all entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field to update.</typeparam>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="field">Expression selecting the field to update.</param>
+        /// <param name="value">The new value to set for the field.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or field is null.</exception>
         public int UpdateField<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null)
         {
             if (predicate == null)
@@ -1035,6 +1240,17 @@ namespace Durable.Postgres
             return rowsAffected;
         }
 
+        /// <summary>
+        /// Asynchronously updates an existing entity in the database.
+        /// </summary>
+        /// <param name="entity">The entity to update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The updated entity.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when entity has null primary key or no rows were affected.</exception>
+        /// <exception cref="OptimisticConcurrencyException">Thrown when version-based concurrency conflict occurs.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<T> UpdateAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (entity == null)
@@ -1090,6 +1306,16 @@ namespace Durable.Postgres
             return entity;
         }
 
+        /// <summary>
+        /// Asynchronously updates multiple entities that match the specified predicate by applying an async update action to each.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="updateAction">The async action to apply to each entity before updating.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateAction is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> UpdateManyAsync(Expression<Func<T, bool>> predicate, Func<T, Task> updateAction, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -1126,6 +1352,18 @@ namespace Durable.Postgres
             return updatedCount;
         }
 
+        /// <summary>
+        /// Asynchronously updates a specific field for all entities that match the specified predicate.
+        /// </summary>
+        /// <typeparam name="TField">The type of the field to update.</typeparam>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="field">Expression selecting the field to update.</param>
+        /// <param name="value">The new value to set for the field.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or field is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -1162,6 +1400,15 @@ namespace Durable.Postgres
         }
 
         // Batch operations
+        /// <summary>
+        /// Performs a batch update operation using an expression to define the update logic.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="updateExpression">Expression defining how to update the entity (e.g., x => new Entity { Name = "NewName", Status = x.Status }).</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateExpression is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when updateExpression format is not supported.</exception>
         public int BatchUpdate(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null)
         {
             if (predicate == null)
@@ -1196,6 +1443,13 @@ namespace Durable.Postgres
             return UpdateMany(predicate, updateAction, transaction);
         }
 
+        /// <summary>
+        /// Performs a batch delete operation for entities matching the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that were deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             if (predicate == null)
@@ -1220,6 +1474,17 @@ namespace Durable.Postgres
             return rowsAffected;
         }
 
+        /// <summary>
+        /// Asynchronously performs a batch update operation using an expression to define the update logic.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to update.</param>
+        /// <param name="updateExpression">Expression defining how to update the entity (e.g., x => new Entity { Name = "NewName", Status = x.Status }).</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate or updateExpression is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when updateExpression format is not supported.</exception>
         public async Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -1254,6 +1519,15 @@ namespace Durable.Postgres
             return await UpdateManyAsync(predicate, updateAction, transaction, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Asynchronously performs a batch delete operation for entities matching the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -1281,6 +1555,14 @@ namespace Durable.Postgres
         }
 
         // Delete operations
+        /// <summary>
+        /// Deletes an entity from the database.
+        /// </summary>
+        /// <param name="entity">The entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity has a null primary key.</exception>
         public bool Delete(T entity, ITransaction? transaction = null)
         {
             if (entity == null)
@@ -1290,6 +1572,13 @@ namespace Durable.Postgres
             return DeleteAsync(entity, transaction, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Deletes an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The identifier of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool DeleteById(object id, ITransaction? transaction = null)
         {
             if (id == null)
@@ -1311,6 +1600,13 @@ namespace Durable.Postgres
             return rowsAffected > 0;
         }
 
+        /// <summary>
+        /// Deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             if (predicate == null)
@@ -1332,6 +1628,11 @@ namespace Durable.Postgres
             return count;
         }
 
+        /// <summary>
+        /// Deletes all entities from the database.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
         public int DeleteAll(ITransaction? transaction = null)
         {
             string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)}";
@@ -1350,6 +1651,16 @@ namespace Durable.Postgres
             return rowsAffected;
         }
 
+        /// <summary>
+        /// Asynchronously deletes an entity from the database.
+        /// </summary>
+        /// <param name="entity">The entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>True if the entity was deleted, false if no rows were affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when entity has null primary key.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (entity == null)
@@ -1364,6 +1675,15 @@ namespace Durable.Postgres
             return await DeleteByIdAsync(id, transaction, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Asynchronously deletes an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The primary key value of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>True if the entity was deleted, false if no rows were affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<bool> DeleteByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (id == null)
@@ -1387,6 +1707,15 @@ namespace Durable.Postgres
             return rowsAffected > 0;
         }
 
+        /// <summary>
+        /// Asynchronously deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> DeleteManyAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
@@ -1416,6 +1745,13 @@ namespace Durable.Postgres
             return count;
         }
 
+        /// <summary>
+        /// Asynchronously deletes all entities from the database.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>The number of entities that were deleted.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
@@ -1696,6 +2032,15 @@ namespace Durable.Postgres
         }
 
         // Raw SQL operations
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An enumerable collection of entities returned by the query.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails.</exception>
         public IEnumerable<T> FromSql(string sql, ITransaction? transaction = null, params object[] parameters)
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1747,6 +2092,16 @@ namespace Durable.Postgres
             return results;
         }
 
+        /// <summary>
+        /// Executes a raw SQL query and returns the results as entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An enumerable collection of entities of the specified type returned by the query.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails.</exception>
         public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object[] parameters) where TResult : new()
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1804,6 +2159,15 @@ namespace Durable.Postgres
             return results;
         }
 
+        /// <summary>
+        /// Executes a raw SQL command and returns the number of rows affected.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="parameters">Parameters for the SQL command.</param>
+        /// <returns>The number of rows affected by the command.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when command execution fails.</exception>
         public int ExecuteSql(string sql, ITransaction? transaction = null, params object[] parameters)
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1820,6 +2184,16 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as an async enumerable of entities of type T.
+        /// </summary>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An async enumerable collection of entities returned by the query.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails.</exception>
         public async IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters)
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1867,6 +2241,17 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL query and returns the results as an async enumerable of entities of the specified type.
+        /// </summary>
+        /// <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+        /// <param name="sql">The raw SQL query to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL query.</param>
+        /// <returns>An async enumerable collection of entities of the specified type returned by the query.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when query execution fails.</exception>
         public async IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters) where TResult : new()
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1920,6 +2305,16 @@ namespace Durable.Postgres
             }
         }
 
+        /// <summary>
+        /// Asynchronously executes a raw SQL command and returns the number of rows affected.
+        /// </summary>
+        /// <param name="sql">The raw SQL command to execute.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <param name="token">Cancellation token to cancel the operation.</param>
+        /// <param name="parameters">Parameters for the SQL command.</param>
+        /// <returns>A task that represents the asynchronous operation containing the number of rows affected by the command.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null or empty.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when command execution fails.</exception>
         public async Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object[] parameters)
         {
             if (string.IsNullOrWhiteSpace(sql))
@@ -1939,12 +2334,21 @@ namespace Durable.Postgres
         }
 
         // Query builder
+        /// <summary>
+        /// Creates a query builder for building and executing complex queries.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>A query builder instance for the entity type.</returns>
         public IQueryBuilder<T> Query(ITransaction? transaction = null)
         {
             return new PostgresQueryBuilder<T>(this, transaction);
         }
 
         // Transaction operations
+        /// <summary>
+        /// Begins a new database transaction.
+        /// </summary>
+        /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
             DbConnection connection = _ConnectionFactory.GetConnection();
@@ -1959,6 +2363,11 @@ namespace Durable.Postgres
             return new PostgresRepositoryTransaction((NpgsqlConnection)connection, (NpgsqlTransaction)transaction, _ConnectionFactory);
         }
 
+        /// <summary>
+        /// Asynchronously begins a new database transaction.
+        /// </summary>
+        /// <param name="token">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
@@ -1975,6 +2384,9 @@ namespace Durable.Postgres
             return new PostgresRepositoryTransaction((NpgsqlConnection)connection, (NpgsqlTransaction)transaction, _ConnectionFactory);
         }
 
+        /// <summary>
+        /// Disposes the repository and its resources. If this instance owns the connection factory, it will also be disposed.
+        /// </summary>
         public void Dispose()
         {
             if (_OwnsConnectionFactory)
