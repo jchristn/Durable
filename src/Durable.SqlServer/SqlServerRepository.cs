@@ -105,7 +105,7 @@ namespace Durable.SqlServer
         internal readonly IBatchInsertConfiguration _BatchConfig;
         internal readonly ISanitizer _Sanitizer;
         internal readonly IDataTypeConverter _DataTypeConverter;
-        internal readonly VersionColumnInfo _VersionColumnInfo;
+        internal readonly VersionColumnInfo? _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
 
@@ -184,7 +184,7 @@ namespace Durable.SqlServer
         /// <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
         /// <param name="transaction">Optional transaction to execute the operation within.</param>
         /// <returns>The first matching entity, or null if no entities match the criteria.</returns>
-        public T ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T? ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
             if (predicate != null) query = query.Where(predicate);
@@ -204,7 +204,7 @@ namespace Durable.SqlServer
         /// <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no match is found.</returns>
-        public T ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             return ReadFirst(predicate, transaction);
         }
@@ -231,7 +231,7 @@ namespace Durable.SqlServer
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The single entity that matches the predicate, or default(T) if no match is found.</returns>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
-        public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
+        public T? ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
             if (results.Count > 1)
@@ -268,7 +268,7 @@ namespace Durable.SqlServer
         /// <param name="id">The identifier of the entity to read.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The entity with the specified identifier.</returns>
-        public T ReadById(object id, ITransaction? transaction = null)
+        public T? ReadById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             return Query(transaction).Where(BuildIdPredicate(id)).Execute().FirstOrDefault();
@@ -830,7 +830,7 @@ namespace Durable.SqlServer
         /// <param name="token">Cancellation token for the async operation</param>
         /// <returns>The first matching entity, or null if no entities match the criteria</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
@@ -856,7 +856,7 @@ namespace Durable.SqlServer
         /// <param name="token">Cancellation token for the async operation</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no match is found</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             return await ReadFirstAsync(predicate, transaction, token).ConfigureAwait(false);
         }
@@ -897,7 +897,7 @@ namespace Durable.SqlServer
         /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
                 throw new ArgumentNullException(nameof(predicate));
@@ -959,7 +959,7 @@ namespace Durable.SqlServer
         /// <returns>The entity with the specified identifier, or null if not found</returns>
         /// <exception cref="ArgumentNullException">Thrown when id is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (id == null)
                 throw new ArgumentNullException(nameof(id));

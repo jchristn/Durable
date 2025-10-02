@@ -25,14 +25,14 @@
         /// <param name="predicate">The predicate to filter entities. If null, returns the first entity.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The first entity that matches the predicate.</returns>
-        T ReadFirst(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null);
+        T? ReadFirst(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null);
         /// <summary>
         /// Reads the first entity that matches the specified predicate, or returns default if none found.
         /// </summary>
         /// <param name="predicate">The predicate to filter entities. If null, returns the first entity.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The first entity that matches the predicate, or default if none found.</returns>
-        T ReadFirstOrDefault(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null);
+        T? ReadFirstOrDefault(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null);
         /// <summary>
         /// Reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
         /// </summary>
@@ -46,7 +46,7 @@
         /// <param name="predicate">The predicate to filter entities.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The single entity that matches the predicate, or default if none found.</returns>
-        T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction transaction = null);
+        T? ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction transaction = null);
         /// <summary>
         /// Reads multiple entities that match the specified predicate.
         /// </summary>
@@ -66,7 +66,7 @@
         /// <param name="id">The identifier of the entity to read.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The entity with the specified identifier.</returns>
-        T ReadById(object id, ITransaction transaction = null);
+        T? ReadById(object id, ITransaction transaction = null);
 
         /// <summary>
         /// Asynchronously reads the first entity that matches the specified predicate.
@@ -75,7 +75,7 @@
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <param name="token">A cancellation token to cancel the operation.</param>
         /// <returns>A task representing the asynchronous operation with the first entity that matches the predicate.</returns>
-        Task<T> ReadFirstAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
+        Task<T?> ReadFirstAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
         /// <summary>
         /// Asynchronously reads the first entity that matches the specified predicate, or returns default if none found.
         /// </summary>
@@ -83,7 +83,7 @@
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <param name="token">A cancellation token to cancel the operation.</param>
         /// <returns>A task representing the asynchronous operation with the first entity that matches the predicate, or default if none found.</returns>
-        Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
+        Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default);
         /// <summary>
         /// Asynchronously reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
         /// </summary>
@@ -99,7 +99,7 @@
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <param name="token">A cancellation token to cancel the operation.</param>
         /// <returns>A task representing the asynchronous operation with the single entity that matches the predicate, or default if none found.</returns>
-        Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default);
+        Task<T?> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default);
         /// <summary>
         /// Asynchronously reads multiple entities that match the specified predicate.
         /// </summary>
@@ -122,7 +122,7 @@
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <param name="token">A cancellation token to cancel the operation.</param>
         /// <returns>A task representing the asynchronous operation with the entity that has the specified identifier.</returns>
-        Task<T> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default);
+        Task<T?> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Checks if any entity exists that matches the specified predicate.
