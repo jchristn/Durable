@@ -6,6 +6,10 @@ namespace Durable.Sqlite
     using System.Reflection;
     using System.Text;
 
+    /// <summary>
+    /// Builds SQL JOIN clauses and manages column mappings for SQLite Include operations.
+    /// Handles complex navigation property relationships including one-to-many and many-to-many scenarios.
+    /// </summary>
     internal class JoinBuilder
     {
         #region Public-Members
@@ -21,6 +25,11 @@ namespace Durable.Sqlite
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the JoinBuilder class.
+        /// </summary>
+        /// <param name="sanitizer">The sanitizer to use for SQL identifiers</param>
+        /// <exception cref="ArgumentNullException">Thrown when sanitizer is null</exception>
         public JoinBuilder(ISanitizer sanitizer)
         {
             _Sanitizer = sanitizer;
@@ -31,22 +40,66 @@ namespace Durable.Sqlite
 
         #region Public-Methods
 
+        /// <summary>
+        /// Represents the result of building JOIN SQL with associated metadata.
+        /// </summary>
         public class JoinResult
         {
+            /// <summary>
+            /// Gets or sets the SELECT clause with all required columns and aliases.
+            /// </summary>
             public string SelectClause { get; set; }
+
+            /// <summary>
+            /// Gets or sets the JOIN clause containing all necessary table joins.
+            /// </summary>
             public string JoinClause { get; set; }
+
+            /// <summary>
+            /// Gets or sets the collection of include information for entity mapping.
+            /// </summary>
             public List<IncludeInfo> Includes { get; set; }
+
+            /// <summary>
+            /// Gets or sets the column mappings organized by table alias for efficient lookup during result mapping.
+            /// </summary>
             public Dictionary<string, List<ColumnMapping>> ColumnMappingsByAlias { get; set; }
         }
 
+        /// <summary>
+        /// Represents a mapping between a database column and an entity property.
+        /// </summary>
         public class ColumnMapping
         {
+            /// <summary>
+            /// Gets or sets the database column name.
+            /// </summary>
             public string ColumnName { get; set; }
+
+            /// <summary>
+            /// Gets or sets the SQL alias for the column in SELECT statements.
+            /// </summary>
             public string Alias { get; set; }
+
+            /// <summary>
+            /// Gets or sets the property that this column maps to.
+            /// </summary>
             public PropertyInfo Property { get; set; }
+
+            /// <summary>
+            /// Gets or sets the table alias that owns this column.
+            /// </summary>
             public string TableAlias { get; set; }
         }
 
+        /// <summary>
+        /// Builds JOIN SQL statements with SELECT and JOIN clauses for the specified includes.
+        /// </summary>
+        /// <typeparam name="T">The root entity type</typeparam>
+        /// <param name="baseTableName">The name of the base table</param>
+        /// <param name="includePaths">The navigation property paths to include</param>
+        /// <returns>A JoinResult containing the SELECT clause, JOIN clause, and mapping information</returns>
+        /// <exception cref="ArgumentNullException">Thrown when baseTableName is null</exception>
         public JoinResult BuildJoinSql<T>(string baseTableName, List<string> includePaths) where T : class
         {
             JoinResult result = new JoinResult

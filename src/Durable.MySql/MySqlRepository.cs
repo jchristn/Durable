@@ -105,7 +105,7 @@ namespace Durable.MySql
         internal readonly IBatchInsertConfiguration _BatchConfig;
         internal readonly ISanitizer _Sanitizer;
         internal readonly IDataTypeConverter _DataTypeConverter;
-        internal readonly VersionColumnInfo _VersionColumnInfo;
+        internal readonly VersionColumnInfo? _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
 
@@ -184,7 +184,7 @@ namespace Durable.MySql
         /// <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
         /// <param name="transaction">Optional transaction to execute the operation within.</param>
         /// <returns>The first matching entity, or null if no entities match the criteria.</returns>
-        public T ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T? ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
             if (predicate != null) query = query.Where(predicate);
@@ -197,7 +197,7 @@ namespace Durable.MySql
         /// <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no match is found.</returns>
-        public T ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             return ReadFirst(predicate, transaction);
         }
@@ -224,7 +224,7 @@ namespace Durable.MySql
         /// <param name="transaction">Optional transaction to execute within.</param>
         /// <returns>The single entity that matches the predicate, or default(T) if no match is found.</returns>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
-        public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
+        public T? ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             List<T> results = Query(transaction).Where(predicate).Take(2).Execute().ToList();
             if (results.Count > 1)
@@ -261,7 +261,7 @@ namespace Durable.MySql
         /// <param name="id">The identifier of the entity to read.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The entity with the specified identifier.</returns>
-        public T ReadById(object id, ITransaction? transaction = null)
+        public T? ReadById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             return Query(transaction).Where(BuildIdPredicate(id)).Execute().FirstOrDefault();
@@ -823,7 +823,7 @@ namespace Durable.MySql
         /// <param name="token">Cancellation token for the async operation</param>
         /// <returns>The first matching entity, or null if no entities match the criteria</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
 
@@ -832,7 +832,7 @@ namespace Durable.MySql
                 query = query.Where(predicate);
 
             IEnumerable<T> results = await query.Take(1).ExecuteAsync(token).ConfigureAwait(false);
-            return results.FirstOrDefault()!;
+            return results.FirstOrDefault();
         }
 
         /// <summary>
@@ -843,7 +843,7 @@ namespace Durable.MySql
         /// <param name="token">Cancellation token for the async operation</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no match is found</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             return await ReadFirstAsync(predicate, transaction, token).ConfigureAwait(false);
         }
@@ -884,7 +884,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when predicate is null</exception>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (predicate == null)
                 throw new ArgumentNullException(nameof(predicate));
@@ -897,7 +897,7 @@ namespace Durable.MySql
             if (resultsList.Count > 1)
                 throw new InvalidOperationException($"Expected 0 or 1 result but found {resultsList.Count}");
 
-            return resultsList.FirstOrDefault()!;
+            return resultsList.FirstOrDefault();
         }
 
         /// <summary>
@@ -946,7 +946,7 @@ namespace Durable.MySql
         /// <returns>The entity with the specified identifier, or null if not found</returns>
         /// <exception cref="ArgumentNullException">Thrown when id is null</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<T> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task<T?> ReadByIdAsync(object id, ITransaction? transaction = null, CancellationToken token = default)
         {
             if (id == null)
                 throw new ArgumentNullException(nameof(id));
@@ -954,14 +954,27 @@ namespace Durable.MySql
             token.ThrowIfCancellationRequested();
 
             IEnumerable<T> results = await Query(transaction).Where(BuildIdPredicate(id)).ExecuteAsync(token).ConfigureAwait(false);
-            return results.FirstOrDefault()!;
+            return results.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Checks if any entity exists that matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if any entity matches the predicate, false otherwise.</returns>
         public bool Exists(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             return Query(transaction).Where(predicate).Take(1).Execute().Any();
         }
 
+        /// <summary>
+        /// Checks if an entity exists with the specified identifier.
+        /// </summary>
+        /// <param name="id">The identifier to check for.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if an entity with the specified id exists, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool ExistsById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
@@ -1005,6 +1018,12 @@ namespace Durable.MySql
             return await ExistsAsync(BuildIdPredicate(id), transaction, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that match the predicate.</returns>
         public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             // Use ambient transaction if no explicit transaction provided
@@ -1418,6 +1437,13 @@ namespace Durable.MySql
             }
         }
 
+        /// <summary>
+        /// Creates a new entity in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entity with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Create(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -1489,6 +1515,13 @@ namespace Durable.MySql
             return entity;
         }
 
+        /// <summary>
+        /// Creates multiple entities in the repository using optimized batch insert operations.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entities with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
         public IEnumerable<T> CreateMany(IEnumerable<T> entities, ITransaction? transaction = null)
         {
             if (entities == null)
@@ -1640,6 +1673,13 @@ namespace Durable.MySql
             return results;
         }
 
+        /// <summary>
+        /// Updates an existing entity in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The updated entity.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Update(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -2161,7 +2201,7 @@ namespace Durable.MySql
 
             // For now, fall back to entity-by-entity updates since expression parsing for object initialization is complex
             // A full implementation would parse MemberInitExpression or NewExpression to generate SET clauses directly
-            return await UpdateManyAsync(predicate, async entity =>
+            return await UpdateManyAsync(predicate, entity =>
             {
                 token.ThrowIfCancellationRequested();
 
@@ -2179,6 +2219,7 @@ namespace Durable.MySql
                         property.SetValue(entity, newValue);
                     }
                 }
+                return Task.CompletedTask;
             }, transaction, token).ConfigureAwait(false);
         }
 
@@ -2219,6 +2260,14 @@ namespace Durable.MySql
             return rowsAffected;
         }
 
+        /// <summary>
+        /// Deletes an entity from the repository.
+        /// </summary>
+        /// <param name="entity">The entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity has a null primary key.</exception>
         public bool Delete(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -2268,6 +2317,13 @@ namespace Durable.MySql
             }
         }
 
+        /// <summary>
+        /// Deletes an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The identifier of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool DeleteById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
@@ -2285,6 +2341,13 @@ namespace Durable.MySql
             }
         }
 
+        /// <summary>
+        /// Deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
@@ -2305,6 +2368,11 @@ namespace Durable.MySql
             return count;
         }
 
+        /// <summary>
+        /// Deletes all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
         public int DeleteAll(ITransaction? transaction = null)
         {
             string sql = $"DELETE FROM `{_TableName}`";

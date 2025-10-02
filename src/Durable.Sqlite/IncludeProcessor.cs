@@ -5,6 +5,10 @@ namespace Durable.Sqlite
     using System.Linq;
     using System.Reflection;
 
+    /// <summary>
+    /// Processes Include expressions and builds navigation property metadata for SQLite queries.
+    /// Handles validation, caching, and relationship discovery for complex entity graphs.
+    /// </summary>
     internal class IncludeProcessor
     {
         #region Public-Members
@@ -23,6 +27,12 @@ namespace Durable.Sqlite
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the IncludeProcessor class.
+        /// </summary>
+        /// <param name="sanitizer">The sanitizer to use for SQL identifiers</param>
+        /// <param name="maxIncludeDepth">Maximum depth for nested includes to prevent infinite recursion. Default is 5</param>
+        /// <exception cref="ArgumentNullException">Thrown when sanitizer is null</exception>
         public IncludeProcessor(ISanitizer sanitizer, int maxIncludeDepth = 5)
         {
             _Sanitizer = sanitizer;
@@ -33,6 +43,14 @@ namespace Durable.Sqlite
 
         #region Public-Methods
 
+        /// <summary>
+        /// Parses a list of include paths and creates corresponding IncludeInfo objects.
+        /// </summary>
+        /// <typeparam name="T">The root entity type</typeparam>
+        /// <param name="includePaths">The navigation property paths to include (e.g., "Company", "Company.Address")</param>
+        /// <returns>A list of root-level include information objects</returns>
+        /// <exception cref="ArgumentNullException">Thrown when includePaths is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when include validation fails</exception>
         public List<IncludeInfo> ParseIncludes<T>(List<string> includePaths) where T : class
         {
             List<IncludeInfo> rootIncludes = new List<IncludeInfo>();
@@ -78,6 +96,12 @@ namespace Durable.Sqlite
             return rootIncludes;
         }
 
+        /// <summary>
+        /// Gets the column mappings for the specified entity type, with caching for performance.
+        /// </summary>
+        /// <param name="entityType">The entity type to get column mappings for</param>
+        /// <returns>A dictionary mapping column names to PropertyInfo objects</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null</exception>
         public Dictionary<string, PropertyInfo> GetColumnMappings(Type entityType)
         {
             if (_ColumnMappingCache.ContainsKey(entityType))

@@ -219,6 +219,11 @@ namespace Durable.MySql
             return BuildSql(true);
         }
 
+        /// <summary>
+        /// Builds the SQL query string from the current query configuration.
+        /// </summary>
+        /// <param name="includeGroupBy">Whether to include GROUP BY clause in the generated SQL.</param>
+        /// <returns>The generated SQL query string.</returns>
         public string BuildSql(bool includeGroupBy)
         {
             List<string> sqlParts = new List<string>();
@@ -422,6 +427,13 @@ namespace Durable.MySql
 
         // These methods will be implemented as the MySQL provider matures
 
+        /// <summary>
+        /// Projects the query results to a different type using the specified selector expression.
+        /// </summary>
+        /// <typeparam name="TResult">The type to project the results to.</typeparam>
+        /// <param name="selector">An expression that defines the projection.</param>
+        /// <returns>A query builder for the projected result type.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         public IQueryBuilder<TResult> Select<TResult>(Expression<Func<TEntity, TResult>> selector) where TResult : class, new()
         {
             if (selector == null)
@@ -430,6 +442,13 @@ namespace Durable.MySql
             return new MySqlProjectedQueryBuilder<TEntity, TResult>(_Repository, selector, this, null);
         }
 
+        /// <summary>
+        /// Specifies a related entity to include in the query results.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the navigation property.</typeparam>
+        /// <param name="navigationProperty">An expression representing the navigation property to include.</param>
+        /// <returns>The query builder for further configuration.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null.</exception>
         public IQueryBuilder<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> navigationProperty)
         {
             if (navigationProperty == null) throw new ArgumentNullException(nameof(navigationProperty));
@@ -439,6 +458,15 @@ namespace Durable.MySql
             return this;
         }
 
+        /// <summary>
+        /// Specifies an additional related entity to include in the query results following a previous Include.
+        /// </summary>
+        /// <typeparam name="TPreviousProperty">The type of the previous navigation property.</typeparam>
+        /// <typeparam name="TProperty">The type of the navigation property to include.</typeparam>
+        /// <param name="navigationProperty">An expression representing the navigation property to include.</param>
+        /// <returns>The query builder for further configuration.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when ThenInclude is called without a prior Include.</exception>
         public IQueryBuilder<TEntity> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
             if (navigationProperty == null) throw new ArgumentNullException(nameof(navigationProperty));
@@ -458,6 +486,13 @@ namespace Durable.MySql
             return this;
         }
 
+        /// <summary>
+        /// Groups the query results by the specified key selector expression.
+        /// </summary>
+        /// <typeparam name="TKey">The type of the grouping key.</typeparam>
+        /// <param name="keySelector">An expression that specifies the property to group by.</param>
+        /// <returns>A grouped query builder for further configuration.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         public IGroupedQueryBuilder<TEntity, TKey> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             if (keySelector == null)
@@ -473,7 +508,7 @@ namespace Durable.MySql
                 string rawColumn = groupColumn.Trim('`');
                 _GroupByColumns.Add(rawColumn);
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException)
             {
                 // Complex expression that can't be translated to SQL column
                 // MySqlGroupedQueryBuilder will handle this with in-memory grouping
@@ -909,6 +944,10 @@ namespace Durable.MySql
             }
         }
 
+        /// <summary>
+        /// Executes the query and returns both the results and the SQL query string.
+        /// </summary>
+        /// <returns>A durable result containing both the query results and the SQL string.</returns>
         public IDurableResult<TEntity> ExecuteWithQuery()
         {
             string sql = BuildSql();
@@ -916,6 +955,12 @@ namespace Durable.MySql
             return new DurableResult<TEntity>(sql, results);
         }
 
+        /// <summary>
+        /// Asynchronously executes the query and returns both the results and the SQL query string.
+        /// </summary>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>A task containing a durable result with both the query results and the SQL string.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
         public async Task<IDurableResult<TEntity>> ExecuteWithQueryAsync(CancellationToken token = default)
         {
             token.ThrowIfCancellationRequested();
@@ -924,6 +969,11 @@ namespace Durable.MySql
             return new DurableResult<TEntity>(sql, results);
         }
 
+        /// <summary>
+        /// Executes the query as an async enumerable and returns both the results and the SQL query string.
+        /// </summary>
+        /// <param name="token">Cancellation token for the async operation.</param>
+        /// <returns>An async durable result containing both the query results stream and the SQL string.</returns>
         public IAsyncDurableResult<TEntity> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default)
         {
             string sql = BuildSql();

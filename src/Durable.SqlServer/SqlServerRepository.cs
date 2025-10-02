@@ -970,11 +970,24 @@ namespace Durable.SqlServer
             return results.FirstOrDefault()!;
         }
 
+        /// <summary>
+        /// Checks if any entity exists that matches the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if any entity matches the predicate, false otherwise.</returns>
         public bool Exists(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             return Query(transaction).Where(predicate).Take(1).Execute().Any();
         }
 
+        /// <summary>
+        /// Checks if an entity exists with the specified identifier.
+        /// </summary>
+        /// <param name="id">The identifier to check for.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if an entity with the specified id exists, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool ExistsById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
@@ -1018,6 +1031,12 @@ namespace Durable.SqlServer
             return await ExistsAsync(BuildIdPredicate(id), transaction, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Counts the number of entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities that match the predicate.</returns>
         public int Count(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             // Use ambient transaction if no explicit transaction provided
@@ -1431,6 +1450,13 @@ namespace Durable.SqlServer
             }
         }
 
+        /// <summary>
+        /// Creates a new entity in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entity with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Create(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -1503,6 +1529,13 @@ namespace Durable.SqlServer
             return entity;
         }
 
+        /// <summary>
+        /// Creates multiple entities in the repository using optimized batch insert operations.
+        /// </summary>
+        /// <param name="entities">The collection of entities to create.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The created entities with any auto-generated values populated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
         public IEnumerable<T> CreateMany(IEnumerable<T> entities, ITransaction? transaction = null)
         {
             if (entities == null)
@@ -1655,6 +1688,13 @@ namespace Durable.SqlServer
             return results;
         }
 
+        /// <summary>
+        /// Updates an existing entity in the repository.
+        /// </summary>
+        /// <param name="entity">The entity to update.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The updated entity.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
         public T Update(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -2176,7 +2216,7 @@ namespace Durable.SqlServer
 
             // For now, fall back to entity-by-entity updates since expression parsing for object initialization is complex
             // A full implementation would parse MemberInitExpression or NewExpression to generate SET clauses directly
-            return await UpdateManyAsync(predicate, async entity =>
+            return await UpdateManyAsync(predicate, entity =>
             {
                 token.ThrowIfCancellationRequested();
 
@@ -2194,6 +2234,7 @@ namespace Durable.SqlServer
                         property.SetValue(entity, newValue);
                     }
                 }
+                return Task.CompletedTask;
             }, transaction, token).ConfigureAwait(false);
         }
 
@@ -2234,6 +2275,14 @@ namespace Durable.SqlServer
             return rowsAffected;
         }
 
+        /// <summary>
+        /// Deletes an entity from the repository.
+        /// </summary>
+        /// <param name="entity">The entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity has a null primary key.</exception>
         public bool Delete(T entity, ITransaction? transaction = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -2283,6 +2332,13 @@ namespace Durable.SqlServer
             }
         }
 
+        /// <summary>
+        /// Deletes an entity by its identifier.
+        /// </summary>
+        /// <param name="id">The identifier of the entity to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>True if the entity was deleted, false otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public bool DeleteById(object id, ITransaction? transaction = null)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
@@ -2300,6 +2356,13 @@ namespace Durable.SqlServer
             }
         }
 
+        /// <summary>
+        /// Deletes multiple entities that match the specified predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to filter entities to delete.</param>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
@@ -2320,6 +2383,11 @@ namespace Durable.SqlServer
             return count;
         }
 
+        /// <summary>
+        /// Deletes all entities from the repository.
+        /// </summary>
+        /// <param name="transaction">Optional transaction to execute within.</param>
+        /// <returns>The number of entities deleted.</returns>
         public int DeleteAll(ITransaction? transaction = null)
         {
             string sql = $"DELETE FROM [{_TableName}]";
