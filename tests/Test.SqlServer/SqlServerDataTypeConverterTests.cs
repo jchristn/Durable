@@ -306,9 +306,9 @@ namespace Test.SqlServer
                 Assert.Equal(10L, Convert.ToInt64(retrieved.Metadata["priority"]));
 
             if (retrieved.Metadata["isPublic"] is System.Text.Json.JsonElement isPublicElement)
-                Assert.Equal(false, isPublicElement.GetBoolean());
+                Assert.False(isPublicElement.GetBoolean());
             else
-                Assert.Equal(false, Convert.ToBoolean(retrieved.Metadata["isPublic"]));
+                Assert.False(Convert.ToBoolean(retrieved.Metadata["isPublic"]));
 
             // Verify complex object
             Assert.Equal("456 JSON Ave", retrieved.Address.Street);

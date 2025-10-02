@@ -485,7 +485,7 @@ namespace Durable.SqlServer
             try
             {
                 // Use the advanced data type converter for complex conversions
-                return _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                return _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property)!;
             }
             catch (Exception ex)
             {

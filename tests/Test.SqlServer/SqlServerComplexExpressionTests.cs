@@ -389,7 +389,7 @@ namespace Test.SqlServer
             foreach (Person person in startsWithList)
             {
                 Console.WriteLine($"  {person.FirstName} {person.LastName}");
-                Assert.True(person.FirstName.StartsWith("A"));
+                Assert.StartsWith("A", person.FirstName);
             }
 
             Console.WriteLine("✅ String functions test passed!");
