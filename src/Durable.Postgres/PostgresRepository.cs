@@ -201,7 +201,7 @@ namespace Durable.Postgres
         /// <param name="predicate">Optional expression to filter entities. If null, returns the first entity in the table.</param>
         /// <param name="transaction">Optional transaction context for the operation.</param>
         /// <returns>The first entity that matches the predicate, or default(T) if no entity is found.</returns>
-        public T ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
+        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
         {
             IQueryBuilder<T> query = Query(transaction);
             if (predicate != null) query = query.Where(predicate);
@@ -235,7 +235,7 @@ namespace Durable.Postgres
         /// <returns>The single entity that matches the predicate, or default(T) if no entity is found.</returns>
         /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
-        public T ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
+        public T? ReadSingleOrDefault(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             if (predicate == null)
                 throw new ArgumentNullException(nameof(predicate));
@@ -276,7 +276,7 @@ namespace Durable.Postgres
         /// <param name="id">The identifier of the entity to read.</param>
         /// <param name="transaction">The transaction to use for the operation.</param>
         /// <returns>The entity with the specified identifier.</returns>
-        public T ReadById(object id, ITransaction? transaction = null)
+        public T? ReadById(object id, ITransaction? transaction = null)
         {
             if (id == null)
                 throw new ArgumentNullException(nameof(id));
@@ -1056,7 +1056,7 @@ namespace Durable.Postgres
 
                 object? value = property.GetValue(entity);
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
             }
 
             string insertSql = $"INSERT INTO {_Sanitizer.SanitizeIdentifier(_TableName)} ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.name))})";
@@ -1220,7 +1220,7 @@ namespace Durable.Postgres
 
             string columnName = parser.GetColumnFromExpression(field.Body);
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
-            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
 
             parameters.Add(("@value", convertedValue));
 
@@ -1275,7 +1275,7 @@ namespace Durable.Postgres
                 else
                 {
                     setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @{columnName}");
-                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                     parameters.Add(($"@{columnName}", convertedValue));
                 }
             }
@@ -1379,7 +1379,7 @@ namespace Durable.Postgres
 
             string columnName = parser.GetColumnFromExpression(field.Body);
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
-            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
 
             parameters.Add(("@value", convertedValue));
 
@@ -1792,8 +1792,6 @@ namespace Durable.Postgres
             List<string> updatePairs = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
-            bool skipPrimaryKeyInInsert = false;
-
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
                 string columnName = kvp.Key;
@@ -1807,14 +1805,13 @@ namespace Durable.Postgres
                 {
                     if (value == null || (value is int intValue && intValue == 0) || (value is long longValue && longValue == 0))
                     {
-                        skipPrimaryKeyInInsert = true;
                         continue; // Skip including this column in the INSERT
                     }
                 }
 
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                 values.Add($"@{columnName}");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
 
                 // Don't update primary key or auto-increment columns in the UPDATE part
                 if (columnName != _PrimaryKeyColumn && !attr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true)
@@ -1920,8 +1917,6 @@ namespace Durable.Postgres
             List<string> updatePairs = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
 
-            bool skipPrimaryKeyInInsert = false;
-
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
                 string columnName = kvp.Key;
@@ -1935,14 +1930,13 @@ namespace Durable.Postgres
                 {
                     if (value == null || (value is int intValue && intValue == 0) || (value is long longValue && longValue == 0))
                     {
-                        skipPrimaryKeyInInsert = true;
                         continue; // Skip including this column in the INSERT
                     }
                 }
 
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                 values.Add($"@{columnName}");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
 
                 // Don't update primary key or auto-increment columns in the UPDATE part
                 if (columnName != _PrimaryKeyColumn && !attr?.PropertyFlags.HasFlag(Flags.AutoIncrement) == true)
@@ -2624,7 +2618,7 @@ namespace Durable.Postgres
 
             try
             {
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult))!;
             }
             catch (Exception ex)
             {
@@ -2683,7 +2677,7 @@ namespace Durable.Postgres
                         object? value = property.GetValue(entity);
                         string paramName = $"@p{paramCounter}";
                         rowValues.Add(paramName);
-                        parameters.Add((paramName, _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                        parameters.Add((paramName, _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
                         paramCounter++;
                     }
 

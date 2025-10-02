@@ -246,7 +246,7 @@ namespace Durable.Postgres
                     if (value != null)
                     {
                         // Convert PostgreSQL-specific types
-                        object convertedValue = ConvertPostgresValue(value, property.PropertyType);
+                        object? convertedValue = ConvertPostgresValue(value, property.PropertyType);
                         property.SetValue(entity, convertedValue);
                     }
                     else if (property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) == null)
@@ -271,7 +271,7 @@ namespace Durable.Postgres
         /// <param name="value">The raw value from PostgreSQL</param>
         /// <param name="targetType">The target .NET type</param>
         /// <returns>The converted value</returns>
-        private object ConvertPostgresValue(object value, Type targetType)
+        private object? ConvertPostgresValue(object? value, Type targetType)
         {
             if (value == null) return null;
 
@@ -311,7 +311,7 @@ namespace Durable.Postgres
             // Handle PostgreSQL JSON and JSONB types
             if (actualTargetType == typeof(string) && (value is Newtonsoft.Json.Linq.JToken || value.GetType().Name.Contains("Json")))
             {
-                return value.ToString();
+                return value.ToString()!;
             }
 
             // Handle PostgreSQL arrays (including multi-dimensional arrays)
@@ -322,7 +322,7 @@ namespace Durable.Postgres
                 for (int i = 0; i < arrayValue.Length; i++)
                 {
                     object? element = arrayValue.GetValue(i);
-                    result.SetValue(ConvertPostgresValue(element, elementType), i);
+                    result.SetValue(ConvertPostgresValue(element!, elementType), i);
                 }
                 return result;
             }
@@ -345,7 +345,7 @@ namespace Durable.Postgres
                 // For PostgreSQL geometric types, convert to string representation
                 // or handle specific types if the target application uses them
                 if (actualTargetType == typeof(string))
-                    return value.ToString();
+                    return value.ToString()!;
             }
 
             // Handle PostgreSQL bit strings
@@ -371,11 +371,11 @@ namespace Durable.Postgres
             if (value.GetType().Name.Contains("Range"))
             {
                 if (actualTargetType == typeof(string))
-                    return value.ToString();
+                    return value.ToString()!;
             }
 
             // Use the data type converter for standard conversions
-            return _DataTypeConverter.ConvertFromDatabase(value, actualTargetType);
+            return _DataTypeConverter.ConvertFromDatabase(value, actualTargetType)!;
         }
 
         /// <summary>

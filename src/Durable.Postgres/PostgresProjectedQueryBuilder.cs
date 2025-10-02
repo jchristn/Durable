@@ -815,7 +815,7 @@ namespace Durable.Postgres
                 if (value != DBNull.Value)
                 {
                     // Use repository's data type converter for consistent type handling
-                    object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(value, targetProperty.PropertyType);
+                    object convertedValue = _Repository._DataTypeConverter.ConvertFromDatabase(value, targetProperty.PropertyType)!;
                     targetProperty.SetValue(result, convertedValue);
                 }
             }

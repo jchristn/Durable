@@ -1512,8 +1512,8 @@ namespace Test.Postgres
 
                 // Verify that Include methods exist on the query builder (without executing problematic includes)
                 // This confirms the API is available for when entities have proper navigation properties
-                Assert.True(includeQuery.GetType().GetMethods().Any(m => m.Name == "Include"));
-                Assert.True(includeQuery.GetType().GetMethods().Any(m => m.Name == "ThenInclude"));
+                Assert.Contains(includeQuery.GetType().GetMethods(), m => m.Name == "Include");
+                Assert.Contains(includeQuery.GetType().GetMethods(), m => m.Name == "ThenInclude");
             }
             finally
             {

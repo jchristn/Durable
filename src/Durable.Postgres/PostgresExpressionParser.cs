@@ -26,7 +26,6 @@ namespace Durable.Postgres
         private readonly Dictionary<string, PropertyInfo> _ColumnMappings;
         private readonly ISanitizer _Sanitizer;
         private readonly List<(string name, object? value)> _Parameters;
-        private int _ParameterCounter;
         private bool _UseParameterizedQueries;
 
         // Type-specific static cache for compiled expressions to avoid repeated compilation overhead
@@ -50,7 +49,6 @@ namespace Durable.Postgres
             _ColumnMappings = columnMappings ?? throw new ArgumentNullException(nameof(columnMappings));
             _Sanitizer = sanitizer ?? new PostgresSanitizer();
             _Parameters = new List<(string name, object? value)>();
-            _ParameterCounter = 0;
             _UseParameterizedQueries = false;
         }
 
@@ -84,7 +82,6 @@ namespace Durable.Postgres
 
             // Clear existing parameters for fresh parsing
             _Parameters.Clear();
-            _ParameterCounter = 0;
             _UseParameterizedQueries = useParameterizedQueries;
 
             return Visit(expression);
@@ -470,7 +467,7 @@ namespace Durable.Postgres
         private string? ResolveNavigationPropertyChain(MemberExpression member) => null;
         private bool ContainsParameterReference(MemberExpression member) => false;
         private object? GetMemberValue(MemberExpression member) => null;
-        private string FormatValue(object? value) => _Sanitizer.FormatValue(value);
+        private string FormatValue(object? value) => _Sanitizer.FormatValue(value!);
         private string ParseUpdateValue(Expression expression) => Visit(expression);
         private string HandleContains(MethodCallExpression methodCall) => throw new NotImplementedException();
         private string HandleDateTimeAdd(MethodCallExpression methodCall) => throw new NotImplementedException();
