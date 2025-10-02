@@ -585,7 +585,7 @@ namespace Durable.MySql
 
                 object? value = property.GetValue(entity);
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
-                values.Add(_Sanitizer.FormatValue(value));
+                values.Add(_Sanitizer.FormatValue(value!));
             }
 
             string sql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)})";
@@ -1204,13 +1204,13 @@ namespace Durable.MySql
             if (transaction != null)
             {
                 object? result = ExecuteScalarWithConnection<object>(transaction.Connection, sql.ToString(), transaction.Transaction, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
         }
 
@@ -1245,13 +1245,13 @@ namespace Durable.MySql
             if (transaction != null)
             {
                 object? result = ExecuteScalarWithConnection<object>(transaction.Connection, sql.ToString(), transaction.Transaction, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
         }
 
@@ -1382,13 +1382,13 @@ namespace Durable.MySql
             if (transaction != null)
             {
                 object? result = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql.ToString(), transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
         }
 
@@ -1427,13 +1427,13 @@ namespace Durable.MySql
             if (transaction != null)
             {
                 object? result = await ExecuteScalarWithConnectionAsync<object>(transaction.Connection, sql.ToString(), transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
             else
             {
                 using var connection = _ConnectionFactory.GetConnection();
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal));
+                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
         }
 
@@ -1466,7 +1466,7 @@ namespace Durable.MySql
 
                 object? value = property.GetValue(entity);
                 columns.Add($"`{columnName}`");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
             }
 
             string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.name))})";
@@ -1584,7 +1584,7 @@ namespace Durable.MySql
 
                 object? value = property.GetValue(entity);
                 columns.Add($"`{columnName}`");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property)));
+                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
             }
 
             string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.name))})";
@@ -1702,16 +1702,16 @@ namespace Durable.MySql
                 else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
                 {
                     currentVersion = value;
-                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion);
+                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion!);
                     setPairs.Add($"`{columnName}` = @new_version");
-                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion, _VersionColumnInfo.PropertyType, property);
+                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion!, _VersionColumnInfo.PropertyType, property);
                     parameters.Add(("@new_version", convertedNewVersion));
                     _VersionColumnInfo.SetValue(entity, newVersion);
                 }
                 else
                 {
                     setPairs.Add($"`{columnName}` = @{columnName}");
-                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                     parameters.Add(($"@{columnName}", convertedValue));
                 }
             }
@@ -1869,7 +1869,7 @@ namespace Durable.MySql
 
             // Convert value to database format
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
-            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
             parameters.Add(("@value", convertedValue));
 
             int rowsAffected;
@@ -1920,16 +1920,16 @@ namespace Durable.MySql
                 else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
                 {
                     currentVersion = value;
-                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion);
+                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion!);
                     setPairs.Add($"`{columnName}` = @new_version");
-                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion, _VersionColumnInfo.PropertyType, property);
+                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion!, _VersionColumnInfo.PropertyType, property);
                     parameters.Add(("@new_version", convertedNewVersion));
                     _VersionColumnInfo.SetValue(entity, newVersion);
                 }
                 else
                 {
                     setPairs.Add($"`{columnName}` = @{columnName}");
-                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                     parameters.Add(($"@{columnName}", convertedValue));
                 }
             }
@@ -2096,7 +2096,7 @@ namespace Durable.MySql
 
             // Convert value to database format
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
-            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, typeof(TField), fieldProperty);
+            object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
             parameters.Add(("@value", convertedValue));
 
             int rowsAffected;
@@ -2587,7 +2587,7 @@ namespace Durable.MySql
                 columns.Add($"`{columnName}`");
                 parameters.Add($"@{columnName}");
 
-                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                 parameterValues.Add((columnName, convertedValue));
 
                 // For UPDATE part - exclude primary key from updates
@@ -2621,7 +2621,7 @@ namespace Durable.MySql
 
             try
             {
-                int rowsAffected = command.ExecuteNonQuery();
+                int rowsAffected = command!.ExecuteNonQuery();
 
                 // Handle auto-generated primary key for new insertions
                 if (_PrimaryKeyProperty != null && _PrimaryKeyProperty.GetValue(entity) == null)
@@ -2760,7 +2760,7 @@ namespace Durable.MySql
                 columns.Add($"`{columnName}`");
                 parameters.Add($"@{columnName}");
 
-                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                 parameterValues.Add((columnName, convertedValue));
 
                 // For UPDATE part - exclude primary key from updates
@@ -2794,7 +2794,7 @@ namespace Durable.MySql
 
             try
             {
-                int rowsAffected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                int rowsAffected = await command!.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
                 // Handle auto-generated primary key for new insertions
                 if (_PrimaryKeyProperty != null && _PrimaryKeyProperty.GetValue(entity) == null)
@@ -2936,7 +2936,7 @@ namespace Durable.MySql
 
             try
             {
-                using var reader = (MySqlConnector.MySqlDataReader)command.ExecuteReader();
+                using var reader = (MySqlConnector.MySqlDataReader)command!.ExecuteReader();
                 List<T> results = new List<T>();
                 while (reader.Read())
                 {
@@ -3001,7 +3001,7 @@ namespace Durable.MySql
 
             try
             {
-                using var reader = (MySqlConnector.MySqlDataReader)command.ExecuteReader();
+                using var reader = (MySqlConnector.MySqlDataReader)command!.ExecuteReader();
                 List<TResult> results = new List<TResult>();
                 while (reader.Read())
                 {
@@ -3065,7 +3065,7 @@ namespace Durable.MySql
 
             try
             {
-                return command.ExecuteNonQuery();
+                return command!.ExecuteNonQuery();
             }
             catch (Exception ex)
             {
@@ -3130,7 +3130,7 @@ namespace Durable.MySql
                 _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
             }
 
-            using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+            using var reader = (MySqlConnector.MySqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
             while (await reader.ReadAsync(token).ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested();
@@ -3196,7 +3196,7 @@ namespace Durable.MySql
                 _LastExecutedSqlWithParameters = BuildSqlWithParameters((MySqlConnector.MySqlCommand)command);
             }
 
-            using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+            using var reader = (MySqlConnector.MySqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
             while (await reader.ReadAsync(token).ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested();
@@ -3257,7 +3257,7 @@ namespace Durable.MySql
 
             try
             {
-                return await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                return await command!.ExecuteNonQueryAsync(token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -3509,7 +3509,7 @@ namespace Durable.MySql
                 {
                     PropertyInfo property = _ColumnMappings[column];
                     object? value = property.GetValue(entity);
-                    object convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
+                    object convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
                     command.Parameters.AddWithValue($"@{column}_{i}", convertedValue);
                 }
             }
@@ -3531,7 +3531,7 @@ namespace Durable.MySql
 
             try
             {
-                int rowsAffected = command.ExecuteNonQuery();
+                int rowsAffected = command!.ExecuteNonQuery();
                 if (rowsAffected != entities.Count)
                 {
                     throw new InvalidOperationException($"Expected to insert {entities.Count} rows, but {rowsAffected} were affected");
@@ -3560,7 +3560,7 @@ namespace Durable.MySql
 
             try
             {
-                int rowsAffected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                int rowsAffected = await command!.ExecuteNonQueryAsync(token).ConfigureAwait(false);
                 if (rowsAffected != entities.Count)
                 {
                     throw new InvalidOperationException($"Expected to insert {entities.Count} rows, but {rowsAffected} were affected");
@@ -3575,7 +3575,7 @@ namespace Durable.MySql
                     if (hasAutoIncrement)
                     {
                         // Get the first auto-generated ID
-                        using var idCommand = new MySqlConnector.MySqlCommand("SELECT LAST_INSERT_ID()", (MySqlConnector.MySqlConnection)command.Connection, command.Transaction);
+                        using var idCommand = new MySqlConnector.MySqlCommand("SELECT LAST_INSERT_ID()", (MySqlConnector.MySqlConnection)command.Connection!, command.Transaction);
                         object? firstIdResult = await idCommand.ExecuteScalarAsync(token).ConfigureAwait(false);
 
                         if (firstIdResult != null && firstIdResult != DBNull.Value)
@@ -3668,7 +3668,7 @@ namespace Durable.MySql
                     if (!reader.IsDBNull(ordinal))
                     {
                         object value = reader.GetValue(ordinal);
-                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property)!;
                         property.SetValue(entity, convertedValue);
                     }
                 }
@@ -3703,7 +3703,7 @@ namespace Durable.MySql
                     object value = reader.GetValue(i);
                     try
                     {
-                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                        object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property)!;
                         property.SetValue(result, convertedValue);
                     }
                     catch (Exception ex)

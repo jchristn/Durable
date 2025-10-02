@@ -529,7 +529,7 @@ namespace Durable.MySql
                     // String.Contains - LIKE operation
                     string column = Visit(methodCall.Object);
                     object? value = GetConstantValue(methodCall.Arguments[0]);
-                    string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString());
+                    string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString() ?? "");
                     // Keep the sanitizer's quotes and use CONCAT for safe wildcard addition
                     // Remove outer quotes, add wildcards, then re-quote safely
                     string innerValue = sanitizedValue.Substring(1, sanitizedValue.Length - 2);
@@ -958,7 +958,7 @@ namespace Durable.MySql
                     {
                         propertyPath.Insert(0, prop.Name);
                     }
-                    current = memberExpr.Expression;
+                    current = memberExpr.Expression!;
                 }
 
                 // Check if the root is the entity parameter
