@@ -175,9 +175,9 @@ namespace Test.MySql
                 // Verify computed fields
                 Assert.False(string.IsNullOrEmpty(profile.FullName));
                 Assert.Contains(" ", profile.FullName); // Should have space between names
-                Assert.True(profile.ContactInfo.Contains("@")); // Should be email
+                Assert.Contains("@", profile.ContactInfo); // Should be email
                 Assert.Contains("Department", profile.WorkInfo);
-                Assert.True(new[] { "Young", "Experienced", "Senior" }.Contains(profile.AgeCategory));
+                Assert.Contains(profile.AgeCategory, new[] { "Young", "Experienced", "Senior" });
             }
 
             Console.WriteLine("✅ Complex member initialization test passed!");
@@ -303,7 +303,7 @@ namespace Test.MySql
             {
                 Console.WriteLine($"  Department: {dept.DepartmentName} (Salary Range: {dept.SampleSalaryRange})");
                 Assert.False(string.IsNullOrEmpty(dept.DepartmentName));
-                Assert.True(new[] { "High", "Standard" }.Contains(dept.SampleSalaryRange));
+                Assert.Contains(dept.SampleSalaryRange, new[] { "High", "Standard" });
             }
 
             // Verify that we have unique combinations
@@ -371,7 +371,7 @@ namespace Test.MySql
             }
 
             // Verify no overlap between pages
-            Assert.False(page1List.Any(p1 => page2List.Any(p2 => p2.Email == p1.Email)));
+            Assert.DoesNotContain(page1List, p1 => page2List.Any(p2 => p2.Email == p1.Email));
 
             // Verify ordering is maintained
             for (int i = 1; i < page1List.Count; i++)
@@ -431,8 +431,8 @@ namespace Test.MySql
                 // Verify calculated fields
                 Assert.True(metric.EmployeeId > 0);
                 Assert.Contains(",", metric.DisplayName);
-                Assert.True(new[] { "Junior", "Mid-level", "Senior", "Executive" }.Contains(metric.AgeGroup));
-                Assert.True(new[] { "Entry", "Mid", "Senior", "Executive" }.Contains(metric.SalaryTier));
+                Assert.Contains(metric.AgeGroup, new[] { "Junior", "Mid-level", "Senior", "Executive" });
+                Assert.Contains(metric.SalaryTier, new[] { "Entry", "Mid", "Senior", "Executive" });
                 Assert.True(metric.EstimatedAnnualBonus > 0);
                 Assert.True(metric.MonthlyTakeHome > 0);
                 Assert.Equal(2, metric.DepartmentCode.Length);
@@ -525,10 +525,8 @@ namespace Test.MySql
                 .ContinueWith(t => t.Result.ToList());
 
             // Wait for both tasks to complete
-            await Task.WhenAll(summariesTask, deptInfoTask);
-
-            List<PersonSummary> summaries = summariesTask.Result;
-            List<DepartmentInfo> deptInfo = deptInfoTask.Result;
+            List<PersonSummary> summaries = await summariesTask;
+            List<DepartmentInfo> deptInfo = await deptInfoTask;
 
             Assert.True(summaries.Count >= 8);
             Assert.True(deptInfo.Count >= 8);
