@@ -1,3 +1,5 @@
+#nullable enable
+
 namespace Test.SqlServer
 {
     using System;
@@ -626,7 +628,7 @@ namespace Test.SqlServer
             {
                 await using SqlCommand checkCommand = connection.CreateCommand();
                 checkCommand.CommandText = $"SELECT COUNT(*) FROM sys.databases WHERE name = '{dbName}'";
-                int count = (int)await checkCommand.ExecuteScalarAsync();
+                int count = (int)(await checkCommand.ExecuteScalarAsync())!;
 
                 if (count == 0)
                 {

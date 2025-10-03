@@ -491,7 +491,7 @@ namespace Durable.SqlServer
                         object? value = GetValueFromReader(reader, columnName, property.PropertyType);
                         if (value != null)
                         {
-                            object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType);
+                            object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType)!;
                             property.SetValue(entity, convertedValue);
                         }
                     }

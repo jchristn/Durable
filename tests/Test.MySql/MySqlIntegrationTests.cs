@@ -457,6 +457,67 @@ namespace Test.MySql
         }
 
         /// <summary>
+        /// Tests that UpsertManyAsync properly returns connections to the pool instead of disposing them.
+        /// This verifies the fix for the connection pool leak bug where connections were being disposed
+        /// instead of returned to the pool, causing pool exhaustion under load.
+        /// </summary>
+        [Fact]
+        public async Task UpsertManyAsync_ReturnsConnectionToPool()
+        {
+            if (_SkipTests) return;
+
+            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            await SetupPersonTable(repository);
+
+            // Create test data
+            List<Person> people = new List<Person>
+            {
+                new Person { FirstName = "Alice", LastName = "Smith", Age = 30, Email = "alice@test.com", Salary = 75000m, Department = "Engineering" },
+                new Person { FirstName = "Bob", LastName = "Jones", Age = 35, Email = "bob@test.com", Salary = 80000m, Department = "Engineering" },
+                new Person { FirstName = "Carol", LastName = "White", Age = 28, Email = "carol@test.com", Salary = 70000m, Department = "Marketing" }
+            };
+
+            // Perform multiple UpsertManyAsync operations in rapid succession
+            // If connections are being disposed instead of returned to pool, this will fail
+            List<Task> tasks = new List<Task>();
+            for (int i = 0; i < 10; i++)
+            {
+                int iteration = i;
+                tasks.Add(Task.Run(async () =>
+                {
+                    List<Person> batch = people.Select(p => new Person
+                    {
+                        FirstName = p.FirstName + iteration,
+                        LastName = p.LastName + iteration,
+                        Age = p.Age + iteration,
+                        Email = $"{p.FirstName.ToLower()}{iteration}@test.com",
+                        Salary = p.Salary + (iteration * 1000),
+                        Department = p.Department
+                    }).ToList();
+
+                    IEnumerable<Person> result = await repository.UpsertManyAsync(batch);
+                    Assert.NotNull(result);
+                    Assert.Equal(3, result.Count());
+                }));
+            }
+
+            // Wait for all operations to complete
+            // If the connection pool leak exists, this will timeout or throw connection pool exhaustion
+            await Task.WhenAll(tasks);
+
+            // Verify data was inserted correctly
+            List<Person> allPeople = new List<Person>();
+            await foreach (Person person in repository.ReadManyAsync(p => true))
+            {
+                allPeople.Add(person);
+            }
+            Assert.True(allPeople.Count >= 30); // At least 30 people (10 iterations * 3 people per batch)
+
+            // Cleanup
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+        }
+
+        /// <summary>
         /// Disposes test resources.
         /// </summary>
         public void Dispose()

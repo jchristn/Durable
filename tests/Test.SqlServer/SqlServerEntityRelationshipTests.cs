@@ -416,7 +416,7 @@ namespace Test.SqlServer
                 };
 
                 Book createdInvalidBook = await _BookRepository.CreateAsync(invalidBook);
-                Assert.True(false, "Expected foreign key constraint violation but creation succeeded");
+                Assert.Fail("Expected foreign key constraint violation but creation succeeded");
             }
             catch (Exception ex)
             {

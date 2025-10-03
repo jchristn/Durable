@@ -14,6 +14,15 @@ A lightweight .NET ORM library with LINQ capabilities, designed with a clean, ge
 - **Change Tracking**: Built-in optimistic concurrency control
 - **Extensible**: Easy to extend with custom data type converters and conflict resolvers
 
+## Requirements
+
+- **.NET 8.0** or later
+- **Database versions:**
+  - SQLite 3.8+ (via Microsoft.Data.Sqlite 9.0+)
+  - MySQL 5.7+ / MariaDB 10.2+ (via MySqlConnector 2.3+)
+  - PostgreSQL 12+ (via Npgsql 8.0+)
+  - SQL Server 2016+ (via Microsoft.Data.SqlClient 5.2+)
+
 ## Core Architecture
 
 The Durable ORM is built around three main interfaces:
@@ -71,26 +80,218 @@ public class Person
 
     [Property("salary")]
     public decimal Salary { get; set; }
+
+    [Property("status")]  // Stored as string by default (e.g., "Active")
+    public Status Status { get; set; }
+}
+
+public enum Status
+{
+    Active,
+    Inactive,
+    Pending
 }
 ```
 
-### 2. Create Repository Implementation
-
-The included SQLite implementation demonstrates how to implement the interfaces:
+**Enum Storage:**
 
 ```csharp
-using Durable;
-using Durable.Sqlite;
+// String storage (default) - stores "Active", "Inactive", etc.
+[Property("status")]
+public Status Status { get; set; }
 
-// Using the built-in SQLite implementation
-var repository = new SqliteRepository<Person>("Data Source=myapp.db");
-
-// Or using connection factory for pooling
-var connectionFactory = new SqliteConnectionFactory("Data Source=myapp.db");
-var repository = new SqliteRepository<Person>(connectionFactory);
+// Integer storage - stores 0, 1, 2, etc.
+[Property("status", Flags.Integer)]  // or any flag except Flags.String
+public Status StatusAsInt { get; set; }
 ```
 
-### 3. Basic CRUD Operations
+### 2. Define Relationships
+
+Durable supports three types of relationships using attributes:
+
+#### One-to-Many
+
+```csharp
+[Entity("books")]
+public class Book
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [Property("author_id")]
+    [ForeignKey(typeof(Author), "Id")]
+    public int AuthorId { get; set; }
+
+    [NavigationProperty("AuthorId")]
+    public Author Author { get; set; }
+}
+
+[Entity("authors")]
+public class Author
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [Property("name", Flags.String, 100)]
+    public string Name { get; set; }
+
+    [InverseNavigationProperty("AuthorId")]
+    public List<Book> Books { get; set; } = new List<Book>();
+}
+```
+
+#### Many-to-Many
+
+```csharp
+[Entity("author_categories")]
+public class AuthorCategory
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [Property("author_id")]
+    [ForeignKey(typeof(Author), "Id")]
+    public int AuthorId { get; set; }
+
+    [Property("category_id")]
+    [ForeignKey(typeof(Category), "Id")]
+    public int CategoryId { get; set; }
+}
+
+[Entity("authors")]
+public class Author
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [ManyToManyNavigationProperty(typeof(AuthorCategory), "AuthorId", "CategoryId")]
+    public List<Category> Categories { get; set; } = new List<Category>();
+}
+
+[Entity("categories")]
+public class Category
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [ManyToManyNavigationProperty(typeof(AuthorCategory), "CategoryId", "AuthorId")]
+    public List<Author> Authors { get; set; } = new List<Author>();
+}
+```
+
+#### Loading Related Data
+
+```csharp
+// Load single navigation property
+var books = await repository.Query()
+    .Include(b => b.Author)
+    .ExecuteAsync();
+
+// Load nested relationships
+var books = await repository.Query()
+    .Include(b => b.Author)
+    .ThenInclude<Author, Company>(a => a.Company)
+    .ExecuteAsync();
+
+// Load multiple relationships
+var books = await repository.Query()
+    .Include(b => b.Author)
+    .Include(b => b.Publisher)
+    .ExecuteAsync();
+```
+
+### 3. Optimistic Concurrency
+
+Add a version column to detect concurrent updates:
+
+```csharp
+[Entity("authors")]
+public class Author
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [Property("name", Flags.String, 100)]
+    public string Name { get; set; }
+
+    [Property("version")]
+    [VersionColumn(VersionColumnType.Integer)]
+    public int Version { get; set; } = 1;
+}
+```
+
+**Version Types:**
+- `Integer` - Auto-incremented counter
+- `RowVersion` - Binary timestamp (SQL Server)
+- `Timestamp` - DateTime-based
+- `Guid` - Unique identifier per update
+
+**Conflict Handling:**
+
+```csharp
+// Default: Throws OptimisticConcurrencyException
+try
+{
+    await repository.UpdateAsync(author);
+}
+catch (OptimisticConcurrencyException ex)
+{
+    // Handle conflict: ex.ExpectedVersion vs ex.ActualVersion
+}
+
+// With conflict resolver
+var resolver = new ClientWinsResolver<Author>();  // Client wins
+// or new DatabaseWinsResolver<Author>();          // Database wins
+// or new MergeChangesResolver<Author>();          // Merge changes
+
+var repository = new SqliteRepository<Author>(connectionString,
+    conflictResolver: resolver);
+```
+
+### 4. Database Provider Setup
+
+Durable provides implementations for SQLite, MySQL, PostgreSQL, and SQL Server:
+
+```csharp
+// SQLite
+using Durable.Sqlite;
+var repo = new SqliteRepository<Person>("Data Source=myapp.db");
+
+// MySQL
+using Durable.MySql;
+var repo = new MySqlRepository<Person>("Server=localhost;Database=mydb;User=root;Password=pass;");
+
+// PostgreSQL
+using Durable.Postgres;
+var repo = new PostgresRepository<Person>("Host=localhost;Database=mydb;Username=postgres;Password=pass;");
+
+// SQL Server
+using Durable.SqlServer;
+var repo = new SqlServerRepository<Person>("Server=localhost;Database=mydb;Trusted_Connection=true;");
+```
+
+**Connection Pooling:**
+
+```csharp
+using Durable.Sqlite;
+
+// Default pooling (MinPoolSize: 5, MaxPoolSize: 100)
+var factory = new SqliteConnectionFactory("Data Source=myapp.db");
+var repository = new SqliteRepository<Person>(factory);
+
+// Configure pool options
+var customFactory = "Data Source=myapp.db".CreateFactory(options =>
+{
+    options.MinPoolSize = 10;              // Minimum connections (default: 5)
+    options.MaxPoolSize = 200;             // Maximum connections (default: 100)
+    options.ConnectionTimeout = TimeSpan.FromSeconds(60);  // Wait timeout (default: 30s)
+    options.IdleTimeout = TimeSpan.FromMinutes(15);        // Idle before cleanup (default: 10m)
+    options.ValidateConnections = true;    // Validate before use (default: true)
+});
+var repository = new SqliteRepository<Person>(customFactory);
+```
+
+### 5. Basic CRUD Operations
 
 ```csharp
 // Create
@@ -119,7 +320,7 @@ await repository.UpdateAsync(foundPerson);
 await repository.DeleteByIdAsync(foundPerson.Id);
 ```
 
-### 4. Advanced Querying
+### 6. Advanced Querying
 
 ```csharp
 // Complex filtering with LINQ
@@ -151,7 +352,7 @@ foreach (var person in result.Results)
 }
 ```
 
-### 5. Advanced Query Features
+### 7. Advanced Query Features
 
 #### Window Functions
 
@@ -294,7 +495,7 @@ var nonEngineerHighEarners = await highEarnersQuery
     .ExecuteAsync();
 ```
 
-### 6. Batch Operations
+### 8. Batch Operations
 
 ```csharp
 // Batch insert
@@ -317,7 +518,7 @@ int updatedCount = await repository.BatchUpdateAsync(
 int deletedCount = await repository.BatchDeleteAsync(p => p.Age < 18);
 ```
 
-### 7. Transaction Management
+### 9. Transaction Management
 
 ```csharp
 // Explicit transactions
@@ -351,7 +552,37 @@ catch
 }
 ```
 
-### 8. Raw SQL Support
+**Savepoints:**
+
+```csharp
+using var transaction = await repository.BeginTransactionAsync();
+try
+{
+    await repository.CreateAsync(person1, transaction);
+
+    // Create savepoint
+    var savepoint = await transaction.CreateSavepointAsync("sp1");
+    try
+    {
+        await repository.CreateAsync(person2, transaction);
+        await savepoint.ReleaseAsync();  // Success - release savepoint
+    }
+    catch
+    {
+        await savepoint.RollbackAsync();  // Rollback to savepoint only
+        throw;
+    }
+
+    await transaction.CommitAsync();
+}
+catch
+{
+    await transaction.RollbackAsync();
+    throw;
+}
+```
+
+### 10. Raw SQL Support
 
 ```csharp
 // Execute raw queries
@@ -369,7 +600,7 @@ var summaries = await repository
     .ToListAsync();
 ```
 
-### 9. SQL Capture and Debugging
+### 11. SQL Capture and Debugging
 
 The Durable ORM provides built-in SQL capture capabilities for debugging and monitoring executed queries. Repositories that implement the `ISqlCapture` interface can track and expose the actual SQL statements being executed.
 
@@ -456,6 +687,85 @@ await foreach (var person in asyncResult.Result)
 - Only enable SQL capture during development or when debugging is needed
 - The `LastExecutedSqlWithParameters` property performs parameter substitution, which has additional overhead
 - When `IncludeQueryInResults` is enabled, all repository operations return wrapped result objects
+
+## Testing
+
+**In-Memory Testing (SQLite):**
+
+```csharp
+using Durable.Sqlite;
+using Xunit;
+
+public class RepositoryTests
+{
+    [Fact]
+    public async Task CreatePerson_ReturnsWithId()
+    {
+        // Use in-memory database
+        const string connStr = "Data Source=TestDB;Mode=Memory;Cache=Shared";
+
+        // Keep connection alive for in-memory database
+        using var keepAlive = new SqliteConnection(connStr);
+        keepAlive.Open();
+
+        var repo = new SqliteRepository<Person>(connStr);
+
+        // Create table
+        await repo.ExecuteSqlAsync(@"
+            CREATE TABLE people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                first_name TEXT,
+                last_name TEXT,
+                age INTEGER
+            )");
+
+        var person = new Person { FirstName = "John", LastName = "Doe", Age = 30 };
+        var created = await repo.CreateAsync(person);
+
+        Assert.True(created.Id > 0);
+    }
+}
+```
+
+**Transaction Testing:**
+
+```csharp
+[Fact]
+public async Task Transaction_RollbackOnError()
+{
+    using var transaction = await repo.BeginTransactionAsync();
+
+    await repo.CreateAsync(person1, transaction);
+
+    // Verify within transaction
+    var count = repo.Count(transaction: transaction);
+    Assert.Equal(1, count);
+
+    await transaction.RollbackAsync();
+
+    // Verify rollback
+    Assert.Equal(0, repo.Count());
+}
+```
+
+**Concurrency Testing:**
+
+```csharp
+[Fact]
+public void OptimisticConcurrency_ThrowsException()
+{
+    var created = repo.Create(authorWithVersion);
+
+    var copy1 = repo.ReadById(created.Id);
+    var copy2 = repo.ReadById(created.Id);
+
+    copy1.Name = "Update 1";
+    repo.Update(copy1);  // Success - version increments
+
+    copy2.Name = "Update 2";
+    Assert.Throws<OptimisticConcurrencyException>(() => repo.Update(copy2));
+}
+```
 
 ## Building Your Own Repository Implementation
 
@@ -656,6 +966,49 @@ public class CustomConflictResolver<T> : IConcurrencyConflictResolver<T>
 }
 ```
 
+## Error Handling
+
+**Concurrency Exceptions:**
+
+```csharp
+// OptimisticConcurrencyException - Version mismatch detected
+try
+{
+    await repository.UpdateAsync(entity);
+}
+catch (OptimisticConcurrencyException ex)
+{
+    Console.WriteLine($"Expected: {ex.ExpectedVersion}, Actual: {ex.ActualVersion}");
+    // Retry with fresh entity or use conflict resolver
+}
+
+// ConcurrencyConflictException - Conflict during resolution
+catch (ConcurrencyConflictException ex)
+{
+    var current = ex.CurrentEntity;
+    var incoming = ex.IncomingEntity;
+    var original = ex.OriginalEntity;
+    // Handle unresolvable conflict
+}
+```
+
+**Standard Exceptions:**
+
+```csharp
+// ArgumentNullException - Null parameters
+try
+{
+    await repository.CreateAsync(null);
+}
+catch (ArgumentNullException ex) { }
+
+// InvalidOperationException - Invalid state (e.g., transaction already completed)
+```
+
+**Database Exceptions:**
+
+Database-specific exceptions (SqlException, MySqlException, NpgsqlException, SqliteException) are passed through from the underlying providers.
+
 ## Extension Methods
 
 The repository includes helpful extension methods:
@@ -685,13 +1038,79 @@ await foreach (var person in asyncResult.Results)
 5. **Expression Trees**: Use LINQ expressions instead of raw SQL when possible for type safety
 6. **Dispose Resources**: Properly dispose of repositories and transactions using `using` statements
 
-## Performance Tips
+## Query Performance
 
-- Use `Take()` and `Skip()` for pagination to limit result sets
-- Leverage batch operations for bulk inserts/updates
-- Use `ReadManyAsync()` with streaming for large result sets
-- Enable prepared statement reuse for repeated operations
-- Consider using raw SQL for complex queries that don't translate well to LINQ
+**Pagination:**
+```csharp
+// Good - limits database load
+var page = await repo.Query()
+    .Where(p => p.IsActive)
+    .OrderBy(p => p.Id)
+    .Skip(pageNum * pageSize)
+    .Take(pageSize)
+    .ExecuteAsync();
+
+// Bad - loads everything then pages in memory
+var all = await repo.ReadManyAsync(p => p.IsActive).ToListAsync();
+var page = all.Skip(pageNum * pageSize).Take(pageSize);
+```
+
+**Batch Operations:**
+```csharp
+// Good - single statement with optimized batching
+await repo.CreateManyAsync(1000_items);
+await repo.BatchUpdateAsync(p => p.Status == "Pending", p => new { Status = "Active" });
+
+// Bad - N queries
+foreach (var item in items) await repo.CreateAsync(item);
+```
+
+**Avoid N+1 Queries:**
+```csharp
+// Good - single query with joins
+var books = await repo.Query()
+    .Include(b => b.Author)
+    .Include(b => b.Publisher)
+    .ExecuteAsync();
+
+// Bad - N+1 queries
+var books = await repo.ReadAllAsync();
+foreach (var book in books)
+{
+    book.Author = await authorRepo.ReadByIdAsync(book.AuthorId);  // N queries!
+}
+```
+
+**Select Only What You Need:**
+```csharp
+// Good - projection reduces data transfer
+var summary = await repo.Query()
+    .Select(p => new { p.Id, p.Name })
+    .ExecuteAsync();
+
+// Bad - fetches all columns
+var all = await repo.ReadAllAsync();
+var names = all.Select(p => p.Name);
+```
+
+**Connection Pooling:**
+```csharp
+// Good - reuses connections
+var factory = connectionString.CreateFactory(opt => opt.MaxPoolSize = 100);
+var repo = new SqliteRepository<Person>(factory);
+
+// Bad - creates new connection each time
+var repo = new SqliteRepository<Person>(connectionString);
+```
+
+**Use Exists for Checks:**
+```csharp
+// Good - stops at first match
+bool hasActive = await repo.ExistsAsync(p => p.IsActive);
+
+// Bad - counts all matching rows
+bool hasActive = await repo.CountAsync(p => p.IsActive) > 0;
+```
 
 ## License
 

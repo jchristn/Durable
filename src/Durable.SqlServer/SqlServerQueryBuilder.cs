@@ -1227,7 +1227,7 @@ namespace Durable.SqlServer
             if (expression.Body is MemberExpression memberExpression)
             {
                 List<string> propertyNames = new List<string>();
-                MemberExpression current = memberExpression;
+                MemberExpression? current = memberExpression;
 
                 while (current != null)
                 {

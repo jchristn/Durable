@@ -292,7 +292,7 @@ namespace Test.MySql
             }
 
             // Verify no overlap between pages
-            Assert.False(page1.Any(p1 => page2.Any(p2 => p2.Id == p1.Id)));
+            Assert.DoesNotContain(page1, p1 => page2.Any(p2 => p2.Id == p1.Id));
 
             Console.WriteLine("✅ Include with Pagination test passed!");
         }

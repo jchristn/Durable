@@ -84,8 +84,8 @@ namespace Test.SqlServer
             List<Author> resultList = results.ToList();
 
             Assert.True(resultList.Count >= 2); // Should have at least George Orwell and Jane Austen
-            Assert.True(resultList.Any(a => a.Name == "George Orwell"));
-            Assert.True(resultList.Any(a => a.Name == "Jane Austen"));
+            Assert.Contains(resultList, a => a.Name == "George Orwell");
+            Assert.Contains(resultList, a => a.Name == "Jane Austen");
         }
 
         /// <summary>

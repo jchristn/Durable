@@ -960,7 +960,7 @@ namespace Durable.Postgres
             if (navigationProperty.Body is MemberExpression memberExpression)
             {
                 List<string> propertyNames = new List<string>();
-                MemberExpression current = memberExpression;
+                MemberExpression? current = memberExpression;
 
                 while (current != null)
                 {
@@ -982,7 +982,7 @@ namespace Durable.Postgres
             if (expression.Body is MemberExpression memberExpression)
             {
                 List<string> propertyNames = new List<string>();
-                MemberExpression current = memberExpression;
+                MemberExpression? current = memberExpression;
 
                 while (current != null)
                 {

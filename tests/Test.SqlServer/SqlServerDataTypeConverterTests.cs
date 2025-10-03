@@ -20,6 +20,7 @@ namespace Test.SqlServer
     /// - Nullable types: Comprehensive null value handling
     /// - Type conversion in operations: UpdateField with type conversion
     /// </summary>
+    [Collection("SqlServerDataTypeTests")]
     public class SqlServerDataTypeConverterTests : IDisposable
     {
         private readonly ITestOutputHelper _output;
@@ -306,9 +307,9 @@ namespace Test.SqlServer
                 Assert.Equal(10L, Convert.ToInt64(retrieved.Metadata["priority"]));
 
             if (retrieved.Metadata["isPublic"] is System.Text.Json.JsonElement isPublicElement)
-                Assert.Equal(false, isPublicElement.GetBoolean());
+                Assert.False(isPublicElement.GetBoolean());
             else
-                Assert.Equal(false, Convert.ToBoolean(retrieved.Metadata["isPublic"]));
+                Assert.False(Convert.ToBoolean(retrieved.Metadata["isPublic"]));
 
             // Verify complex object
             Assert.Equal("456 JSON Ave", retrieved.Address.Street);
@@ -624,6 +625,8 @@ namespace Test.SqlServer
             {
                 await repository.ExecuteSqlAsync("IF OBJECT_ID('dbo.complex_entities', 'U') IS NOT NULL DROP TABLE complex_entities");
                 _output.WriteLine("✓ Dropped existing complex_entities table");
+                // Give SQL Server time to complete the drop operation
+                await Task.Delay(100);
             }
             catch
             {

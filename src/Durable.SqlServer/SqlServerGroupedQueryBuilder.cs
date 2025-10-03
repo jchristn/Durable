@@ -436,7 +436,7 @@ namespace Durable.SqlServer
                     return default(TResult)!;
 
                 // Use advanced data type converter for complex type handling
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return (TResult)_DataTypeConverter.ConvertFromDatabase(result!, typeof(TResult))!;
             }
             catch (Exception ex)
             {
@@ -480,7 +480,7 @@ namespace Durable.SqlServer
                     return default(TResult)!;
 
                 // Use advanced data type converter for complex type handling
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return (TResult)_DataTypeConverter.ConvertFromDatabase(result!, typeof(TResult))!;
             }
             catch (Exception ex)
             {
@@ -521,7 +521,7 @@ namespace Durable.SqlServer
                     return default(TResult)!;
 
                 // Use advanced data type converter for complex type handling
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return (TResult)_DataTypeConverter.ConvertFromDatabase(result!, typeof(TResult))!;
             }
             catch (Exception ex)
             {
@@ -565,7 +565,7 @@ namespace Durable.SqlServer
                     return default(TResult)!;
 
                 // Use advanced data type converter for complex type handling
-                return (TResult)_DataTypeConverter.ConvertFromDatabase(result, typeof(TResult));
+                return (TResult)_DataTypeConverter.ConvertFromDatabase(result!, typeof(TResult))!;
             }
             catch (Exception ex)
             {
@@ -726,7 +726,7 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    key = (TKey)_DataTypeConverter.ConvertFromDatabase(rawValue, typeof(TKey));
+                    key = (TKey)_DataTypeConverter.ConvertFromDatabase(rawValue!, typeof(TKey))!;
                 }
 
                 keys.Add(key);
@@ -765,7 +765,7 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    key = (TKey)_DataTypeConverter.ConvertFromDatabase(rawValue, typeof(TKey));
+                    key = (TKey)_DataTypeConverter.ConvertFromDatabase(rawValue!, typeof(TKey))!;
                 }
 
                 keys.Add(key);
@@ -1092,7 +1092,7 @@ namespace Durable.SqlServer
                     {
                         try
                         {
-                            object convertedValue = _DataTypeConverter.ConvertFromDatabase(value, property.PropertyType, property);
+                            object convertedValue = _DataTypeConverter.ConvertFromDatabase(value!, property.PropertyType, property)!;
                             property.SetValue(entity, convertedValue);
                         }
                         catch
