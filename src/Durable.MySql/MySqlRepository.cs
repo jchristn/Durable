@@ -302,9 +302,6 @@ namespace Durable.MySql
             return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
-        // TODO: Implement remaining IRepository<T> methods
-        // This is a foundational implementation - async methods, CRUD operations, etc. will be added incrementally
-
         #endregion
 
         #region Private-Methods
@@ -2881,7 +2878,7 @@ namespace Durable.MySql
                     if (localTransaction != null)
                         await localTransaction.DisposeAsync().ConfigureAwait(false);
                     if (connection != null)
-                        await connection.DisposeAsync().ConfigureAwait(false);
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
                 }
             }
         }
@@ -3763,10 +3760,7 @@ namespace Durable.MySql
         public async Task<MySqlConnector.MySqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // For now, delegate to synchronous method since connection factory doesn't have async GetConnection
-            // In a full implementation, this could be enhanced if the connection factory supports async connection creation
-            return await Task.FromResult(GetConnection()).ConfigureAwait(false);
+            return (MySqlConnector.MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         #endregion

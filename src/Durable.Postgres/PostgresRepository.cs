@@ -517,9 +517,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
-                return Convert.ToBoolean(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+                    return Convert.ToBoolean(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -549,9 +558,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters).ConfigureAwait(false);
-                return Convert.ToBoolean(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters).ConfigureAwait(false);
+                    return Convert.ToBoolean(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -586,9 +604,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
-                return Convert.ToInt32(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                    return Convert.ToInt32(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -626,9 +653,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
-                return Convert.ToInt32(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+                    return Convert.ToInt32(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -668,9 +704,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -709,9 +754,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -749,9 +803,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -789,9 +852,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -835,9 +907,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -880,9 +961,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -924,9 +1014,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -968,9 +1067,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -1075,8 +1183,17 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                    insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                        insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    }
                 }
 
                 if (insertedId != null && insertedId != DBNull.Value)
@@ -1093,8 +1210,17 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                    await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                        await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    }
                 }
             }
 
@@ -1233,8 +1359,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -1294,8 +1429,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             if (rowsAffected == 0)
@@ -1392,8 +1536,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             return rowsAffected;
@@ -1467,8 +1620,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -1547,8 +1709,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.Cast<(string, object?)>().ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             return rowsAffected;
@@ -1593,8 +1764,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id));
+                DbConnection connection = null;
+                try
+                {
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id));
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected > 0;
@@ -1644,8 +1824,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null);
+                DbConnection connection = null;
+                try
+                {
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -1700,8 +1889,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             return rowsAffected > 0;
@@ -1765,8 +1963,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             return rowsAffected;
@@ -1830,8 +2037,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                returnedId = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    returnedId = ExecuteScalarWithConnection<object>(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             // Set the primary key if it was returned and the entity doesn't have one
@@ -1955,8 +2171,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                returnedId = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    returnedId = await ExecuteScalarWithConnectionAsync<object>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
 
             // Set the primary key if it was returned and the entity doesn't have one
@@ -2077,9 +2302,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    connection?.Dispose();
+                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
 
@@ -2144,9 +2369,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    connection?.Dispose();
+                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
 
@@ -2173,8 +2398,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using DbConnection connection = (DbConnection)_ConnectionFactory.GetConnection();
-                return ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    return ExecuteNonQueryWithConnection(connection, sql, null, parameters.Cast<(string, object?)>().ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2228,9 +2462,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    await connection.DisposeAsync().ConfigureAwait(false);
+                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
                 }
             }
         }
@@ -2292,9 +2526,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    await connection.DisposeAsync().ConfigureAwait(false);
+                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
                 }
             }
         }
@@ -2322,8 +2556,17 @@ namespace Durable.Postgres
             }
             else
             {
-                using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                return await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.Select(p => p is (string, object) ? ((string, object?))p : ($"@p{Array.IndexOf(parameters, p)}", p)).ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                    return await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.Select(p => p is (string, object) ? ((string, object?))p : ($"@p{Array.IndexOf(parameters, p)}", p)).ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
             }
         }
 
@@ -2424,10 +2667,7 @@ namespace Durable.Postgres
         public async Task<NpgsqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // For now, delegate to synchronous method since connection factory doesn't have async GetConnection
-            // In a full implementation, this could be enhanced if the connection factory supports async connection creation
-            return await Task.FromResult(GetConnection()).ConfigureAwait(false);
+            return (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -2716,19 +2956,28 @@ namespace Durable.Postgres
                     }
                     else
                     {
-                        using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                        await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
-
-                        using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
-                        foreach (var (name, value) in parameters)
+                        DbConnection connection = null;
+                        try
                         {
-                            command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                            connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
+
+                            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
+                            foreach (var (name, value) in parameters)
+                            {
+                                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                            }
+
+                            using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                            while (await reader.ReadAsync(token).ConfigureAwait(false))
+                            {
+                                insertedIds.Add(reader.GetValue(0));
+                            }
                         }
-
-                        using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
-                        while (await reader.ReadAsync(token).ConfigureAwait(false))
+                        finally
                         {
-                            insertedIds.Add(reader.GetValue(0));
+                            if (connection != null)
+                                await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
                         }
                     }
 
@@ -2748,8 +2997,17 @@ namespace Durable.Postgres
                     }
                     else
                     {
-                        using var connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                        await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                        DbConnection connection = null;
+                        try
+                        {
+                            connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                            await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            if (connection != null)
+                                await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                        }
                     }
                 }
 

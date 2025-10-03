@@ -1,8 +1,8 @@
-namespace Test.SqlServer
+namespace Test.Postgres
 {
     using Durable;
-    using Durable.SqlServer;
-    using Microsoft.Data.SqlClient;
+    using Durable.Postgres;
+    using Npgsql;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -13,40 +13,51 @@ namespace Test.SqlServer
     using Xunit.Abstractions;
 
     /// <summary>
-    /// Comprehensive tests for SQL Server advanced transaction features including:
+    /// Comprehensive tests for PostgreSQL advanced transaction features including:
     /// - Savepoints: Nested transaction rollback points
     /// - Ambient transactions: TransactionScope integration
     /// - Concurrent transactions: Thread-safety testing
     /// - Deep nesting: Multi-level savepoint chains
     /// - Memory leak prevention: Resource management testing
     /// </summary>
-    public class SqlServerTransactionScopeTests : IDisposable
+    public class PostgresTransactionScopeTests : IDisposable
     {
-        private readonly ITestOutputHelper _output;
-        private readonly SqlServerRepository<Person> _PersonRepository;
-        private readonly SqlServerRepository<Company> _CompanyRepository;
-        private readonly SqlServerRepository<Author> _AuthorRepository;
+
+        #region Private-Members
+
+        private readonly ITestOutputHelper _Output;
+        private readonly PostgresRepository<Person> _PersonRepository;
+        private readonly PostgresRepository<Company> _CompanyRepository;
+        private readonly PostgresRepository<Author> _AuthorRepository;
         private readonly bool _SkipTests;
 
-        public SqlServerTransactionScopeTests(ITestOutputHelper output)
-        {
-            _output = output;
+        #endregion
 
-            // Check if SQL Server is available and skip tests if not
-            string connectionString = "Server=view.homedns.org,1433;Database=durable_test;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the PostgresTransactionScopeTests class.
+        /// </summary>
+        /// <param name="output">The test output helper for logging.</param>
+        public PostgresTransactionScopeTests(ITestOutputHelper output)
+        {
+            _Output = output;
+
+            // Check if PostgreSQL is available and skip tests if not
+            string connectionString = "Server=localhost;Database=durable_test;Username=test_user;Password=test_password;";
 
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new SqlConnection(connectionString);
+                using NpgsqlConnection connection = new NpgsqlConnection(connectionString);
                 connection.Open();
-                using var command = connection.CreateCommand();
+                using NpgsqlCommand command = connection.CreateCommand();
                 command.CommandText = "SELECT 1";
                 command.ExecuteScalar();
 
-                _PersonRepository = new SqlServerRepository<Person>(connectionString);
-                _CompanyRepository = new SqlServerRepository<Company>(connectionString);
-                _AuthorRepository = new SqlServerRepository<Author>(connectionString);
+                _PersonRepository = new PostgresRepository<Person>(connectionString);
+                _CompanyRepository = new PostgresRepository<Company>(connectionString);
+                _AuthorRepository = new PostgresRepository<Author>(connectionString);
 
                 // Create tables if they don't exist
                 CreateTablesIfNeeded();
@@ -54,76 +65,28 @@ namespace Test.SqlServer
                 // Clean up any existing test data
                 CleanupTestData();
 
-                _output.WriteLine("SQL Server transaction scope tests initialized successfully");
+                _Output.WriteLine("PostgreSQL transaction scope tests initialized successfully");
             }
             catch (Exception ex)
             {
                 _SkipTests = true;
-                _output.WriteLine($"WARNING: SQL Server initialization failed - {ex.Message}");
+                _Output.WriteLine($"WARNING: PostgreSQL initialization failed - {ex.Message}");
             }
         }
 
-        private void CreateTablesIfNeeded()
-        {
-            try
-            {
-                // Create people table
-                _PersonRepository.ExecuteSql(@"
-                    CREATE TABLE people (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        first VARCHAR(100) NOT NULL,
-                        last VARCHAR(100) NOT NULL,
-                        age INT NOT NULL,
-                        email VARCHAR(255) NOT NULL,
-                        salary DECIMAL(10,2) NOT NULL,
-                        department VARCHAR(100) NOT NULL
-                    )");
+        #endregion
 
-                // Create companies table
-                _CompanyRepository.ExecuteSql(@"
-                    CREATE TABLE companies (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        name VARCHAR(100) NOT NULL,
-                        industry VARCHAR(50)
-                    )");
+        #region Public-Methods
 
-                // Create authors table
-                _AuthorRepository.ExecuteSql(@"
-                    CREATE TABLE authors (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        name VARCHAR(100) NOT NULL,
-                        company_id INT NULL,
-                        FOREIGN KEY (company_id) REFERENCES companies(id)
-                    )");
-
-                _output.WriteLine("Database tables created or verified successfully");
-            }
-            catch (Exception ex)
-            {
-                _output.WriteLine($"Warning: Could not create tables: {ex.Message}");
-            }
-        }
-
-        private void CleanupTestData()
-        {
-            try
-            {
-                _PersonRepository.DeleteAll();
-                _CompanyRepository.DeleteAll();
-                _AuthorRepository.DeleteAll();
-            }
-            catch (Exception ex)
-            {
-                _output.WriteLine($"Warning: Could not clean up test data: {ex.Message}");
-            }
-        }
-
+        /// <summary>
+        /// Tests basic transaction scope functionality with commit and rollback scenarios.
+        /// </summary>
         [Fact]
         public void TestBasicTransactionScope()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Basic Transaction Scope ===");
+            _Output.WriteLine("=== Testing Basic Transaction Scope ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -152,8 +115,8 @@ namespace Test.SqlServer
                 _PersonRepository.Create(person1);  // Uses ambient transaction
                 _PersonRepository.Create(person2);  // Uses ambient transaction
 
-                _output.WriteLine($"Created person 1 with ID: {person1.Id}");
-                _output.WriteLine($"Created person 2 with ID: {person2.Id}");
+                _Output.WriteLine($"Created person 1 with ID: {person1.Id}");
+                _Output.WriteLine($"Created person 2 with ID: {person2.Id}");
 
                 Assert.True(person1.Id > 0);
                 Assert.True(person2.Id > 0);
@@ -161,7 +124,7 @@ namespace Test.SqlServer
 
             int afterSuccessCount = _PersonRepository.Count();
             Assert.Equal(initialCount + 2, afterSuccessCount);
-            _output.WriteLine($"Total persons after successful transaction: {afterSuccessCount}");
+            _Output.WriteLine($"Total persons after successful transaction: {afterSuccessCount}");
 
             // Test rollback transaction
             bool exceptionCaught = false;
@@ -179,7 +142,7 @@ namespace Test.SqlServer
                         Department = "Sales"
                     };
                     _PersonRepository.Create(person3);
-                    _output.WriteLine($"Created person 3 with ID: {person3.Id}");
+                    _Output.WriteLine($"Created person 3 with ID: {person3.Id}");
 
                     // Force an exception to trigger rollback
                     throw new InvalidOperationException("Simulated error for rollback test");
@@ -187,22 +150,25 @@ namespace Test.SqlServer
             }
             catch (InvalidOperationException ex)
             {
-                _output.WriteLine($"Caught expected exception: {ex.Message}");
+                _Output.WriteLine($"Caught expected exception: {ex.Message}");
                 exceptionCaught = true;
             }
 
             Assert.True(exceptionCaught);
             int finalCount = _PersonRepository.Count();
             Assert.Equal(afterSuccessCount, finalCount); // Should not have increased
-            _output.WriteLine($"Total persons after rollback: {finalCount}");
+            _Output.WriteLine($"Total persons after rollback: {finalCount}");
         }
 
+        /// <summary>
+        /// Tests asynchronous transaction scope functionality with async/await patterns.
+        /// </summary>
         [Fact]
         public async Task TestAsyncTransactionScope()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Async Transaction Scope ===");
+            _Output.WriteLine("=== Testing Async Transaction Scope ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -230,8 +196,8 @@ namespace Test.SqlServer
                 await _PersonRepository.CreateAsync(person4);
                 await _PersonRepository.CreateAsync(person5);
 
-                _output.WriteLine($"Created person 4 with ID: {person4.Id}");
-                _output.WriteLine($"Created person 5 with ID: {person5.Id}");
+                _Output.WriteLine($"Created person 4 with ID: {person4.Id}");
+                _Output.WriteLine($"Created person 5 with ID: {person5.Id}");
 
                 Assert.True(person4.Id > 0);
                 Assert.True(person5.Id > 0);
@@ -239,20 +205,23 @@ namespace Test.SqlServer
                 return $"Successfully created 2 persons";
             });
 
-            _output.WriteLine($"Operation result: {result}");
+            _Output.WriteLine($"Operation result: {result}");
             Assert.Equal("Successfully created 2 persons", result);
 
             int count = _PersonRepository.Count();
             Assert.Equal(initialCount + 2, count);
-            _output.WriteLine($"Total persons after async transaction: {count}");
+            _Output.WriteLine($"Total persons after async transaction: {count}");
         }
 
+        /// <summary>
+        /// Tests nested transactions using savepoints for partial rollback capability.
+        /// </summary>
         [Fact]
         public void TestNestedTransactionWithSavepoints()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Nested Transactions with Savepoints ===");
+            _Output.WriteLine("=== Testing Nested Transactions with Savepoints ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -270,7 +239,7 @@ namespace Test.SqlServer
                     Department = "Engineering"
                 };
                 _PersonRepository.Create(person6, transaction);
-                _output.WriteLine($"Created person 6 with ID: {person6.Id} in main transaction");
+                _Output.WriteLine($"Created person 6 with ID: {person6.Id} in main transaction");
                 Assert.True(person6.Id > 0);
 
                 // Execute operation with savepoint - this should succeed
@@ -286,7 +255,7 @@ namespace Test.SqlServer
                         Department = "HR"
                     };
                     _PersonRepository.Create(person7, transaction);
-                    _output.WriteLine($"Created person 7 with ID: {person7.Id} in savepoint");
+                    _Output.WriteLine($"Created person 7 with ID: {person7.Id} in savepoint");
                     Assert.True(person7.Id > 0);
 
                     // This will succeed and release the savepoint
@@ -308,21 +277,21 @@ namespace Test.SqlServer
                             Department = "Legal"
                         };
                         _PersonRepository.Create(person8, transaction);
-                        _output.WriteLine($"Created person 8 with ID: {person8.Id} in failing savepoint");
+                        _Output.WriteLine($"Created person 8 with ID: {person8.Id} in failing savepoint");
 
                         throw new InvalidOperationException("Savepoint operation failed");
                     });
                 }
                 catch (InvalidOperationException ex)
                 {
-                    _output.WriteLine($"Savepoint rolled back due to: {ex.Message}");
+                    _Output.WriteLine($"Savepoint rolled back due to: {ex.Message}");
                     savepointExceptionCaught = true;
                 }
 
                 Assert.True(savepointExceptionCaught);
 
                 transaction.Commit();
-                _output.WriteLine("Main transaction committed successfully");
+                _Output.WriteLine("Main transaction committed successfully");
             }
             catch (Exception)
             {
@@ -334,15 +303,18 @@ namespace Test.SqlServer
             // Should have 2 new persons (person6 and person7, but not person8 due to savepoint rollback)
             int finalCount = _PersonRepository.Count();
             Assert.Equal(initialCount + 2, finalCount);
-            _output.WriteLine($"Final count after savepoint test: {finalCount}");
+            _Output.WriteLine($"Final count after savepoint test: {finalCount}");
         }
 
+        /// <summary>
+        /// Tests ambient transaction scope with nested scopes sharing the same transaction.
+        /// </summary>
         [Fact]
         public void TestAmbientTransactionScope()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Ambient Transaction Scope ===");
+            _Output.WriteLine("=== Testing Ambient Transaction Scope ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -359,7 +331,7 @@ namespace Test.SqlServer
                     Department = "Marketing"
                 };
                 _PersonRepository.Create(person9);  // No transaction parameter needed
-                _output.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
+                _Output.WriteLine($"Created person 9 with ID: {person9.Id} using ambient transaction");
                 Assert.True(person9.Id > 0);
 
                 // Nested scope with same transaction
@@ -375,25 +347,28 @@ namespace Test.SqlServer
                         Department = "IT"
                     };
                     _PersonRepository.Create(person10);  // Still uses the same transaction
-                    _output.WriteLine($"Created person 10 with ID: {person10.Id} in nested ambient transaction");
+                    _Output.WriteLine($"Created person 10 with ID: {person10.Id} in nested ambient transaction");
                     Assert.True(person10.Id > 0);
                 }
 
                 scope1.Complete();
-                _output.WriteLine("Ambient transaction scopes completed successfully");
+                _Output.WriteLine("Ambient transaction scopes completed successfully");
             }
 
             int finalCount = _PersonRepository.Count();
             Assert.Equal(initialCount + 2, finalCount);
-            _output.WriteLine($"Final count after ambient transaction test: {finalCount}");
+            _Output.WriteLine($"Final count after ambient transaction test: {finalCount}");
         }
 
+        /// <summary>
+        /// Tests concurrent transaction scopes to verify thread safety and isolation.
+        /// </summary>
         [Fact]
         public async Task TestConcurrentTransactionScopes()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Concurrent Transaction Scopes ===");
+            _Output.WriteLine("=== Testing Concurrent Transaction Scopes ===");
 
             int initialCount = _PersonRepository.Count();
             List<Task> tasks = new List<Task>();
@@ -425,7 +400,7 @@ namespace Test.SqlServer
                             // Simulate some work
                             await Task.Delay(50 + taskId * 10);
 
-                            _output.WriteLine($"Task {taskId}: Created person with ID {person.Id}");
+                            _Output.WriteLine($"Task {taskId}: Created person with ID {person.Id}");
 
                             lock (lockObject)
                             {
@@ -437,27 +412,30 @@ namespace Test.SqlServer
                     }
                     catch (Exception ex)
                     {
-                        _output.WriteLine($"Concurrent task {taskId} failed: {ex.Message}");
+                        _Output.WriteLine($"Concurrent task {taskId} failed: {ex.Message}");
                     }
                 }));
             }
 
             await Task.WhenAll(tasks);
 
-            _output.WriteLine($"Concurrent tasks completed: {successCount} successful");
+            _Output.WriteLine($"Concurrent tasks completed: {successCount} successful");
             Assert.True(successCount >= 8); // Allow for some potential failures in concurrent scenarios
 
             int finalCount = _PersonRepository.Count();
             Assert.True(finalCount >= initialCount + 8); // Should have at least 8 new records
-            _output.WriteLine($"Final count after concurrent test: {finalCount}");
+            _Output.WriteLine($"Final count after concurrent test: {finalCount}");
         }
 
+        /// <summary>
+        /// Tests deep nested savepoints to verify multi-level transaction support.
+        /// </summary>
         [Fact]
         public void TestDeepNestedSavepoints()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Deep Nested Savepoints ===");
+            _Output.WriteLine("=== Testing Deep Nested Savepoints ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -475,61 +453,38 @@ namespace Test.SqlServer
                     Department = "Main"
                 };
                 _PersonRepository.Create(mainPerson, transaction);
-                _output.WriteLine($"Created main person with ID: {mainPerson.Id}");
+                _Output.WriteLine($"Created main person with ID: {mainPerson.Id}");
                 Assert.True(mainPerson.Id > 0);
 
                 // Create nested savepoints (depth of 5)
                 CreateNestedSavepoints(transaction, 1, 5);
 
                 transaction.Commit();
-                _output.WriteLine("Deep nested savepoint test completed successfully");
+                _Output.WriteLine("Deep nested savepoint test completed successfully");
             }
             catch (Exception ex)
             {
                 // The using statement will automatically dispose the transaction,
                 // which includes rollback, so no manual rollback needed
-                _output.WriteLine($"Deep nested test failed: {ex.Message}");
+                _Output.WriteLine($"Deep nested test failed: {ex.Message}");
                 throw;
             }
 
             // Should have 1 main person + 5 nested persons = 6 total new persons
             int finalCount = _PersonRepository.Count();
             Assert.Equal(initialCount + 6, finalCount);
-            _output.WriteLine($"Final count after deep nested test: {finalCount}");
+            _Output.WriteLine($"Final count after deep nested test: {finalCount}");
         }
 
-        private void CreateNestedSavepoints(ITransaction transaction, int currentDepth, int maxDepth)
-        {
-            if (currentDepth > maxDepth)
-                return;
-
-            transaction.ExecuteWithSavepoint(() =>
-            {
-                Person person = new Person
-                {
-                    FirstName = $"Nested{currentDepth}",
-                    LastName = "Savepoint",
-                    Age = 25 + currentDepth,
-                    Email = $"nested{currentDepth}@nestedtest.com",
-                    Salary = 60000 + currentDepth * 5000,
-                    Department = "Nested"
-                };
-                _PersonRepository.Create(person, transaction);
-                _output.WriteLine($"Created nested person at depth {currentDepth} with ID: {person.Id}");
-                Assert.True(person.Id > 0);
-
-                // Recursively create deeper savepoints
-                CreateNestedSavepoints(transaction, currentDepth + 1, maxDepth);
-
-            }, $"nested_sp_{currentDepth}");
-        }
-
+        /// <summary>
+        /// Tests concurrent savepoint creation to verify thread safety of savepoint naming and management.
+        /// </summary>
         [Fact]
         public async Task TestConcurrentSavepointCreation()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Concurrent Savepoint Creation ===");
+            _Output.WriteLine("=== Testing Concurrent Savepoint Creation ===");
 
             using ITransaction transaction = _PersonRepository.BeginTransaction();
             try
@@ -565,7 +520,7 @@ namespace Test.SqlServer
                                 }
                                 else
                                 {
-                                    _output.WriteLine($"Warning: Task {taskId} got null savepoint or null savepoint name");
+                                    _Output.WriteLine($"Warning: Task {taskId} got null savepoint or null savepoint name");
                                 }
                             }
 
@@ -593,16 +548,16 @@ namespace Test.SqlServer
                                     await savepoint.ReleaseAsync();
                                 }
 
-                                _output.WriteLine($"Task {taskId}: Created savepoint '{savepoint.Name}' and person ID {person.Id}");
+                                _Output.WriteLine($"Task {taskId}: Created savepoint '{savepoint.Name}' and person ID {person.Id}");
                             }
                             else
                             {
-                                _output.WriteLine($"Task {taskId}: Failed to create savepoint, but created person ID {person.Id}");
+                                _Output.WriteLine($"Task {taskId}: Failed to create savepoint, but created person ID {person.Id}");
                             }
                         }
                         catch (Exception ex)
                         {
-                            _output.WriteLine($"Concurrent savepoint task {taskId} failed: {ex.Message}");
+                            _Output.WriteLine($"Concurrent savepoint task {taskId} failed: {ex.Message}");
                         }
                     }));
                 }
@@ -611,20 +566,20 @@ namespace Test.SqlServer
 
                 // Verify all savepoint names are unique (thread safety test)
                 int uniqueNames = savepointNames.Distinct().Count();
-                _output.WriteLine($"Created {savepointNames.Count} savepoints, {uniqueNames} unique names");
+                _Output.WriteLine($"Created {savepointNames.Count} savepoints, {uniqueNames} unique names");
                 if (uniqueNames == savepointNames.Count && savepointNames.Count > 0)
                 {
-                    _output.WriteLine("✓ Thread safety test passed - all savepoint names are unique");
+                    _Output.WriteLine("✓ Thread safety test passed - all savepoint names are unique");
                     Assert.Equal(savepointNames.Count, uniqueNames);
                 }
                 else if (savepointNames.Count == 0)
                 {
-                    _output.WriteLine("⚠ No savepoints were created - this may indicate savepoints are not supported");
+                    _Output.WriteLine("⚠ No savepoints were created - this may indicate savepoints are not supported");
                     // This is not necessarily a failure - some databases may not support savepoints
                 }
                 else
                 {
-                    _output.WriteLine("✗ Thread safety test failed - duplicate savepoint names detected");
+                    _Output.WriteLine("✗ Thread safety test failed - duplicate savepoint names detected");
                     Assert.Fail("Duplicate savepoint names detected");
                 }
 
@@ -634,17 +589,20 @@ namespace Test.SqlServer
             {
                 // The using statement will automatically dispose the transaction,
                 // which includes rollback, so no manual rollback needed
-                _output.WriteLine($"Concurrent savepoint test failed: {ex.Message}");
+                _Output.WriteLine($"Concurrent savepoint test failed: {ex.Message}");
                 throw;
             }
         }
 
+        /// <summary>
+        /// Tests memory leak prevention by creating and disposing many nested transaction scopes.
+        /// </summary>
         [Fact]
         public void TestMemoryLeakPrevention()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Memory Leak Prevention ===");
+            _Output.WriteLine("=== Testing Memory Leak Prevention ===");
 
             int initialCount = _PersonRepository.Count();
 
@@ -692,15 +650,18 @@ namespace Test.SqlServer
             int finalCount = _PersonRepository.Count();
             int expectedNewRecords = 10; // 100 iterations, but only every 10th commits
             Assert.Equal(initialCount + expectedNewRecords, finalCount);
-            _output.WriteLine($"Memory leak test completed - created {expectedNewRecords} records out of 100 iterations");
+            _Output.WriteLine($"Memory leak test completed - created {expectedNewRecords} records out of 100 iterations");
         }
 
+        /// <summary>
+        /// Tests transaction scope with multiple repositories to verify cross-repository transaction support.
+        /// </summary>
         [Fact]
         public void TestTransactionScopeWithMultipleRepositories()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Transaction Scope with Multiple Repositories ===");
+            _Output.WriteLine("=== Testing Transaction Scope with Multiple Repositories ===");
 
             int initialPersonCount = _PersonRepository.Count();
             int initialCompanyCount = _CompanyRepository.Count();
@@ -716,7 +677,7 @@ namespace Test.SqlServer
                     Industry = "Software"
                 };
                 _CompanyRepository.Create(company);
-                _output.WriteLine($"Created company with ID: {company.Id}");
+                _Output.WriteLine($"Created company with ID: {company.Id}");
 
                 // Create a person
                 Person person = new Person
@@ -729,7 +690,7 @@ namespace Test.SqlServer
                     Department = "CrossRepo"
                 };
                 _PersonRepository.Create(person);
-                _output.WriteLine($"Created person with ID: {person.Id}");
+                _Output.WriteLine($"Created person with ID: {person.Id}");
 
                 Assert.True(company.Id > 0);
                 Assert.True(person.Id > 0);
@@ -744,15 +705,18 @@ namespace Test.SqlServer
             Assert.Equal(initialPersonCount + 1, finalPersonCount);
             Assert.Equal(initialCompanyCount + 1, finalCompanyCount);
 
-            _output.WriteLine($"Cross-repository transaction completed successfully");
+            _Output.WriteLine($"Cross-repository transaction completed successfully");
         }
 
+        /// <summary>
+        /// Tests transaction rollback with multiple repositories to verify cross-repository rollback support.
+        /// </summary>
         [Fact]
         public void TestTransactionRollbackWithMultipleRepositories()
         {
             if (_SkipTests) return;
 
-            _output.WriteLine("=== Testing Transaction Rollback with Multiple Repositories ===");
+            _Output.WriteLine("=== Testing Transaction Rollback with Multiple Repositories ===");
 
             int initialPersonCount = _PersonRepository.Count();
             int initialCompanyCount = _CompanyRepository.Count();
@@ -770,7 +734,7 @@ namespace Test.SqlServer
                         Industry = "Finance"
                     };
                     _CompanyRepository.Create(company);
-                    _output.WriteLine($"Created company with ID: {company.Id} (will be rolled back)");
+                    _Output.WriteLine($"Created company with ID: {company.Id} (will be rolled back)");
 
                     // Create a person
                     Person person = new Person
@@ -783,7 +747,7 @@ namespace Test.SqlServer
                         Department = "RollbackTest"
                     };
                     _PersonRepository.Create(person);
-                    _output.WriteLine($"Created person with ID: {person.Id} (will be rolled back)");
+                    _Output.WriteLine($"Created person with ID: {person.Id} (will be rolled back)");
 
                     // Force rollback
                     throw new InvalidOperationException("Forced rollback for testing");
@@ -791,7 +755,7 @@ namespace Test.SqlServer
             }
             catch (InvalidOperationException ex)
             {
-                _output.WriteLine($"Caught expected exception: {ex.Message}");
+                _Output.WriteLine($"Caught expected exception: {ex.Message}");
                 exceptionCaught = true;
             }
 
@@ -804,9 +768,12 @@ namespace Test.SqlServer
             Assert.Equal(initialPersonCount, finalPersonCount);
             Assert.Equal(initialCompanyCount, finalCompanyCount);
 
-            _output.WriteLine($"Cross-repository rollback completed successfully");
+            _Output.WriteLine($"Cross-repository rollback completed successfully");
         }
 
+        /// <summary>
+        /// Disposes resources used by the test class.
+        /// </summary>
         public void Dispose()
         {
             if (!_SkipTests)
@@ -817,9 +784,111 @@ namespace Test.SqlServer
                 }
                 catch (Exception ex)
                 {
-                    _output.WriteLine($"Warning: Could not clean up test data during disposal: {ex.Message}");
+                    _Output.WriteLine($"Warning: Could not clean up test data during disposal: {ex.Message}");
                 }
             }
         }
+
+        #endregion
+
+        #region Private-Methods
+
+        private void CreateTablesIfNeeded()
+        {
+            try
+            {
+                // Create people table
+                _PersonRepository.ExecuteSql(@"
+                    CREATE TABLE IF NOT EXISTS people (
+                        id SERIAL PRIMARY KEY,
+                        first VARCHAR(100) NOT NULL,
+                        last VARCHAR(100) NOT NULL,
+                        age INT NOT NULL,
+                        email VARCHAR(255) NOT NULL,
+                        salary DECIMAL(10,2) NOT NULL,
+                        department VARCHAR(100) NOT NULL
+                    )");
+
+                _PersonRepository.ExecuteSql(@"
+                    CREATE INDEX IF NOT EXISTS idx_department ON people(department)");
+
+                _PersonRepository.ExecuteSql(@"
+                    CREATE INDEX IF NOT EXISTS idx_age ON people(age)");
+
+                // Create companies table
+                _CompanyRepository.ExecuteSql(@"
+                    CREATE TABLE IF NOT EXISTS companies (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        industry VARCHAR(50)
+                    )");
+
+                _CompanyRepository.ExecuteSql(@"
+                    CREATE INDEX IF NOT EXISTS idx_name ON companies(name)");
+
+                // Create authors table
+                _AuthorRepository.ExecuteSql(@"
+                    CREATE TABLE IF NOT EXISTS authors (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        company_id INT NULL,
+                        CONSTRAINT fk_company FOREIGN KEY (company_id) REFERENCES companies(id)
+                    )");
+
+                _AuthorRepository.ExecuteSql(@"
+                    CREATE INDEX IF NOT EXISTS idx_author_name ON authors(name)");
+
+                _AuthorRepository.ExecuteSql(@"
+                    CREATE INDEX IF NOT EXISTS idx_company_id ON authors(company_id)");
+
+                _Output.WriteLine("Database tables created or verified successfully");
+            }
+            catch (Exception ex)
+            {
+                _Output.WriteLine($"Warning: Could not create tables: {ex.Message}");
+            }
+        }
+
+        private void CleanupTestData()
+        {
+            try
+            {
+                _AuthorRepository.DeleteAll();
+                _PersonRepository.DeleteAll();
+                _CompanyRepository.DeleteAll();
+            }
+            catch (Exception ex)
+            {
+                _Output.WriteLine($"Warning: Could not clean up test data: {ex.Message}");
+            }
+        }
+
+        private void CreateNestedSavepoints(ITransaction transaction, int currentDepth, int maxDepth)
+        {
+            if (currentDepth > maxDepth)
+                return;
+
+            transaction.ExecuteWithSavepoint(() =>
+            {
+                Person person = new Person
+                {
+                    FirstName = $"Nested{currentDepth}",
+                    LastName = "Savepoint",
+                    Age = 25 + currentDepth,
+                    Email = $"nested{currentDepth}@nestedtest.com",
+                    Salary = 60000 + currentDepth * 5000,
+                    Department = "Nested"
+                };
+                _PersonRepository.Create(person, transaction);
+                _Output.WriteLine($"Created nested person at depth {currentDepth} with ID: {person.Id}");
+                Assert.True(person.Id > 0);
+
+                // Recursively create deeper savepoints
+                CreateNestedSavepoints(transaction, currentDepth + 1, maxDepth);
+
+            }, $"nested_sp_{currentDepth}");
+        }
+
+        #endregion
     }
 }

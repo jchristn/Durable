@@ -309,9 +309,6 @@ namespace Durable.SqlServer
             return new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
-        // TODO: Implement remaining IRepository<T> methods
-        // This is a foundational implementation - async methods, CRUD operations, etc. will be added incrementally
-
         #endregion
 
         #region Private-Methods
@@ -607,8 +604,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteNonQueryWithConnection(connection, sql, null);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteNonQueryWithConnection(connection, sql, null);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1059,8 +1065,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteScalarWithConnection<int>(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteScalarWithConnection<int>(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1096,8 +1111,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return await ExecuteScalarWithConnectionAsync<int>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return await ExecuteScalarWithConnectionAsync<int>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1137,9 +1161,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1179,9 +1212,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1221,9 +1263,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1262,9 +1313,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
+                    return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1308,9 +1368,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1354,9 +1423,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return SafeConvertDatabaseResult<TResult>(result);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return SafeConvertDatabaseResult<TResult>(result);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1399,9 +1477,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1444,9 +1531,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
-                return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
+                    return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result!, typeof(decimal))!;
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1501,8 +1597,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    insertedId = ExecuteScalarWithConnection<object>(connection, insertSql, null, parameters.ToArray());
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        insertedId = ExecuteScalarWithConnection<object>(connection, insertSql, null, parameters.ToArray());
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
 
                 // Set the ID on the entity
@@ -1521,8 +1626,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    ExecuteNonQueryWithConnection(connection, insertSql, null, parameters.ToArray());
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        ExecuteNonQueryWithConnection(connection, insertSql, null, parameters.ToArray());
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
             }
 
@@ -1620,8 +1734,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
 
                 // Set the ID on the entity
@@ -1640,8 +1763,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
             }
 
@@ -1754,8 +1886,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             if (rowsAffected == 0)
@@ -1894,8 +2035,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -1972,8 +2122,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             if (rowsAffected == 0)
@@ -2121,8 +2280,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -2190,8 +2358,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -2268,8 +2445,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -2303,8 +2489,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id), ("@version", version));
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id), ("@version", version));
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
 
                 if (rowsAffected == 0)
@@ -2351,8 +2546,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id)) > 0;
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id)) > 0;
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2398,8 +2602,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteNonQueryWithConnection(connection, sql, null);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteNonQueryWithConnection(connection, sql, null);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2434,8 +2647,17 @@ namespace Durable.SqlServer
                 }
                 else
                 {
-                    using var connection = _ConnectionFactory.GetConnection();
-                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                    DbConnection connection = null;
+                    try
+                    {
+                        connection = _ConnectionFactory.GetConnection();
+                        rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (connection != null)
+                            _ConnectionFactory.ReturnConnection(connection);
+                    }
                 }
 
                 if (rowsAffected == 0)
@@ -2486,8 +2708,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected > 0;
@@ -2549,8 +2780,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
 
             return rowsAffected;
@@ -2576,8 +2816,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return UpsertWithConnection(connection, entity, null);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return UpsertWithConnection(connection, entity, null);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2747,8 +2996,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return await UpsertAsyncWithConnection(connection, entity, null, token).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return await UpsertAsyncWithConnection(connection, entity, null, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2896,7 +3154,7 @@ namespace Durable.SqlServer
                     if (localTransaction != null)
                         await localTransaction.DisposeAsync().ConfigureAwait(false);
                     if (connection != null)
-                        await connection.DisposeAsync().ConfigureAwait(false);
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
                 }
             }
         }
@@ -2921,8 +3179,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteFromSqlWithConnection(connection, sql, null, parameters);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteFromSqlWithConnection(connection, sql, null, parameters);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -2986,8 +3253,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteFromSqlWithConnection<TResult>(connection, sql, null, parameters);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteFromSqlWithConnection<TResult>(connection, sql, null, parameters);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -3050,8 +3326,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return ExecuteSqlWithConnection(connection, sql, null, parameters);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return ExecuteSqlWithConnection(connection, sql, null, parameters);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -3112,10 +3397,19 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                await foreach (var item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
+                DbConnection connection = null;
+                try
                 {
-                    yield return item;
+                    connection = _ConnectionFactory.GetConnection();
+                    await foreach (var item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
+                    {
+                        yield return item;
+                    }
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3178,10 +3472,19 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
+                DbConnection connection = null;
+                try
                 {
-                    yield return item;
+                    connection = _ConnectionFactory.GetConnection();
+                    await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
+                    {
+                        yield return item;
+                    }
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3240,8 +3543,17 @@ namespace Durable.SqlServer
             }
             else
             {
-                using var connection = _ConnectionFactory.GetConnection();
-                return await ExecuteSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false);
+                DbConnection connection = null;
+                try
+                {
+                    connection = _ConnectionFactory.GetConnection();
+                    return await ExecuteSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -3292,7 +3604,7 @@ namespace Durable.SqlServer
         /// <returns>The created entities with any auto-generated values populated</returns>
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction? transaction)
         {
-            using var connection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
+            DbConnection connection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
             List<T> results = new List<T>();
 
             try
@@ -3831,10 +4143,7 @@ namespace Durable.SqlServer
         public async Task<SqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // For now, delegate to synchronous method since connection factory doesn't have async GetConnection
-            // In a full implementation, this could be enhanced if the connection factory supports async connection creation
-            return await Task.FromResult(GetConnection()).ConfigureAwait(false);
+            return (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         #endregion
