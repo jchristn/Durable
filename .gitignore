@@ -274,6 +274,9 @@ ClientBin/
 *.publishsettings
 node_modules/
 orleans.codegen.cs
+include_test.db
+pooling_example.db
+settings.local.json
 
 # Since there are multiple workflows, uncomment next line to ignore bower_components
 # (https://github.com/github/gitignore/pull/1529#issuecomment-104372622)
