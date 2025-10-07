@@ -1,3 +1,5 @@
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+
 namespace Test.Sqlite
 {
     using System;
@@ -154,7 +156,9 @@ namespace Test.Sqlite
             // Assert
             Assert.True(type1 == type2); // Same identifier
             Assert.False(type1 == type3); // Different identifier
+#pragma warning disable CS1718 // Comparison made to same variable
             Assert.True(RepositoryType.Sqlite == RepositoryType.Sqlite);
+#pragma warning restore CS1718
         }
 
         [Fact]

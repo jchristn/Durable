@@ -140,7 +140,7 @@ namespace Durable.MySql
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
-            _OrderByClauses.Add($"`{column}` ASC");
+            _OrderByClauses.Add($"{column} ASC");
             return this;
         }
 
@@ -153,7 +153,7 @@ namespace Durable.MySql
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
-            _OrderByClauses.Add($"`{column}` DESC");
+            _OrderByClauses.Add($"{column} DESC");
             return this;
         }
 
