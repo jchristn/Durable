@@ -533,6 +533,11 @@
         /// <param name="token">A cancellation token to cancel the operation.</param>
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         Task<ITransaction> BeginTransactionAsync(CancellationToken token = default);
+
+        /// <summary>
+        /// Gets the repository settings used to configure the connection
+        /// </summary>
+        RepositorySettings Settings { get; }
 #pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
     }
 }

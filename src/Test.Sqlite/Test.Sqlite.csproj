@@ -17,6 +17,7 @@
 		<Compile Include="IncludeTest.cs" />
 		<Compile Include="PoolingExample.cs" />
 		<Compile Include="QueryExposureTest.cs" />
+		<Compile Include="RepositorySettingsTests.cs" />
 		<Compile Include="SanitizationTest.cs" />
 		<Compile Include="SimpleTest.cs" />
 		<Compile Include="TransactionScopeTest.cs" />

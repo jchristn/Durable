@@ -65,6 +65,11 @@
             set => _IncludeQueryInResults = value;
         }
 
+        /// <summary>
+        /// Gets the repository settings used to configure the connection
+        /// </summary>
+        public RepositorySettings Settings { get; }
+
         #endregion
 
         #region Private-Members
@@ -104,6 +109,37 @@
         /// <exception cref="InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key).</exception>
         public SqliteRepository(string connectionString, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
+            ArgumentNullException.ThrowIfNull(connectionString);
+            Settings = SqliteRepositorySettings.Parse(connectionString);
+            _ConnectionFactory = new SqliteConnectionFactory(connectionString);
+            _Sanitizer = new SqliteSanitizer();
+            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _TableName = GetEntityName();
+            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            _ColumnMappings = GetColumnMappings();
+            _ForeignKeys = GetForeignKeys();
+            _NavigationProperties = GetNavigationProperties();
+            _BatchConfig = batchConfig ?? BatchInsertConfiguration.Default;
+            _VersionColumnInfo = GetVersionColumnInfo();
+            _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
+            _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the SqliteRepository with repository settings and optional configuration.
+        /// Creates an internal SqliteConnectionFactory using the connection string built from settings.
+        /// </summary>
+        /// <param name="settings">The SQLite repository settings to use for configuration.</param>
+        /// <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+        /// <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+        /// <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key), or when settings are invalid.</exception>
+        public SqliteRepository(SqliteRepositorySettings settings, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            Settings = settings;
+            string connectionString = settings.BuildConnectionString();
             _ConnectionFactory = new SqliteConnectionFactory(connectionString);
             _Sanitizer = new SqliteSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
@@ -121,6 +157,7 @@
         /// <summary>
         /// Initializes a new instance of the SqliteRepository with a provided connection factory and optional configuration.
         /// Allows for shared connection pooling and factory management across multiple repository instances.
+        /// Note: When using this constructor, the Settings property will be null as no connection string is directly provided.
         /// </summary>
         /// <param name="connectionFactory">The connection factory to use for database connections.</param>
         /// <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
@@ -131,6 +168,7 @@
         public SqliteRepository(IConnectionFactory connectionFactory, IBatchInsertConfiguration batchConfig = null, IDataTypeConverter dataTypeConverter = null, IConcurrencyConflictResolver<T> conflictResolver = null)
         {
             _ConnectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            Settings = null!;
             _Sanitizer = new SqliteSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
