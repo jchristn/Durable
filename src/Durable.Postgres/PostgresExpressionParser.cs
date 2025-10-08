@@ -473,8 +473,60 @@ namespace Durable.Postgres
             return $"ARRAY[{string.Join(", ", elements)}]";
         }
 
-        private string VisitWithPrecedence(Expression expression, ExpressionType parentType, bool isLeft) => Visit(expression);
         private string ParseUpdateValue(Expression expression) => Visit(expression);
+
+        private string VisitWithPrecedence(Expression expression, ExpressionType parentOperator, bool isLeft)
+        {
+            // If this is not a binary expression, visit normally without extra parentheses
+            if (expression is not BinaryExpression childBinary)
+            {
+                return Visit(expression);
+            }
+
+            // Get operator precedence levels
+            int parentPrecedence = GetOperatorPrecedence(parentOperator);
+            int childPrecedence = GetOperatorPrecedence(childBinary.NodeType);
+
+            // Add parentheses if:
+            // 1. Child has lower precedence than parent
+            // 2. Same precedence but right-associative operation on the left side
+            bool needsParentheses = childPrecedence < parentPrecedence ||
+                                  (childPrecedence == parentPrecedence && isLeft && IsRightAssociative(childBinary.NodeType));
+
+            string result = Visit(expression);
+            return needsParentheses ? $"({result})" : result;
+        }
+
+        private int GetOperatorPrecedence(ExpressionType operatorType)
+        {
+            return operatorType switch
+            {
+                // Highest precedence
+                ExpressionType.Multiply or ExpressionType.Divide or ExpressionType.Modulo => 5,
+                ExpressionType.Add or ExpressionType.Subtract => 4,
+
+                // Comparison operators
+                ExpressionType.Equal or ExpressionType.NotEqual or
+                ExpressionType.LessThan or ExpressionType.LessThanOrEqual or
+                ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual => 3,
+
+                // Logical AND
+                ExpressionType.And or ExpressionType.AndAlso => 2,
+
+                // Logical OR (lowest precedence)
+                ExpressionType.Or or ExpressionType.OrElse => 1,
+
+                // Default for unknown operators
+                _ => 0
+            };
+        }
+
+        private bool IsRightAssociative(ExpressionType operatorType)
+        {
+            // Most operators are left-associative; very few are right-associative in SQL
+            // For simplicity, we'll treat all as left-associative
+            return false;
+        }
 
         private object? GetMemberValue(MemberExpression member)
         {
