@@ -22,6 +22,7 @@
 		<Compile Include="SimpleTest.cs" />
 		<Compile Include="TransactionScopeTest.cs" />
 		<Compile Include="ConcurrencyIntegrationTest.cs" />
+		<Compile Include="SqliteIntegrationTests.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
