@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://github.com/jchristn/Durable/blob/main/assets/logo.png" width="256" height="256">
+</div>
+
 # Durable ORM
 
 A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes.
@@ -29,7 +33,7 @@ A lightweight .NET ORM library with LINQ capabilities, designed with a clean, ge
 - **Multi-database from day one**: SQLite, MySQL, PostgreSQL, SQL Server - same API
 - **No vendor lock-in**: Switch databases by changing one line of code
 - **Database-specific features**: Direct access to provider-specific capabilities when needed
-- **Build your own**: Clean interfaces make it trivial to add support for any database
+- **Build your own**: Clean interfaces make it trivial to add support for any repository
 
 ### Developer Experience
 - **Type-safe everything**: LINQ expressions, compile-time checking, IntelliSense support
@@ -46,8 +50,8 @@ A lightweight .NET ORM library with LINQ capabilities, designed with a clean, ge
 | **Change Tracking** | ⚡ Opt-in (optimistic concurrency) | 🐌 Always on (performance cost) | 🐌 Always on | ✅ None |
 | **Configuration** | ✅ Attributes only | ❌ Fluent API + migrations | ❌ XML/Fluent + mappings | ✅ None needed |
 | **Multi-database** | ✅ Same API, swap provider | ⚠️ Different providers, same API | ⚠️ Different dialects | ✅ Provider-agnostic |
-| **Batch Operations** | ✅ Built-in, optimized | ⚠️ EF Core 7+ only | ⚠️ Limited | ❌ Manual |
-| **Advanced SQL** | ✅ CTEs, window functions, subqueries | ⚠️ Limited/complex | ⚠️ Limited | ✅ Raw SQL only |
+| **Batch Operations** | ✅ Built-in, optimized | ✅ EF Core 7+ | ⚠️ Limited | ❌ Manual |
+| **Advanced SQL** | ✅ CTEs, window functions, subqueries | ❌ Requires extensions | ⚠️ Limited | ✅ Raw SQL only |
 | **Connection Pooling** | ✅ Built-in | ⚠️ Provider-dependent | ⚠️ Provider-dependent | ⚠️ Provider-dependent |
 | **SQL Visibility** | ✅ Built-in capture | ⚠️ Requires logging/profiler | ⚠️ Requires configuration | ✅ You write it |
 | **Transaction Control** | ✅ Explicit + ambient | ✅ Explicit + ambient | ✅ Explicit + ambient | ⚠️ Manual |
@@ -74,27 +78,6 @@ A lightweight .NET ORM library with LINQ capabilities, designed with a clean, ge
 - Your team is already heavily invested in Entity Framework
 - You need complex graph operations with automatic relationship fixup
 - You're building a very simple CRUD app and Dapper is sufficient
-
-### Real-World Performance
-
-```csharp
-// Benchmark: Insert 10,000 records
-
-// Durable with batching: ~150ms
-await repo.CreateManyAsync(records);
-
-// Entity Framework (EF Core 8): ~2,500ms
-await dbContext.AddRangeAsync(records);
-await dbContext.SaveChangesAsync();
-
-// Dapper (manual batching): ~180ms
-await connection.ExecuteAsync(sql, records);
-```
-
-**Why the difference?**
-- **Durable**: Optimized multi-row INSERT statements, connection pooling, minimal allocations
-- **Entity Framework**: Change tracking overhead, DbContext allocations, individual INSERTs (or complex batching in EF Core 7+)
-- **Dapper**: Raw SQL performance, but requires manual SQL writing and batching logic
 
 ## Features
 
@@ -184,6 +167,40 @@ public enum Status
     Active,
     Inactive,
     Pending
+}
+```
+
+**Nullable Properties:**
+
+To define a property as nullable, use nullable value types or nullable reference types:
+
+```csharp
+[Entity("people")]
+public class Person
+{
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
+    public int Id { get; set; }
+
+    [Property("first_name", Flags.String, 64)]
+    public string FirstName { get; set; }
+
+    // Nullable value types - use ? syntax
+    [Property("age")]
+    public int? Age { get; set; }
+
+    [Property("salary")]
+    public decimal? Salary { get; set; }
+
+    [Property("birth_date")]
+    public DateTime? BirthDate { get; set; }
+
+    // Nullable reference types (when nullable reference types are enabled)
+    [Property("middle_name", Flags.String, 64)]
+    public string? MiddleName { get; set; }
+
+    // Nullable enums
+    [Property("status")]
+    public Status? Status { get; set; }
 }
 ```
 
@@ -346,6 +363,8 @@ var repository = new SqliteRepository<Author>(connectionString,
 
 Durable provides implementations for SQLite, MySQL, PostgreSQL, and SQL Server:
 
+#### Using Connection Strings
+
 ```csharp
 // SQLite
 using Durable.Sqlite;
@@ -363,6 +382,91 @@ var repo = new PostgresRepository<Person>("Host=localhost;Database=mydb;Username
 using Durable.SqlServer;
 var repo = new SqlServerRepository<Person>("Server=localhost;Database=mydb;Trusted_Connection=true;");
 ```
+
+#### Using Database Settings Objects
+
+Instead of connection strings, you can use strongly-typed settings objects for better configuration management:
+
+```csharp
+// SQLite with settings
+using Durable.Sqlite;
+
+var sqliteSettings = new SqliteDatabaseSettings
+{
+    DataSource = "myapp.db",
+    Mode = SqliteOpenMode.ReadWriteCreate,
+    Cache = SqliteCacheMode.Shared,
+    Password = null,  // Optional encryption password
+    ForeignKeys = true,
+    RecursiveTriggers = false
+};
+
+var sqliteRepo = new SqliteRepository<Person>(sqliteSettings);
+
+// MySQL with settings
+using Durable.MySql;
+
+var mysqlSettings = new MySqlDatabaseSettings
+{
+    Server = "localhost",
+    Database = "mydb",
+    UserId = "root",
+    Password = "pass",
+    Port = 3306,
+    SslMode = MySqlSslMode.Preferred,
+    CharacterSet = "utf8mb4",
+    AllowUserVariables = true,
+    UseAffectedRows = false
+};
+
+var mysqlRepo = new MySqlRepository<Person>(mysqlSettings);
+
+// PostgreSQL with settings
+using Durable.Postgres;
+
+var postgresSettings = new PostgresDatabaseSettings
+{
+    Host = "localhost",
+    Database = "mydb",
+    Username = "postgres",
+    Password = "pass",
+    Port = 5432,
+    SslMode = SslMode.Prefer,
+    Pooling = true,
+    MinPoolSize = 5,
+    MaxPoolSize = 100,
+    CommandTimeout = 30,
+    SearchPath = "public"
+};
+
+var postgresRepo = new PostgresRepository<Person>(postgresSettings);
+
+// SQL Server with settings
+using Durable.SqlServer;
+
+var sqlServerSettings = new SqlServerDatabaseSettings
+{
+    Server = "localhost",
+    Database = "mydb",
+    IntegratedSecurity = true,
+    UserId = null,
+    Password = null,
+    Encrypt = true,
+    TrustServerCertificate = false,
+    MultipleActiveResultSets = true,
+    ConnectTimeout = 30,
+    ApplicationName = "DurableORM"
+};
+
+var sqlServerRepo = new SqlServerRepository<Person>(sqlServerSettings);
+```
+
+**Benefits of Using Settings Objects:**
+- **Type Safety**: Compile-time checking of configuration values
+- **IntelliSense Support**: Discoverability of available options
+- **Better Validation**: Settings objects can validate values before creating connections
+- **Configuration Management**: Easier to bind to application configuration systems (appsettings.json, environment variables, etc.)
+- **Documentation**: Properties are self-documenting with XML comments
 
 **Connection Pooling:**
 
@@ -1209,6 +1313,13 @@ bool hasActive = await repo.CountAsync(p => p.IsActive) > 0;
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+## Contributors
+
+Special thanks to the following contributors:
+
+- [@jchristn](https://github.com/jchristn) - Joel Christner
+- [@JoshClopton](https://github.com/JoshClopton) / [@joshclopton](https://github.com/joshclopton)
 
 ## Contributing
 
