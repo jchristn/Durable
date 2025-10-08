@@ -1319,8 +1319,8 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 Special thanks to the following contributors:
 
 - [@jchristn](https://github.com/jchristn) - Joel Christner
-- [@JoshClopton](https://github.com/JoshClopton) / [@joshclopton](https://github.com/joshclopton)
-
+- [@joshclopton](https://github.com/JoshClopton) - Josh Clopton
+  
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
