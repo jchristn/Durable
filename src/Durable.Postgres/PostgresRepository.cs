@@ -545,7 +545,7 @@ namespace Durable.Postgres
             token.ThrowIfCancellationRequested();
 
             var expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-            string whereClause = expressionParser.ParseExpression(predicate);
+            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
             string sql = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause})";
             object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
 
@@ -631,7 +631,7 @@ namespace Durable.Postgres
             else
             {
                 PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-                string whereClause = expressionParser.ParseExpression(predicate);
+                string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
                 sql = $"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
                 parameters = expressionParser.GetParameters().Cast<object>().ToArray();
             }
@@ -680,7 +680,7 @@ namespace Durable.Postgres
             else
             {
                 var expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-                string whereClause = expressionParser.ParseExpression(predicate);
+                string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
                 sql = $"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
                 parameters = expressionParser.GetParameters().Cast<object>().ToArray();
             }
@@ -1648,7 +1648,7 @@ namespace Durable.Postgres
                 throw new ArgumentNullException(nameof(predicate));
 
             PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-            string whereClause = expressionParser.ParseExpression(predicate);
+            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
             string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
             object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
 
@@ -1737,7 +1737,7 @@ namespace Durable.Postgres
             token.ThrowIfCancellationRequested();
 
             PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
-            string whereClause = expressionParser.ParseExpression(predicate);
+            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
             string sql = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
             object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
 

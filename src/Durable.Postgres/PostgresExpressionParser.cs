@@ -418,6 +418,14 @@ namespace Durable.Postgres
                 case "Tan":
                     return HandleMathFunction(methodCall);
 
+                // String operations
+                case "ToUpper":
+                case "ToLower":
+                case "Trim":
+                case "Substring":
+                case "get_Length":
+                    return HandleStringFunction(methodCall);
+
                 default:
                     throw new NotSupportedException($"Method '{methodCall.Method.Name}' is not supported in PostgreSQL expressions");
             }
@@ -469,11 +477,195 @@ namespace Durable.Postgres
         private object? GetMemberValue(MemberExpression member) => null;
         private string FormatValue(object? value) => _Sanitizer.FormatValue(value!);
         private string ParseUpdateValue(Expression expression) => Visit(expression);
-        private string HandleContains(MethodCallExpression methodCall) => throw new NotImplementedException();
-        private string HandleDateTimeAdd(MethodCallExpression methodCall) => throw new NotImplementedException();
-        private string HandleDateTimePart(MethodCallExpression methodCall) => throw new NotImplementedException();
-        private string HandleMathFunction(MethodCallExpression methodCall) => throw new NotImplementedException();
-        private object? GetConstantValue(Expression expression) => null;
+
+        private string HandleContains(MethodCallExpression methodCall)
+        {
+            if (methodCall.Method.DeclaringType == typeof(Enumerable) || methodCall.Method.DeclaringType == typeof(System.Collections.Generic.List<>).GetGenericTypeDefinition())
+            {
+                // Collection.Contains(item) - IN operation
+                if (methodCall.Arguments.Count == 2)
+                {
+                    System.Collections.IEnumerable? collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                    string item = Visit(methodCall.Arguments[1]);
+
+                    if (collection != null)
+                    {
+                        List<string> values = new List<string>();
+                        foreach (object? collectionItem in collection)
+                        {
+                            values.Add(FormatValue(collectionItem));
+                        }
+                        return $"{item} IN ({string.Join(", ", values)})";
+                    }
+                }
+            }
+            else if (methodCall.Method.DeclaringType == typeof(string))
+            {
+                // String.Contains - ILIKE operation (case-insensitive in PostgreSQL)
+                if (methodCall.Object != null && methodCall.Arguments.Count == 1)
+                {
+                    string column = Visit(methodCall.Object);
+                    object? value = GetConstantValue(methodCall.Arguments[0]);
+                    string sanitizedValue = _Sanitizer.SanitizeLikeValue(value?.ToString() ?? "");
+                    // Remove outer quotes, add wildcards, then re-quote safely
+                    string innerValue = sanitizedValue.Substring(1, sanitizedValue.Length - 2);
+                    return $"{column} LIKE '%' || {_Sanitizer.SanitizeString(innerValue)} || '%'";
+                }
+            }
+            else if (methodCall.Arguments.Count == 2)
+            {
+                // Static Contains method: collection.Contains(item)
+                System.Collections.IEnumerable? collection = GetConstantValue(methodCall.Arguments[0]) as System.Collections.IEnumerable;
+                string item = Visit(methodCall.Arguments[1]);
+
+                if (collection != null)
+                {
+                    List<string> values = new List<string>();
+                    foreach (object? collectionItem in collection)
+                    {
+                        values.Add(FormatValue(collectionItem));
+                    }
+                    return $"{item} IN ({string.Join(", ", values)})";
+                }
+            }
+
+            throw new NotSupportedException("Contains method call is not supported in this context. Ensure you're using it with a collection (for IN operations) or string (for LIKE operations).");
+        }
+
+        private string HandleDateTimeAdd(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null && methodCall.Arguments.Count == 1)
+            {
+                string dateColumn = Visit(methodCall.Object);
+                object? amount = GetConstantValue(methodCall.Arguments[0]);
+
+                string interval = methodCall.Method.Name switch
+                {
+                    "AddDays" => $"{amount} days",
+                    "AddHours" => $"{amount} hours",
+                    "AddMinutes" => $"{amount} minutes",
+                    "AddSeconds" => $"{amount} seconds",
+                    "AddMonths" => $"{amount} months",
+                    "AddYears" => $"{amount} years",
+                    _ => throw new NotSupportedException($"DateTime method '{methodCall.Method.Name}' is not supported. Supported methods: AddDays, AddHours, AddMinutes, AddSeconds, AddMonths, AddYears")
+                };
+
+                return $"({dateColumn} + INTERVAL '{interval}')";
+            }
+
+            throw new NotSupportedException($"DateTime method '{methodCall.Method.Name}' requires a valid DateTime expression as the target object");
+        }
+
+        private string HandleDateTimePart(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null)
+            {
+                string dateColumn = Visit(methodCall.Object);
+
+                string part = methodCall.Method.Name switch
+                {
+                    "get_Year" => $"EXTRACT(YEAR FROM {dateColumn})",
+                    "get_Month" => $"EXTRACT(MONTH FROM {dateColumn})",
+                    "get_Day" => $"EXTRACT(DAY FROM {dateColumn})",
+                    "get_Hour" => $"EXTRACT(HOUR FROM {dateColumn})",
+                    "get_Minute" => $"EXTRACT(MINUTE FROM {dateColumn})",
+                    "get_Second" => $"EXTRACT(SECOND FROM {dateColumn})",
+                    _ => throw new NotSupportedException($"DateTime property '{methodCall.Method.Name}' is not supported. Supported properties: Year, Month, Day, Hour, Minute, Second")
+                };
+
+                return part;
+            }
+
+            throw new NotSupportedException($"DateTime property '{methodCall.Method.Name}' requires a valid DateTime expression as the target object");
+        }
+
+        private string HandleMathFunction(MethodCallExpression methodCall)
+        {
+            string functionName = methodCall.Method.Name.ToUpper();
+
+            if (methodCall.Arguments.Count == 1)
+            {
+                string argument = Visit(methodCall.Arguments[0]);
+
+                return functionName switch
+                {
+                    "ABS" => $"ABS({argument})",
+                    "FLOOR" => $"FLOOR({argument})",
+                    "CEILING" => $"CEILING({argument})",
+                    "ROUND" => $"ROUND({argument})",
+                    "SQRT" => $"SQRT({argument})",
+                    "SIN" => $"SIN({argument})",
+                    "COS" => $"COS({argument})",
+                    "TAN" => $"TAN({argument})",
+                    _ => throw new NotSupportedException($"Math function '{functionName}' is not supported. Supported functions: ABS, FLOOR, CEILING, ROUND, SQRT, SIN, COS, TAN")
+                };
+            }
+            else if (methodCall.Arguments.Count == 2 && functionName == "ROUND")
+            {
+                string value = Visit(methodCall.Arguments[0]);
+                string digits = Visit(methodCall.Arguments[1]);
+                return $"ROUND({value}::numeric, {digits})";
+            }
+
+            throw new NotSupportedException($"Math function {functionName} call not supported in this context");
+        }
+
+        private string HandleStringFunction(MethodCallExpression methodCall)
+        {
+            if (methodCall.Object != null)
+            {
+                string stringColumn = Visit(methodCall.Object);
+
+                return methodCall.Method.Name switch
+                {
+                    "ToUpper" => $"UPPER({stringColumn})",
+                    "ToLower" => $"LOWER({stringColumn})",
+                    "Trim" => $"TRIM({stringColumn})",
+                    "get_Length" when methodCall.Method.DeclaringType == typeof(string) => $"LENGTH({stringColumn})",
+                    "Substring" => HandleSubstring(methodCall, stringColumn),
+                    _ => throw new NotSupportedException($"String method {methodCall.Method.Name} is not supported")
+                };
+            }
+
+            throw new NotSupportedException($"String method {methodCall.Method.Name} call not supported in this context");
+        }
+
+        private string HandleSubstring(MethodCallExpression methodCall, string stringColumn)
+        {
+            if (methodCall.Arguments.Count == 1)
+            {
+                // Substring(startIndex) - from start index to end
+                string startIndex = Visit(methodCall.Arguments[0]);
+                // PostgreSQL SUBSTRING is 1-indexed, .NET is 0-indexed, so add 1
+                return $"SUBSTRING({stringColumn} FROM ({startIndex} + 1))";
+            }
+            else if (methodCall.Arguments.Count == 2)
+            {
+                // Substring(startIndex, length)
+                string startIndex = Visit(methodCall.Arguments[0]);
+                string length = Visit(methodCall.Arguments[1]);
+                // PostgreSQL SUBSTRING is 1-indexed, .NET is 0-indexed, so add 1
+                return $"SUBSTRING({stringColumn} FROM ({startIndex} + 1) FOR {length})";
+            }
+
+            throw new NotSupportedException($"Substring method requires 1 or 2 arguments");
+        }
+
+        private object? GetConstantValue(Expression expression)
+        {
+            if (expression is ConstantExpression constant)
+                return constant.Value;
+
+            // For more complex expressions, compile and execute them
+            if (expression is MemberExpression || expression is MethodCallExpression || expression is UnaryExpression)
+            {
+                LambdaExpression lambda = Expression.Lambda(expression);
+                Delegate compiledLambda = lambda.Compile();
+                return compiledLambda.DynamicInvoke();
+            }
+
+            return null;
+        }
 
         #endregion
     }
