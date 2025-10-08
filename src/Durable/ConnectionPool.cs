@@ -358,20 +358,5 @@ namespace Durable
 
         #endregion
 
-        private class PooledConnection
-        {
-            public DbConnection Connection { get; }
-            public DateTime Created { get; }
-            public DateTime LastUsed { get; set; }
-            public bool IsInUse { get; set; }
-
-            public PooledConnection(DbConnection connection)
-            {
-                Connection = connection;
-                Created = DateTime.UtcNow;
-                LastUsed = DateTime.UtcNow;
-                IsInUse = false;
-            }
-        }
     }
 }

@@ -116,80 +116,21 @@ namespace Durable.SqlServer
 
         /// <summary>
         /// Builds a WHERE clause from a LINQ expression for use in CASE WHEN conditions.
+        /// Uses the full SqlServerExpressionParser to support complex expressions, method calls,
+        /// navigation properties, and all standard LINQ query patterns.
         /// </summary>
         /// <param name="expression">The LINQ expression to convert to SQL</param>
         /// <returns>A SQL WHERE clause string</returns>
         private string BuildWhereClause(Expression<Func<TEntity, bool>> expression)
         {
-            // For now, we'll use a simplified approach. In a full implementation,
-            // this would use the SqlServerExpressionParser to convert the expression to SQL.
-            // This is a placeholder implementation.
+            // Use the full SqlServerExpressionParser for comprehensive expression support
+            SqlServerExpressionParser<TEntity> parser = new SqlServerExpressionParser<TEntity>(
+                _Repository._ColumnMappings,
+                _Repository._Sanitizer
+            );
 
-            if (expression.Body is BinaryExpression binaryExpr)
-            {
-                return ConvertBinaryExpression(binaryExpr);
-            }
-            else if (expression.Body is MemberExpression memberExpr)
-            {
-                return $"[{memberExpr.Member.Name}] = 1"; // For boolean properties
-            }
-
-            // Fallback - would need more comprehensive expression parsing
-            return "1=1"; // Always true condition as fallback
-        }
-
-        /// <summary>
-        /// Converts a binary expression to MySQL SQL syntax.
-        /// </summary>
-        /// <param name="expression">The binary expression to convert</param>
-        /// <returns>A SQL condition string</returns>
-        private string ConvertBinaryExpression(BinaryExpression expression)
-        {
-            string left = GetExpressionValue(expression.Left);
-            string right = GetExpressionValue(expression.Right);
-            string op = GetOperator(expression.NodeType);
-
-            return $"{left} {op} {right}";
-        }
-
-        /// <summary>
-        /// Gets the SQL representation of an expression value.
-        /// </summary>
-        /// <param name="expression">The expression to convert</param>
-        /// <returns>A SQL value string</returns>
-        private string GetExpressionValue(Expression expression)
-        {
-            if (expression is MemberExpression memberExpr)
-            {
-                return $"[{memberExpr.Member.Name}]";
-            }
-            else if (expression is ConstantExpression constExpr)
-            {
-                return FormatResult(constExpr.Value);
-            }
-
-            return "NULL"; // Fallback
-        }
-
-        /// <summary>
-        /// Converts an expression type to SQL operator.
-        /// </summary>
-        /// <param name="nodeType">The expression node type</param>
-        /// <returns>A SQL operator string</returns>
-        private string GetOperator(ExpressionType nodeType)
-        {
-            return nodeType switch
-            {
-                ExpressionType.Equal => "=",
-                ExpressionType.NotEqual => "!=",
-                ExpressionType.GreaterThan => ">",
-                ExpressionType.GreaterThanOrEqual => ">=",
-                ExpressionType.LessThan => "<",
-                ExpressionType.LessThanOrEqual => "<=",
-                ExpressionType.AndAlso => "AND",
-                ExpressionType.OrElse => "OR",
-                _ => "="
-            };
+            // Parse the expression without parameters (embedded values for CASE expressions)
+            return parser.ParseExpression(expression.Body);
         }
 
         /// <summary>
