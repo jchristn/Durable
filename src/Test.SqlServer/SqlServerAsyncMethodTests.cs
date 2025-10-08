@@ -157,7 +157,7 @@ namespace Test.SqlServer
 
             await transaction.RollbackAsync();
 
-            Author? shouldBeNull = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
+            Author shouldBeNull = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
             Assert.Null(shouldBeNull);
         }
 
@@ -231,7 +231,7 @@ namespace Test.SqlServer
 
             await transaction.RollbackAsync();
 
-            Author? shouldBeNull = await _AuthorRepository.ReadFirstAsync(a => a.Id == upserted.Id);
+            Author shouldBeNull = await _AuthorRepository.ReadFirstAsync(a => a.Id == upserted.Id);
             Assert.Null(shouldBeNull);
         }
 
