@@ -1610,12 +1610,17 @@ namespace Durable.Postgres
 
             PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
 
-            // Parse the WHERE clause
-            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
-            List<(string name, object? value)> parameters = expressionParser.GetParameters();
+            // Initialize parameterized mode (but don't parse anything yet, just set the flag)
+            expressionParser.ParseExpressionWithParameters(Expression.Constant(true));  // Dummy expression to set the flag
 
-            // Parse the SET clause from the update expression
+            // Parse the SET clause from the update expression (will use parameterized mode)
             string setClause = expressionParser.ParseUpdateExpression(updateExpression);
+
+            // Parse the WHERE clause (will add to existing parameters)
+            string whereClause = expressionParser.ParseExpression(predicate.Body);
+
+            // Get all parameters (from both SET and WHERE clauses)
+            List<(string name, object? value)> parameters = expressionParser.GetParameters();
 
             // Build UPDATE SQL
             string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setClause} WHERE {whereClause}";
@@ -1705,12 +1710,17 @@ namespace Durable.Postgres
 
             PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
 
-            // Parse the WHERE clause
-            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
-            List<(string name, object? value)> parameters = expressionParser.GetParameters();
+            // Initialize parameterized mode (but don't parse anything yet, just set the flag)
+            expressionParser.ParseExpressionWithParameters(Expression.Constant(true));  // Dummy expression to set the flag
 
-            // Parse the SET clause from the update expression
+            // Parse the SET clause from the update expression (will use parameterized mode)
             string setClause = expressionParser.ParseUpdateExpression(updateExpression);
+
+            // Parse the WHERE clause (will add to existing parameters)
+            string whereClause = expressionParser.ParseExpression(predicate.Body);
+
+            // Get all parameters (from both SET and WHERE clauses)
+            List<(string name, object? value)> parameters = expressionParser.GetParameters();
 
             // Build UPDATE SQL
             string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setClause} WHERE {whereClause}";
