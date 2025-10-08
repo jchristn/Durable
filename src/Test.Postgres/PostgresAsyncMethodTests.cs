@@ -72,7 +72,7 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId == 1);
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId == 1);
 
             Assert.NotNull(author);
             Assert.Equal(1, author.CompanyId);
@@ -86,7 +86,7 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId == 999);
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId == 999);
 
             Assert.Null(author);
         }
@@ -99,7 +99,7 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId != null);
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.CompanyId != null);
 
             Assert.NotNull(author);
             Assert.True(author.Id > 0);
@@ -128,7 +128,7 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            Author? author = await _AuthorRepository.ReadSingleAsync(a => a.Name == "Alice Tech");
+            Author author = await _AuthorRepository.ReadSingleAsync(a => a.Name == "Alice Tech");
 
             Assert.NotNull(author);
             Assert.Equal("Alice Tech", author.Name);
@@ -180,7 +180,7 @@ namespace Test.Postgres
             bool deleted = await _AuthorRepository.DeleteAsync(created);
             Assert.True(deleted);
 
-            Author? retrieved = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
+            Author retrieved = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
             Assert.Null(retrieved);
         }
 
@@ -206,7 +206,7 @@ namespace Test.Postgres
 
             await transaction.CommitAsync();
 
-            Author? retrieved = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
+            Author retrieved = await _AuthorRepository.ReadFirstAsync(a => a.Id == created.Id);
             Assert.Null(retrieved);
         }
 
@@ -314,7 +314,7 @@ namespace Test.Postgres
 
             int updated = await _AuthorRepository.UpdateManyAsync(
                 a => a.Name.StartsWith("Update Test"),
-                async (a) => { a.CompanyId = 3; });
+                async (a) => { a.CompanyId = 3; await Task.CompletedTask; });
 
             Assert.Equal(2, updated);
 
@@ -332,7 +332,7 @@ namespace Test.Postgres
 
             int updated = await _AuthorRepository.UpdateManyAsync(
                 a => a.Name == "NonExistentAuthor",
-                async (a) => { a.CompanyId = 1; });
+                async (a) => { a.CompanyId = 1; await Task.CompletedTask; });
 
             Assert.Equal(0, updated);
         }
@@ -509,7 +509,7 @@ namespace Test.Postgres
 
             Assert.Equal(1, rowsAffected);
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Insert Test");
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Insert Test");
             Assert.NotNull(author);
         }
 
@@ -529,8 +529,8 @@ namespace Test.Postgres
 
             Assert.Equal(1, rowsAffected);
 
-            Author? updated = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Update Test");
-            Assert.Equal(2, updated?.CompanyId);
+            Author updated = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Update Test");
+            Assert.Equal(2, updated.CompanyId);
         }
 
         /// <summary>
@@ -549,7 +549,7 @@ namespace Test.Postgres
 
             Assert.Equal(1, rowsAffected);
 
-            Author? deleted = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Delete Test");
+            Author deleted = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Delete Test");
             Assert.Null(deleted);
         }
 
@@ -569,7 +569,7 @@ namespace Test.Postgres
 
             await transaction.CommitAsync();
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Transaction Test");
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Transaction Test");
             Assert.NotNull(author);
         }
 
@@ -588,7 +588,7 @@ namespace Test.Postgres
 
             await transaction.RollbackAsync();
 
-            Author? author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Rollback Test");
+            Author author = await _AuthorRepository.ReadFirstAsync(a => a.Name == "SQL Rollback Test");
             Assert.Null(author);
         }
 
@@ -618,7 +618,7 @@ namespace Test.Postgres
                 connection.Open();
 
                 using NpgsqlCommand checkDbCommand = new NpgsqlCommand($"SELECT 1 FROM pg_database WHERE datname = '{TestDatabaseName}'", connection);
-                object? result = checkDbCommand.ExecuteScalar();
+                object result = checkDbCommand.ExecuteScalar();
 
                 if (result == null)
                 {

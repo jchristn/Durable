@@ -423,7 +423,7 @@ namespace Test.Postgres
                 connection.Open();
 
                 using NpgsqlCommand checkDbCommand = new NpgsqlCommand($"SELECT 1 FROM pg_database WHERE datname = '{TestDatabaseName}'", connection);
-                object? result = checkDbCommand.ExecuteScalar();
+                object result = checkDbCommand.ExecuteScalar();
 
                 if (result == null)
                 {
