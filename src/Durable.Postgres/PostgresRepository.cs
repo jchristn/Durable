@@ -1608,31 +1608,39 @@ namespace Durable.Postgres
             if (updateExpression == null)
                 throw new ArgumentNullException(nameof(updateExpression));
 
-            // For now, fall back to UpdateMany pattern like MySQL implementation
-            // Full expression parsing for MemberInitExpression/NewExpression is complex
-            // TODO: Implement proper expression parsing for direct SQL SET clauses
+            PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
 
-            // Read entities matching the predicate
-            IEnumerable<T> entitiesToUpdate = ReadMany(predicate, transaction);
+            // Parse the WHERE clause
+            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
+            List<(string name, object? value)> parameters = expressionParser.GetParameters();
 
-            // Convert updateExpression to an Action for UpdateMany
-            Func<T, T> updateFunc = updateExpression.Compile();
-            Action<T> updateAction = entity =>
+            // Parse the SET clause from the update expression
+            string setClause = expressionParser.ParseUpdateExpression(updateExpression);
+
+            // Build UPDATE SQL
+            string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setClause} WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
             {
-                T updatedEntity = updateFunc(entity);
-                // Copy properties from updated entity back to original
-                foreach (var kvp in _ColumnMappings)
+                rowsAffected = ExecuteNonQueryWithConnection((DbConnection)transaction.Connection, sql, (DbTransaction?)transaction.Transaction, parameters.ToArray());
+            }
+            else
+            {
+                DbConnection? connection = null;
+                try
                 {
-                    PropertyInfo property = kvp.Value;
-                    if (property.CanWrite && kvp.Key != _PrimaryKeyColumn)
-                    {
-                        object? newValue = property.GetValue(updatedEntity);
-                        property.SetValue(entity, newValue);
-                    }
+                    connection = (DbConnection)_ConnectionFactory.GetConnection();
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
                 }
-            };
+                finally
+                {
+                    if (connection != null)
+                        _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
 
-            return UpdateMany(predicate, updateAction, transaction);
+            return rowsAffected;
         }
 
         /// <summary>
@@ -1695,29 +1703,39 @@ namespace Durable.Postgres
 
             token.ThrowIfCancellationRequested();
 
-            // For now, fall back to UpdateManyAsync pattern like MySQL implementation
-            // Full expression parsing for MemberInitExpression/NewExpression is complex
-            // TODO: Implement proper expression parsing for direct SQL SET clauses
+            PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
 
-            // Convert updateExpression to a Func for UpdateManyAsync
-            Func<T, T> updateFunc = updateExpression.Compile();
-            Func<T, Task> updateAction = async entity =>
+            // Parse the WHERE clause
+            string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
+            List<(string name, object? value)> parameters = expressionParser.GetParameters();
+
+            // Parse the SET clause from the update expression
+            string setClause = expressionParser.ParseUpdateExpression(updateExpression);
+
+            // Build UPDATE SQL
+            string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {setClause} WHERE {whereClause}";
+
+            int rowsAffected;
+            if (transaction != null)
             {
-                T updatedEntity = updateFunc(entity);
-                // Copy properties from updated entity back to original
-                foreach (var kvp in _ColumnMappings)
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, parameters.ToArray()).ConfigureAwait(false);
+            }
+            else
+            {
+                DbConnection? connection = null;
+                try
                 {
-                    PropertyInfo property = kvp.Value;
-                    if (property.CanWrite && kvp.Key != _PrimaryKeyColumn)
-                    {
-                        object? newValue = property.GetValue(updatedEntity);
-                        property.SetValue(entity, newValue);
-                    }
+                    connection = await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
                 }
-                await Task.CompletedTask; // Sync operation wrapped in Task
-            };
+                finally
+                {
+                    if (connection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
+            }
 
-            return await UpdateManyAsync(predicate, updateAction, transaction, token).ConfigureAwait(false);
+            return rowsAffected;
         }
 
         /// <summary>
