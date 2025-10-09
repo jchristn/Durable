@@ -24,7 +24,7 @@ namespace Test.SqlServer
         #region Private-Members
 
         private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static readonly string _ConnectionString = "Server=view.homedns.org,1433;Database=durable_integration_test;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;AllowUserVariables=true;";
+        private static readonly string _ConnectionString = "Server=view.homedns.org,1433;Database=durable_integration_test;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
 
         #endregion
 
@@ -35,29 +35,15 @@ namespace Test.SqlServer
             try
             {
                 Console.WriteLine("Starting SQL Server ORM Test Program...");
-                Console.WriteLine($"Arguments received: {args.Length}");
-                if (args.Length > 0)
-                {
-                    Console.WriteLine($"First argument: '{args[0]}'");
-                }
 
-                // Check command line arguments for test mode
+                // Check command line arguments for special modes
                 if (args.Length > 0 && args[0].ToLower() == "createdatabases")
                 {
                     await CreateAllDatabases();
                     return;
                 }
 
-                if (args.Length > 0 && args[0].ToLower() == "integration")
-                {
-                    Console.WriteLine("=== SQL Server Integration Test Suite ===\n");
-                    await SqlServerTestRunner.RunAllTests();
-                    return;
-                }
-
-                Console.WriteLine("=== SQL Server Repository Pattern Demo - Sync & Async ===\n");
-                Console.WriteLine("💡 Tip: Run with 'integration' argument to execute comprehensive integration tests");
-                Console.WriteLine("   Example: dotnet run integration\n");
+                Console.WriteLine("=== SQL Server Comprehensive Integration Test Suite ===\n");
 
                 // Check if SQL Server is available
                 if (!await IsMyServerAvailable())
@@ -66,6 +52,10 @@ namespace Test.SqlServer
                     Console.WriteLine("   Connection string: " + _ConnectionString);
                     return;
                 }
+
+                // Run comprehensive integration tests
+                await SqlServerTestRunner.RunAllTests();
+                Console.WriteLine("\n=== Basic Repository Pattern Demo ===\n");
 
                 await InitializeDatabase();
 
@@ -113,9 +103,6 @@ namespace Test.SqlServer
                 Console.WriteLine($"❌ Fatal error: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
-
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
         }
 
         #endregion
@@ -143,28 +130,20 @@ namespace Test.SqlServer
                 using var connection = new SqlConnection(_ConnectionString);
                 await connection.OpenAsync();
 
-                // Create test database if it doesn't exist
-                string createDbSql = @"
-                    CREATE DATABASE IF NOT EXISTS durable_integration_test
-                    CHARACTER SET utf8mb4
-                    COLLATE utf8mb4_unicode_ci;
-                    USE durable_integration_test;";
-
-                using var command = new SqlCommand(createDbSql, connection);
-                await command.ExecuteNonQueryAsync();
-
                 // Drop and recreate Person table
                 string createTableSql = @"
-                    DROP TABLE IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'people') `people`;
-                    CREATE TABLE `people` (
-                        `id` INT AUTO_INCREMENT PRIMARY KEY,
-                        `first` VARCHAR(64) NOT NULL,
-                        `last` VARCHAR(64) NOT NULL,
-                        `age` INT NOT NULL DEFAULT 0,
-                        `email` VARCHAR(128),
-                        `salary` DECIMAL(10,2) DEFAULT 0.00,
-                        `department` VARCHAR(32)
-                    ) ENGINE=InnoDB;";
+                    IF OBJECT_ID('people', 'U') IS NOT NULL
+                        DROP TABLE people;
+
+                    CREATE TABLE people (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        first VARCHAR(64) NOT NULL,
+                        last VARCHAR(64) NOT NULL,
+                        age INT NOT NULL DEFAULT 0,
+                        email VARCHAR(128),
+                        salary DECIMAL(10,2) DEFAULT 0.00,
+                        department VARCHAR(32)
+                    );";
 
                 using var createCommand = new SqlCommand(createTableSql, connection);
                 await createCommand.ExecuteNonQueryAsync();
@@ -446,21 +425,24 @@ namespace Test.SqlServer
 
         private static async Task TestTakeSkipOperations(SqlServerRepository<Person> repository)
         {
-            // Test Take
+            // Test Take (SQL Server requires ORDER BY with OFFSET/FETCH)
             IEnumerable<Person> firstTwo = repository.Query()
+                .OrderBy(p => p.Id)
                 .Take(2)
                 .Execute();
 
             if (firstTwo.Count() > 2)
                 throw new Exception("Take(2) should return at most 2 items");
 
-            // Test Skip
+            // Test Skip (SQL Server requires ORDER BY with OFFSET/FETCH)
             IEnumerable<Person> skipFirst = repository.Query()
+                .OrderBy(p => p.Id)
                 .Skip(1)
                 .Execute();
 
             // Test Take + Skip
             IEnumerable<Person> paging = repository.Query()
+                .OrderBy(p => p.Id)
                 .Skip(1)
                 .Take(2)
                 .Execute();
@@ -503,8 +485,9 @@ namespace Test.SqlServer
             if (!sql.Contains("ORDER BY"))
                 throw new Exception("SQL should contain ORDER BY clause");
 
-            if (!sql.Contains("LIMIT"))
-                throw new Exception("SQL should contain LIMIT clause");
+            // SQL Server uses OFFSET/FETCH instead of LIMIT
+            if (!sql.Contains("OFFSET") || !sql.Contains("FETCH"))
+                throw new Exception("SQL should contain OFFSET/FETCH clause for pagination");
 
             Console.WriteLine($"   Generated SQL: {sql}");
 

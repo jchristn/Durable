@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<IsPackable>false</IsPackable>
+		<StartupObject>Sample.BlogApp.Postgres.Program</StartupObject>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable\Durable.csproj" />
+		<ProjectReference Include="..\Durable.Postgres\Durable.Postgres.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Npgsql" Version="8.0.5" />
+	</ItemGroup>
+
+</Project>

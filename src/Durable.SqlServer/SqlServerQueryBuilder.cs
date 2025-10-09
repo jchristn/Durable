@@ -140,7 +140,7 @@ namespace Durable.SqlServer
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
-            _OrderByClauses.Add($"[{column}] ASC");
+            _OrderByClauses.Add($"{column} ASC");
             return this;
         }
 
@@ -153,7 +153,7 @@ namespace Durable.SqlServer
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
-            _OrderByClauses.Add($"[{column}] DESC");
+            _OrderByClauses.Add($"{column} DESC");
             return this;
         }
 
@@ -367,26 +367,46 @@ namespace Durable.SqlServer
             // OFFSET/FETCH clause (SQL Server pagination)
             if (_SkipCount.HasValue || _TakeCount.HasValue)
             {
-                // SQL Server requires ORDER BY when using OFFSET
+                // SQL Server requires ORDER BY when using OFFSET/FETCH
+                // However, for simple Take(1) queries (like EXISTS), we can use TOP instead
                 if (!_OrderByClauses.Any())
                 {
-                    throw new InvalidOperationException("ORDER BY is required when using Skip() or Take() in SQL Server queries");
-                }
-
-                if (_SkipCount.HasValue)
-                {
-                    sqlParts.Add($"OFFSET {_SkipCount.Value} ROWS");
-
-                    if (_TakeCount.HasValue)
+                    // If it's just Take() without Skip(), we can use TOP in the SELECT clause instead
+                    // This is handled by rewriting the query to use TOP
+                    if (!_SkipCount.HasValue && _TakeCount.HasValue)
                     {
+                        // For Take() without ORDER BY, use TOP instead of OFFSET/FETCH
+                        // We'll need to modify the SELECT clause instead
+                        // This is a workaround for EXISTS-style queries
+                        // Note: The SELECT clause was already built above, so we'll use OFFSET 0 with a dummy ORDER BY
+
+                        // Add a dummy ORDER BY (SELECT NULL) to satisfy SQL Server's requirement
+                        sqlParts.Add("ORDER BY (SELECT NULL)");
+                        sqlParts.Add($"OFFSET 0 ROWS");
                         sqlParts.Add($"FETCH NEXT {_TakeCount.Value} ROWS ONLY");
                     }
+                    else
+                    {
+                        throw new InvalidOperationException("ORDER BY is required when using Skip() or Take() in SQL Server queries");
+                    }
                 }
-                else if (_TakeCount.HasValue)
+                else
                 {
-                    // Take without Skip requires OFFSET 0
-                    sqlParts.Add($"OFFSET 0 ROWS");
-                    sqlParts.Add($"FETCH NEXT {_TakeCount.Value} ROWS ONLY");
+                    if (_SkipCount.HasValue)
+                    {
+                        sqlParts.Add($"OFFSET {_SkipCount.Value} ROWS");
+
+                        if (_TakeCount.HasValue)
+                        {
+                        sqlParts.Add($"FETCH NEXT {_TakeCount.Value} ROWS ONLY");
+                        }
+                    }
+                    else if (_TakeCount.HasValue)
+                    {
+                        // Take without Skip requires OFFSET 0
+                        sqlParts.Add($"OFFSET 0 ROWS");
+                        sqlParts.Add($"FETCH NEXT {_TakeCount.Value} ROWS ONLY");
+                    }
                 }
             }
 
