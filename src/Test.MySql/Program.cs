@@ -24,7 +24,7 @@ namespace Test.MySql
         #region Private-Members
 
         private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static readonly string _ConnectionString = "Server=localhost;Database=durable_integration_test;User=test_user;Password=test_password;AllowUserVariables=true;";
+        private static string _ConnectionString = "";
 
         #endregion
 
@@ -34,82 +34,132 @@ namespace Test.MySql
         {
             try
             {
-                Console.WriteLine("Starting MySQL ORM Test Program...");
-                Console.WriteLine($"Arguments received: {args.Length}");
+                Console.WriteLine("=== MySQL Integration Test Suite ===\n");
+
+                // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
                 if (args.Length > 0)
                 {
-                    Console.WriteLine($"First argument: '{args[0]}'");
+                    _ConnectionString = args[0];
+                    Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
                 }
-
-                // Check command line arguments for test mode
-                if (args.Length > 0 && args[0].ToLower() == "integration")
+                else
                 {
-                    Console.WriteLine("=== MySQL Integration Test Suite ===\n");
-                    await MySqlTestRunner.RunAllTests();
-                    return;
+                    _ConnectionString = BuildConnectionString();
+                    Console.WriteLine("Tip: You can specify a custom MySQL connection string by passing it as an argument.");
+                    Console.WriteLine("     Example: dotnet Test.MySql.dll \"Server=localhost;Database=mydb;User=myuser;Password=mypass;AllowUserVariables=true;\"\n");
                 }
 
-                Console.WriteLine("=== MySQL Repository Pattern Demo - Sync & Async ===\n");
-                Console.WriteLine("💡 Tip: Run with 'integration' argument to execute comprehensive integration tests");
-                Console.WriteLine("   Example: dotnet run integration\n");
-
-                // Check if MySQL is available
-                if (!await IsMyServerAvailable())
-                {
-                    Console.WriteLine("❌ MySQL server is not available. Please ensure MySQL is running on localhost:3306");
-                    Console.WriteLine("   Connection string: " + _ConnectionString);
-                    return;
-                }
-
-                await InitializeDatabase();
-
-                // Create repository
-                MySqlRepository<Person> repository = new MySqlRepository<Person>(_ConnectionString);
-
-                Console.WriteLine("========== BASIC FUNCTIONALITY TESTS ==========");
-                await RunTest("Basic Repository Creation", () => TestRepositoryCreation(repository));
-                await RunTest("Database Schema Creation", () => TestSchemaCreation(repository));
-
-                Console.WriteLine("\n========== CRUD OPERATIONS TESTS ==========");
-                await RunTest("Create Operations", () => TestCreateOperations(repository));
-                await RunTest("Read Operations", () => TestReadOperations(repository));
-                await RunTest("Update Operations", () => TestUpdateOperations(repository));
-                await RunTest("Delete Operations", () => TestDeleteOperations(repository));
-
-                Console.WriteLine("\n========== EXPRESSION PARSING TESTS ==========");
-                await RunTest("Simple Where Expressions", () => TestSimpleExpressions(repository));
-                await RunTest("Complex Where Expressions", () => TestComplexExpressions(repository));
-                await RunTest("String Method Expressions", () => TestStringMethods(repository));
-                await RunTest("Math Operations", () => TestMathOperations(repository));
-                // DateTime operations removed - Person class doesn't have DateTime properties
-                await RunTest("Collection Operations", () => TestCollectionOperations(repository));
-
-                Console.WriteLine("\n========== QUERY BUILDER TESTS ==========");
-                await RunTest("OrderBy Operations", () => TestOrderByOperations(repository));
-                await RunTest("Take/Skip Operations", () => TestTakeSkipOperations(repository));
-                await RunTest("Distinct Operations", () => TestDistinctOperations(repository));
-
-                Console.WriteLine("\n========== SQL GENERATION TESTS ==========");
-                await RunTest("SQL Generation Quality", () => TestSqlGeneration(repository));
-                await RunTest("Parentheses Optimization", () => TestParenthesesOptimization(repository));
-
-                Console.WriteLine("\n========== ASYNC OPERATIONS TESTS ==========");
-                await RunTest("Async Create Operations", () => TestAsyncCreateOperations(repository));
-                await RunTest("Async Read Operations", () => TestAsyncReadOperations(repository));
-
-                // Cleanup
-                repository.Dispose();
-
-                PrintTestResults();
+                await MySqlTestRunner.RunAllTests();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Fatal error: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
+        }
 
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
+        /// <summary>
+        /// Builds the connection string from environment variables or prompts user.
+        /// </summary>
+        /// <returns>A MySQL connection string.</returns>
+        private static string BuildConnectionString()
+        {
+            string server = Environment.GetEnvironmentVariable("MYSQL_SERVER") ?? "";
+            string database = Environment.GetEnvironmentVariable("MYSQL_DATABASE") ?? "";
+            string user = Environment.GetEnvironmentVariable("MYSQL_USER") ?? "";
+            string password = Environment.GetEnvironmentVariable("MYSQL_PASSWORD") ?? "";
+
+            // If any required value is missing, prompt for all of them
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(password))
+            {
+                Console.WriteLine("=== MySQL Connection Setup ===");
+
+                if (string.IsNullOrEmpty(server))
+                {
+                    Console.Write("Enter MySQL host and port (e.g., 'localhost' or 'server.com:3306'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    server = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(server))
+                    {
+                        server = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using server from environment: {server}");
+                }
+
+                if (string.IsNullOrEmpty(user))
+                {
+                    Console.Write("Enter MySQL username (or press Enter for default 'test_user'): ");
+                    user = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(user))
+                    {
+                        user = "test_user";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {user}");
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    Console.Write("Enter MySQL password (or press Enter for default 'test_password'): ");
+                    password = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        password = "test_password";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(database))
+                {
+                    Console.Write("Enter database name (or press Enter for default 'durable_integration_test'): ");
+                    database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(database))
+                    {
+                        database = "durable_integration_test";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using database from environment: {database}");
+                }
+
+                Console.WriteLine();
+            }
+
+            // Use defaults if still empty
+            if (string.IsNullOrEmpty(database))
+            {
+                database = "durable_integration_test";
+            }
+
+            return $"Server={server};Database={database};User={user};Password={password};AllowUserVariables=true;";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
         }
 
         #endregion

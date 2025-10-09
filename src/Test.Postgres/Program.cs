@@ -19,10 +19,25 @@ namespace Test.Postgres
             Console.WriteLine("==================================");
             Console.WriteLine();
 
+            string connectionString;
+
+            // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
+            if (args.Length > 0)
+            {
+                connectionString = args[0];
+                Console.WriteLine($"Using connection string from command line: {MaskConnectionString(connectionString)}\n");
+            }
+            else
+            {
+                connectionString = BuildConnectionString();
+                Console.WriteLine("Tip: You can specify a custom PostgreSQL connection string by passing it as an argument.");
+                Console.WriteLine("     Example: dotnet Test.Postgres.dll \"Host=localhost;Database=mydb;Username=myuser;Password=mypass;\"\n");
+            }
+
             try
             {
                 // Run basic connectivity test
-                var integrationTests = new PostgresIntegrationTests();
+                var integrationTests = new PostgresIntegrationTests(connectionString);
 
                 Console.WriteLine("Testing PostgreSQL connectivity...");
                 await integrationTests.CanConnectToDatabase();
@@ -130,6 +145,110 @@ namespace Test.Postgres
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 return 1;
             }
+        }
+
+        /// <summary>
+        /// Builds the connection string from environment variables or prompts user.
+        /// </summary>
+        /// <returns>A PostgreSQL connection string.</returns>
+        private static string BuildConnectionString()
+        {
+            string host = Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "";
+            string database = Environment.GetEnvironmentVariable("POSTGRES_DATABASE") ?? "";
+            string username = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "";
+            string password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "";
+
+            // If any required value is missing, prompt for all of them
+            if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                Console.WriteLine("=== PostgreSQL Connection Setup ===");
+
+                if (string.IsNullOrEmpty(host))
+                {
+                    Console.Write("Enter PostgreSQL host and port (e.g., 'localhost' or 'server.com:5432'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    host = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(host))
+                    {
+                        host = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using host from environment: {host}");
+                }
+
+                if (string.IsNullOrEmpty(username))
+                {
+                    Console.Write("Enter PostgreSQL username (or press Enter for default 'test_user'): ");
+                    username = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(username))
+                    {
+                        username = "test_user";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {username}");
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    Console.Write("Enter PostgreSQL password (or press Enter for default 'test_password'): ");
+                    password = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        password = "test_password";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(database))
+                {
+                    Console.Write("Enter database name (or press Enter for default 'durable_integration_test'): ");
+                    database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(database))
+                    {
+                        database = "durable_integration_test";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using database from environment: {database}");
+                }
+
+                Console.WriteLine();
+            }
+
+            // Use defaults if still empty
+            if (string.IsNullOrEmpty(database))
+            {
+                database = "durable_integration_test";
+            }
+
+            return $"Host={host};Database={database};Username={username};Password={password};";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
         }
     }
 }

@@ -24,7 +24,7 @@ namespace Test.SqlServer
         #region Private-Members
 
         private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static readonly string _ConnectionString = "Server=view.homedns.org,1433;Database=durable_integration_test;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+        private static string _ConnectionString = "";
 
         #endregion
 
@@ -39,17 +39,32 @@ namespace Test.SqlServer
                 // Check command line arguments for special modes
                 if (args.Length > 0 && args[0].ToLower() == "createdatabases")
                 {
+                    // For create databases mode, use master database connection
+                    _ConnectionString = BuildConnectionString(true);
                     await CreateAllDatabases();
                     return;
                 }
 
                 Console.WriteLine("=== SQL Server Comprehensive Integration Test Suite ===\n");
 
+                // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
+                if (args.Length > 0)
+                {
+                    _ConnectionString = args[0];
+                    Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
+                }
+                else
+                {
+                    _ConnectionString = BuildConnectionString();
+                    Console.WriteLine("Tip: You can specify a custom SQL Server connection string by passing it as an argument.");
+                    Console.WriteLine("     Example: dotnet Test.SqlServer.dll \"Server=localhost;Database=mydb;User=sa;Password=secret;TrustServerCertificate=true;\"\n");
+                }
+
                 // Check if SQL Server is available
                 if (!await IsMyServerAvailable())
                 {
                     Console.WriteLine("❌ SQL Server is not available. Please check your connection.");
-                    Console.WriteLine("   Connection string: " + _ConnectionString);
+                    Console.WriteLine("   Connection string: " + MaskConnectionString(_ConnectionString));
                     return;
                 }
 
@@ -582,11 +597,120 @@ namespace Test.SqlServer
         }
 
         /// <summary>
+        /// Builds the connection string from environment variables or prompts user.
+        /// </summary>
+        /// <param name="useMaster">If true, connects to master database instead of test database.</param>
+        /// <returns>A SQL Server connection string.</returns>
+        private static string BuildConnectionString(bool useMaster = false)
+        {
+            string server = Environment.GetEnvironmentVariable("SQLSERVER_SERVER") ?? "";
+            string database = Environment.GetEnvironmentVariable("SQLSERVER_DATABASE") ?? "";
+            string user = Environment.GetEnvironmentVariable("SQLSERVER_USER") ?? "";
+            string password = Environment.GetEnvironmentVariable("SQLSERVER_PASSWORD") ?? "";
+
+            // If any required value is missing, prompt for all of them
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(password))
+            {
+                Console.WriteLine("=== SQL Server Connection Setup ===");
+
+                if (string.IsNullOrEmpty(server))
+                {
+                    Console.Write("Enter SQL Server host and port (e.g., 'localhost' or 'server.com,1433'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    server = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(server))
+                    {
+                        server = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using server from environment: {server}");
+                }
+
+                if (string.IsNullOrEmpty(user))
+                {
+                    Console.Write("Enter SQL Server username (or press Enter for default 'sa'): ");
+                    user = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(user))
+                    {
+                        user = "sa";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {user}");
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    Console.Write("Enter SQL Server password (or press Enter for default 'P@ssw0rd4Sql'): ");
+                    password = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        password = "P@ssw0rd4Sql";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(database) && !useMaster)
+                {
+                    Console.Write("Enter database name (or press Enter for default 'durable_integration_test'): ");
+                    database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(database))
+                    {
+                        database = "durable_integration_test";
+                    }
+                }
+                else if (!useMaster)
+                {
+                    Console.WriteLine($"Using database from environment: {database}");
+                }
+
+                Console.WriteLine();
+            }
+
+            // Override database if useMaster is true
+            if (useMaster)
+            {
+                database = "master";
+            }
+            else if (string.IsNullOrEmpty(database))
+            {
+                database = "durable_integration_test";
+            }
+
+            return $"Server={server};Database={database};User={user};Password={password};TrustServerCertificate=true;Encrypt=false;";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
+        }
+
+        /// <summary>
         /// Creates all required test databases if they don't exist
         /// </summary>
         private static async Task CreateAllDatabases()
         {
-            string masterConnectionString = "Server=view.homedns.org,1433;Database=master;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+            string masterConnectionString = _ConnectionString;
 
             string[] databases = new[] {
                 "durable_integration_test",

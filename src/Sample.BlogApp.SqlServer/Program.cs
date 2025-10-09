@@ -17,7 +17,11 @@ namespace Sample.BlogApp.SqlServer
 
         #region Private-Members
 
-        private static string _ConnectionString = "Server=view.homedns.org,1433;Database=BlogApp;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+        private static string _ConnectionString = "";
+        private static string _Server = "";
+        private static string _User = "";
+        private static string _Password = "";
+        private static string _Database = "";
 
         #endregion
 
@@ -30,6 +34,19 @@ namespace Sample.BlogApp.SqlServer
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== Durable ORM Sample: Blog Application (SQL Server) ===\n");
+
+            // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
+            if (args.Length > 0)
+            {
+                _ConnectionString = args[0];
+                Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
+            }
+            else
+            {
+                _ConnectionString = BuildConnectionString();
+                Console.WriteLine("Tip: You can specify a custom SQL Server connection string by passing it as an argument.");
+                Console.WriteLine("     Example: dotnet Sample.BlogApp.SqlServer.dll \"Server=localhost;Database=blogapp;User=sa;Password=secret;TrustServerCertificate=true;\"\n");
+            }
 
             try
             {
@@ -55,6 +72,136 @@ namespace Sample.BlogApp.SqlServer
         #region Private-Methods
 
         /// <summary>
+        /// Builds the connection string from environment variables or prompts user.
+        /// </summary>
+        /// <param name="useMaster">If true, connects to master database; otherwise uses configured database.</param>
+        /// <returns>A SQL Server connection string.</returns>
+        private static string BuildConnectionString(bool useMaster = false)
+        {
+            // Use cached values if already set, otherwise check environment variables
+            if (string.IsNullOrEmpty(_Server))
+            {
+                _Server = Environment.GetEnvironmentVariable("SQLSERVER_SERVER") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_Database))
+            {
+                _Database = Environment.GetEnvironmentVariable("SQLSERVER_DATABASE") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_User))
+            {
+                _User = Environment.GetEnvironmentVariable("SQLSERVER_USER") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_Password))
+            {
+                _Password = Environment.GetEnvironmentVariable("SQLSERVER_PASSWORD") ?? "";
+            }
+
+            // If any required value is missing, prompt for all of them (only once)
+            if (string.IsNullOrEmpty(_Server) || string.IsNullOrEmpty(_User) || string.IsNullOrEmpty(_Password))
+            {
+                Console.WriteLine("=== SQL Server Connection Setup ===");
+
+                if (string.IsNullOrEmpty(_Server))
+                {
+                    Console.Write("Enter SQL Server host and port (e.g., 'localhost' or 'server.com,1433'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    _Server = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Server))
+                    {
+                        _Server = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using server from environment: {_Server}");
+                }
+
+                if (string.IsNullOrEmpty(_User))
+                {
+                    Console.Write("Enter SQL Server username (or press Enter for default 'sa'): ");
+                    _User = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_User))
+                    {
+                        _User = "sa";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {_User}");
+                }
+
+                if (string.IsNullOrEmpty(_Password))
+                {
+                    Console.Write("Enter SQL Server password (or press Enter for default 'P@ssw0rd4Sql'): ");
+                    _Password = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Password))
+                    {
+                        _Password = "P@ssw0rd4Sql";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(_Database) && !useMaster)
+                {
+                    Console.Write("Enter database name (or press Enter for default 'BlogApp'): ");
+                    _Database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Database))
+                    {
+                        _Database = "BlogApp";
+                    }
+                }
+                else if (!useMaster)
+                {
+                    Console.WriteLine($"Using database from environment: {_Database}");
+                }
+
+                Console.WriteLine();
+            }
+
+            // Determine which database to use
+            string database;
+            if (useMaster)
+            {
+                database = "master";
+            }
+            else if (string.IsNullOrEmpty(_Database))
+            {
+                database = "BlogApp";
+            }
+            else
+            {
+                database = _Database;
+            }
+
+            return $"Server={_Server};Database={database};User={_User};Password={_Password};TrustServerCertificate=true;Encrypt=false;";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
+        }
+
+        /// <summary>
         /// Initializes the SQL Server database and creates all required tables.
         /// </summary>
         private static void InitializeDatabase()
@@ -62,7 +209,7 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine("Initializing database...");
 
             // First, create the database if it doesn't exist
-            string masterConnectionString = "Server=view.homedns.org,1433;Database=master;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+            string masterConnectionString = BuildConnectionString(true);
             using (SqlConnection masterConnection = new SqlConnection(masterConnectionString))
             {
                 masterConnection.Open();
@@ -255,9 +402,9 @@ namespace Sample.BlogApp.SqlServer
                 return;
             }
 
-            Author alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
-            Author bob = await authorRepo.ReadFirstAsync(a => a.Username == "bob_data");
-            Author carol = await authorRepo.ReadFirstAsync(a => a.Username == "carol_dev");
+            Author alice = (await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech"))!;
+            Author bob = (await authorRepo.ReadFirstAsync(a => a.Username == "bob_data"))!;
+            Author carol = (await authorRepo.ReadFirstAsync(a => a.Username == "carol_dev"))!;
 
             List<BlogPost> posts = new List<BlogPost>
             {
@@ -358,8 +505,8 @@ namespace Sample.BlogApp.SqlServer
                 return;
             }
 
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
-            BlogPost mlPost = await postRepo.ReadFirstAsync(p => p.Slug == "ml-basics-developers");
+            BlogPost microservicesPost = (await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices"))!;
+            BlogPost mlPost = (await postRepo.ReadFirstAsync(p => p.Slug == "ml-basics-developers"))!;
 
             List<Comment> comments = new List<Comment>
             {
@@ -436,7 +583,7 @@ namespace Sample.BlogApp.SqlServer
             }
 
             Console.WriteLine("\n2. Find posts by a specific author:");
-            Author alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
+            Author alice = (await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech"))!;
             IEnumerable<BlogPost> alicePosts = await postRepo.Query()
                 .Where(p => p.AuthorId == alice.Id)
                 .ExecuteAsync();
@@ -448,7 +595,7 @@ namespace Sample.BlogApp.SqlServer
             }
 
             Console.WriteLine("\n3. Find approved comments for a specific post:");
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            BlogPost microservicesPost = (await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices"))!;
             IEnumerable<Comment> approvedComments = await commentRepo.Query()
                 .Where(c => c.PostId == microservicesPost.Id && c.IsApproved == true)
                 .OrderBy(c => c.CreatedDate)
@@ -485,17 +632,17 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine("=== Scenario 5: Update Operations ===");
 
             Console.WriteLine("\n1. Increment view count for a post:");
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            BlogPost microservicesPost = (await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices"))!;
             int originalViews = microservicesPost.ViewCount;
             microservicesPost.ViewCount += 10;
             microservicesPost.UpdatedDate = DateTime.UtcNow;
             await postRepo.UpdateAsync(microservicesPost);
 
-            BlogPost updatedPost = await postRepo.ReadByIdAsync(microservicesPost.Id);
+            BlogPost updatedPost = (await postRepo.ReadByIdAsync(microservicesPost.Id))!;
             Console.WriteLine($"   Views: {originalViews} → {updatedPost.ViewCount}");
 
             Console.WriteLine("\n2. Publish a draft post:");
-            BlogPost draftPost = await postRepo.ReadFirstOrDefaultAsync(p => p.IsPublished == false);
+            BlogPost? draftPost = await postRepo.ReadFirstOrDefaultAsync(p => p.IsPublished == false);
             if (draftPost != null)
             {
                 draftPost.IsPublished = true;
@@ -544,7 +691,7 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine($"   Comments: {totalComments} ({approvedComments} approved)");
 
             int maxViews = await postRepo.MaxAsync(p => p.ViewCount);
-            BlogPost mostViewed = await postRepo.ReadFirstAsync(p => p.ViewCount == maxViews);
+            BlogPost mostViewed = (await postRepo.ReadFirstAsync(p => p.ViewCount == maxViews))!;
 
             Console.WriteLine($"\n🔥 Most viewed post: '{mostViewed.Title}' with {mostViewed.ViewCount} views");
 
@@ -886,11 +1033,11 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine("=== Scenario 12: Edge Cases and Error Handling ===");
 
             Console.WriteLine("\n1. Handling non-existent records:");
-            BlogPost nonExistent = await postRepo.ReadByIdAsync(99999);
+            BlogPost? nonExistent = await postRepo.ReadByIdAsync(99999);
             Console.WriteLine($"   ReadById(99999) returned: {(nonExistent == null ? "null" : "a post")}");
 
             Console.WriteLine("\n2. ReadFirstOrDefault with no matches:");
-            BlogPost noMatch = await postRepo.ReadFirstOrDefaultAsync(p => p.ViewCount > 1000000);
+            BlogPost? noMatch = await postRepo.ReadFirstOrDefaultAsync(p => p.ViewCount > 1000000);
             Console.WriteLine($"   ReadFirstOrDefault (no matches) returned: {(noMatch == null ? "null" : "a post")}");
 
             Console.WriteLine("\n3. Empty collection operations:");

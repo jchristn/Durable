@@ -17,7 +17,11 @@ namespace Sample.BlogApp.Postgres
 
         #region Private-Members
 
-        private static string _ConnectionString = BuildConnectionString();
+        private static string _ConnectionString = "";
+        private static string _Host = "";
+        private static string _User = "";
+        private static string _Password = "";
+        private static string _Database = "";
 
         #endregion
 
@@ -26,24 +30,127 @@ namespace Sample.BlogApp.Postgres
         /// <summary>
         /// Builds the connection string from environment variables or prompts user.
         /// </summary>
+        /// <param name="usePostgres">If true, connects to postgres database instead of blogapp.</param>
         /// <returns>A PostgreSQL connection string.</returns>
-        private static string BuildConnectionString()
+        private static string BuildConnectionString(bool usePostgres = false)
         {
-            // Try to determine the PostgreSQL username
-            // On macOS/Homebrew, it's often the current user; on Linux, it's usually 'postgres'
-            string username = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? Environment.UserName;
-            string password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "";
+            // Use cached values if already set, otherwise check environment variables
+            if (string.IsNullOrEmpty(_Host))
+            {
+                _Host = Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "";
+            }
 
-            if (string.IsNullOrEmpty(password))
+            if (string.IsNullOrEmpty(_Database))
+            {
+                _Database = Environment.GetEnvironmentVariable("POSTGRES_DATABASE") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_User))
+            {
+                _User = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_Password))
+            {
+                _Password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "";
+            }
+
+            // If any required value is missing, prompt for all of them (only once)
+            if (string.IsNullOrEmpty(_Host) || string.IsNullOrEmpty(_User) || string.IsNullOrEmpty(_Password))
             {
                 Console.WriteLine("=== PostgreSQL Connection Setup ===");
-                Console.WriteLine($"PostgreSQL Username: {username}");
-                Console.WriteLine("Enter PostgreSQL password (or press Enter if none): ");
-                password = Console.ReadLine() ?? "";
+
+                if (string.IsNullOrEmpty(_Host))
+                {
+                    Console.Write("Enter PostgreSQL host and port (e.g., 'localhost' or 'server.com:5432'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    _Host = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Host))
+                    {
+                        _Host = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using host from environment: {_Host}");
+                }
+
+                if (string.IsNullOrEmpty(_User))
+                {
+                    Console.Write($"Enter PostgreSQL username (or press Enter for default '{Environment.UserName}'): ");
+                    _User = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_User))
+                    {
+                        _User = Environment.UserName;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {_User}");
+                }
+
+                if (string.IsNullOrEmpty(_Password))
+                {
+                    Console.Write("Enter PostgreSQL password (or press Enter if none): ");
+                    _Password = Console.ReadLine() ?? "";
+                }
+
+                if (string.IsNullOrEmpty(_Database) && !usePostgres)
+                {
+                    Console.Write("Enter database name (or press Enter for default 'blogapp'): ");
+                    _Database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Database))
+                    {
+                        _Database = "blogapp";
+                    }
+                }
+                else if (!usePostgres)
+                {
+                    Console.WriteLine($"Using database from environment: {_Database}");
+                }
+
                 Console.WriteLine();
             }
 
-            return $"Host=localhost;Database=blogapp;Username={username};Password={password};";
+            // Determine which database to use
+            string database;
+            if (usePostgres)
+            {
+                database = "postgres";
+            }
+            else if (string.IsNullOrEmpty(_Database))
+            {
+                database = "blogapp";
+            }
+            else
+            {
+                database = _Database;
+            }
+
+            return $"Host={_Host};Database={database};Username={_User};Password={_Password};";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
         }
 
         /// <summary>
@@ -53,6 +160,19 @@ namespace Sample.BlogApp.Postgres
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== Durable ORM Sample: Blog Application ===\n");
+
+            // Parse command line arguments
+            if (args.Length > 0)
+            {
+                _ConnectionString = args[0];
+                Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
+            }
+            else
+            {
+                _ConnectionString = BuildConnectionString();
+                Console.WriteLine("Tip: You can specify a custom PostgreSQL connection string by passing it as an argument.");
+                Console.WriteLine("     Example: dotnet Sample.BlogApp.Postgres.dll \"Host=localhost;Database=blogapp;Username=myuser;Password=mypass;\"\n");
+            }
 
             try
             {
@@ -85,9 +205,9 @@ namespace Sample.BlogApp.Postgres
             Console.WriteLine("Initializing database...");
 
             // First, connect to the default 'postgres' database to create our database
-            string connectionStringWithoutDb = _ConnectionString.Replace("Database=blogapp;", "Database=postgres;");
+            string postgresConnectionString = BuildConnectionString(true);
 
-            using (NpgsqlConnection connection = new NpgsqlConnection(connectionStringWithoutDb))
+            using (NpgsqlConnection connection = new NpgsqlConnection(postgresConnectionString))
             {
                 connection.Open();
 

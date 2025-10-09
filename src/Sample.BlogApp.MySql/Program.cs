@@ -17,7 +17,11 @@ namespace Sample.BlogApp.MySql
 
         #region Private-Members
 
-        private static string _ConnectionString = BuildConnectionString();
+        private static string _ConnectionString = "";
+        private static string _Server = "";
+        private static string _User = "";
+        private static string _Password = "";
+        private static string _Database = "";
 
         #endregion
 
@@ -26,20 +30,121 @@ namespace Sample.BlogApp.MySql
         /// <summary>
         /// Builds the connection string from environment variables or prompts user.
         /// </summary>
+        /// <param name="omitDatabase">If true, omits the database parameter from the connection string.</param>
         /// <returns>A MySQL connection string.</returns>
-        private static string BuildConnectionString()
+        private static string BuildConnectionString(bool omitDatabase = false)
         {
-            string password = Environment.GetEnvironmentVariable("MYSQL_PASSWORD") ?? "";
+            // Use cached values if already set, otherwise check environment variables
+            if (string.IsNullOrEmpty(_Server))
+            {
+                _Server = Environment.GetEnvironmentVariable("MYSQL_SERVER") ?? "";
+            }
 
-            if (string.IsNullOrEmpty(password))
+            if (string.IsNullOrEmpty(_Database))
+            {
+                _Database = Environment.GetEnvironmentVariable("MYSQL_DATABASE") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_User))
+            {
+                _User = Environment.GetEnvironmentVariable("MYSQL_USER") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(_Password))
+            {
+                _Password = Environment.GetEnvironmentVariable("MYSQL_PASSWORD") ?? "";
+            }
+
+            // If any required value is missing, prompt for all of them (only once)
+            if (string.IsNullOrEmpty(_Server) || string.IsNullOrEmpty(_User) || string.IsNullOrEmpty(_Password))
             {
                 Console.WriteLine("=== MySQL Connection Setup ===");
-                Console.WriteLine("Enter MySQL root password (or press Enter if none): ");
-                password = Console.ReadLine() ?? "";
+
+                if (string.IsNullOrEmpty(_Server))
+                {
+                    Console.Write("Enter MySQL host and port (e.g., 'localhost' or 'server.com:3306'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    _Server = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Server))
+                    {
+                        _Server = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using server from environment: {_Server}");
+                }
+
+                if (string.IsNullOrEmpty(_User))
+                {
+                    Console.Write("Enter MySQL username (or press Enter for default 'root'): ");
+                    _User = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_User))
+                    {
+                        _User = "root";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {_User}");
+                }
+
+                if (string.IsNullOrEmpty(_Password))
+                {
+                    Console.Write("Enter MySQL password (or press Enter if none): ");
+                    _Password = Console.ReadLine() ?? "";
+                }
+
+                if (string.IsNullOrEmpty(_Database) && !omitDatabase)
+                {
+                    Console.Write("Enter database name (or press Enter for default 'blogapp'): ");
+                    _Database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(_Database))
+                    {
+                        _Database = "blogapp";
+                    }
+                }
+                else if (!omitDatabase)
+                {
+                    Console.WriteLine($"Using database from environment: {_Database}");
+                }
+
                 Console.WriteLine();
             }
 
-            return $"Server=localhost;Database=blogapp;User=root;Password={password};";
+            // Build connection string
+            if (omitDatabase)
+            {
+                return $"Server={_Server};User={_User};Password={_Password};";
+            }
+            else
+            {
+                string database = string.IsNullOrEmpty(_Database) ? "blogapp" : _Database;
+                return $"Server={_Server};Database={database};User={_User};Password={_Password};";
+            }
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
         }
 
         /// <summary>
@@ -49,6 +154,19 @@ namespace Sample.BlogApp.MySql
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== Durable ORM Sample: Blog Application ===\n");
+
+            // Parse command line arguments
+            if (args.Length > 0)
+            {
+                _ConnectionString = args[0];
+                Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
+            }
+            else
+            {
+                _ConnectionString = BuildConnectionString();
+                Console.WriteLine("Tip: You can specify a custom MySQL connection string by passing it as an argument.");
+                Console.WriteLine("     Example: dotnet Sample.BlogApp.MySql.dll \"Server=localhost;Database=blogapp;User=root;Password=mypass;\"\n");
+            }
 
             try
             {
@@ -81,7 +199,7 @@ namespace Sample.BlogApp.MySql
             Console.WriteLine("Initializing database...");
 
             // First, connect without specifying a database to create it
-            string connectionStringWithoutDb = _ConnectionString.Replace("Database=blogapp;", "");
+            string connectionStringWithoutDb = BuildConnectionString(true);
 
             using MySqlConnection connection = new MySqlConnection(connectionStringWithoutDb);
             connection.Open();

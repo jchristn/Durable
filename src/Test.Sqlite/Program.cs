@@ -27,9 +27,22 @@
                 Console.WriteLine("Starting program...");
                 Console.WriteLine("=== SQLite Repository Pattern Demo - Sync & Async ===\n");
 
-            // For file-based database use: var connectionString = "Data Source=demo.db";
-            // Create in-memory database
+            // Default to in-memory database, allow override via command line
             string connectionString = "Data Source=InMemoryDemo;Mode=Memory;Cache=Shared";
+
+            // Parse command line arguments
+            if (args.Length > 0)
+            {
+                connectionString = args[0];
+                Console.WriteLine($"Using custom connection string: {connectionString}");
+            }
+            else
+            {
+                Console.WriteLine($"Using default connection string: {connectionString}");
+                Console.WriteLine("Tip: You can specify a custom SQLite database by passing the connection string as an argument.");
+                Console.WriteLine("     Example: dotnet Test.Sqlite.dll \"Data Source=test.db\"");
+                Console.WriteLine("     For in-memory: dotnet Test.Sqlite.dll \"Data Source=InMemoryDemo;Mode=Memory;Cache=Shared\"\n");
+            }
 
             // Keep one connection open to maintain the in-memory database
             using SqliteConnection keepAliveConnection = new SqliteConnection(connectionString);

@@ -26,10 +26,23 @@ namespace Sample.BlogApp.Sqlite
         /// <summary>
         /// Main entry point for the blog application.
         /// </summary>
-        /// <param name="args">Command line arguments.</param>
+        /// <param name="args">Command line arguments. Optional: connection string as first argument.</param>
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== Durable ORM Sample: Blog Application ===\n");
+
+            // Parse command line arguments
+            if (args.Length > 0)
+            {
+                _ConnectionString = args[0];
+                Console.WriteLine($"Using custom connection string: {_ConnectionString}");
+            }
+            else
+            {
+                Console.WriteLine($"Using default connection string: {_ConnectionString}");
+                Console.WriteLine("Tip: You can specify a custom SQLite database by passing the connection string as an argument.");
+                Console.WriteLine("     Example: dotnet Sample.BlogApp.Sqlite.dll \"Data Source=/path/to/custom.db\"\n");
+            }
 
             try
             {

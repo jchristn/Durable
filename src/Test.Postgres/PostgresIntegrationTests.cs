@@ -70,7 +70,7 @@ namespace Test.Postgres
 
         #region Private-Members
 
-        private const string TestConnectionString = "Host=localhost;Database=durable_integration_test;Username=test_user;Password=test_password;";
+        private readonly string TestConnectionString;
         private const string TestDatabaseName = "durable_integration_test";
         private static readonly object _TestLock = new object();
         private static bool _DatabaseSetupComplete = false;
@@ -83,8 +83,11 @@ namespace Test.Postgres
         /// <summary>
         /// Initializes the test class by setting up the test database.
         /// </summary>
-        public PostgresIntegrationTests()
+        /// <param name="connectionString">The PostgreSQL connection string to use for tests.</param>
+        public PostgresIntegrationTests(string connectionString = "Host=localhost;Database=durable_integration_test;Username=test_user;Password=test_password;")
         {
+            TestConnectionString = connectionString;
+
             lock (_TestLock)
             {
                 if (!_DatabaseSetupComplete)
