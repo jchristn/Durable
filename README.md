@@ -1318,8 +1318,8 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 Special thanks to the following contributors:
 
-- [@jchristn](https://github.com/jchristn) - Joel Christner
 - [@joshclopton](https://github.com/JoshClopton) - Josh Clopton
+- [@jchristn](https://github.com/jchristn) - Joel Christner
   
 ## Contributing
 
