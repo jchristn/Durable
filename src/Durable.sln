@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Postgres", "Durable
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.SqlServer", "Durable.SqlServer\Durable.SqlServer.csproj", "{77F888B8-D980-4593-9948-261C7572965B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sample.BlogApp.SqlServer", "Sample.BlogApp.SqlServer\Sample.BlogApp.SqlServer.csproj", "{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -153,6 +155,18 @@ Global
 		{77F888B8-D980-4593-9948-261C7572965B}.Release|x64.Build.0 = Release|Any CPU
 		{77F888B8-D980-4593-9948-261C7572965B}.Release|x86.ActiveCfg = Release|Any CPU
 		{77F888B8-D980-4593-9948-261C7572965B}.Release|x86.Build.0 = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|x64.Build.0 = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Debug|x86.Build.0 = Debug|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|x64.ActiveCfg = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|x64.Build.0 = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|x86.ActiveCfg = Release|Any CPU
+		{7F742C34-324D-4DA0-8A6B-B5A23E360A8D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

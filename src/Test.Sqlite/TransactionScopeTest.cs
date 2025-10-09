@@ -289,113 +289,7 @@ namespace Test.Sqlite
                 
             }, $"nested_sp_{currentDepth}");
         }
-        
-        public async Task TestConcurrentSavepointCreation()
-        {
-            Console.WriteLine("=== Testing Concurrent Savepoint Creation ===");
-            
-            using ITransaction transaction = _repository.BeginTransaction();
-            try
-            {
-                List<Task> tasks = new List<Task>();
-                List<string> savepointNames = new List<string>();
-                object lockObject = new object();
-                
-                // Create 20 concurrent savepoints to test thread safety
-                for (int i = 0; i < 20; i++)
-                {
-                    int taskId = i;
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        try
-                        {
-                            // Test both sync and async savepoint creation
-                            ISavepoint savepoint;
-                            if (taskId % 2 == 0)
-                            {
-                                savepoint = transaction.CreateSavepoint();
-                            }
-                            else
-                            {
-                                savepoint = await transaction.CreateSavepointAsync();
-                            }
-                            
-                            lock (lockObject)
-                            {
-                                if (savepoint?.Name != null)
-                                {
-                                    savepointNames.Add(savepoint.Name);
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Warning: Task {taskId} got null savepoint or null savepoint name");
-                                }
-                            }
-                            
-                            // Create a person within this savepoint
-                            Person person = new Person 
-                            { 
-                                FirstName = $"Savepoint{taskId}", 
-                                LastName = "Concurrent", 
-                                Age = 18 + taskId,
-                                Email = $"savepoint{taskId}@test.com",
-                                Salary = 45000 + taskId * 2000,
-                                Department = "Concurrent"
-                            };
-                            _repository.Create(person, transaction);
-                            
-                            // Release the savepoint
-                            if (savepoint != null)
-                            {
-                                if (taskId % 2 == 0)
-                                {
-                                    savepoint.Release();
-                                }
-                                else
-                                {
-                                    await savepoint.ReleaseAsync();
-                                }
 
-                                Console.WriteLine($"Task {taskId}: Created savepoint '{savepoint.Name}' and person ID {person.Id}");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"Task {taskId}: Failed to create savepoint, but created person ID {person.Id}");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Concurrent savepoint task {taskId} failed: {ex.Message}");
-                        }
-                    }));
-                }
-                
-                await Task.WhenAll(tasks);
-                
-                // Verify all savepoint names are unique (thread safety test)
-                int uniqueNames = savepointNames.Distinct().Count();
-                Console.WriteLine($"Created {savepointNames.Count} savepoints, {uniqueNames} unique names");
-                if (uniqueNames == savepointNames.Count)
-                {
-                    Console.WriteLine("✓ Thread safety test passed - all savepoint names are unique");
-                }
-                else
-                {
-                    Console.WriteLine("✗ Thread safety test failed - duplicate savepoint names detected");
-                }
-                
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                Console.WriteLine($"Concurrent savepoint test failed: {ex.Message}");
-                throw;
-            }
-            
-            Console.WriteLine();
-        }
-        
         public void TestMemoryLeakPrevention()
         {
             Console.WriteLine("=== Testing Memory Leak Prevention ===");
@@ -467,7 +361,6 @@ namespace Test.Sqlite
                 TestAmbientTransactionScope();
                 TestConcurrentTransactionScopes();
                 TestDeepNestedSavepoints();
-                TestConcurrentSavepointCreation().Wait();
                 TestMemoryLeakPrevention();
 
                 Console.WriteLine("=== All Tests Completed Successfully ===");

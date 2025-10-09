@@ -24,7 +24,7 @@ namespace Test.SqlServer
         #region Private-Members
 
         private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static readonly string _ConnectionString = "Server=view.homedns.org,1433;Database=durable_integration_test;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;AllowUserVariables=true;";
+        private static string _ConnectionString = "";
 
         #endregion
 
@@ -35,37 +35,42 @@ namespace Test.SqlServer
             try
             {
                 Console.WriteLine("Starting SQL Server ORM Test Program...");
-                Console.WriteLine($"Arguments received: {args.Length}");
-                if (args.Length > 0)
-                {
-                    Console.WriteLine($"First argument: '{args[0]}'");
-                }
 
-                // Check command line arguments for test mode
+                // Check command line arguments for special modes
                 if (args.Length > 0 && args[0].ToLower() == "createdatabases")
                 {
+                    // For create databases mode, use master database connection
+                    _ConnectionString = BuildConnectionString(true);
                     await CreateAllDatabases();
                     return;
                 }
 
-                if (args.Length > 0 && args[0].ToLower() == "integration")
-                {
-                    Console.WriteLine("=== SQL Server Integration Test Suite ===\n");
-                    await SqlServerTestRunner.RunAllTests();
-                    return;
-                }
+                Console.WriteLine("=== SQL Server Comprehensive Integration Test Suite ===\n");
 
-                Console.WriteLine("=== SQL Server Repository Pattern Demo - Sync & Async ===\n");
-                Console.WriteLine("💡 Tip: Run with 'integration' argument to execute comprehensive integration tests");
-                Console.WriteLine("   Example: dotnet run integration\n");
+                // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
+                if (args.Length > 0)
+                {
+                    _ConnectionString = args[0];
+                    Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
+                }
+                else
+                {
+                    _ConnectionString = BuildConnectionString();
+                    Console.WriteLine("Tip: You can specify a custom SQL Server connection string by passing it as an argument.");
+                    Console.WriteLine("     Example: dotnet Test.SqlServer.dll \"Server=localhost;Database=mydb;User=sa;Password=secret;TrustServerCertificate=true;\"\n");
+                }
 
                 // Check if SQL Server is available
                 if (!await IsMyServerAvailable())
                 {
                     Console.WriteLine("❌ SQL Server is not available. Please check your connection.");
-                    Console.WriteLine("   Connection string: " + _ConnectionString);
+                    Console.WriteLine("   Connection string: " + MaskConnectionString(_ConnectionString));
                     return;
                 }
+
+                // Run comprehensive integration tests
+                await SqlServerTestRunner.RunAllTests();
+                Console.WriteLine("\n=== Basic Repository Pattern Demo ===\n");
 
                 await InitializeDatabase();
 
@@ -113,9 +118,6 @@ namespace Test.SqlServer
                 Console.WriteLine($"❌ Fatal error: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
-
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
         }
 
         #endregion
@@ -143,28 +145,20 @@ namespace Test.SqlServer
                 using var connection = new SqlConnection(_ConnectionString);
                 await connection.OpenAsync();
 
-                // Create test database if it doesn't exist
-                string createDbSql = @"
-                    CREATE DATABASE IF NOT EXISTS durable_integration_test
-                    CHARACTER SET utf8mb4
-                    COLLATE utf8mb4_unicode_ci;
-                    USE durable_integration_test;";
-
-                using var command = new SqlCommand(createDbSql, connection);
-                await command.ExecuteNonQueryAsync();
-
                 // Drop and recreate Person table
                 string createTableSql = @"
-                    DROP TABLE IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'people') `people`;
-                    CREATE TABLE `people` (
-                        `id` INT AUTO_INCREMENT PRIMARY KEY,
-                        `first` VARCHAR(64) NOT NULL,
-                        `last` VARCHAR(64) NOT NULL,
-                        `age` INT NOT NULL DEFAULT 0,
-                        `email` VARCHAR(128),
-                        `salary` DECIMAL(10,2) DEFAULT 0.00,
-                        `department` VARCHAR(32)
-                    ) ENGINE=InnoDB;";
+                    IF OBJECT_ID('people', 'U') IS NOT NULL
+                        DROP TABLE people;
+
+                    CREATE TABLE people (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        first VARCHAR(64) NOT NULL,
+                        last VARCHAR(64) NOT NULL,
+                        age INT NOT NULL DEFAULT 0,
+                        email VARCHAR(128),
+                        salary DECIMAL(10,2) DEFAULT 0.00,
+                        department VARCHAR(32)
+                    );";
 
                 using var createCommand = new SqlCommand(createTableSql, connection);
                 await createCommand.ExecuteNonQueryAsync();
@@ -446,21 +440,24 @@ namespace Test.SqlServer
 
         private static async Task TestTakeSkipOperations(SqlServerRepository<Person> repository)
         {
-            // Test Take
+            // Test Take (SQL Server requires ORDER BY with OFFSET/FETCH)
             IEnumerable<Person> firstTwo = repository.Query()
+                .OrderBy(p => p.Id)
                 .Take(2)
                 .Execute();
 
             if (firstTwo.Count() > 2)
                 throw new Exception("Take(2) should return at most 2 items");
 
-            // Test Skip
+            // Test Skip (SQL Server requires ORDER BY with OFFSET/FETCH)
             IEnumerable<Person> skipFirst = repository.Query()
+                .OrderBy(p => p.Id)
                 .Skip(1)
                 .Execute();
 
             // Test Take + Skip
             IEnumerable<Person> paging = repository.Query()
+                .OrderBy(p => p.Id)
                 .Skip(1)
                 .Take(2)
                 .Execute();
@@ -503,8 +500,9 @@ namespace Test.SqlServer
             if (!sql.Contains("ORDER BY"))
                 throw new Exception("SQL should contain ORDER BY clause");
 
-            if (!sql.Contains("LIMIT"))
-                throw new Exception("SQL should contain LIMIT clause");
+            // SQL Server uses OFFSET/FETCH instead of LIMIT
+            if (!sql.Contains("OFFSET") || !sql.Contains("FETCH"))
+                throw new Exception("SQL should contain OFFSET/FETCH clause for pagination");
 
             Console.WriteLine($"   Generated SQL: {sql}");
 
@@ -599,11 +597,120 @@ namespace Test.SqlServer
         }
 
         /// <summary>
+        /// Builds the connection string from environment variables or prompts user.
+        /// </summary>
+        /// <param name="useMaster">If true, connects to master database instead of test database.</param>
+        /// <returns>A SQL Server connection string.</returns>
+        private static string BuildConnectionString(bool useMaster = false)
+        {
+            string server = Environment.GetEnvironmentVariable("SQLSERVER_SERVER") ?? "";
+            string database = Environment.GetEnvironmentVariable("SQLSERVER_DATABASE") ?? "";
+            string user = Environment.GetEnvironmentVariable("SQLSERVER_USER") ?? "";
+            string password = Environment.GetEnvironmentVariable("SQLSERVER_PASSWORD") ?? "";
+
+            // If any required value is missing, prompt for all of them
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(password))
+            {
+                Console.WriteLine("=== SQL Server Connection Setup ===");
+
+                if (string.IsNullOrEmpty(server))
+                {
+                    Console.Write("Enter SQL Server host and port (e.g., 'localhost' or 'server.com,1433'): ");
+                    Console.Write("(or press Enter for default 'localhost'): ");
+                    server = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(server))
+                    {
+                        server = "localhost";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using server from environment: {server}");
+                }
+
+                if (string.IsNullOrEmpty(user))
+                {
+                    Console.Write("Enter SQL Server username (or press Enter for default 'sa'): ");
+                    user = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(user))
+                    {
+                        user = "sa";
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Using username from environment: {user}");
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    Console.Write("Enter SQL Server password (or press Enter for default 'P@ssw0rd4Sql'): ");
+                    password = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        password = "P@ssw0rd4Sql";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(database) && !useMaster)
+                {
+                    Console.Write("Enter database name (or press Enter for default 'durable_integration_test'): ");
+                    database = Console.ReadLine() ?? "";
+                    if (string.IsNullOrEmpty(database))
+                    {
+                        database = "durable_integration_test";
+                    }
+                }
+                else if (!useMaster)
+                {
+                    Console.WriteLine($"Using database from environment: {database}");
+                }
+
+                Console.WriteLine();
+            }
+
+            // Override database if useMaster is true
+            if (useMaster)
+            {
+                database = "master";
+            }
+            else if (string.IsNullOrEmpty(database))
+            {
+                database = "durable_integration_test";
+            }
+
+            return $"Server={server};Database={database};User={user};Password={password};TrustServerCertificate=true;Encrypt=false;";
+        }
+
+        /// <summary>
+        /// Masks the password in a connection string for safe display.
+        /// </summary>
+        /// <param name="connectionString">The connection string to mask.</param>
+        /// <returns>Connection string with password hidden.</returns>
+        private static string MaskConnectionString(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                return connectionString;
+
+            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
+            if (passwordIndex == -1)
+                return connectionString;
+
+            int passwordStart = passwordIndex + "Password=".Length;
+            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
+
+            if (semicolonIndex == -1)
+                return connectionString.Substring(0, passwordStart) + "***";
+
+            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
+        }
+
+        /// <summary>
         /// Creates all required test databases if they don't exist
         /// </summary>
         private static async Task CreateAllDatabases()
         {
-            string masterConnectionString = "Server=view.homedns.org,1433;Database=master;User=sa;Password=P@ssw0rd4Sql;TrustServerCertificate=true;Encrypt=false;";
+            string masterConnectionString = _ConnectionString;
 
             string[] databases = new[] {
                 "durable_integration_test",
