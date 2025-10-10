@@ -1,0 +1,2333 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.Sqlite</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.Sqlite.CollectionLoader`1">
+            <summary>
+            Handles loading of collection navigation properties for SQLite entities.
+            Supports both one-to-many and many-to-many relationships with efficient batch loading.
+            </summary>
+            <typeparam name="T">The entity type that contains collection navigation properties</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.CollectionLoader`1.#ctor(Durable.ISanitizer,Durable.IDataTypeConverter)">
+            <summary>
+            Initializes a new instance of the CollectionLoader class.
+            </summary>
+            <param name="sanitizer">The sanitizer for SQL identifiers</param>
+            <param name="dataTypeConverter">The data type converter for database values</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when sanitizer or dataTypeConverter is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.CollectionLoader`1.LoadCollections(System.Collections.Generic.List{`0},System.Collections.Generic.List{Durable.Sqlite.IncludeInfo},Microsoft.Data.Sqlite.SqliteConnection,Durable.ITransaction)">
+            <summary>
+            Loads collection navigation properties for a list of entities.
+            </summary>
+            <param name="entities">The entities to load collections for</param>
+            <param name="includes">The include information for navigation properties</param>
+            <param name="connection">The SQLite connection to use</param>
+            <param name="transaction">Optional transaction to execute within</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when required parameters are null</exception>
+        </member>
+        <member name="T:Durable.Sqlite.ConnectionResult">
+            <summary>
+            Internal helper class that manages the lifecycle of SQLite connections and commands.
+            Ensures proper disposal of database resources.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.ConnectionResult.Connection">
+            <summary>
+            Gets the SQLite connection associated with this result.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.ConnectionResult.Command">
+            <summary>
+            Gets the SQLite command associated with this result.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.ConnectionResult.ShouldDispose">
+            <summary>
+            Gets a value indicating whether this connection result should dispose the connection when disposed.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.ConnectionResult.#ctor(Microsoft.Data.Sqlite.SqliteConnection,Microsoft.Data.Sqlite.SqliteCommand,System.Boolean)">
+            <summary>
+            Initializes a new instance of the ConnectionResult.
+            </summary>
+            <param name="connection">The SQLite connection</param>
+            <param name="command">The SQLite command</param>
+            <param name="shouldDispose">Whether to dispose the connection when this object is disposed</param>
+        </member>
+        <member name="T:Durable.Sqlite.CycleDetector">
+            <summary>
+            Detects cycles in navigation property includes to prevent infinite loops in SQLite queries.
+            Ensures that Include() chains don't create circular references that would cause stack overflow.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.CycleDetector.#ctor">
+            <summary>
+            Initializes a new instance of the CycleDetector.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.CycleDetector.WouldCreateCycle(System.String,System.Type,System.Type)">
+            <summary>
+            Checks if adding the specified navigation path would create a cycle.
+            </summary>
+            <param name="includePath">The navigation property path to check</param>
+            <param name="sourceType">The source entity type</param>
+            <param name="targetType">The target entity type</param>
+            <returns>True if adding this path would create a cycle, false otherwise</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when includePath, sourceType, or targetType is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.CycleDetector.Reset">
+            <summary>
+            Clears all tracked paths and resets the detector to initial state.
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.EntityMapper`1">
+            <summary>
+            Maps SQLite query results to entity objects, handling joined tables and related entities.
+            Supports complex object graphs with navigation properties.
+            </summary>
+            <typeparam name="T">The primary entity type being mapped</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.EntityMapper`1.#ctor(Durable.IDataTypeConverter,System.Collections.Generic.Dictionary{System.String,System.Reflection.PropertyInfo})">
+            <summary>
+            Initializes a new instance of the EntityMapper class.
+            </summary>
+            <param name="dataTypeConverter">The data type converter for database values</param>
+            <param name="baseColumnMappings">The column mappings for the primary entity</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when required parameters are null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.EntityMapper`1.MapJoinedResults(Microsoft.Data.Sqlite.SqliteDataReader,Durable.Sqlite.JoinBuilder.JoinResult,System.Collections.Generic.List{Durable.Sqlite.IncludeInfo})">
+            <summary>
+            Maps joined query results to a list of entities with related navigation properties populated.
+            </summary>
+            <param name="reader">The data reader containing the query results</param>
+            <param name="joinResult">The join information from the query builder</param>
+            <param name="includes">The list of navigation properties to include</param>
+            <returns>A list of entities with related data populated</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when required parameters are null</exception>
+        </member>
+        <member name="T:Durable.Sqlite.ExpressionParser`1">
+            <summary>
+            Parses and converts LINQ expressions to SQLite-compatible SQL strings.
+            Provides support for complex expression trees including binary operations, method calls, and member access.
+            </summary>
+            <typeparam name="T">The entity type that the expressions operate on.</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.ExpressionParser`1.#ctor(System.Collections.Generic.Dictionary{System.String,System.Reflection.PropertyInfo},Durable.ISanitizer)">
+            <summary>
+            Initializes a new instance of the ExpressionParser with the specified column mappings and sanitizer.
+            </summary>
+            <param name="columnMappings">A dictionary mapping property names to their corresponding database column names and PropertyInfo objects.</param>
+            <param name="sanitizer">The sanitizer to use for value formatting and SQL injection prevention. Defaults to SqliteSanitizer if null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnMappings is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.ExpressionParser`1.ParseExpression(System.Linq.Expressions.Expression)">
+            <summary>
+            Parses any expression tree and converts it to its SQLite SQL equivalent string representation.
+            </summary>
+            <param name="expression">The expression tree to parse and convert to SQL.</param>
+            <returns>A string containing the SQLite-compatible SQL representation of the expression.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when an unsupported expression type is encountered.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.ExpressionParser`1.GetColumnFromExpression(System.Linq.Expressions.Expression)">
+            <summary>
+            Extracts the database column name from a member expression that references an entity property.
+            </summary>
+            <param name="expression">The member expression representing a property access (e.g., p.FirstName).</param>
+            <returns>The corresponding database column name for the property.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the expression is not a valid member expression or the property is not mapped to a column.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.ExpressionParser`1.ParseUpdateExpression(System.Linq.Expressions.Expression{System.Func{`0,`0}})">
+            <summary>
+            Parses an update expression that specifies how to modify entity properties and converts it to SQL SET clause format.
+            </summary>
+            <param name="updateExpression">A lambda expression defining the property updates using member initialization syntax (e.g., p => new Person { Name = "John", Age = 30 }).</param>
+            <returns>A string containing the SQL SET clause with column assignments (e.g., "Name = 'John', Age = 30").</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the expression is not a member initialization expression.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when an unsupported expression type is encountered in the update values.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.ExpressionParser`1.ParseSelectExpression``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Parses a select expression that defines which properties to retrieve and how to map them, returning column mapping information.
+            Supports anonymous types, member initialization, single property selection, and identity projection.
+            </summary>
+            <typeparam name="TResult">The result type that the selector expression produces.</typeparam>
+            <param name="selector">A lambda expression defining the selection and projection logic (e.g., p => new { p.Name, p.Age } or p => p.Name).</param>
+            <returns>A list of SelectMapping objects containing column names, aliases, and property mapping information for building SELECT clauses.</returns>
+        </member>
+        <member name="T:Durable.Sqlite.Grouping`2">
+            <summary>
+            Represents a grouping of elements with a common key for SQLite grouped query operations.
+            Provides enhanced navigation property support and complex type handling.
+            </summary>
+            <typeparam name="TKey">The type of the grouping key</typeparam>
+            <typeparam name="TElement">The type of the elements in the group</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.Grouping`2.#ctor(`0,System.Collections.Generic.IEnumerable{`1})">
+            <summary>
+            Initializes a new instance of the Grouping class.
+            </summary>
+            <param name="key">The common key for all elements in this group</param>
+            <param name="elements">The elements that share this key</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when elements is null</exception>
+        </member>
+        <member name="P:Durable.Sqlite.Grouping`2.Key">
+            <summary>
+            Gets the key that is common to all elements in this group.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.Grouping`2.GetEnumerator">
+            <summary>
+            Returns an enumerator that iterates through the elements in this group.
+            </summary>
+            <returns>An enumerator for the elements in this group</returns>
+        </member>
+        <member name="M:Durable.Sqlite.Grouping`2.System#Collections#IEnumerable#GetEnumerator">
+            <summary>
+            Returns an enumerator that iterates through the elements in this group.
+            </summary>
+            <returns>An enumerator for the elements in this group</returns>
+        </member>
+        <member name="T:Durable.Sqlite.IncludeInfo">
+            <summary>
+            Contains metadata about navigation properties for Include operations in SQLite queries.
+            Supports both single-entity and collection navigation properties with foreign key relationships.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.PropertyPath">
+            <summary>
+            Gets or sets the full property path for this include (e.g., "Company.Address").
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.NavigationProperty">
+            <summary>
+            Gets or sets the navigation property that will be populated with related data.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.ForeignKeyProperty">
+            <summary>
+            Gets or sets the foreign key property that establishes the relationship.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.RelatedEntityType">
+            <summary>
+            Gets or sets the type of the related entity being included.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.RelatedTableName">
+            <summary>
+            Gets or sets the database table name for the related entity.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.JoinAlias">
+            <summary>
+            Gets or sets the SQL alias used for the related table in JOIN operations.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.Parent">
+            <summary>
+            Gets or sets the parent include info for nested includes (ThenInclude scenarios).
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.Children">
+            <summary>
+            Gets or sets the collection of child includes for nested navigation properties.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.IsCollection">
+            <summary>
+            Gets or sets whether this navigation property represents a collection (one-to-many relationship).
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.IsManyToMany">
+            <summary>
+            Gets or sets whether this represents a many-to-many relationship requiring a junction table.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.JunctionEntityType">
+            <summary>
+            Gets or sets the junction entity type for many-to-many relationships.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.JunctionTableName">
+            <summary>
+            Gets or sets the junction table name for many-to-many relationships.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.IncludeInfo.JunctionAlias">
+            <summary>
+            Gets or sets the SQL alias for the junction table in many-to-many scenarios.
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.IncludeProcessor">
+            <summary>
+            Processes Include expressions and builds navigation property metadata for SQLite queries.
+            Handles validation, caching, and relationship discovery for complex entity graphs.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeProcessor.#ctor(Durable.ISanitizer,System.Int32)">
+            <summary>
+            Initializes a new instance of the IncludeProcessor class.
+            </summary>
+            <param name="sanitizer">The sanitizer to use for SQL identifiers</param>
+            <param name="maxIncludeDepth">Maximum depth for nested includes to prevent infinite recursion. Default is 5</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when sanitizer is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeProcessor.ParseIncludes``1(System.Collections.Generic.List{System.String})">
+            <summary>
+            Parses a list of include paths and creates corresponding IncludeInfo objects.
+            </summary>
+            <typeparam name="T">The root entity type</typeparam>
+            <param name="includePaths">The navigation property paths to include (e.g., "Company", "Company.Address")</param>
+            <returns>A list of root-level include information objects</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when includePaths is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when include validation fails</exception>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeProcessor.GetColumnMappings(System.Type)">
+            <summary>
+            Gets the column mappings for the specified entity type, with caching for performance.
+            </summary>
+            <param name="entityType">The entity type to get column mappings for</param>
+            <returns>A dictionary mapping column names to PropertyInfo objects</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null</exception>
+        </member>
+        <member name="T:Durable.Sqlite.IncludeValidator">
+            <summary>
+            Validates Include expressions to prevent infinite recursion and ensure valid navigation paths.
+            Provides protection against circular references and excessive nesting depth.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeValidator.#ctor(System.Int32)">
+            <summary>
+            Initializes a new instance of the IncludeValidator class.
+            </summary>
+            <param name="maxIncludeDepth">Maximum depth for nested includes. Default is 5</param>
+            <exception cref="T:System.ArgumentException">Thrown when maxIncludeDepth is less than 1</exception>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeValidator.ValidateInclude(System.String,System.Type,System.Type)">
+            <summary>
+            Validates an include path for circular references, depth constraints, and duplicates.
+            </summary>
+            <param name="includePath">The include path to validate (e.g., "Company.Address")</param>
+            <param name="sourceType">The source entity type</param>
+            <param name="targetType">The target entity type</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when any parameter is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when validation fails (circular reference, duplicate path, or excessive depth)</exception>
+        </member>
+        <member name="M:Durable.Sqlite.IncludeValidator.Reset">
+            <summary>
+            Clears all tracked validation state and resets the validator to initial state.
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.JoinBuilder">
+            <summary>
+            Builds SQL JOIN clauses and manages column mappings for SQLite Include operations.
+            Handles complex navigation property relationships including one-to-many and many-to-many scenarios.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.JoinBuilder.#ctor(Durable.ISanitizer)">
+            <summary>
+            Initializes a new instance of the JoinBuilder class.
+            </summary>
+            <param name="sanitizer">The sanitizer to use for SQL identifiers</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when sanitizer is null</exception>
+        </member>
+        <member name="T:Durable.Sqlite.JoinBuilder.JoinResult">
+            <summary>
+            Represents the result of building JOIN SQL with associated metadata.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.JoinResult.SelectClause">
+            <summary>
+            Gets or sets the SELECT clause with all required columns and aliases.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.JoinResult.JoinClause">
+            <summary>
+            Gets or sets the JOIN clause containing all necessary table joins.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.JoinResult.Includes">
+            <summary>
+            Gets or sets the collection of include information for entity mapping.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.JoinResult.ColumnMappingsByAlias">
+            <summary>
+            Gets or sets the column mappings organized by table alias for efficient lookup during result mapping.
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.JoinBuilder.ColumnMapping">
+            <summary>
+            Represents a mapping between a database column and an entity property.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.ColumnMapping.ColumnName">
+            <summary>
+            Gets or sets the database column name.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.ColumnMapping.Alias">
+            <summary>
+            Gets or sets the SQL alias for the column in SELECT statements.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.ColumnMapping.Property">
+            <summary>
+            Gets or sets the property that this column maps to.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.JoinBuilder.ColumnMapping.TableAlias">
+            <summary>
+            Gets or sets the table alias that owns this column.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.JoinBuilder.BuildJoinSql``1(System.String,System.Collections.Generic.List{System.String})">
+            <summary>
+            Builds JOIN SQL statements with SELECT and JOIN clauses for the specified includes.
+            </summary>
+            <typeparam name="T">The root entity type</typeparam>
+            <param name="baseTableName">The name of the base table</param>
+            <param name="includePaths">The navigation property paths to include</param>
+            <returns>A JoinResult containing the SELECT clause, JOIN clause, and mapping information</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when baseTableName is null</exception>
+        </member>
+        <member name="T:Durable.Sqlite.OrderByClause">
+            <summary>
+            Represents an ORDER BY clause in a SQL query with column and direction information.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.OrderByClause.Column">
+            <summary>
+            Gets or sets the column name to order by.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.OrderByClause.Ascending">
+            <summary>
+            Gets or sets whether to sort in ascending order (true) or descending order (false).
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.SelectMapping">
+            <summary>
+            Represents the mapping information for a column selection in SQL query projection.
+            Contains metadata about how database columns map to entity properties and their aliases.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SelectMapping.ColumnName">
+            <summary>
+            Gets or sets the name of the database column to select from.
+            </summary>
+            <value>The database column name as it appears in the SQL table schema.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SelectMapping.Alias">
+            <summary>
+            Gets or sets the alias name to use for the column in the SQL SELECT clause.
+            </summary>
+            <value>The alias name that will be used in the result set, or null if no alias is needed.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SelectMapping.SourceProperty">
+            <summary>
+            Gets or sets the PropertyInfo of the source entity property that maps to the database column.
+            </summary>
+            <value>The PropertyInfo representing the original entity property being selected from.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SelectMapping.TargetProperty">
+            <summary>
+            Gets or sets the PropertyInfo of the target property in the projection result type.
+            </summary>
+            <value>The PropertyInfo representing the property in the result object where the selected value will be assigned, or null for identity projections.</value>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteCaseExpressionBuilder`1">
+            <summary>
+            Provides a fluent interface for building SQL CASE expressions in SQLite queries.
+            Allows conditional logic within SQL SELECT statements using WHEN/THEN/ELSE syntax.
+            </summary>
+            <typeparam name="TEntity">The entity type that the CASE expression operates on.</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteCaseExpressionBuilder`1.#ctor(Durable.Sqlite.SqliteQueryBuilder{`0},Durable.Sqlite.SqliteRepository{`0})">
+            <summary>
+            Initializes a new instance of the SqliteCaseExpressionBuilder with the specified query builder and repository.
+            </summary>
+            <param name="queryBuilder">The SQLite query builder instance to add the CASE expression to.</param>
+            <param name="repository">The SQLite repository instance used for building WHERE clause conditions.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when queryBuilder or repository is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteCaseExpressionBuilder`1.When(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Object)">
+            <summary>
+            Adds a WHEN clause to the CASE expression with a condition expressed as a LINQ expression.
+            </summary>
+            <param name="condition">A lambda expression defining the condition to evaluate (e.g., x => x.Age > 18).</param>
+            <param name="result">The value to return when the condition is true. Can be string, number, boolean, or null.</param>
+            <returns>The current builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteCaseExpressionBuilder`1.WhenRaw(System.String,System.Object)">
+            <summary>
+            Adds a WHEN clause to the CASE expression with a raw SQL condition string.
+            </summary>
+            <param name="condition">The raw SQL condition string to evaluate (e.g., "column_name > 18").</param>
+            <param name="result">The value to return when the condition is true. Can be string, number, boolean, or null.</param>
+            <returns>The current builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteCaseExpressionBuilder`1.Else(System.Object)">
+            <summary>
+            Sets the ELSE clause for the CASE expression, defining the default value when no WHEN conditions are met.
+            </summary>
+            <param name="result">The default value to return when no WHEN conditions are true. Can be string, number, boolean, or null.</param>
+            <returns>The current builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteCaseExpressionBuilder`1.EndCase(System.String)">
+            <summary>
+            Completes the CASE expression construction and adds it to the SELECT clause with the specified alias.
+            </summary>
+            <param name="alias">The column alias to use for the CASE expression result in the SELECT clause.</param>
+            <returns>The query builder instance to continue building the query.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when alias is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when alias is empty or whitespace.</exception>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteConnectionFactory">
+            <summary>
+            Provides a factory for creating and managing SQLite database connections with connection pooling support.
+            Implements connection pooling to improve performance and resource management for SQLite databases.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.#ctor(System.String,Durable.ConnectionPoolOptions)">
+            <summary>
+            Initializes a new instance of the SqliteConnectionFactory with the specified connection string and pooling options.
+            </summary>
+            <param name="connectionString">The SQLite connection string used to create database connections.</param>
+            <param name="options">Optional connection pool configuration settings. Uses default settings if null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.GetConnection">
+            <summary>
+            Retrieves a database connection from the connection pool synchronously.
+            </summary>
+            <returns>A ready-to-use SQLite database connection from the pool.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the factory has been disposed.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.GetConnectionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Retrieves a database connection from the connection pool asynchronously.
+            </summary>
+            <param name="cancellationToken">A cancellation token to cancel the operation if needed.</param>
+            <returns>A task representing the asynchronous operation that returns a ready-to-use SQLite database connection from the pool.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the factory has been disposed.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.ReturnConnection(System.Data.Common.DbConnection)">
+            <summary>
+            Returns a database connection to the connection pool for reuse.
+            </summary>
+            <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.ReturnConnectionAsync(System.Data.Common.DbConnection)">
+            <summary>
+            Returns a database connection to the connection pool for reuse asynchronously.
+            </summary>
+            <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
+            <returns>A task representing the asynchronous return operation.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.Dispose">
+            <summary>
+            Disposes of the connection factory and releases all managed resources including the connection pool.
+            All connections in the pool will be closed and disposed.
+            </summary>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteConnectionFactoryExtensions">
+            <summary>
+            Extension methods for creating SQLite connection factories.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactoryExtensions.CreateFactory(System.String,System.Action{Durable.ConnectionPoolOptions})">
+            <summary>
+            Creates a SQLite connection factory from a connection string with optional configuration.
+            </summary>
+            <param name="connectionString">The SQLite connection string.</param>
+            <param name="configureOptions">Optional action to configure connection pool options.</param>
+            <returns>A configured SQLite connection factory.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteProjectedQueryBuilder`2">
+            <summary>
+            Provides query building functionality for projected queries that transform entities from TEntity to TResult.
+            This class handles SELECT operations with projection and supports ordering, pagination, and result transformation.
+            </summary>
+            <typeparam name="TEntity">The source entity type being queried from the database.</typeparam>
+            <typeparam name="TResult">The projected result type that entities will be transformed into.</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.#ctor(Durable.Sqlite.SqliteRepository{`0},System.Linq.Expressions.Expression{System.Func{`0,`1}},Durable.Sqlite.SqliteQueryBuilder{`0},Durable.ITransaction)">
+            <summary>
+            Initializes a new instance of the SqliteProjectedQueryBuilder class.
+            </summary>
+            <param name="repository">The repository instance for database operations.</param>
+            <param name="selector">The projection expression that transforms TEntity to TResult.</param>
+            <param name="sourceQueryBuilder">The source query builder to copy state from.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or selector is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Where(System.Linq.Expressions.Expression{System.Func{`1,System.Boolean}})">
+            <summary>
+            Applies a WHERE clause to the projected query.
+            </summary>
+            <param name="predicate">The predicate expression to filter results.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WHERE clauses on projected queries are not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Orders the query results by the specified key selector in ascending order.
+            </summary>
+            <typeparam name="TKey">The type of the key used for ordering.</typeparam>
+            <param name="keySelector">The expression that selects the key for ordering.</param>
+            <returns>The query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Orders the query results by the specified key selector in descending order.
+            </summary>
+            <typeparam name="TKey">The type of the key used for ordering.</typeparam>
+            <param name="keySelector">The expression that selects the key for ordering.</param>
+            <returns>The query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ThenBy``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Performs a subsequent ordering of the query results by the specified key selector in ascending order.
+            </summary>
+            <typeparam name="TKey">The type of the key used for ordering.</typeparam>
+            <param name="keySelector">The expression that selects the key for additional ordering.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ThenByDescending``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Performs a subsequent ordering of the query results by the specified key selector in descending order.
+            </summary>
+            <typeparam name="TKey">The type of the key used for ordering.</typeparam>
+            <param name="keySelector">The expression that selects the key for additional ordering.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Skip(System.Int32)">
+            <summary>
+            Skips the specified number of results in the query.
+            </summary>
+            <param name="count">The number of results to skip.</param>
+            <returns>The query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Take(System.Int32)">
+            <summary>
+            Limits the query to return only the specified number of results.
+            </summary>
+            <param name="count">The maximum number of results to return.</param>
+            <returns>The query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Distinct">
+            <summary>
+            Ensures that the query returns only distinct results.
+            </summary>
+            <returns>The query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Select``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Applies an additional projection to the query results.
+            </summary>
+            <typeparam name="TNewResult">The type of the new projection result.</typeparam>
+            <param name="selector">The projection expression.</param>
+            <returns>A new query builder for the projected type.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as chaining Select operations is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Include``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Includes related data in the query results.
+            </summary>
+            <typeparam name="TProperty">The type of the navigation property.</typeparam>
+            <param name="navigationProperty">The navigation property to include.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Include on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ThenInclude``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
+            <summary>
+            Includes additional related data based on a previously included navigation property.
+            </summary>
+            <typeparam name="TPreviousProperty">The type of the previously included property.</typeparam>
+            <typeparam name="TProperty">The type of the navigation property to include.</typeparam>
+            <param name="navigationProperty">The navigation property to include.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as ThenInclude on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.GroupBy``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Groups the query results by the specified key selector.
+            </summary>
+            <typeparam name="TKey">The type of the grouping key.</typeparam>
+            <param name="keySelector">The expression that selects the grouping key.</param>
+            <returns>A grouped query builder for the specified key type.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as GroupBy on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Having(System.Linq.Expressions.Expression{System.Func{`1,System.Boolean}})">
+            <summary>
+            Applies a HAVING clause to the grouped query results.
+            </summary>
+            <param name="predicate">The predicate expression for the HAVING clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Having on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Union(Durable.IQueryBuilder{`1})">
+            <summary>
+            Performs a UNION operation with another query.
+            </summary>
+            <param name="other">The other query to union with.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Union on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.UnionAll(Durable.IQueryBuilder{`1})">
+            <summary>
+            Performs a UNION ALL operation with another query.
+            </summary>
+            <param name="other">The other query to union with.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as UnionAll on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Intersect(Durable.IQueryBuilder{`1})">
+            <summary>
+            Performs an INTERSECT operation with another query.
+            </summary>
+            <param name="other">The other query to intersect with.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Intersect on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Except(Durable.IQueryBuilder{`1})">
+            <summary>
+            Performs an EXCEPT operation with another query.
+            </summary>
+            <param name="other">The other query to exclude from results.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Except on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereIn``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},Durable.IQueryBuilder{``0})">
+            <summary>
+            Applies a WHERE IN clause using a subquery.
+            </summary>
+            <typeparam name="TKey">The type of the key for the IN operation.</typeparam>
+            <param name="keySelector">The expression that selects the key for comparison.</param>
+            <param name="subquery">The subquery that provides values for the IN clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereIn on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereNotIn``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},Durable.IQueryBuilder{``0})">
+            <summary>
+            Applies a WHERE NOT IN clause using a subquery.
+            </summary>
+            <typeparam name="TKey">The type of the key for the NOT IN operation.</typeparam>
+            <param name="keySelector">The expression that selects the key for comparison.</param>
+            <param name="subquery">The subquery that provides values for the NOT IN clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereNotIn on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereInRaw``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.String)">
+            <summary>
+            Applies a WHERE IN clause using raw SQL.
+            </summary>
+            <typeparam name="TKey">The type of the key for the IN operation.</typeparam>
+            <param name="keySelector">The expression that selects the key for comparison.</param>
+            <param name="subquerySql">The raw SQL string for the IN clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereInRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereNotInRaw``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.String)">
+            <summary>
+            Applies a WHERE NOT IN clause using raw SQL.
+            </summary>
+            <typeparam name="TKey">The type of the key for the NOT IN operation.</typeparam>
+            <param name="keySelector">The expression that selects the key for comparison.</param>
+            <param name="subquerySql">The raw SQL string for the NOT IN clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereNotInRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereExists``1(Durable.IQueryBuilder{``0})">
+            <summary>
+            Applies a WHERE EXISTS clause using a subquery.
+            </summary>
+            <typeparam name="TOther">The type of the subquery entity.</typeparam>
+            <param name="subquery">The subquery for the EXISTS clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereExists on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereNotExists``1(Durable.IQueryBuilder{``0})">
+            <summary>
+            Applies a WHERE NOT EXISTS clause using a subquery.
+            </summary>
+            <typeparam name="TOther">The type of the subquery entity.</typeparam>
+            <param name="subquery">The subquery for the NOT EXISTS clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereNotExists on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WithWindowFunction(System.String,System.String,System.String)">
+            <summary>
+            Adds a window function to the query.
+            </summary>
+            <param name="functionName">The name of the window function.</param>
+            <param name="partitionBy">Optional PARTITION BY clause.</param>
+            <param name="orderBy">Optional ORDER BY clause for the window.</param>
+            <returns>A windowed query builder instance.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as window functions on projected queries are not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WithCte(System.String,System.String)">
+            <summary>
+            Adds a Common Table Expression (CTE) to the query.
+            </summary>
+            <param name="cteName">The name of the CTE.</param>
+            <param name="cteQuery">The SQL query for the CTE.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as CTEs on projected queries are not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WithRecursiveCte(System.String,System.String,System.String)">
+            <summary>
+            Adds a recursive Common Table Expression (CTE) to the query.
+            </summary>
+            <param name="cteName">The name of the recursive CTE.</param>
+            <param name="anchorQuery">The anchor (base) query for the CTE.</param>
+            <param name="recursiveQuery">The recursive query for the CTE.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as recursive CTEs on projected queries are not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.WhereRaw(System.String,System.Object[])">
+            <summary>
+            Applies a WHERE clause using raw SQL.
+            </summary>
+            <param name="sql">The raw SQL for the WHERE clause.</param>
+            <param name="parameters">Parameters for the SQL query.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as WhereRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.SelectRaw(System.String)">
+            <summary>
+            Adds raw SQL to the SELECT clause.
+            </summary>
+            <param name="sql">The raw SQL to add to the SELECT clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as SelectRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.FromRaw(System.String)">
+            <summary>
+            Uses raw SQL for the FROM clause.
+            </summary>
+            <param name="sql">The raw SQL for the FROM clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as FromRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.JoinRaw(System.String)">
+            <summary>
+            Adds a raw SQL JOIN clause to the query.
+            </summary>
+            <param name="sql">The raw SQL for the JOIN clause.</param>
+            <returns>The query builder instance for method chaining.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as JoinRaw on projected queries is not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.SelectCase">
+            <summary>
+            Creates a CASE expression builder for conditional logic in the SELECT clause.
+            </summary>
+            <returns>A CASE expression builder instance.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as CASE expressions on projected queries are not supported.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Execute">
+            <summary>
+            Executes the query synchronously and returns the results.
+            </summary>
+            <returns>An enumerable collection of projected results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ExecuteAsync(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns the results.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing an enumerable collection of projected results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ExecuteAsyncEnumerable(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns the results as an async enumerable for streaming.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>An async enumerable collection of projected results that can be consumed with await foreach.</returns>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteProjectedQueryBuilder`2.Query">
+            <summary>
+            Gets the generated SQL query string.
+            </summary>
+            <value>The SQL query string that will be executed.</value>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ExecuteWithQuery">
+            <summary>
+            Executes the query synchronously and returns both the results and the SQL query.
+            </summary>
+            <returns>A durable result containing both the query string and the projected results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ExecuteWithQueryAsync(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns both the results and the SQL query.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing a durable result with both the query string and projected results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.ExecuteAsyncEnumerableWithQuery(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns both the results as an async enumerable and the SQL query.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>An async durable result containing both the query string and an async enumerable of projected results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteProjectedQueryBuilder`2.BuildSql">
+            <summary>
+            Builds and returns the SQL query string for this projected query.
+            </summary>
+            <returns>The complete SQL query string including SELECT, FROM, WHERE, ORDER BY, and other clauses as applicable.</returns>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteQueryBuilder`1">
+            <summary>
+            SQLite-specific implementation of IQueryBuilder that provides fluent query building capabilities for SQLite databases.
+            Supports advanced features like CTEs, window functions, set operations, and includes.
+            </summary>
+            <typeparam name="TEntity">The entity type being queried</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.#ctor(Durable.Sqlite.SqliteRepository{`0},Durable.ITransaction)">
+            <summary>
+            Initializes a new instance of the SqliteQueryBuilder class.
+            </summary>
+            <param name="repository">The SQLite repository instance for data access operations</param>
+            <param name="transaction">Optional transaction to execute queries within. Default is null</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Where(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})">
+            <summary>
+            Adds a WHERE clause condition to the query using a lambda expression.
+            </summary>
+            <param name="predicate">Lambda expression representing the WHERE condition</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds an ORDER BY clause to sort results in ascending order by the specified property.
+            </summary>
+            <typeparam name="TKey">The type of the property to sort by</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to sort by</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds an ORDER BY clause to sort results in descending order by the specified property.
+            </summary>
+            <typeparam name="TKey">The type of the property to sort by</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to sort by</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ThenBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds a secondary sort condition in ascending order. Must be used after OrderBy or OrderByDescending.
+            </summary>
+            <typeparam name="TKey">The type of the property to sort by</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to sort by</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ThenByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds a secondary sort condition in descending order. Must be used after OrderBy or OrderByDescending.
+            </summary>
+            <typeparam name="TKey">The type of the property to sort by</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to sort by</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when called without a preceding OrderBy or OrderByDescending</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Skip(System.Int32)">
+            <summary>
+            Skips the specified number of records from the beginning of the result set.
+            </summary>
+            <param name="count">Number of records to skip. Must be non-negative</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when count is negative</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Take(System.Int32)">
+            <summary>
+            Limits the result set to the specified number of records.
+            </summary>
+            <param name="count">Maximum number of records to return. Must be positive</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when count is non-positive</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Distinct">
+            <summary>
+            Ensures that only distinct (unique) records are returned in the result set.
+            </summary>
+            <returns>The current query builder instance for method chaining</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Select``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Projects the query results into a different type using the specified selector expression.
+            </summary>
+            <typeparam name="TResult">The target type for projection</typeparam>
+            <param name="selector">Lambda expression defining the projection</param>
+            <returns>A new query builder for the projected type</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Include``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Includes related entities in the query results through eager loading.
+            </summary>
+            <typeparam name="TProperty">The type of the navigation property</typeparam>
+            <param name="navigationProperty">Lambda expression selecting the navigation property to include</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigationProperty is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ThenInclude``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
+            <summary>
+            Includes nested related entities through the previously included navigation property.
+            </summary>
+            <typeparam name="TPreviousProperty">The type of the previously included property</typeparam>
+            <typeparam name="TProperty">The type of the nested navigation property</typeparam>
+            <param name="navigationProperty">Lambda expression selecting the nested navigation property</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigationProperty is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.GroupBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Groups query results by the specified key selector expression.
+            </summary>
+            <typeparam name="TKey">The type of the grouping key</typeparam>
+            <param name="keySelector">Lambda expression selecting the grouping key</param>
+            <returns>A grouped query builder for aggregate operations</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Having(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})">
+            <summary>
+            Adds a HAVING clause condition for grouped queries. Can only be used with GROUP BY.
+            </summary>
+            <param name="predicate">Lambda expression representing the HAVING condition</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when called without a GROUP BY clause</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Union(Durable.IQueryBuilder{`0})">
+            <summary>
+            Combines the current query with another query using UNION operation, removing duplicates.
+            </summary>
+            <param name="other">The other query builder to union with</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.UnionAll(Durable.IQueryBuilder{`0})">
+            <summary>
+            Combines the current query with another query using UNION ALL operation, including duplicates.
+            </summary>
+            <param name="other">The other query builder to union with</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Intersect(Durable.IQueryBuilder{`0})">
+            <summary>
+            Returns only records that exist in both the current query and the other query.
+            </summary>
+            <param name="other">The other query builder to intersect with</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Except(Durable.IQueryBuilder{`0})">
+            <summary>
+            Returns records from the current query that do not exist in the other query.
+            </summary>
+            <param name="other">The other query builder to except against</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereIn``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``0})">
+            <summary>
+            Adds a WHERE IN clause using a subquery to filter results.
+            </summary>
+            <typeparam name="TKey">The type of the key being compared</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to compare</param>
+            <param name="subquery">The subquery providing values for the IN clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquery is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereNotIn``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``0})">
+            <summary>
+            Adds a WHERE NOT IN clause using a subquery to filter results.
+            </summary>
+            <typeparam name="TKey">The type of the key being compared</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to compare</param>
+            <param name="subquery">The subquery providing values for the NOT IN clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquery is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a WHERE IN clause using raw SQL for the subquery.
+            </summary>
+            <typeparam name="TKey">The type of the key being compared</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to compare</param>
+            <param name="subquerySql">Raw SQL string for the subquery</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereNotInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a WHERE NOT IN clause using raw SQL for the subquery.
+            </summary>
+            <typeparam name="TKey">The type of the key being compared</typeparam>
+            <param name="keySelector">Lambda expression selecting the property to compare</param>
+            <param name="subquerySql">Raw SQL string for the subquery</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereExists``1(Durable.IQueryBuilder{``0})">
+            <summary>
+            Adds a WHERE EXISTS clause using a subquery.
+            </summary>
+            <typeparam name="TOther">The entity type of the subquery</typeparam>
+            <param name="subquery">The subquery for the EXISTS clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereNotExists``1(Durable.IQueryBuilder{``0})">
+            <summary>
+            Adds a WHERE NOT EXISTS clause using a subquery.
+            </summary>
+            <typeparam name="TOther">The entity type of the subquery</typeparam>
+            <param name="subquery">The subquery for the NOT EXISTS clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WithWindowFunction(System.String,System.String,System.String)">
+            <summary>
+            Adds a window function to the query with optional partitioning and ordering.
+            </summary>
+            <param name="functionName">The name of the window function (e.g., ROW_NUMBER, RANK, LAG)</param>
+            <param name="partitionBy">Optional partition clause for the window function. Default is null</param>
+            <param name="orderBy">Optional order clause for the window function. Default is null</param>
+            <returns>A windowed query builder for additional window function configuration</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when functionName is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when functionName is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WithCte(System.String,System.String)">
+            <summary>
+            Adds a Common Table Expression (CTE) to the query.
+            </summary>
+            <param name="cteName">The name for the CTE</param>
+            <param name="cteQuery">The SQL query defining the CTE</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName or cteQuery is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when cteName or cteQuery is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WithRecursiveCte(System.String,System.String,System.String)">
+            <summary>
+            Adds a recursive Common Table Expression (CTE) to the query.
+            </summary>
+            <param name="cteName">The name for the recursive CTE</param>
+            <param name="anchorQuery">The anchor (base) query for the recursive CTE</param>
+            <param name="recursiveQuery">The recursive query that references the CTE</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName, anchorQuery, or recursiveQuery is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when cteName, anchorQuery, or recursiveQuery is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.WhereRaw(System.String,System.Object[])">
+            <summary>
+            Adds a raw SQL WHERE clause with optional parameters.
+            </summary>
+            <param name="sql">Raw SQL string for the WHERE condition</param>
+            <param name="parameters">Optional parameters to format into the SQL string</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.SelectRaw(System.String)">
+            <summary>
+            Sets a custom raw SQL SELECT clause, overriding the default column selection.
+            </summary>
+            <param name="sql">Raw SQL string for the SELECT clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.FromRaw(System.String)">
+            <summary>
+            Sets a custom raw SQL FROM clause, overriding the default table name.
+            </summary>
+            <param name="sql">Raw SQL string for the FROM clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.JoinRaw(System.String)">
+            <summary>
+            Adds a custom raw SQL JOIN clause to the query.
+            </summary>
+            <param name="sql">Raw SQL string for the JOIN clause</param>
+            <returns>The current query builder instance for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.SelectCase">
+            <summary>
+            Creates a CASE expression builder for conditional logic in SELECT clauses.
+            </summary>
+            <returns>A case expression builder for constructing conditional expressions</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.Execute">
+            <summary>
+            Executes the query synchronously and returns the results as an enumerable collection.
+            </summary>
+            <returns>An enumerable collection of entities matching the query criteria</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ExecuteAsync(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns the results as an enumerable collection.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+            <returns>A task representing the asynchronous operation with an enumerable collection of entities</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ExecuteAsyncEnumerable(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns the results as an async enumerable for streaming large result sets.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+            <returns>An async enumerable collection of entities for streaming results</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteQueryBuilder`1.Query">
+            <summary>
+            Gets the generated SQL query string. The query is cached after first access.
+            </summary>
+            <value>The complete SQL query string for this query builder</value>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ExecuteWithQuery">
+            <summary>
+            Executes the query synchronously and returns both the generated SQL query and the results.
+            </summary>
+            <returns>A durable result containing both the SQL query and the enumerable collection of entities</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ExecuteWithQueryAsync(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns both the generated SQL query and the results.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+            <returns>A task representing the asynchronous operation with a durable result containing both the SQL query and the enumerable collection of entities</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.ExecuteAsyncEnumerableWithQuery(System.Threading.CancellationToken)">
+            <summary>
+            Executes the query asynchronously and returns both the generated SQL query and an async enumerable of results.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation. Default is default(CancellationToken)</param>
+            <returns>An async durable result containing both the SQL query and the async enumerable collection of entities</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query cannot be executed</exception>
+            <exception cref="T:Microsoft.Data.Sqlite.SqliteException">Thrown when a database error occurs during execution</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteQueryBuilder`1.BuildSql">
+            <summary>
+            Builds and returns the complete SQL query string without executing it.
+            </summary>
+            <returns>The generated SQL query string</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the query configuration is invalid</exception>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteRepository`1">
+            <summary>
+            SQLite Repository Implementation with Full Transaction Support and Connection Pooling.
+            Provides comprehensive data access operations for entities with support for optimistic concurrency,
+            batch operations, SQL capture, and advanced querying capabilities.
+            </summary>
+            <typeparam name="T">The entity type that this repository manages. Must be a class with a parameterless constructor.</typeparam>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.LastExecutedSql">
+            <summary>
+            Gets the last SQL statement that was executed by this repository instance.
+            Returns null if no SQL has been executed or SQL capture is disabled.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.LastExecutedSqlWithParameters">
+            <summary>
+            Gets the last SQL statement with parameter values substituted that was executed by this repository instance.
+            This provides a fully executable SQL statement with actual parameter values for debugging purposes.
+            Returns null if no SQL has been executed or SQL capture is disabled.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.CaptureSql">
+            <summary>
+            Gets or sets whether SQL statements should be captured and stored.
+            Default value is false for performance reasons.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.IncludeQueryInResults">
+            <summary>
+            Gets or sets whether query results should automatically include the executed SQL statement.
+            When true, repository operations will return IDurableResult objects containing both results and SQL.
+            When false, repository operations return standard result types without SQL information.
+            Default value is false for performance and backward compatibility.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.Settings">
+            <summary>
+            Gets the repository settings used to configure the connection
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.#ctor(System.String,Durable.IBatchInsertConfiguration,Durable.IDataTypeConverter,Durable.IConcurrencyConflictResolver{`0})">
+            <summary>
+            Initializes a new instance of the SqliteRepository with a connection string and optional configuration.
+            Creates an internal SqliteConnectionFactory for connection management.
+            </summary>
+            <param name="connectionString">The SQLite connection string used to connect to the database.</param>
+            <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+            <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+            <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key).</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.#ctor(Durable.Sqlite.SqliteRepositorySettings,Durable.IBatchInsertConfiguration,Durable.IDataTypeConverter,Durable.IConcurrencyConflictResolver{`0})">
+            <summary>
+            Initializes a new instance of the SqliteRepository with repository settings and optional configuration.
+            Creates an internal SqliteConnectionFactory using the connection string built from settings.
+            </summary>
+            <param name="settings">The SQLite repository settings to use for configuration.</param>
+            <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+            <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+            <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key), or when settings are invalid.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.#ctor(Durable.IConnectionFactory,Durable.IBatchInsertConfiguration,Durable.IDataTypeConverter,Durable.IConcurrencyConflictResolver{`0})">
+            <summary>
+            Initializes a new instance of the SqliteRepository with a provided connection factory and optional configuration.
+            Allows for shared connection pooling and factory management across multiple repository instances.
+            Note: When using this constructor, the Settings property will be null as no connection string is directly provided.
+            </summary>
+            <param name="connectionFactory">The connection factory to use for database connections.</param>
+            <param name="batchConfig">Optional batch insert configuration settings. Uses default settings if null.</param>
+            <param name="dataTypeConverter">Optional data type converter for custom type handling. Uses default converter if null.</param>
+            <param name="conflictResolver">Optional concurrency conflict resolver. Uses default resolver with ThrowException strategy if null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type T lacks required attributes (Entity, primary key).</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Reads the first entity that matches the specified predicate, or the first entity if no predicate is provided.
+            </summary>
+            <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <returns>The first matching entity, or null if no entities match the criteria.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads the first entity that matches the specified predicate, or the first entity if no predicate is provided.
+            </summary>
+            <param name="predicate">Optional filter expression to apply. If null, returns the first entity found.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <param name="token">Cancellation token to cancel the operation if needed.</param>
+            <returns>A task representing the asynchronous operation that returns the first matching entity, or null if no entities match the criteria.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Reads the first entity that matches the specified predicate, or returns default if no match is found.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The first entity that matches the predicate, or default(T) if no match is found.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads the first entity that matches the specified predicate, or returns default if no match is found.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, returns the first entity.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the first entity that matches the predicate, or default(T) if no match is found.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
+            </summary>
+            <param name="predicate">The predicate to filter entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The single entity that matches the predicate.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads a single entity that matches the specified predicate. Throws an exception if zero or more than one entity is found.
+            </summary>
+            <param name="predicate">The predicate to filter entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when zero or more than one entity matches the predicate.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadSingleOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Reads a single entity that matches the specified predicate, or returns default if no match is found. Throws an exception if more than one entity is found.
+            </summary>
+            <param name="predicate">The predicate to filter entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The single entity that matches the predicate, or default(T) if no match is found.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadSingleOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads a single entity that matches the specified predicate, or returns default if no match is found. Throws an exception if more than one entity is found.
+            </summary>
+            <param name="predicate">The predicate to filter entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the single entity that matches the predicate, or default(T) if no match is found.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when more than one entity matches the predicate.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Reads multiple entities that match the specified predicate.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, returns all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>An enumerable collection of entities that match the predicate.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads multiple entities that match the specified predicate.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, returns all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>An async enumerable collection of entities that match the predicate.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadAll(Durable.ITransaction)">
+            <summary>
+            Reads all entities from the repository.
+            </summary>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>An enumerable collection of all entities.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads all entities from the repository.
+            </summary>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>An async enumerable collection of all entities.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadById(System.Object,Durable.ITransaction)">
+            <summary>
+            Reads an entity by its primary key value.
+            </summary>
+            <param name="id">The primary key value of the entity to retrieve.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <returns>The entity with the specified primary key, or null if not found.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when id is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ReadByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads an entity by its primary key value.
+            </summary>
+            <param name="id">The primary key value of the entity to retrieve.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <param name="token">Cancellation token to cancel the operation if needed.</param>
+            <returns>A task representing the asynchronous operation that returns the entity with the specified primary key, or null if not found.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when id is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Finds the maximum value of the specified property across entities that match the predicate.
+            </summary>
+            <typeparam name="TResult">The type of the property to find the maximum of.</typeparam>
+            <param name="selector">Expression that selects the property to find the maximum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The maximum value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the maximum value of the specified property across entities that match the predicate.
+            </summary>
+            <typeparam name="TResult">The type of the property to find the maximum of.</typeparam>
+            <param name="selector">Expression that selects the property to find the maximum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the maximum value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Finds the minimum value of the specified property across entities that match the predicate.
+            </summary>
+            <typeparam name="TResult">The type of the property to find the minimum of.</typeparam>
+            <param name="selector">Expression that selects the property to find the minimum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The minimum value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the minimum value of the specified property across entities that match the predicate.
+            </summary>
+            <typeparam name="TResult">The type of the property to find the minimum of.</typeparam>
+            <param name="selector">Expression that selects the property to find the minimum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the minimum value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Average(System.Linq.Expressions.Expression{System.Func{`0,System.Decimal}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Calculates the average value of the specified decimal property across entities that match the predicate.
+            </summary>
+            <param name="selector">Expression that selects the decimal property to calculate the average of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The average value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.AverageAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Decimal}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the average value of the specified decimal property across entities that match the predicate.
+            </summary>
+            <param name="selector">Expression that selects the decimal property to calculate the average of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the average value of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Sum(System.Linq.Expressions.Expression{System.Func{`0,System.Decimal}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Calculates the sum of the specified decimal property across entities that match the predicate.
+            </summary>
+            <param name="selector">Expression that selects the decimal property to calculate the sum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The sum of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.SumAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Decimal}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the sum of the specified decimal property across entities that match the predicate.
+            </summary>
+            <param name="selector">Expression that selects the decimal property to calculate the sum of.</param>
+            <param name="predicate">Optional predicate to filter entities. If null, considers all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the sum of the selected property.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BatchUpdate(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,`0}},Durable.ITransaction)">
+            <summary>
+            Performs a batch update operation on entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="updateExpression">Expression that defines how to update the entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BatchUpdateAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,`0}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously performs a batch update operation on entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="updateExpression">Expression that defines how to update the entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Performs a batch delete operation on entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for deletion.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously performs a batch delete operation on entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for deletion.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.FromSql(System.String,Durable.ITransaction,System.Object[])">
+            <summary>
+            Executes a raw SQL query and returns the results as entities of type T.
+            </summary>
+            <param name="sql">The raw SQL query to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="parameters">Parameters for the SQL query.</param>
+            <returns>An enumerable collection of entities returned by the query.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.FromSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+            <summary>
+            Asynchronously executes a raw SQL query and returns the results as entities of type T.
+            </summary>
+            <param name="sql">The raw SQL query to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <param name="parameters">Parameters for the SQL query.</param>
+            <returns>An async enumerable collection of entities returned by the query.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.FromSqlAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+            <summary>
+            Asynchronously executes a raw SQL query and returns the results as entities of the specified type.
+            </summary>
+            <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+            <param name="sql">The raw SQL query to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <param name="parameters">Parameters for the SQL query.</param>
+            <returns>An async enumerable collection of entities of the specified type returned by the query.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.FromSql``1(System.String,Durable.ITransaction,System.Object[])">
+            <summary>
+            Executes a raw SQL query and returns the results as entities of the specified type.
+            </summary>
+            <typeparam name="TResult">The type to map the query results to. Must have a parameterless constructor.</typeparam>
+            <param name="sql">The raw SQL query to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="parameters">Parameters for the SQL query.</param>
+            <returns>An enumerable collection of entities of the specified type returned by the query.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ExecuteSql(System.String,Durable.ITransaction,System.Object[])">
+            <summary>
+            Executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+            </summary>
+            <param name="sql">The raw SQL command to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="parameters">Parameters for the SQL command.</param>
+            <returns>The number of rows affected by the command.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ExecuteSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+            <summary>
+            Asynchronously executes a raw SQL command (INSERT, UPDATE, DELETE) and returns the number of affected rows.
+            </summary>
+            <param name="sql">The raw SQL command to execute.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <param name="parameters">Parameters for the SQL command.</param>
+            <returns>A task that represents the asynchronous operation containing the number of rows affected by the command.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BeginTransaction">
+            <summary>
+            Begins a new database transaction for executing multiple operations atomically.
+            The transaction must be committed or rolled back explicitly.
+            </summary>
+            <returns>A transaction object that can be used to execute multiple operations atomically.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when unable to create a database connection or transaction.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously begins a new database transaction for executing multiple operations atomically.
+            The transaction must be committed or rolled back explicitly.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation if needed.</param>
+            <returns>A task representing the asynchronous operation that returns a transaction object.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when unable to create a database connection or transaction.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Exists(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Determines whether any entity exists that matches the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to test entities against.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>True if any entity matches the predicate; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ExistsAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously determines whether any entity exists that matches the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to test entities against.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing true if any entity matches the predicate; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ExistsById(System.Object,Durable.ITransaction)">
+            <summary>
+            Determines whether an entity with the specified primary key exists.
+            </summary>
+            <param name="id">The primary key value to search for.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>True if an entity with the specified primary key exists; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.ExistsByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously determines whether an entity with the specified primary key exists.
+            </summary>
+            <param name="id">The primary key value to search for.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing true if an entity with the specified primary key exists; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Count(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Counts the number of entities that match the specified predicate.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that match the predicate.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.CountAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously counts the number of entities that match the specified predicate.
+            </summary>
+            <param name="predicate">Optional predicate to filter entities. If null, counts all entities.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that match the predicate.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Create(`0,Durable.ITransaction)">
+            <summary>
+            Creates a new entity in the database. Auto-increment primary keys will be set on the entity after creation.
+            Version columns will be initialized with default values if not already set.
+            </summary>
+            <param name="entity">The entity to create in the database.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <returns>The created entity with any auto-generated values (like primary keys) populated.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entity is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity violates database constraints.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.CreateAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates a new entity in the database. Auto-increment primary keys will be set on the entity after creation.
+            Version columns will be initialized with default values if not already set.
+            </summary>
+            <param name="entity">The entity to create in the database.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <param name="token">Cancellation token to cancel the operation if needed.</param>
+            <returns>A task representing the asynchronous operation that returns the created entity with any auto-generated values populated.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entity is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity violates database constraints.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.CreateMany(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
+            <summary>
+            Creates multiple entities in the repository using batch insert operations for optimal performance.
+            </summary>
+            <param name="entities">The collection of entities to create.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The created entities with any generated values (like auto-increment IDs) populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.CreateManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates multiple entities in the repository using batch insert operations for optimal performance.
+            </summary>
+            <param name="entities">The collection of entities to create.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the created entities with any generated values (like auto-increment IDs) populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Update(`0,Durable.ITransaction)">
+            <summary>
+            Updates an existing entity in the database. Supports optimistic concurrency control through version columns.
+            If a concurrency conflict occurs, the configured conflict resolver will attempt to resolve it automatically.
+            </summary>
+            <param name="entity">The entity to update in the database.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <returns>The updated entity with incremented version column if applicable.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entity is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when no rows are affected by the update operation.</exception>
+            <exception cref="T:Durable.OptimisticConcurrencyException">Thrown when a concurrency conflict cannot be resolved automatically.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpdateAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously updates an existing entity in the repository.
+            </summary>
+            <param name="entity">The entity to update with new values.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the updated entity.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpdateMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Action{`0},Durable.ITransaction)">
+            <summary>
+            Updates multiple entities that match the specified predicate by applying an update action to each entity.
+            </summary>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="updateAction">The action to apply to each matching entity for updating.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpdateManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Func{`0,System.Threading.Tasks.Task},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously updates multiple entities that match the specified predicate by applying an async update action to each entity.
+            </summary>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="updateAction">The async action to apply to each matching entity for updating.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpdateField``1(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,``0}},``0,Durable.ITransaction)">
+            <summary>
+            Updates a specific field for all entities that match the specified predicate.
+            </summary>
+            <typeparam name="TField">The type of the field being updated.</typeparam>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="field">Expression that selects the field to update.</param>
+            <param name="value">The new value for the field.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpdateFieldAsync``1(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,``0}},``0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously updates a specific field for all entities that match the specified predicate.
+            </summary>
+            <typeparam name="TField">The type of the field being updated.</typeparam>
+            <param name="predicate">The predicate to filter entities for updating.</param>
+            <param name="field">Expression that selects the field to update.</param>
+            <param name="value">The new value for the field.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Delete(`0,Durable.ITransaction)">
+            <summary>
+            Deletes an entity from the database by its primary key value.
+            </summary>
+            <param name="entity">The entity to delete from the database.</param>
+            <param name="transaction">Optional transaction to execute the operation within.</param>
+            <returns>True if the entity was deleted successfully, false if the entity was not found.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entity is null.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes an entity from the repository.
+            </summary>
+            <param name="entity">The entity to delete.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing true if the entity was deleted; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteById(System.Object,Durable.ITransaction)">
+            <summary>
+            Deletes an entity by its primary key.
+            </summary>
+            <param name="id">The primary key value of the entity to delete.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>True if the entity was deleted; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes an entity by its primary key.
+            </summary>
+            <param name="id">The primary key value of the entity to delete.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing true if the entity was deleted; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <summary>
+            Deletes multiple entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for deletion.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes multiple entities that match the specified predicate.
+            </summary>
+            <param name="predicate">The predicate to filter entities for deletion.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteAll(Durable.ITransaction)">
+            <summary>
+            Deletes all entities from the repository.
+            </summary>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes all entities from the repository.
+            </summary>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Upsert(`0,Durable.ITransaction)">
+            <summary>
+            Inserts or updates an entity depending on whether it already exists in the repository.
+            </summary>
+            <param name="entity">The entity to insert or update.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The entity after the upsert operation, with any generated values populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpsertAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously inserts or updates an entity depending on whether it already exists in the repository.
+            </summary>
+            <param name="entity">The entity to insert or update.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the entity after the upsert operation, with any generated values populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpsertMany(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
+            <summary>
+            Inserts or updates multiple entities depending on whether they already exist in the repository.
+            </summary>
+            <param name="entities">The collection of entities to insert or update.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <returns>The entities after the upsert operation, with any generated values populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.UpsertManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
+            </summary>
+            <param name="entities">The collection of entities to insert or update.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the entities after the upsert operation, with any generated values populated.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Query(Durable.ITransaction)">
+            <summary>
+            Creates a new query builder for constructing complex queries against the entity table.
+            Provides a fluent interface for building SELECT, WHERE, ORDER BY, and other SQL clauses.
+            </summary>
+            <param name="transaction">Optional transaction to execute the query within.</param>
+            <returns>A query builder instance for constructing and executing complex queries.</returns>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.MaxRowsPerBatch">
+            <summary>
+            Gets the maximum number of rows to include in a single batch operation.
+            </summary>
+            <value>The maximum number of rows per batch. Default is typically 1000.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.MaxParametersPerStatement">
+            <summary>
+            Gets the maximum number of parameters allowed per SQL statement.
+            </summary>
+            <value>The maximum number of parameters per statement. Default is typically 999 for SQLite.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.EnablePreparedStatementReuse">
+            <summary>
+            Gets a value indicating whether prepared statement reuse is enabled for improved performance.
+            </summary>
+            <value>True if prepared statement reuse is enabled; otherwise, false.</value>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepository`1.EnableMultiRowInsert">
+            <summary>
+            Gets a value indicating whether multi-row insert statements are enabled for batch operations.
+            </summary>
+            <value>True if multi-row insert is enabled; otherwise, false.</value>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.Dispose">
+            <summary>
+            Disposes of the repository and releases all managed resources including the connection factory.
+            After disposal, the repository instance should not be used for any operations.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetConnection">
+            <summary>
+            Gets a connection to the SQLite database from the connection factory.
+            </summary>
+            <returns>A SQLite database connection.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetConnectionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously gets a connection to the SQLite database from the connection factory.
+            </summary>
+            <param name="cancellationToken">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing a SQLite database connection.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetEntityName">
+            <summary>
+            Gets the entity name (table name) for the current entity type from the Entity attribute.
+            </summary>
+            <returns>The name of the database table for this entity type.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type does not have an Entity attribute.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetPrimaryKeyInfo">
+            <summary>
+            Gets the primary key column information for the current entity type.
+            </summary>
+            <returns>A tuple containing the column name and PropertyInfo for the primary key.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type does not have a primary key column.</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetColumnMappings">
+            <summary>
+            Gets the column mappings for the current entity type, mapping database column names to entity properties.
+            </summary>
+            <returns>A dictionary mapping column names to their corresponding PropertyInfo objects.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetForeignKeys">
+            <summary>
+            Gets the foreign key relationships for the current entity type.
+            </summary>
+            <returns>A dictionary mapping properties to their foreign key attributes.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetNavigationProperties">
+            <summary>
+            Gets the navigation properties for the current entity type.
+            </summary>
+            <returns>A dictionary mapping properties to their navigation property attributes.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetVersionColumnInfo">
+            <summary>
+            Gets the version column information for optimistic concurrency control.
+            </summary>
+            <returns>Version column information, or null if no version column is defined.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.GetPrimaryKeyValue(`0)">
+            <summary>
+            Gets the primary key value from the specified entity.
+            </summary>
+            <param name="entity">The entity to get the primary key value from.</param>
+            <returns>The primary key value of the entity.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepository`1.MapReaderToType``1(System.Data.IDataReader)">
+            <summary>
+            Maps an IDataReader to an instance of the specified result type.
+            </summary>
+            <typeparam name="TResult">The type to map the reader data to. Must have a parameterless constructor.</typeparam>
+            <param name="reader">The data reader containing the data to map.</param>
+            <returns>An instance of TResult with properties populated from the reader data.</returns>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteRepositorySettings">
+            <summary>
+            Connection settings for SQLite repositories
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepositorySettings.Type">
+            <summary>
+            The type of repository
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepositorySettings.DataSource">
+            <summary>
+            The file path to the SQLite database file. Required for file-based databases.
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepositorySettings.CacheMode">
+            <summary>
+            The cache mode. Default: null (uses SQLite default). Values: Default, Private, Shared
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepositorySettings.Mode">
+            <summary>
+            The open mode. Default: null (uses SQLite default). Values: ReadWriteCreate, ReadWrite, ReadOnly, Memory
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepositorySettings.#ctor">
+            <summary>
+            Initializes a new instance of the SqliteRepositorySettings class
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepositorySettings.Parse(System.String)">
+            <summary>
+            Parses a SQLite connection string and returns a SqliteRepositorySettings instance
+            </summary>
+            <param name="connectionString">The connection string to parse</param>
+            <returns>A SqliteRepositorySettings instance</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteRepositorySettings.BuildConnectionString">
+            <summary>
+            Builds a SQLite connection string from the current settings
+            </summary>
+            <returns>A SQLite connection string</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when DataSource is null or empty</exception>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteSanitizer">
+            <summary>
+            SQLite-specific implementation of ISanitizer that provides secure sanitization
+            of values to prevent SQL injection attacks.
+            </summary>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteSanitizer.SanitizeString(System.String)">
+            <summary>
+            Sanitizes a string value for safe insertion into SQL queries.
+            Uses proper SQL escaping to prevent injection attacks.
+            </summary>
+            <param name="value">The string value to sanitize</param>
+            <returns>A sanitized string safe for SQL insertion</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteSanitizer.SanitizeLikeValue(System.String)">
+            <summary>
+            Sanitizes a string value for use in LIKE operations.
+            Handles both SQL injection prevention and LIKE special characters.
+            </summary>
+            <param name="value">The string value to sanitize for LIKE operations</param>
+            <returns>A sanitized string safe for LIKE operations</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteSanitizer.SanitizeIdentifier(System.String)">
+            <summary>
+            Sanitizes an identifier (table name, column name, etc.) for safe insertion into SQL.
+            Uses SQLite bracket notation for identifiers that might contain special characters.
+            </summary>
+            <param name="identifier">The identifier to sanitize</param>
+            <returns>A sanitized identifier safe for SQL insertion</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteSanitizer.RequiresSanitization(System.Object)">
+            <summary>
+            Determines if a value requires sanitization based on its type.
+            Safe types like Guid, numeric types, etc. don't need string sanitization.
+            </summary>
+            <param name="value">The value to check</param>
+            <returns>True if the value needs sanitization, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteSanitizer.FormatValue(System.Object)">
+            <summary>
+            Formats a value for safe SQL insertion, applying sanitization as needed.
+            This is the main method that should be used for formatting any value.
+            </summary>
+            <param name="value">The value to format</param>
+            <returns>A safely formatted value for SQL insertion</returns>
+        </member>
+        <member name="T:Durable.Sqlite.SqliteWindowedQueryBuilder`1">
+            <summary>
+            Provides window function support for SQLite queries, enabling advanced analytical operations like ROW_NUMBER, RANK, and aggregate functions with window clauses.
+            </summary>
+            <typeparam name="TEntity">The entity type for the query. Must be a class with a parameterless constructor.</typeparam>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.#ctor(Durable.Sqlite.SqliteQueryBuilder{`0},Durable.Sqlite.SqliteRepository{`0},Durable.ITransaction,System.String,System.String,System.String)">
+            <summary>
+            Initializes a new instance of the SqliteWindowedQueryBuilder class.
+            </summary>
+            <param name="queryBuilder">The base query builder to extend with window functions.</param>
+            <param name="repository">The repository instance for database operations.</param>
+            <param name="transaction">Optional transaction to execute within.</param>
+            <param name="functionName">The name of the window function to use.</param>
+            <param name="partitionBy">Optional PARTITION BY clause for the window function.</param>
+            <param name="orderBy">Optional ORDER BY clause for the window function.</param>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RowNumber(System.String)">
+            <summary>
+            Adds a ROW_NUMBER() window function to assign sequential numbers to rows within the window partition.
+            </summary>
+            <param name="alias">The alias for the row number column in the result set. Default is "row_number".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Rank(System.String)">
+            <summary>
+            Adds a RANK() window function to assign ranks to rows within the window partition, with gaps for tied values.
+            </summary>
+            <param name="alias">The alias for the rank column in the result set. Default is "rank".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.DenseRank(System.String)">
+            <summary>
+            Adds a DENSE_RANK() window function to assign ranks to rows within the window partition, without gaps for tied values.
+            </summary>
+            <param name="alias">The alias for the dense rank column in the result set. Default is "dense_rank".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Lead``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)">
+            <summary>
+            Adds a LEAD() window function to access data from subsequent rows within the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being accessed.</typeparam>
+            <param name="column">Expression that selects the column to access from subsequent rows.</param>
+            <param name="offset">The number of rows forward to look. Default is 1.</param>
+            <param name="defaultValue">Default value to return when no subsequent row exists. Default is null.</param>
+            <param name="alias">The alias for the lead column in the result set. Default is "lead".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Lag``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)">
+            <summary>
+            Adds a LAG() window function to access data from preceding rows within the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being accessed.</typeparam>
+            <param name="column">Expression that selects the column to access from preceding rows.</param>
+            <param name="offset">The number of rows backward to look. Default is 1.</param>
+            <param name="defaultValue">Default value to return when no preceding row exists. Default is null.</param>
+            <param name="alias">The alias for the lag column in the result set. Default is "lag".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.FirstValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a FIRST_VALUE() window function to return the first value in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being accessed.</typeparam>
+            <param name="column">Expression that selects the column to get the first value from.</param>
+            <param name="alias">The alias for the first value column in the result set. Default is "first_value".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.LastValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a LAST_VALUE() window function to return the last value in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being accessed.</typeparam>
+            <param name="column">Expression that selects the column to get the last value from.</param>
+            <param name="alias">The alias for the last value column in the result set. Default is "last_value".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)">
+            <summary>
+            Adds an NTH_VALUE() window function to return the nth value in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being accessed.</typeparam>
+            <param name="column">Expression that selects the column to get the nth value from.</param>
+            <param name="n">The position (1-based) of the value to return.</param>
+            <param name="alias">The alias for the nth value column in the result set. Default is "nth_value".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a SUM() window function to calculate the sum of values in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being summed.</typeparam>
+            <param name="column">Expression that selects the column to sum.</param>
+            <param name="alias">The alias for the sum column in the result set. Default is "sum".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Avg``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds an AVG() window function to calculate the average of values in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being averaged.</typeparam>
+            <param name="column">Expression that selects the column to average.</param>
+            <param name="alias">The alias for the average column in the result set. Default is "avg".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Count(System.String)">
+            <summary>
+            Adds a COUNT() window function to count rows in the window partition.
+            </summary>
+            <param name="alias">The alias for the count column in the result set. Default is "count".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a MIN() window function to find the minimum value in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being evaluated.</typeparam>
+            <param name="column">Expression that selects the column to find the minimum of.</param>
+            <param name="alias">The alias for the minimum column in the result set. Default is "min".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
+            <summary>
+            Adds a MAX() window function to find the maximum value in the window partition.
+            </summary>
+            <typeparam name="TKey">The type of the column being evaluated.</typeparam>
+            <param name="column">Expression that selects the column to find the maximum of.</param>
+            <param name="alias">The alias for the maximum column in the result set. Default is "max".</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.PartitionBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds a PARTITION BY clause to the window function, dividing rows into partitions.
+            </summary>
+            <typeparam name="TKey">The type of the partition key.</typeparam>
+            <param name="keySelector">Expression that selects the column to partition by.</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds an ORDER BY clause to the window function in ascending order.
+            </summary>
+            <typeparam name="TKey">The type of the ordering key.</typeparam>
+            <param name="keySelector">Expression that selects the column to order by.</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Adds an ORDER BY clause to the window function in descending order.
+            </summary>
+            <typeparam name="TKey">The type of the ordering key.</typeparam>
+            <param name="keySelector">Expression that selects the column to order by in descending order.</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Rows(System.Int32,System.Int32)">
+            <summary>
+            Defines a window frame using ROWS with specific preceding and following offsets.
+            </summary>
+            <param name="preceding">Number of rows preceding the current row to include in the frame.</param>
+            <param name="following">Number of rows following the current row to include in the frame.</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RowsUnboundedPreceding">
+            <summary>
+            Sets the window frame to include all rows from the start of the partition up to the current row.
+            </summary>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RowsUnboundedFollowing">
+            <summary>
+            Sets the window frame to include all rows from the current row to the end of the partition.
+            </summary>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RowsBetween(System.String,System.String)">
+            <summary>
+            Defines a custom window frame using ROWS BETWEEN with string-based boundary specifications.
+            </summary>
+            <param name="start">The start boundary specification (e.g., "UNBOUNDED PRECEDING", "2 PRECEDING").</param>
+            <param name="end">The end boundary specification (e.g., "CURRENT ROW", "1 FOLLOWING").</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Range(System.Int32,System.Int32)">
+            <summary>
+            Defines a window frame using RANGE with specific preceding and following value offsets.
+            </summary>
+            <param name="preceding">Value offset preceding the current row to include in the frame.</param>
+            <param name="following">Value offset following the current row to include in the frame.</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RangeUnboundedPreceding">
+            <summary>
+            Sets the window frame to use RANGE with unbounded preceding, including all preceding values.
+            </summary>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RangeUnboundedFollowing">
+            <summary>
+            Sets the window frame to use RANGE with unbounded following, including all following values.
+            </summary>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.RangeBetween(System.String,System.String)">
+            <summary>
+            Defines a custom window frame using RANGE BETWEEN with string-based boundary specifications.
+            </summary>
+            <param name="start">The start boundary specification (e.g., "UNBOUNDED PRECEDING", "2 PRECEDING").</param>
+            <param name="end">The end boundary specification (e.g., "CURRENT ROW", "1 FOLLOWING").</param>
+            <returns>The windowed query builder instance for method chaining.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.EndWindow">
+            <summary>
+            Completes the window function configuration and returns the base query builder for further operations.
+            </summary>
+            <returns>The base query builder instance with the window function applied.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.Execute">
+            <summary>
+            Executes the windowed query synchronously and returns the results.
+            </summary>
+            <returns>An enumerable collection of entities with window function results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.ExecuteAsync(System.Threading.CancellationToken)">
+            <summary>
+            Executes the windowed query asynchronously and returns the results.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing an enumerable collection of entities with window function results.</returns>
+        </member>
+        <member name="M:Durable.Sqlite.SqliteWindowedQueryBuilder`1.ExecuteAsyncEnumerable(System.Threading.CancellationToken)">
+            <summary>
+            Executes the windowed query asynchronously and returns the results as an async enumerable for streaming.
+            </summary>
+            <param name="token">Cancellation token to cancel the operation.</param>
+            <returns>An async enumerable collection of entities with window function results that can be consumed with await foreach.</returns>
+        </member>
+    </members>
+</doc>

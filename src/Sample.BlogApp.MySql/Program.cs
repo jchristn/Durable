@@ -14,6 +14,8 @@ namespace Sample.BlogApp.MySql
     /// </summary>
     class Program
     {
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
 
         #region Private-Members
 
@@ -1070,6 +1072,7 @@ namespace Sample.BlogApp.MySql
 
         #endregion
 
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
     }
-
 }
