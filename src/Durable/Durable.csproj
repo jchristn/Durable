@@ -48,4 +48,10 @@
 		<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.6" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="Durable.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 </Project>

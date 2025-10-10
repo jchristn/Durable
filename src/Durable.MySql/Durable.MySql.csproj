@@ -51,4 +51,10 @@
 		<ProjectReference Include="..\Durable\Durable.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="Durable.MySql.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 </Project>

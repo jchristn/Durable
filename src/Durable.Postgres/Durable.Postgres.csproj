@@ -52,4 +52,10 @@
 		<ProjectReference Include="..\Durable\Durable.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="Durable.Postgres.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 </Project>
