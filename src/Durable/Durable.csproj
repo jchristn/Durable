@@ -10,7 +10,7 @@
 		<DocumentationFile>Durable.xml</DocumentationFile>
 		<Title>Durable</Title>
 		<Version>0.1.0</Version>
-		<Authors>Joel Christner, Josh Clopton, and Community</Authors>
+		<Authors>jchristn,joshclopton</Authors>
 		<Description>A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>

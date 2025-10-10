@@ -9,7 +9,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Postgres</Title>
 		<Version>0.1.0</Version>
-		<Company>Joel Christner, Josh Clopton, and Community</Company>
+		<Company>jchristn,joshclopton</Company>
 		<Description>A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
