@@ -4,6 +4,11 @@
 
 # Durable ORM
 
+[![NuGet Durable.MySql](https://img.shields.io/nuget/v/Durable.MySql.svg?label=Durable.MySql)](https://www.nuget.org/packages/Durable.MySql/)
+[![NuGet Durable.Postgres](https://img.shields.io/nuget/v/Durable.Postgres.svg?label=Durable.Postgres)](https://www.nuget.org/packages/Durable.Postgres/)
+[![NuGet Durable.Sqlite](https://img.shields.io/nuget/v/Durable.Sqlite.svg?label=Durable.Sqlite)](https://www.nuget.org/packages/Durable.Sqlite/)
+[![NuGet Durable.SqlServer](https://img.shields.io/nuget/v/Durable.SqlServer.svg?label=Durable.SqlServer)](https://www.nuget.org/packages/Durable.SqlServer/)
+
 A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes.
 
 ## Why Durable?
