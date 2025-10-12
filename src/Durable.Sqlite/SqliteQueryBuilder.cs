@@ -788,10 +788,8 @@
             // Handle set operations
             if (_SetOperations.Count > 0)
             {
-                sql.Append("(");
                 sql.Append(mainQuery);
-                sql.Append(")");
-                
+
                 foreach (SetOperation<TEntity> setOp in _SetOperations)
                 {
                     switch (setOp.Type)
@@ -809,9 +807,7 @@
                             sql.Append(" EXCEPT ");
                             break;
                     }
-                    sql.Append("(");
                     sql.Append(setOp.OtherQuery.BuildSql().TrimEnd(';'));
-                    sql.Append(")");
                 }
             }
             else
