@@ -237,12 +237,21 @@ namespace Durable.MySql
             }
 
             // TimeSpan handling - MySQL returns TimeSpan objects for TIME type
+            // MySQL TIME can store values from '-838:59:59' to '838:59:59' (extended range)
             if (targetType == typeof(TimeSpan))
             {
                 if (value is TimeSpan ts)
                     return ts;
                 if (value is string tsStr)
+                {
+                    // Try to parse MySQL TIME format which can have hours > 24
+                    // Format: [-]HH:MM:SS[.fraction] or [-]HHH:MM:SS[.fraction]
+                    if (TryParseMySqlTime(tsStr, out TimeSpan result))
+                        return result;
+                    // Fallback to standard parsing
                     return TimeSpan.Parse(tsStr, CultureInfo.InvariantCulture);
+                }
+                // Fallback to standard parsing
                 return TimeSpan.Parse(value.ToString()!, CultureInfo.InvariantCulture);
             }
 
@@ -305,16 +314,23 @@ namespace Durable.MySql
             if (targetType.IsArray || (targetType.IsGenericType &&
                 (typeof(IEnumerable).IsAssignableFrom(targetType) && targetType != typeof(string))))
             {
-                if (value is string jsonStr)
+                if (value is string jsonStr && !string.IsNullOrWhiteSpace(jsonStr))
                 {
                     return JsonSerializer.Deserialize(jsonStr, targetType, JsonOptions);
                 }
+                // Return null for empty/null JSON values for nullable types
+                return null;
             }
 
             // Complex object handling - deserialize from MySQL JSON column
             if (!IsSimpleType(targetType) && value is string json)
             {
-                return JsonSerializer.Deserialize(json, targetType, JsonOptions);
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    return JsonSerializer.Deserialize(json, targetType, JsonOptions);
+                }
+                // Return null for empty/null JSON values
+                return null;
             }
 
             // Default type conversion
@@ -428,6 +444,72 @@ namespace Durable.MySql
                 || type == typeof(long) || type == typeof(ulong)
                 || type == typeof(float) || type == typeof(double)
                 || type == typeof(decimal);
+        }
+
+        private bool TryParseMySqlTime(string value, out TimeSpan result)
+        {
+            result = TimeSpan.Zero;
+
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            try
+            {
+                // MySQL TIME format: [-]HHH:MM:SS[.fraction]
+                // Can have negative values and hours > 24
+                bool isNegative = value.StartsWith("-");
+                string timeValue = isNegative ? value.Substring(1) : value;
+
+                string[] parts = timeValue.Split(':');
+                if (parts.Length != 3)
+                    return false;
+
+                if (!int.TryParse(parts[0], out int hours))
+                    return false;
+
+                if (!int.TryParse(parts[1], out int minutes))
+                    return false;
+
+                // Handle seconds with optional fractional part
+                string[] secondsParts = parts[2].Split('.');
+                if (!int.TryParse(secondsParts[0], out int seconds))
+                    return false;
+
+                int microseconds = 0;
+                if (secondsParts.Length > 1)
+                {
+                    // MySQL stores microseconds (6 digits), .NET uses ticks (10000 ticks = 1 ms)
+                    // Pad or truncate to 6 digits then convert to ticks
+                    string fractionStr = secondsParts[1].PadRight(6, '0').Substring(0, 6);
+                    if (int.TryParse(fractionStr, out int fraction))
+                    {
+                        // Convert microseconds to ticks (1 microsecond = 10 ticks)
+                        microseconds = fraction;
+                    }
+                }
+
+                // Build TimeSpan from components
+                // TimeSpan constructor: days, hours, minutes, seconds, milliseconds
+                // We need to convert total hours to days + hours
+                int days = hours / 24;
+                int remainingHours = hours % 24;
+                int milliseconds = microseconds / 1000;
+                int remainingMicroseconds = microseconds % 1000;
+
+                result = new TimeSpan(days, remainingHours, minutes, seconds, milliseconds);
+
+                // Add remaining microseconds as ticks (1 microsecond = 10 ticks)
+                result = result.Add(TimeSpan.FromTicks(remainingMicroseconds * 10));
+
+                if (isNegative)
+                    result = result.Negate();
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         #endregion
