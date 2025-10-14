@@ -355,7 +355,7 @@ namespace Test.MySql
                     Name = "Minimal DateTime",
                     CreatedDate = DateTime.MinValue.AddYears(1900), // MySQL doesn't support year 1
                     UpdatedDate = (DateTimeOffset?)null,
-                    Duration = TimeSpan.FromTicks(1)
+                    Duration = TimeSpan.FromTicks(10) // 10 ticks = 1 microsecond (MySQL TIME precision limit)
                 }
             };
 

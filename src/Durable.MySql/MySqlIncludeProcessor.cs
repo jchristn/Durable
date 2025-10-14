@@ -56,6 +56,10 @@ namespace Durable.MySql
             if (includePaths == null)
                 throw new ArgumentNullException(nameof(includePaths));
 
+            // Reset alias counter to ensure consistent aliases across multiple calls
+            // This is critical for WHERE clause and JOIN clause alias matching
+            _AliasCounter = 0;
+
             List<MySqlIncludeInfo> rootIncludes = new List<MySqlIncludeInfo>();
             Dictionary<string, MySqlIncludeInfo> includeMap = new Dictionary<string, MySqlIncludeInfo>();
 

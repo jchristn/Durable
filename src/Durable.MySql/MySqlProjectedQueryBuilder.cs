@@ -37,6 +37,9 @@ namespace Durable.MySql
         private string? _CachedSql;
         private List<SelectMapping>? _SelectMappings;
 
+        // MySQL maximum value for BIGINT UNSIGNED - used when OFFSET is specified without LIMIT
+        private const ulong MYSQL_MAX_ROWS = 18446744073709551615;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -793,7 +796,7 @@ namespace Durable.MySql
                 }
                 else if (_SkipCount.HasValue)
                 {
-                    sql.Append("18446744073709551615"); // MySQL max value for unlimited
+                    sql.Append(MYSQL_MAX_ROWS);
                 }
             }
 

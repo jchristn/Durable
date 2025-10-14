@@ -141,7 +141,7 @@ namespace Durable.MySql
             _ConnectionFactory = new MySqlConnectionFactory(connectionString);
             _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new MySqlSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new MySqlDataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -171,7 +171,7 @@ namespace Durable.MySql
             _ConnectionFactory = new MySqlConnectionFactory(connectionString);
             _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new MySqlSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new MySqlDataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();
@@ -200,7 +200,7 @@ namespace Durable.MySql
             _OwnsConnectionFactory = false; // External factory, we don't own it
             Settings = null!;
             _Sanitizer = new MySqlSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new MySqlDataTypeConverter();
             _TableName = GetEntityName();
             (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
             _ColumnMappings = GetColumnMappings();

@@ -4,6 +4,38 @@
         <name>Durable.MySql</name>
     </assembly>
     <members>
+        <member name="T:Durable.MySql.FullTextSearchMode">
+            <summary>
+            Specifies the search mode for MySQL full-text search operations.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.FullTextSearchMode.Natural">
+            <summary>
+            Natural language search mode (default). Interprets the search string as a phrase in natural human language.
+            Words are stemmed and stop words are ignored. Results are ranked by relevance.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.FullTextSearchMode.NaturalWithQueryExpansion">
+            <summary>
+            Natural language search mode with query expansion. First performs a natural language search,
+            then runs a second search that includes the most relevant documents from the first search.
+            Useful for finding related documents even if they don't contain the exact search terms.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.FullTextSearchMode.Boolean">
+            <summary>
+            Boolean search mode. Allows special operators in the search string:
+            + (must contain), - (must not contain), * (wildcard), "" (exact phrase),
+            &gt; (increase relevance), &lt; (decrease relevance), () (grouping), ~ (negation).
+            Results are not automatically ranked by relevance.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.FullTextSearchMode.BooleanWithQueryExpansion">
+            <summary>
+            Boolean search mode with query expansion. Combines boolean operators with query expansion.
+            First performs a boolean search, then expands the results with related documents.
+            </summary>
+        </member>
         <member name="T:Durable.MySql.MySqlCaseExpressionBuilder`1">
             <summary>
             Provides a fluent interface for building SQL CASE expressions in MySQL queries.
@@ -435,6 +467,47 @@
             <param name="newPath">The new path to append</param>
             <returns>The full navigation path</returns>
         </member>
+        <member name="T:Durable.MySql.MySqlDataTypeConverter">
+            <summary>
+            MySQL-specific data type converter that handles MySQL's unique type representations.
+            Provides special handling for TINYINT(1) booleans, JSON columns, unsigned integers, ENUM/SET types, and MySQL datetime types.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlDataTypeConverter.ConvertToDatabase(System.Object,System.Type,System.Reflection.PropertyInfo)">
+            <summary>
+            Converts a .NET object to its MySQL database parameter representation.
+            Preserves native types where possible for proper MySQL parameter binding.
+            </summary>
+            <param name="value">The value to convert.</param>
+            <param name="targetType">The target database type.</param>
+            <param name="propertyInfo">Optional property information for attribute-based conversion hints.</param>
+            <returns>The MySQL-compatible representation of the value.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlDataTypeConverter.ConvertFromDatabase(System.Object,System.Type,System.Reflection.PropertyInfo)">
+            <summary>
+            Converts a MySQL database value to its .NET type representation.
+            Handles MySQL-specific types including TINYINT(1) booleans, JSON columns, and unsigned integers.
+            </summary>
+            <param name="value">The database value to convert.</param>
+            <param name="targetType">The target .NET type.</param>
+            <param name="propertyInfo">Optional property information for attribute-based conversion hints.</param>
+            <returns>The .NET object representation of the database value.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlDataTypeConverter.CanConvert(System.Type)">
+            <summary>
+            Determines whether the converter can handle the specified type.
+            </summary>
+            <param name="type">The type to check for conversion support.</param>
+            <returns>True if the type can be converted; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlDataTypeConverter.GetDatabaseTypeString(System.Type,System.Reflection.PropertyInfo)">
+            <summary>
+            Gets the appropriate MySQL database type string for the specified .NET type.
+            </summary>
+            <param name="type">The .NET type.</param>
+            <param name="propertyInfo">Optional property information for attribute-based type mapping hints.</param>
+            <returns>The MySQL type string (e.g., "VARCHAR(255)", "INT", "DATETIME", "JSON").</returns>
+        </member>
         <member name="T:Durable.MySql.MySqlEntityMapper`1">
             <summary>
             Advanced entity mapping capabilities for MySQL data readers.
@@ -580,15 +653,51 @@
             This method is useful for testing and debugging cache behavior.
             </summary>
         </member>
+        <member name="M:Durable.MySql.MySqlExpressionParser`1.GetCacheHitCount">
+            <summary>
+            Gets the cache hit count for this specific T type.
+            This metric indicates how many times a compiled expression was retrieved from cache.
+            </summary>
+            <returns>The number of cache hits since the last cache clear</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlExpressionParser`1.GetCacheMissCount">
+            <summary>
+            Gets the cache miss count for this specific T type.
+            This metric indicates how many times an expression had to be compiled and cached.
+            </summary>
+            <returns>The number of cache misses since the last cache clear</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlExpressionParser`1.GetCacheHitRate">
+            <summary>
+            Gets the cache hit rate as a percentage for this specific T type.
+            A higher rate indicates better cache effectiveness.
+            </summary>
+            <returns>The cache hit rate as a percentage (0-100), or 0 if no cache operations have occurred</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlExpressionParser`1.SetNavigationPropertyAliases(System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Sets the navigation property to table alias mappings for Include operations.
+            This allows the expression parser to correctly resolve navigation property references in WHERE clauses.
+            </summary>
+            <param name="navigationPropertyAliases">A dictionary mapping navigation property names to their SQL table aliases</param>
+        </member>
         <member name="M:Durable.MySql.MySqlExpressionParser`1.ResolveNavigationPropertyChain(System.Linq.Expressions.MemberExpression)">
             <summary>
-            Resolves navigation property chains like b.Author.Name to table alias references like t1.name
+            Resolves navigation property chains to table alias references.
+            Supports arbitrary depth navigation (e.g., b.Author.Name, b.Author.Company.Industry, etc.),
+            self-referencing entities, multiple navigation properties to the same entity type, and circular references.
             </summary>
+            <param name="member">The member expression representing the navigation property chain.</param>
+            <returns>The fully qualified column reference with table alias, or null if resolution fails.</returns>
         </member>
-        <member name="M:Durable.MySql.MySqlExpressionParser`1.GetNavigationColumnReference(System.String,System.String)">
+        <member name="M:Durable.MySql.MySqlExpressionParser`1.ResolveNavigationPath(System.Collections.Generic.List{System.String})">
             <summary>
-            Gets the column reference for a navigation property
+            Resolves a navigation property path to its fully qualified SQL column reference.
+            This method handles navigation paths of arbitrary depth by trying progressively
+            longer path segments until a match is found in the navigation property aliases.
             </summary>
+            <param name="propertyPath">The complete property path (e.g., ["Author", "Company", "Name"]).</param>
+            <returns>The fully qualified column reference, or null if resolution fails.</returns>
         </member>
         <member name="M:Durable.MySql.MySqlExpressionParser`1.ConvertPropertyNameToColumnName(System.String)">
             <summary>
@@ -599,6 +708,63 @@
             <summary>
             Converts PascalCase strings to snake_case
             </summary>
+        </member>
+        <member name="T:Durable.MySql.ExpressionStructuralEqualityComparer">
+            <summary>
+            Provides structural equality comparison for Expression trees to enable cache hits for semantically identical expressions.
+            This comparer treats two Expression objects as equal if they have the same structure, node types, and values,
+            regardless of whether they are the same object instance.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.ExpressionStructuralEqualityComparer.Equals(System.Linq.Expressions.Expression,System.Linq.Expressions.Expression)">
+            <summary>
+            Determines whether two Expression objects are structurally equal.
+            </summary>
+            <param name="x">The first Expression to compare.</param>
+            <param name="y">The second Expression to compare.</param>
+            <returns>True if the expressions have the same structure; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.MySql.ExpressionStructuralEqualityComparer.GetHashCode(System.Linq.Expressions.Expression)">
+            <summary>
+            Returns a hash code for the specified Expression based on its structure.
+            Structurally equivalent expressions will produce the same hash code.
+            </summary>
+            <param name="obj">The Expression for which to get a hash code.</param>
+            <returns>A hash code for the Expression's structure.</returns>
+        </member>
+        <member name="T:Durable.MySql.MySqlFullTextSearchExtensions">
+            <summary>
+            Extension methods for MySQL full-text search capabilities.
+            Provides methods to add MATCH() AGAINST() clauses to queries.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlFullTextSearchExtensions.WhereFullTextMatch``2(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{``0,``1}},System.String,Durable.MySql.FullTextSearchMode)">
+            <summary>
+            Adds a full-text search condition using MATCH() AGAINST() syntax for a single column.
+            </summary>
+            <typeparam name="T">The entity type</typeparam>
+            <typeparam name="TProperty">The property type being searched</typeparam>
+            <param name="queryBuilder">The query builder instance</param>
+            <param name="propertySelector">Expression selecting the property to search</param>
+            <param name="searchTerms">The search terms to match against</param>
+            <param name="searchMode">The full-text search mode to use. Default is Natural.</param>
+            <returns>The query builder for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when queryBuilder, propertySelector, or searchTerms is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when searchTerms is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlFullTextSearchExtensions.WhereFullTextMatch``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Object}}[],System.String,Durable.MySql.FullTextSearchMode)">
+            <summary>
+            Adds a full-text search condition using MATCH() AGAINST() syntax for multiple columns.
+            All specified columns must be part of the same FULLTEXT index.
+            </summary>
+            <typeparam name="T">The entity type</typeparam>
+            <param name="queryBuilder">The query builder instance</param>
+            <param name="propertySelectors">Array of expressions selecting the properties to search</param>
+            <param name="searchTerms">The search terms to match against</param>
+            <param name="searchMode">The full-text search mode to use. Default is Natural.</param>
+            <returns>The query builder for method chaining</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when queryBuilder, propertySelectors, or searchTerms is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when propertySelectors is empty or searchTerms is empty/whitespace</exception>
         </member>
         <member name="T:Durable.MySql.MySqlGroupedQueryBuilder`2">
             <summary>
@@ -1867,6 +2033,19 @@
             </summary>
             <param name="token">Cancellation token for the async operation.</param>
             <returns>An async durable result containing both the query results stream and the SQL string.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.UpdateNavigationPropertyAliases">
+            <summary>
+            Updates the expression parser with current navigation property to table alias mappings.
+            This ensures WHERE clauses can correctly reference navigation properties.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.BuildNavigationAliasMapping(System.Collections.Generic.List{Durable.MySql.MySqlIncludeInfo},System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Recursively builds a mapping from navigation property paths to table aliases.
+            </summary>
+            <param name="includes">The list of include information</param>
+            <param name="navigationAliases">The dictionary to populate with mappings</param>
         </member>
         <member name="M:Durable.MySql.MySqlQueryBuilder`1.GetGroupByColumns">
             <summary>

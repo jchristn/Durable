@@ -6,7 +6,6 @@ namespace Durable.MySql
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
-    using System.Runtime.CompilerServices;
     using System.Text;
 
     /// <summary>
@@ -28,11 +27,21 @@ namespace Durable.MySql
         private int _ParameterCounter;
         private bool _UseParameterizedQueries;
 
+        // Navigation property to table alias mapping for Include operations
+        // Maps navigation property names (e.g., "Author", "Company") to their SQL table aliases (e.g., "t1", "t2")
+        private Dictionary<string, string> _NavigationPropertyAliases;
+
         // Type-specific static cache for compiled expressions to avoid repeated compilation overhead
         // IMPORTANT: This static field is unique per generic type T (e.g., MySqlExpressionParser<User> has
         // a separate cache from MySqlExpressionParser<Product>), preventing cross-type pollution
-        // Using ConditionalWeakTable to allow garbage collection of both keys and values
-        private static readonly ConditionalWeakTable<Expression, Func<object?>> _CompiledExpressions = new ConditionalWeakTable<Expression, Func<object?>>();
+        // Using ConcurrentDictionary with structural equality comparer to enable cache hits for semantically
+        // identical expressions (e.g., p => p.Name == "John" called twice will reuse the same compiled delegate)
+        private static readonly ConcurrentDictionary<Expression, Func<object?>> _CompiledExpressions =
+            new ConcurrentDictionary<Expression, Func<object?>>(new ExpressionStructuralEqualityComparer());
+
+        // Cache effectiveness metrics for monitoring and testing
+        private static long _CacheHits = 0;
+        private static long _CacheMisses = 0;
 
         #endregion
 
@@ -51,6 +60,7 @@ namespace Durable.MySql
             _Parameters = new List<(string name, object? value)>();
             _ParameterCounter = 0;
             _UseParameterizedQueries = false;
+            _NavigationPropertyAliases = new Dictionary<string, string>();
         }
 
         #endregion
@@ -181,7 +191,7 @@ namespace Durable.MySql
         /// <returns>The number of expressions currently cached for this type T</returns>
         public static int GetCacheCount()
         {
-            return _CompiledExpressions.Count();
+            return _CompiledExpressions.Count;
         }
 
         /// <summary>
@@ -191,6 +201,56 @@ namespace Durable.MySql
         public static void ClearCache()
         {
             _CompiledExpressions.Clear();
+            System.Threading.Interlocked.Exchange(ref _CacheHits, 0);
+            System.Threading.Interlocked.Exchange(ref _CacheMisses, 0);
+        }
+
+        /// <summary>
+        /// Gets the cache hit count for this specific T type.
+        /// This metric indicates how many times a compiled expression was retrieved from cache.
+        /// </summary>
+        /// <returns>The number of cache hits since the last cache clear</returns>
+        public static long GetCacheHitCount()
+        {
+            return System.Threading.Interlocked.Read(ref _CacheHits);
+        }
+
+        /// <summary>
+        /// Gets the cache miss count for this specific T type.
+        /// This metric indicates how many times an expression had to be compiled and cached.
+        /// </summary>
+        /// <returns>The number of cache misses since the last cache clear</returns>
+        public static long GetCacheMissCount()
+        {
+            return System.Threading.Interlocked.Read(ref _CacheMisses);
+        }
+
+        /// <summary>
+        /// Gets the cache hit rate as a percentage for this specific T type.
+        /// A higher rate indicates better cache effectiveness.
+        /// </summary>
+        /// <returns>The cache hit rate as a percentage (0-100), or 0 if no cache operations have occurred</returns>
+        public static double GetCacheHitRate()
+        {
+            long hits = System.Threading.Interlocked.Read(ref _CacheHits);
+            long misses = System.Threading.Interlocked.Read(ref _CacheMisses);
+            long total = hits + misses;
+
+            if (total == 0)
+                return 0.0;
+
+            return (hits / (double)total) * 100.0;
+        }
+
+        /// <summary>
+        /// Sets the navigation property to table alias mappings for Include operations.
+        /// This allows the expression parser to correctly resolve navigation property references in WHERE clauses.
+        /// </summary>
+        /// <param name="navigationPropertyAliases">A dictionary mapping navigation property names to their SQL table aliases</param>
+        public void SetNavigationPropertyAliases(Dictionary<string, string> navigationPropertyAliases)
+        {
+            ArgumentNullException.ThrowIfNull(navigationPropertyAliases);
+            _NavigationPropertyAliases = navigationPropertyAliases;
         }
 
         #endregion
@@ -941,17 +1001,21 @@ namespace Durable.MySql
         }
 
         /// <summary>
-        /// Resolves navigation property chains like b.Author.Name to table alias references like t1.name
+        /// Resolves navigation property chains to table alias references.
+        /// Supports arbitrary depth navigation (e.g., b.Author.Name, b.Author.Company.Industry, etc.),
+        /// self-referencing entities, multiple navigation properties to the same entity type, and circular references.
         /// </summary>
+        /// <param name="member">The member expression representing the navigation property chain.</param>
+        /// <returns>The fully qualified column reference with table alias, or null if resolution fails.</returns>
         private string? ResolveNavigationPropertyChain(MemberExpression member)
         {
             try
             {
-                // Build the property path from the member expression
+                // Build the property path from the member expression, walking from leaf to root
                 List<string> propertyPath = new List<string>();
                 Expression current = member;
 
-                // Walk up the member expression chain to build the path
+                // Walk up the member expression chain to build the complete path
                 while (current is MemberExpression memberExpr)
                 {
                     if (memberExpr.Member is PropertyInfo prop)
@@ -961,57 +1025,39 @@ namespace Durable.MySql
                     current = memberExpr.Expression!;
                 }
 
-                // Check if the root is the entity parameter
+                // Verify the root is the entity parameter (e.g., "p" in p.Author.Name)
                 if (current is not ParameterExpression)
                 {
                     return null;
                 }
 
-                // For navigation properties, we need to resolve to the appropriate JOIN table alias
-                // This is a simplified approach - in a full implementation, you'd need to:
-                // 1. Look up the Include mappings to find the correct table alias
-                // 2. Convert the property name to the appropriate column name
-                // 3. Handle nested navigation properties correctly
-
-                // Handle navigation property patterns
-                if (propertyPath.Count >= 2)
+                // Must have at least 2 elements: navigation property + target property
+                // Example: ["Author", "Name"] or ["Author", "Company", "Industry"]
+                if (propertyPath.Count < 2)
                 {
-                    // Handle 2-level navigation: Author.Name
-                    if (propertyPath.Count == 2)
-                    {
-                        string navigationProperty = propertyPath[0];
-                        string targetProperty = propertyPath[1];
-
-                        // Handle special property methods/properties
-                        if (targetProperty == "Length")
-                        {
-                            // Handle .Length property on string navigation properties
-                            return $"CHAR_LENGTH({GetNavigationColumnReference(navigationProperty, navigationProperty)})";
-                        }
-
-                        // Simple mapping - in a real implementation, this would look up
-                        // the actual include mappings to get the correct table alias
-                        return GetNavigationColumnReference(navigationProperty, targetProperty);
-                    }
-                    // Handle 3-level navigation: Author.Company.Industry
-                    else if (propertyPath.Count == 3)
-                    {
-                        string firstNavigation = propertyPath[0];  // Author
-                        string secondNavigation = propertyPath[1]; // Company
-                        string targetProperty = propertyPath[2];   // Industry
-
-                        // For 3-level navigation, we need to determine the final table alias
-                        if (firstNavigation == "Author" && secondNavigation == "Company")
-                        {
-                            // Author.Company.Industry -> t2 (Company table).industry
-                            string columnName = ConvertPropertyNameToColumnName(targetProperty);
-                            return $"`t2`.`{columnName}`";
-                        }
-                    }
+                    return null;
                 }
 
-                // If we can't resolve it, return null to fall back to the error handling
-                return null;
+                // The last element is the target column name
+                string targetProperty = propertyPath[propertyPath.Count - 1];
+
+                // Handle special properties that require SQL functions
+                if (targetProperty == "Length" && propertyPath.Count >= 2)
+                {
+                    // For .Length on string properties, wrap in CHAR_LENGTH()
+                    // Recursively resolve the navigation path without the Length property
+                    List<string> navigationPath = propertyPath.GetRange(0, propertyPath.Count - 1);
+                    string? columnRef = ResolveNavigationPath(navigationPath);
+
+                    if (columnRef != null)
+                    {
+                        return $"CHAR_LENGTH({columnRef})";
+                    }
+                    return null;
+                }
+
+                // Resolve the full navigation path to get the appropriate table alias and column
+                return ResolveNavigationPath(propertyPath);
             }
             catch
             {
@@ -1021,27 +1067,84 @@ namespace Durable.MySql
         }
 
         /// <summary>
-        /// Gets the column reference for a navigation property
+        /// Resolves a navigation property path to its fully qualified SQL column reference.
+        /// This method handles navigation paths of arbitrary depth by trying progressively
+        /// longer path segments until a match is found in the navigation property aliases.
         /// </summary>
-        private string GetNavigationColumnReference(string navigationProperty, string targetProperty)
+        /// <param name="propertyPath">The complete property path (e.g., ["Author", "Company", "Name"]).</param>
+        /// <returns>The fully qualified column reference, or null if resolution fails.</returns>
+        private string? ResolveNavigationPath(List<string> propertyPath)
         {
-            string columnName = ConvertPropertyNameToColumnName(targetProperty);
-
-            if (navigationProperty == "Author")
+            if (propertyPath.Count < 2)
             {
-                return $"`t1`.`{columnName}`";
-            }
-            else if (navigationProperty == "Company")
-            {
-                return $"`t2`.`{columnName}`";
-            }
-            else if (navigationProperty == "Publisher")
-            {
-                return $"`t3`.`{columnName}`";
+                return null;
             }
 
-            // Default fallback - this should be improved to dynamically resolve table aliases
-            return $"`t1`.`{columnName}`";
+            // The last element is always the target column name
+            string targetProperty = propertyPath[propertyPath.Count - 1];
+
+            // Try to resolve the navigation path by testing progressively longer path segments
+            // This handles nested navigation properties correctly
+            //
+            // Example path: ["Author", "Company", "Industry"]
+            // We try:
+            //   1. "Author.Company" -> if found, use its alias for "Industry" column
+            //   2. "Author" -> if found, check if "Company" is a column on Author, then fail
+            //
+            // This approach handles:
+            // - Simple navigation: Author.Name -> try "Author", get alias, resolve "Name"
+            // - Nested navigation: Author.Company.Industry -> try "Author.Company", get alias, resolve "Industry"
+            // - Deep nesting: A.B.C.D.E -> try "A.B.C.D", "A.B.C", "A.B", "A" until match found
+
+            // Start from the longest possible navigation path (excluding the target column)
+            // and work backwards to find a match in _NavigationPropertyAliases
+            for (int pathLength = propertyPath.Count - 1; pathLength >= 1; pathLength--)
+            {
+                // Build the navigation path string (e.g., "Author.Company")
+                string navigationPath = string.Join(".", propertyPath.GetRange(0, pathLength));
+
+                // Try to find this path in the navigation property aliases
+                if (_NavigationPropertyAliases.TryGetValue(navigationPath, out string? tableAlias))
+                {
+                    // Found a match! Now determine what the target column is
+
+                    // If pathLength equals propertyPath.Count - 1, this is a direct property access
+                    // Example: ["Author", "Name"] with pathLength=1 means we found "Author" -> get "Name" column
+                    if (pathLength == propertyPath.Count - 1)
+                    {
+                        string columnName = ConvertPropertyNameToColumnName(targetProperty);
+                        return $"{tableAlias}.`{columnName}`";
+                    }
+
+                    // If pathLength < propertyPath.Count - 1, there are more navigation properties after this one
+                    // This means the remaining path elements represent navigation properties that should have
+                    // been included but weren't. This is an error condition.
+                    //
+                    // Example: ["Author", "Company", "Industry"] with pathLength=1 means we only found "Author"
+                    // but "Company" should also be included for this query to work.
+                    else
+                    {
+                        // Build the missing include path for the error message
+                        List<string> remainingPath = propertyPath.GetRange(pathLength, propertyPath.Count - pathLength - 1);
+                        string missingPath = navigationPath + "." + string.Join(".", remainingPath);
+
+                        throw new InvalidOperationException(
+                            $"Navigation property '{missingPath}' is not included in the query. " +
+                            $"Found '{navigationPath}' but '{string.Join(".", remainingPath)}' is also required. " +
+                            $"Use .Include(x => x.{missingPath.Replace(".", ".")}) to include the complete navigation path. " +
+                            $"Available navigation properties: {string.Join(", ", _NavigationPropertyAliases.Keys)}");
+                    }
+                }
+            }
+
+            // No matching navigation path found in aliases
+            // This means the first navigation property wasn't included
+            string firstNavigation = propertyPath[0];
+
+            throw new InvalidOperationException(
+                $"Navigation property '{firstNavigation}' is not included in the query. " +
+                $"Use .Include(x => x.{firstNavigation}) to include this navigation property before using it in WHERE clauses. " +
+                $"Available navigation properties: {string.Join(", ", _NavigationPropertyAliases.Keys)}");
         }
 
         /// <summary>
@@ -1163,30 +1266,27 @@ namespace Durable.MySql
 
         private Func<object?> GetCachedCompiledExpression(Expression expression)
         {
-            // Try to get existing cached expression using ConditionalWeakTable
-            // This allows both keys and values to be garbage collected when no longer referenced
+            // Try to get existing cached expression using structural equality
+            // This enables cache hits for semantically identical expressions even if they are different object instances
             if (_CompiledExpressions.TryGetValue(expression, out Func<object?>? cachedGetter))
             {
+                System.Threading.Interlocked.Increment(ref _CacheHits);
                 return cachedGetter;
             }
 
-            // Compile new expression
+            // Cache miss - compile new expression
+            System.Threading.Interlocked.Increment(ref _CacheMisses);
+
+            // Compile the expression to a delegate
             UnaryExpression objectMember = Expression.Convert(expression, typeof(object));
             Expression<Func<object>> getterLambda = Expression.Lambda<Func<object>>(objectMember);
             Func<object?> compiledGetter = getterLambda.Compile();
 
-            // Cache using thread-safe Add operation
-            // The ConditionalWeakTable automatically removes entries when the key (Expression) is garbage collected
-            try
-            {
-                _CompiledExpressions.Add(expression, compiledGetter);
-                return compiledGetter;
-            }
-            catch (ArgumentException)
-            {
-                // Key already exists (race condition), return existing value
-                return _CompiledExpressions.TryGetValue(expression, out cachedGetter) ? cachedGetter : compiledGetter;
-            }
+            // Cache using thread-safe GetOrAdd operation
+            // If another thread added the same expression while we were compiling, GetOrAdd will return the existing one
+            Func<object?> cachedOrNewGetter = _CompiledExpressions.GetOrAdd(expression, compiledGetter);
+
+            return cachedOrNewGetter;
         }
 
         private bool ContainsParameterReference(Expression? expression)
@@ -1208,6 +1308,248 @@ namespace Durable.MySql
                 default:
                     return false;
             }
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Provides structural equality comparison for Expression trees to enable cache hits for semantically identical expressions.
+    /// This comparer treats two Expression objects as equal if they have the same structure, node types, and values,
+    /// regardless of whether they are the same object instance.
+    /// </summary>
+    internal class ExpressionStructuralEqualityComparer : IEqualityComparer<Expression>
+    {
+        #region Public-Members
+
+        #endregion
+
+        #region Private-Members
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        #endregion
+
+        #region Public-Methods
+
+        /// <summary>
+        /// Determines whether two Expression objects are structurally equal.
+        /// </summary>
+        /// <param name="x">The first Expression to compare.</param>
+        /// <param name="y">The second Expression to compare.</param>
+        /// <returns>True if the expressions have the same structure; otherwise, false.</returns>
+        public bool Equals(Expression? x, Expression? y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+
+            if (x == null || y == null)
+                return false;
+
+            if (x.NodeType != y.NodeType || x.Type != y.Type)
+                return false;
+
+            return x.NodeType switch
+            {
+                ExpressionType.Constant => EqualsConstant((ConstantExpression)x, (ConstantExpression)y),
+                ExpressionType.MemberAccess => EqualsMember((MemberExpression)x, (MemberExpression)y),
+                ExpressionType.Call => EqualsMethodCall((MethodCallExpression)x, (MethodCallExpression)y),
+                ExpressionType.Lambda => EqualsLambda((LambdaExpression)x, (LambdaExpression)y),
+                ExpressionType.Parameter => EqualsParameter((ParameterExpression)x, (ParameterExpression)y),
+                ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.Not or ExpressionType.Negate or ExpressionType.NegateChecked
+                    => EqualsUnary((UnaryExpression)x, (UnaryExpression)y),
+                ExpressionType.Add or ExpressionType.AddChecked or ExpressionType.Subtract or ExpressionType.SubtractChecked or
+                ExpressionType.Multiply or ExpressionType.MultiplyChecked or ExpressionType.Divide or ExpressionType.Modulo or
+                ExpressionType.And or ExpressionType.AndAlso or ExpressionType.Or or ExpressionType.OrElse or
+                ExpressionType.Equal or ExpressionType.NotEqual or ExpressionType.LessThan or ExpressionType.LessThanOrEqual or
+                ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual or ExpressionType.Coalesce
+                    => EqualsBinary((BinaryExpression)x, (BinaryExpression)y),
+                ExpressionType.Conditional => EqualsConditional((ConditionalExpression)x, (ConditionalExpression)y),
+                ExpressionType.NewArrayInit or ExpressionType.NewArrayBounds => EqualsNewArray((NewArrayExpression)x, (NewArrayExpression)y),
+                _ => false // Unknown expression types are not considered equal
+            };
+        }
+
+        /// <summary>
+        /// Returns a hash code for the specified Expression based on its structure.
+        /// Structurally equivalent expressions will produce the same hash code.
+        /// </summary>
+        /// <param name="obj">The Expression for which to get a hash code.</param>
+        /// <returns>A hash code for the Expression's structure.</returns>
+        public int GetHashCode(Expression obj)
+        {
+            if (obj == null)
+                return 0;
+
+            unchecked
+            {
+                int hash = (int)obj.NodeType * 397;
+                hash = (hash * 397) ^ obj.Type.GetHashCode();
+
+                switch (obj)
+                {
+                    case ConstantExpression constant:
+                        if (constant.Value != null)
+                            hash = (hash * 397) ^ constant.Value.GetHashCode();
+                        break;
+
+                    case MemberExpression member:
+                        hash = (hash * 397) ^ member.Member.GetHashCode();
+                        if (member.Expression != null)
+                            hash = (hash * 397) ^ GetHashCode(member.Expression);
+                        break;
+
+                    case MethodCallExpression methodCall:
+                        hash = (hash * 397) ^ methodCall.Method.GetHashCode();
+                        if (methodCall.Object != null)
+                            hash = (hash * 397) ^ GetHashCode(methodCall.Object);
+                        foreach (Expression arg in methodCall.Arguments)
+                            hash = (hash * 397) ^ GetHashCode(arg);
+                        break;
+
+                    case LambdaExpression lambda:
+                        hash = (hash * 397) ^ GetHashCode(lambda.Body);
+                        foreach (ParameterExpression param in lambda.Parameters)
+                            hash = (hash * 397) ^ GetHashCode(param);
+                        break;
+
+                    case ParameterExpression parameter:
+                        hash = (hash * 397) ^ parameter.Name!.GetHashCode();
+                        break;
+
+                    case UnaryExpression unary:
+                        hash = (hash * 397) ^ GetHashCode(unary.Operand);
+                        break;
+
+                    case BinaryExpression binary:
+                        hash = (hash * 397) ^ GetHashCode(binary.Left);
+                        hash = (hash * 397) ^ GetHashCode(binary.Right);
+                        break;
+
+                    case ConditionalExpression conditional:
+                        hash = (hash * 397) ^ GetHashCode(conditional.Test);
+                        hash = (hash * 397) ^ GetHashCode(conditional.IfTrue);
+                        hash = (hash * 397) ^ GetHashCode(conditional.IfFalse);
+                        break;
+
+                    case NewArrayExpression newArray:
+                        foreach (Expression expr in newArray.Expressions)
+                            hash = (hash * 397) ^ GetHashCode(expr);
+                        break;
+                }
+
+                return hash;
+            }
+        }
+
+        #endregion
+
+        #region Private-Methods
+
+        private bool EqualsConstant(ConstantExpression x, ConstantExpression y)
+        {
+            if (x.Value == null && y.Value == null)
+                return true;
+
+            if (x.Value == null || y.Value == null)
+                return false;
+
+            return x.Value.Equals(y.Value);
+        }
+
+        private bool EqualsMember(MemberExpression x, MemberExpression y)
+        {
+            if (x.Member != y.Member)
+                return false;
+
+            return Equals(x.Expression, y.Expression);
+        }
+
+        private bool EqualsMethodCall(MethodCallExpression x, MethodCallExpression y)
+        {
+            if (x.Method != y.Method)
+                return false;
+
+            if (!Equals(x.Object, y.Object))
+                return false;
+
+            if (x.Arguments.Count != y.Arguments.Count)
+                return false;
+
+            for (int i = 0; i < x.Arguments.Count; i++)
+            {
+                if (!Equals(x.Arguments[i], y.Arguments[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private bool EqualsLambda(LambdaExpression x, LambdaExpression y)
+        {
+            if (x.Parameters.Count != y.Parameters.Count)
+                return false;
+
+            for (int i = 0; i < x.Parameters.Count; i++)
+            {
+                if (!Equals(x.Parameters[i], y.Parameters[i]))
+                    return false;
+            }
+
+            return Equals(x.Body, y.Body);
+        }
+
+        private bool EqualsParameter(ParameterExpression x, ParameterExpression y)
+        {
+            // Parameters are equal if they have the same name and type
+            // This is sufficient for our caching purposes
+            return x.Name == y.Name && x.Type == y.Type;
+        }
+
+        private bool EqualsUnary(UnaryExpression x, UnaryExpression y)
+        {
+            if (x.Method != y.Method)
+                return false;
+
+            return Equals(x.Operand, y.Operand);
+        }
+
+        private bool EqualsBinary(BinaryExpression x, BinaryExpression y)
+        {
+            if (x.Method != y.Method)
+                return false;
+
+            if (!Equals(x.Left, y.Left))
+                return false;
+
+            return Equals(x.Right, y.Right);
+        }
+
+        private bool EqualsConditional(ConditionalExpression x, ConditionalExpression y)
+        {
+            if (!Equals(x.Test, y.Test))
+                return false;
+
+            if (!Equals(x.IfTrue, y.IfTrue))
+                return false;
+
+            return Equals(x.IfFalse, y.IfFalse);
+        }
+
+        private bool EqualsNewArray(NewArrayExpression x, NewArrayExpression y)
+        {
+            if (x.Expressions.Count != y.Expressions.Count)
+                return false;
+
+            for (int i = 0; i < x.Expressions.Count; i++)
+            {
+                if (!Equals(x.Expressions[i], y.Expressions[i]))
+                    return false;
+            }
+
+            return true;
         }
 
         #endregion
