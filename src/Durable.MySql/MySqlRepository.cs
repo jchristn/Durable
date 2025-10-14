@@ -317,6 +317,50 @@ namespace Durable.MySql
         }
 
         /// <summary>
+        /// Clears the SQL generation cache and resets all cache statistics for this entity type.
+        /// </summary>
+        public void ClearSqlCache()
+        {
+            MySqlQueryBuilder<T>.ClearSqlCache();
+        }
+
+        /// <summary>
+        /// Gets the number of SQL cache hits for this entity type.
+        /// </summary>
+        /// <returns>The total number of cache hits</returns>
+        public long GetSqlCacheHitCount()
+        {
+            return MySqlQueryBuilder<T>.GetSqlCacheHitCount();
+        }
+
+        /// <summary>
+        /// Gets the number of SQL cache misses for this entity type.
+        /// </summary>
+        /// <returns>The total number of cache misses</returns>
+        public long GetSqlCacheMissCount()
+        {
+            return MySqlQueryBuilder<T>.GetSqlCacheMissCount();
+        }
+
+        /// <summary>
+        /// Gets the total number of entries currently in the SQL cache for this entity type.
+        /// </summary>
+        /// <returns>The number of cached SQL strings</returns>
+        public int GetSqlCacheEntryCount()
+        {
+            return MySqlQueryBuilder<T>.GetSqlCacheEntryCount();
+        }
+
+        /// <summary>
+        /// Gets the SQL cache hit rate as a percentage for this entity type.
+        /// </summary>
+        /// <returns>The cache hit rate percentage (0.0 to 100.0)</returns>
+        public double GetSqlCacheHitRate()
+        {
+            return MySqlQueryBuilder<T>.GetSqlCacheHitRate();
+        }
+
+        /// <summary>
         /// Begins a new database transaction.
         /// </summary>
         /// <returns>A new transaction instance.</returns>

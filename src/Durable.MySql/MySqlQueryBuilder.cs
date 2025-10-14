@@ -64,6 +64,11 @@ namespace Durable.MySql
         // MySQL maximum value for BIGINT UNSIGNED - used when OFFSET is specified without LIMIT
         private const ulong MYSQL_MAX_ROWS = 18446744073709551615;
 
+        // SQL generation cache - static to share across all query builder instances
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _SqlCache = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+        private static long _SqlCacheHits = 0;
+        private static long _SqlCacheMisses = 0;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -238,12 +243,78 @@ namespace Durable.MySql
         }
 
         /// <summary>
+        /// Clears the SQL generation cache and resets all cache statistics.
+        /// </summary>
+        public static void ClearSqlCache()
+        {
+            _SqlCache.Clear();
+            System.Threading.Interlocked.Exchange(ref _SqlCacheHits, 0);
+            System.Threading.Interlocked.Exchange(ref _SqlCacheMisses, 0);
+        }
+
+        /// <summary>
+        /// Gets the number of SQL cache hits.
+        /// </summary>
+        /// <returns>The total number of cache hits</returns>
+        public static long GetSqlCacheHitCount()
+        {
+            return System.Threading.Interlocked.Read(ref _SqlCacheHits);
+        }
+
+        /// <summary>
+        /// Gets the number of SQL cache misses.
+        /// </summary>
+        /// <returns>The total number of cache misses</returns>
+        public static long GetSqlCacheMissCount()
+        {
+            return System.Threading.Interlocked.Read(ref _SqlCacheMisses);
+        }
+
+        /// <summary>
+        /// Gets the total number of entries currently in the SQL cache.
+        /// </summary>
+        /// <returns>The number of cached SQL strings</returns>
+        public static int GetSqlCacheEntryCount()
+        {
+            return _SqlCache.Count;
+        }
+
+        /// <summary>
+        /// Gets the SQL cache hit rate as a percentage.
+        /// </summary>
+        /// <returns>The cache hit rate percentage (0.0 to 100.0)</returns>
+        public static double GetSqlCacheHitRate()
+        {
+            long hits = System.Threading.Interlocked.Read(ref _SqlCacheHits);
+            long misses = System.Threading.Interlocked.Read(ref _SqlCacheMisses);
+            long total = hits + misses;
+
+            if (total == 0)
+                return 0.0;
+
+            return (hits / (double)total) * 100.0;
+        }
+
+        /// <summary>
         /// Builds the SQL query string from the current query configuration.
         /// </summary>
         /// <param name="includeGroupBy">Whether to include GROUP BY clause in the generated SQL.</param>
         /// <returns>The generated SQL query string.</returns>
         public string BuildSql(bool includeGroupBy)
         {
+            // Generate cache key from query configuration
+            string cacheKey = GenerateSqlCacheKey(includeGroupBy);
+
+            // Try to get cached SQL
+            if (_SqlCache.TryGetValue(cacheKey, out string? cachedSql))
+            {
+                System.Threading.Interlocked.Increment(ref _SqlCacheHits);
+                return cachedSql;
+            }
+
+            // Cache miss - generate SQL
+            System.Threading.Interlocked.Increment(ref _SqlCacheMisses);
+
             List<string> sqlParts = new List<string>();
             MySqlJoinBuilder.MySqlJoinResult? joinResult = null;
 
@@ -429,7 +500,10 @@ namespace Durable.MySql
                                 string baseQuery = string.Join(" ", sqlParts);
                                 string otherQuerySql = setOp.OtherQuery.BuildSql().TrimEnd(';');
                                 string primaryKey = _Repository._PrimaryKeyColumn;
-                                return $"SELECT DISTINCT t1.* FROM ({baseQuery}) t1 INNER JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}`";
+                                string intersectSql = $"SELECT DISTINCT t1.* FROM ({baseQuery}) t1 INNER JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}`";
+                                // Cache and return
+                                _SqlCache.TryAdd(cacheKey, intersectSql);
+                                return intersectSql;
                             }
                         case SetOperationType.Except:
                             // MySQL doesn't support EXCEPT natively, so we implement it using LEFT JOIN with NULL check
@@ -437,7 +511,10 @@ namespace Durable.MySql
                                 string baseQuery = string.Join(" ", sqlParts);
                                 string otherQuerySql = setOp.OtherQuery.BuildSql().TrimEnd(';');
                                 string primaryKey = _Repository._PrimaryKeyColumn;
-                                return $"SELECT t1.* FROM ({baseQuery}) t1 LEFT JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}` WHERE t2.`{primaryKey}` IS NULL";
+                                string exceptSql = $"SELECT t1.* FROM ({baseQuery}) t1 LEFT JOIN ({otherQuerySql}) t2 ON t1.`{primaryKey}` = t2.`{primaryKey}` WHERE t2.`{primaryKey}` IS NULL";
+                                // Cache and return
+                                _SqlCache.TryAdd(cacheKey, exceptSql);
+                                return exceptSql;
                             }
                     }
                     setOperationSql.Append("(");
@@ -445,10 +522,16 @@ namespace Durable.MySql
                     setOperationSql.Append(")");
                 }
 
-                return setOperationSql.ToString();
+                string setOpSql = setOperationSql.ToString();
+                // Cache and return
+                _SqlCache.TryAdd(cacheKey, setOpSql);
+                return setOpSql;
             }
 
-            return string.Join(" ", sqlParts);
+            string finalSql = string.Join(" ", sqlParts);
+            // Cache and return
+            _SqlCache.TryAdd(cacheKey, finalSql);
+            return finalSql;
         }
 
         #endregion
@@ -1480,6 +1563,89 @@ namespace Durable.MySql
                 default:
                     return "CURRENT ROW";
             }
+        }
+
+        private string GenerateSqlCacheKey(bool includeGroupBy)
+        {
+            StringBuilder keyBuilder = new StringBuilder();
+
+            // Include entity type name
+            keyBuilder.Append(typeof(TEntity).FullName);
+            keyBuilder.Append("|");
+
+            // Include table name
+            keyBuilder.Append(_Repository._TableName);
+            keyBuilder.Append("|");
+
+            // Include WHERE clauses
+            keyBuilder.Append("W:");
+            keyBuilder.Append(string.Join(";", _WhereClauses));
+            keyBuilder.Append("|");
+
+            // Include ORDER BY clauses
+            keyBuilder.Append("O:");
+            keyBuilder.Append(string.Join(";", _OrderByClauses));
+            keyBuilder.Append("|");
+
+            // Include GROUP BY columns if includeGroupBy is true
+            if (includeGroupBy)
+            {
+                keyBuilder.Append("G:");
+                keyBuilder.Append(string.Join(";", _GroupByColumns));
+                keyBuilder.Append("|");
+            }
+
+            // Include HAVING clauses
+            keyBuilder.Append("H:");
+            keyBuilder.Append(string.Join(";", _HavingClauses));
+            keyBuilder.Append("|");
+
+            // Include INCLUDE paths
+            keyBuilder.Append("I:");
+            keyBuilder.Append(string.Join(";", _IncludePaths));
+            keyBuilder.Append("|");
+
+            // Include LIMIT/OFFSET
+            keyBuilder.Append("L:");
+            keyBuilder.Append(_TakeCount?.ToString() ?? "null");
+            keyBuilder.Append("|S:");
+            keyBuilder.Append(_SkipCount?.ToString() ?? "null");
+            keyBuilder.Append("|");
+
+            // Include DISTINCT flag
+            keyBuilder.Append("D:");
+            keyBuilder.Append(_Distinct.ToString());
+            keyBuilder.Append("|");
+
+            // Include custom clauses
+            keyBuilder.Append("CS:");
+            keyBuilder.Append(_CustomSelectClause ?? "null");
+            keyBuilder.Append("|CF:");
+            keyBuilder.Append(_CustomFromClause ?? "null");
+            keyBuilder.Append("|CJ:");
+            keyBuilder.Append(string.Join(";", _CustomJoinClauses));
+            keyBuilder.Append("|");
+
+            // Include window functions count
+            keyBuilder.Append("WF:");
+            keyBuilder.Append(_WindowFunctions.Count);
+            keyBuilder.Append("|");
+
+            // Include case expressions count
+            keyBuilder.Append("CE:");
+            keyBuilder.Append(_CaseExpressions.Count);
+            keyBuilder.Append("|");
+
+            // Include CTE count
+            keyBuilder.Append("CTE:");
+            keyBuilder.Append(_CteDefinitions.Count);
+            keyBuilder.Append("|");
+
+            // Include set operations count
+            keyBuilder.Append("SO:");
+            keyBuilder.Append(_SetOperations.Count);
+
+            return keyBuilder.ToString();
         }
 
         #endregion

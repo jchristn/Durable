@@ -1751,6 +1751,35 @@
             </summary>
             <returns>The SQL query string.</returns>
         </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.ClearSqlCache">
+            <summary>
+            Clears the SQL generation cache and resets all cache statistics.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.GetSqlCacheHitCount">
+            <summary>
+            Gets the number of SQL cache hits.
+            </summary>
+            <returns>The total number of cache hits</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.GetSqlCacheMissCount">
+            <summary>
+            Gets the number of SQL cache misses.
+            </summary>
+            <returns>The total number of cache misses</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.GetSqlCacheEntryCount">
+            <summary>
+            Gets the total number of entries currently in the SQL cache.
+            </summary>
+            <returns>The number of cached SQL strings</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.GetSqlCacheHitRate">
+            <summary>
+            Gets the SQL cache hit rate as a percentage.
+            </summary>
+            <returns>The cache hit rate percentage (0.0 to 100.0)</returns>
+        </member>
         <member name="M:Durable.MySql.MySqlQueryBuilder`1.BuildSql(System.Boolean)">
             <summary>
             Builds the SQL query string from the current query configuration.
@@ -2274,6 +2303,35 @@
             </summary>
             <param name="transaction">The transaction to use for the operation.</param>
             <returns>A query builder instance for the entity type.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.ClearSqlCache">
+            <summary>
+            Clears the SQL generation cache and resets all cache statistics for this entity type.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetSqlCacheHitCount">
+            <summary>
+            Gets the number of SQL cache hits for this entity type.
+            </summary>
+            <returns>The total number of cache hits</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetSqlCacheMissCount">
+            <summary>
+            Gets the number of SQL cache misses for this entity type.
+            </summary>
+            <returns>The total number of cache misses</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetSqlCacheEntryCount">
+            <summary>
+            Gets the total number of entries currently in the SQL cache for this entity type.
+            </summary>
+            <returns>The number of cached SQL strings</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetSqlCacheHitRate">
+            <summary>
+            Gets the SQL cache hit rate as a percentage for this entity type.
+            </summary>
+            <returns>The cache hit rate percentage (0.0 to 100.0)</returns>
         </member>
         <member name="M:Durable.MySql.MySqlRepository`1.BeginTransaction">
             <summary>
