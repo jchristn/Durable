@@ -61,6 +61,9 @@ namespace Durable.MySql
         private string? _CustomFromClause;
         private readonly List<string> _CustomJoinClauses = new List<string>();
 
+        // MySQL maximum value for BIGINT UNSIGNED - used when OFFSET is specified without LIMIT
+        private const ulong MYSQL_MAX_ROWS = 18446744073709551615;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -94,6 +97,9 @@ namespace Durable.MySql
         {
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
 
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
+
             string whereClause = _ExpressionParser.ParseExpression(predicate.Body);
             _WhereClauses.Add(whereClause);
             return this;
@@ -109,6 +115,9 @@ namespace Durable.MySql
         public IQueryBuilder<TEntity> OrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
             if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
+
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
 
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add($"{column} ASC");
@@ -126,6 +135,9 @@ namespace Durable.MySql
         {
             if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
 
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
+
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add($"{column} DESC");
             return this;
@@ -139,6 +151,9 @@ namespace Durable.MySql
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
+
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add($"{column} ASC");
             return this;
@@ -152,6 +167,9 @@ namespace Durable.MySql
         /// <returns>The current query builder for method chaining.</returns>
         public IQueryBuilder<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
+
             string column = _ExpressionParser.GetColumnFromExpression(keySelector.Body);
             _OrderByClauses.Add($"{column} DESC");
             return this;
@@ -232,8 +250,12 @@ namespace Durable.MySql
             // Pre-calculate join result if includes are present
             if (_IncludePaths.Count > 0)
             {
-                joinResult = _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
-                _CachedJoinResult = joinResult; // Cache for later use in Execute()
+                // Use cached result if available to ensure consistent table aliases
+                joinResult = _CachedJoinResult ?? _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
+                if (_CachedJoinResult == null)
+                {
+                    _CachedJoinResult = joinResult; // Cache for later use
+                }
             }
 
             // Handle CTEs first
@@ -349,7 +371,15 @@ namespace Durable.MySql
             // GROUP BY clause
             if (includeGroupBy && _GroupByColumns.Any())
             {
-                sqlParts.Add($"GROUP BY {string.Join(", ", _GroupByColumns.Select(c => $"`{c.Replace("`", "``")}`"))}");
+                // Filter out any null or empty column names as a defensive measure
+                List<string> validColumns = _GroupByColumns
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .ToList();
+
+                if (validColumns.Any())
+                {
+                    sqlParts.Add($"GROUP BY {string.Join(", ", validColumns.Select(c => $"`{c.Replace("`", "``")}`"))}");
+                }
             }
 
             // HAVING clause
@@ -364,15 +394,15 @@ namespace Durable.MySql
                 sqlParts.Add($"ORDER BY {string.Join(", ", _OrderByClauses)}");
             }
 
-            // LIMIT clause (MySQL uses LIMIT instead of SQLite's LIMIT OFFSET)
+            // LIMIT clause (MySQL supports modern LIMIT row_count OFFSET offset syntax)
             if (_TakeCount.HasValue || _SkipCount.HasValue)
             {
                 if (_SkipCount.HasValue && _TakeCount.HasValue)
-                    sqlParts.Add($"LIMIT {_SkipCount.Value}, {_TakeCount.Value}");
+                    sqlParts.Add($"LIMIT {_TakeCount.Value} OFFSET {_SkipCount.Value}");
                 else if (_TakeCount.HasValue)
                     sqlParts.Add($"LIMIT {_TakeCount.Value}");
                 else if (_SkipCount.HasValue)
-                    sqlParts.Add($"LIMIT {_SkipCount.Value}, 18446744073709551615"); // Max value for MySQL
+                    sqlParts.Add($"LIMIT {MYSQL_MAX_ROWS} OFFSET {_SkipCount.Value}");
             }
 
             // Handle set operations
@@ -504,8 +534,22 @@ namespace Durable.MySql
             try
             {
                 string groupColumn = GetColumnFromExpression(keySelector.Body);
+
+                // Validate column name is not null or empty
+                if (string.IsNullOrWhiteSpace(groupColumn))
+                {
+                    throw new ArgumentException("Column name cannot be null or empty for GROUP BY");
+                }
+
                 // Remove backticks if present to store raw column name
                 string rawColumn = groupColumn.Trim('`');
+
+                // Final validation after trimming
+                if (string.IsNullOrWhiteSpace(rawColumn))
+                {
+                    throw new ArgumentException("Column name cannot be empty after removing backticks");
+                }
+
                 _GroupByColumns.Add(rawColumn);
             }
             catch (ArgumentException)
@@ -547,6 +591,9 @@ namespace Durable.MySql
             {
                 throw new InvalidOperationException("HAVING clause can only be used with GROUP BY");
             }
+
+            // Ensure navigation property mappings are available if includes are present
+            UpdateNavigationPropertyAliases();
 
             string havingClause = _ExpressionParser.ParseExpression(predicate.Body);
             _HavingClauses.Add(havingClause);
@@ -632,7 +679,7 @@ namespace Durable.MySql
 
             string column = GetColumnFromExpression(keySelector.Body);
             string subquerySql = subquery.BuildSql().TrimEnd(';');
-            _WhereClauses.Add($"`{column}` IN ({subquerySql})");
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
             return this;
         }
 
@@ -653,7 +700,7 @@ namespace Durable.MySql
 
             string column = GetColumnFromExpression(keySelector.Body);
             string subquerySql = subquery.BuildSql().TrimEnd(';');
-            _WhereClauses.Add($"`{column}` NOT IN ({subquerySql})");
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
             return this;
         }
 
@@ -674,7 +721,7 @@ namespace Durable.MySql
                 throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
 
             string column = GetColumnFromExpression(keySelector.Body);
-            _WhereClauses.Add($"`{column}` IN ({subquerySql})");
+            _WhereClauses.Add($"{column} IN ({subquerySql})");
             return this;
         }
 
@@ -695,7 +742,7 @@ namespace Durable.MySql
                 throw new ArgumentException("Subquery SQL cannot be null or empty", nameof(subquerySql));
 
             string column = GetColumnFromExpression(keySelector.Body);
-            _WhereClauses.Add($"`{column}` NOT IN ({subquerySql})");
+            _WhereClauses.Add($"{column} NOT IN ({subquerySql})");
             return this;
         }
 
@@ -985,6 +1032,56 @@ namespace Durable.MySql
 
         #region Private-Methods
 
+        /// <summary>
+        /// Updates the expression parser with current navigation property to table alias mappings.
+        /// This ensures WHERE clauses can correctly reference navigation properties.
+        /// </summary>
+        private void UpdateNavigationPropertyAliases()
+        {
+            // Only update if we have includes
+            if (_IncludePaths.Count == 0)
+                return;
+
+            // Build or use cached join result to get navigation property mappings
+            MySqlJoinBuilder.MySqlJoinResult joinResult = _CachedJoinResult ??
+                _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
+
+            // Cache for later use
+            if (_CachedJoinResult == null)
+                _CachedJoinResult = joinResult;
+
+            // Build mapping from navigation property paths to table aliases
+            Dictionary<string, string> navigationAliases = new Dictionary<string, string>();
+            BuildNavigationAliasMapping(joinResult.Includes, navigationAliases);
+
+            // Update the expression parser with the mappings
+            _ExpressionParser.SetNavigationPropertyAliases(navigationAliases);
+        }
+
+        /// <summary>
+        /// Recursively builds a mapping from navigation property paths to table aliases.
+        /// </summary>
+        /// <param name="includes">The list of include information</param>
+        /// <param name="navigationAliases">The dictionary to populate with mappings</param>
+        private void BuildNavigationAliasMapping(List<MySqlIncludeInfo> includes, Dictionary<string, string> navigationAliases)
+        {
+            foreach (MySqlIncludeInfo include in includes)
+            {
+                // Map the property path to its table alias
+                // PropertyPath could be "Author" or "Author.Company"
+                if (!string.IsNullOrEmpty(include.PropertyPath) && !string.IsNullOrEmpty(include.JoinAlias))
+                {
+                    navigationAliases[include.PropertyPath] = include.JoinAlias;
+                }
+
+                // Recursively process nested includes (ThenInclude)
+                if (include.Children.Count > 0)
+                {
+                    BuildNavigationAliasMapping(include.Children, navigationAliases);
+                }
+            }
+        }
+
         private IEnumerable<TEntity> ExecuteSqlInternal(string sql)
         {
             if (_Transaction != null)
@@ -995,8 +1092,16 @@ namespace Durable.MySql
             else
             {
                 // Get connection from factory
-                using var connection = _Repository._ConnectionFactory.GetConnection();
-                return ExecuteWithConnection(connection, sql);
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return ExecuteWithConnection(connection, sql);
+                }
+                finally
+                {
+                    // Return connection to pool
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1107,8 +1212,16 @@ namespace Durable.MySql
             else
             {
                 // Get connection from factory
-                using var connection = _Repository._ConnectionFactory.GetConnection();
-                return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    // Return connection to pool
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
