@@ -169,6 +169,7 @@ namespace Durable.MySql
                 null => "NULL",
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0",
+                Guid g => SanitizeString(g.ToString()), // GUIDs must be quoted for VARCHAR columns
                 DateTime dt => SanitizeString(dt.ToString("yyyy-MM-dd HH:mm:ss")),
                 DateTimeOffset dto => SanitizeString(dto.ToString("yyyy-MM-dd HH:mm:ss")),
                 TimeSpan ts => SanitizeString(ts.ToString()),
