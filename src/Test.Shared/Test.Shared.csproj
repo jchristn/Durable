@@ -3,7 +3,13 @@
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="xunit" Version="2.6.1" />
+		<PackageReference Include="xunit.abstractions" Version="2.0.3" />
+	</ItemGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\Durable\Durable.csproj" />

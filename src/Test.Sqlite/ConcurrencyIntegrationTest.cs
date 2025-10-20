@@ -27,25 +27,25 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                using (SqliteRepository<AuthorWithVersion> repo = new SqliteRepository<AuthorWithVersion>(connectionString))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
                 {
                     CreateTestTable(connectionString);
                     
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Test Author",
                         CompanyId = null
                     };
                     
                     Console.WriteLine("Creating author...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     Console.WriteLine($"Created: ID={created.Id}, Version={created.Version}, Name={created.Name}");
                     
                     Assert.Equal(1, created.Version);
                     
                     Console.WriteLine("Updating author...");
                     created.Name = "Updated Author";
-                    AuthorWithVersion updated = repo.Update(created);
+                    Author updated = repo.Update(created);
                     Console.WriteLine($"Updated: ID={updated.Id}, Version={updated.Version}, Name={updated.Name}");
                     
                     Assert.Equal(2, updated.Version);
@@ -79,20 +79,20 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                using (SqliteRepository<AuthorWithVersion> repo = new SqliteRepository<AuthorWithVersion>(connectionString))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
                 {
                     CreateTestTable(connectionString);
                 
-                AuthorWithVersion author = new AuthorWithVersion
+                Author author = new Author
                 {
                     Name = "Conflict Author",
                     CompanyId = null
                 };
                 
-                AuthorWithVersion created = repo.Create(author);
+                Author created = repo.Create(author);
                 
-                AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                Author copy1 = repo.ReadById(created.Id);
+                Author copy2 = repo.ReadById(created.Id);
                 
                 copy1.Name = "Update 1";
                 repo.Update(copy1);
@@ -129,28 +129,28 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new ClientWinsResolver<AuthorWithVersion>();
-                using (SqliteRepository<AuthorWithVersion> repo = new SqliteRepository<AuthorWithVersion>(connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
                 {
                     CreateTestTable(connectionString);
                 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
                     
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
                     
                     copy1.Name = "Update 1";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     Assert.Equal(2, updated1.Version);
                     
                     copy2.Name = "Update 2";
-                    AuthorWithVersion updated2 = repo.Update(copy2);
+                    Author updated2 = repo.Update(copy2);
                     
                     Assert.Equal("Update 2", updated2.Name);
                     Assert.Equal(3, updated2.Version);
@@ -177,29 +177,29 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new DatabaseWinsResolver<AuthorWithVersion>();
-                using (SqliteRepository<AuthorWithVersion> repo = new SqliteRepository<AuthorWithVersion>(connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new DatabaseWinsResolver<Author>();
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
                 {
                     CreateTestTable(connectionString);
                 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
                     
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
                     
                     copy1.Name = "Update 1";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     Assert.Equal(2, updated1.Version);
                     
                     copy2.Name = "Update 2";
                     copy2.CompanyId = 100;
-                    AuthorWithVersion updated2 = repo.Update(copy2);
+                    Author updated2 = repo.Update(copy2);
                     
                     Assert.Equal("Update 1", updated2.Name);
                     Assert.Equal(3, updated2.Version);
@@ -227,30 +227,30 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new MergeChangesResolver<AuthorWithVersion>("Id", "Version");
-                using (SqliteRepository<AuthorWithVersion> repo = new SqliteRepository<AuthorWithVersion>(connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new MergeChangesResolver<Author>("Id", "Version");
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
                 {
                     CreateTestTable(connectionString);
                 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Original Name",
                         CompanyId = 50
                     };
                     
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
                     
                     // First update changes the name
                     copy1.Name = "Updated Name";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     Assert.Equal(2, updated1.Version);
                     
                     // Second update tries to change only the CompanyId
                     copy2.CompanyId = 100;
-                    AuthorWithVersion updated2 = repo.Update(copy2);
+                    Author updated2 = repo.Update(copy2);
                     
                     // The merge resolver uses the incoming entity as the original (limitation of current implementation)
                     // So it sees: original=(Original Name, 100), current=(Updated Name, 50), incoming=(Original Name, 100)
@@ -282,26 +282,26 @@ namespace Test.Sqlite
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
-                using (SqliteRepository<AuthorWithoutVersion> repo = new SqliteRepository<AuthorWithoutVersion>(connectionString))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
                 {
                     CreateTestTableWithoutVersion(connectionString);
                 
-                AuthorWithoutVersion author = new AuthorWithoutVersion
+                Author author = new Author
                 {
                     Name = "No Version Author",
                     CompanyId = null
                 };
                 
-                AuthorWithoutVersion created = repo.Create(author);
+                Author created = repo.Create(author);
                 
-                AuthorWithoutVersion copy1 = repo.ReadById(created.Id);
-                AuthorWithoutVersion copy2 = repo.ReadById(created.Id);
+                Author copy1 = repo.ReadById(created.Id);
+                Author copy2 = repo.ReadById(created.Id);
                 
                 copy1.Name = "Update 1";
                 repo.Update(copy1);
                 
                 copy2.Name = "Update 2";
-                AuthorWithoutVersion updated = repo.Update(copy2);
+                Author updated = repo.Update(copy2);
                 
                 Assert.Equal("Update 2", updated.Name);
                 }

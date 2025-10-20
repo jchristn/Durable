@@ -67,18 +67,18 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Test Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Creating author...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _Output.WriteLine($"Created: ID={created.Id}, Version={created.Version}, Name={created.Name}");
 
                     Assert.True(created.Id > 0);
@@ -87,7 +87,7 @@ namespace Test.Postgres
 
                     _Output.WriteLine("Updating author...");
                     created.Name = "Updated Author";
-                    AuthorWithVersion updated = repo.Update(created);
+                    Author updated = repo.Update(created);
                     _Output.WriteLine($"Updated: ID={updated.Id}, Version={updated.Version}, Name={updated.Name}");
 
                     Assert.Equal(2, updated.Version);
@@ -114,30 +114,30 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Creating author for conflict test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _Output.WriteLine($"Created: ID={created.Id}, Version={created.Version}");
 
                     // Get two copies of the same entity
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     Assert.Equal(copy1.Version, copy2.Version);
 
                     // Update the first copy successfully
                     copy1.Name = "Update 1";
                     _Output.WriteLine("Performing first update...");
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _Output.WriteLine($"First update successful: Version={updated1.Version}");
 
                     // Attempt to update the second copy - this should throw
@@ -172,32 +172,32 @@ namespace Test.Postgres
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new ClientWinsResolver<AuthorWithVersion>();
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Setting up Client Wins conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update first copy
                     copy1.Name = "Database Update";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _Output.WriteLine($"Database update: Name='{updated1.Name}', Version={updated1.Version}");
 
                     // Update second copy - should use Client Wins resolver
                     copy2.Name = "Client Update";
                     _Output.WriteLine("Attempting client update with Client Wins resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _Output.WriteLine($"Client Wins result: Name='{resolved.Name}', Version={resolved.Version}");
 
@@ -226,32 +226,32 @@ namespace Test.Postgres
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new DatabaseWinsResolver<AuthorWithVersion>();
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new DatabaseWinsResolver<Author>();
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Setting up Database Wins conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update first copy
                     copy1.Name = "Database Update";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _Output.WriteLine($"Database update: Name='{updated1.Name}', Version={updated1.Version}");
 
                     // Update second copy - should use Database Wins resolver
                     copy2.Name = "Client Update";
                     _Output.WriteLine("Attempting client update with Database Wins resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _Output.WriteLine($"Database Wins result: Name='{resolved.Name}', Version={resolved.Version}");
 
@@ -280,32 +280,32 @@ namespace Test.Postgres
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new MergeChangesResolver<AuthorWithVersion>("Id", "Version");
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new MergeChangesResolver<Author>("Id", "Version");
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Original Name",
                         CompanyId = 50
                     };
 
                     _Output.WriteLine("Setting up Merge Changes conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _Output.WriteLine($"Created: Name='{created.Name}', CompanyId={created.CompanyId}, Version={created.Version}");
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update different fields in each copy
                     copy1.Name = "Updated Name";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _Output.WriteLine($"First update (Name): Name='{updated1.Name}', CompanyId={updated1.CompanyId}, Version={updated1.Version}");
 
                     copy2.CompanyId = 100;
                     _Output.WriteLine("Attempting second update (CompanyId) with Merge Changes resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _Output.WriteLine($"Merge result: Name='{resolved.Name}', CompanyId={resolved.CompanyId}, Version={resolved.Version}");
 
@@ -334,24 +334,24 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Async Test Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Testing async concurrency operations...");
-                    AuthorWithVersion created = await repo.CreateAsync(author);
+                    Author created = await repo.CreateAsync(author);
                     _Output.WriteLine($"Async created: ID={created.Id}, Version={created.Version}");
 
                     Assert.Equal(1, created.Version);
 
                     created.Name = "Async Updated Author";
-                    AuthorWithVersion updated = await repo.UpdateAsync(created);
+                    Author updated = await repo.UpdateAsync(created);
                     _Output.WriteLine($"Async updated: Version={updated.Version}, Name='{updated.Name}'");
 
                     Assert.Equal(2, updated.Version);
@@ -378,49 +378,49 @@ namespace Test.Postgres
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new ClientWinsResolver<AuthorWithVersion>();
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Concurrent Test Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Setting up concurrent updates test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
                     // Create multiple tasks that will attempt concurrent updates
-                    Task<AuthorWithVersion> task1 = Task.Run(async () =>
+                    Task<Author> task1 = Task.Run(async () =>
                     {
-                        using PostgresRepository<AuthorWithVersion> repo1 = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo1.ReadById(created.Id);
+                        using PostgresRepository<Author> repo1 = new PostgresRepository<Author>(_ConnectionString, null, null, resolver);
+                        Author copy = repo1.ReadById(created.Id);
                         copy.Name = "Update from Task 1";
                         await Task.Delay(50);
                         return repo1.Update(copy);
                     });
 
-                    Task<AuthorWithVersion> task2 = Task.Run(async () =>
+                    Task<Author> task2 = Task.Run(async () =>
                     {
-                        using PostgresRepository<AuthorWithVersion> repo2 = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo2.ReadById(created.Id);
+                        using PostgresRepository<Author> repo2 = new PostgresRepository<Author>(_ConnectionString, null, null, resolver);
+                        Author copy = repo2.ReadById(created.Id);
                         copy.Name = "Update from Task 2";
                         await Task.Delay(50);
                         return repo2.Update(copy);
                     });
 
-                    Task<AuthorWithVersion> task3 = Task.Run(async () =>
+                    Task<Author> task3 = Task.Run(async () =>
                     {
-                        using PostgresRepository<AuthorWithVersion> repo3 = new PostgresRepository<AuthorWithVersion>(_ConnectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo3.ReadById(created.Id);
+                        using PostgresRepository<Author> repo3 = new PostgresRepository<Author>(_ConnectionString, null, null, resolver);
+                        Author copy = repo3.ReadById(created.Id);
                         copy.Name = "Update from Task 3";
                         await Task.Delay(50);
                         return repo3.Update(copy);
                     });
 
-                    AuthorWithVersion[] results = await Task.WhenAll(task1, task2, task3);
+                    Author[] results = await Task.WhenAll(task1, task2, task3);
 
                     _Output.WriteLine("Concurrent updates completed:");
                     for (int i = 0; i < results.Length; i++)
@@ -430,7 +430,7 @@ namespace Test.Postgres
 
                     Assert.All(results, result => Assert.True(result.Version > created.Version));
 
-                    AuthorWithVersion final = repo.ReadById(created.Id);
+                    Author final = repo.ReadById(created.Id);
                     _Output.WriteLine($"Final state: Name='{final.Name}', Version={final.Version}");
 
                     _Output.WriteLine("✅ Concurrent updates test completed successfully");
@@ -454,29 +454,29 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithoutVersion> repo = new PostgresRepository<AuthorWithoutVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     repo.DeleteAll();
 
-                    AuthorWithoutVersion author = new AuthorWithoutVersion
+                    Author author = new Author
                     {
                         Name = "No Version Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Testing entity without version column...");
-                    AuthorWithoutVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _Output.WriteLine($"Created: ID={created.Id}, Name='{created.Name}'");
 
-                    AuthorWithoutVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithoutVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     copy1.Name = "Update 1";
-                    AuthorWithoutVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _Output.WriteLine($"First update: Name='{updated1.Name}'");
 
                     copy2.Name = "Update 2";
-                    AuthorWithoutVersion updated2 = repo.Update(copy2);
+                    Author updated2 = repo.Update(copy2);
                     _Output.WriteLine($"Second update: Name='{updated2.Name}'");
 
                     Assert.Equal("Update 2", updated2.Name);
@@ -502,18 +502,18 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Version Test Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Testing version increment behavior...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _Output.WriteLine($"Initial version: {created.Version}");
                     Assert.Equal(1, created.Version);
 
@@ -546,21 +546,21 @@ namespace Test.Postgres
 
             try
             {
-                using (PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString))
+                using (PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Delete Test Author",
                         CompanyId = null
                     };
 
                     _Output.WriteLine("Testing concurrency with delete operations...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     bool deleted = repo.Delete(copy1);
                     Assert.True(deleted);
@@ -598,7 +598,7 @@ namespace Test.Postgres
             {
                 try
                 {
-                    using PostgresRepository<AuthorWithVersion> repo = new PostgresRepository<AuthorWithVersion>(_ConnectionString);
+                    using PostgresRepository<Author> repo = new PostgresRepository<Author>(_ConnectionString);
                     CleanupTestData(repo);
                 }
                 catch (Exception ex)
@@ -612,7 +612,7 @@ namespace Test.Postgres
 
         #region Private-Methods
 
-        private void CleanupTestData(PostgresRepository<AuthorWithVersion> repo)
+        private void CleanupTestData(PostgresRepository<Author> repo)
         {
             try
             {

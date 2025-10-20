@@ -51,12 +51,19 @@ namespace Test.Shared
         public List<Category> Categories { get; set; } = new List<Category>();
 
         /// <summary>
+        /// Gets or sets the version number for optimistic concurrency control.
+        /// </summary>
+        [Property("version")]
+        [VersionColumn(VersionColumnType.Integer)]
+        public int Version { get; set; } = 1;
+
+        /// <summary>
         /// Returns a string representation of the author including ID, name, company information, and counts of books and categories.
         /// </summary>
         /// <returns>A formatted string containing author details.</returns>
         public override string ToString()
         {
-            return $"Author: Id={Id}, Name={Name}, CompanyId={CompanyId}, Company={Company?.Name ?? "null"}, Books Count={Books?.Count ?? 0}, Categories Count={Categories?.Count ?? 0}";
+            return $"Author: Id={Id}, Name={Name}, CompanyId={CompanyId}, Company={Company?.Name ?? "null"}, Books Count={Books?.Count ?? 0}, Categories Count={Categories?.Count ?? 0}, Version={Version}";
         }
     }
 }

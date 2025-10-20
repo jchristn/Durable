@@ -2,6 +2,7 @@ namespace Durable.Postgres
 {
     using Newtonsoft.Json;
     using System;
+    using System.Globalization;
     using System.Text;
     using System.Text.RegularExpressions;
 
@@ -173,6 +174,7 @@ namespace Durable.Postgres
                 null => "NULL",
                 string s => SanitizeString(s),
                 bool b => b ? "true" : "false", // PostgreSQL uses true/false instead of 1/0
+                Enum e => SanitizeString(e.ToString()),
                 DateTime dt => FormatDateTime(dt),
                 DateTimeOffset dto => FormatDateTimeOffset(dto),
                 DateOnly dateOnly => SanitizeString(dateOnly.ToString("yyyy-MM-dd")),
@@ -254,11 +256,11 @@ namespace Durable.Postgres
         {
             if (dateTime.Kind == DateTimeKind.Utc)
             {
-                return $"'{dateTime:yyyy-MM-dd HH:mm:ss.fff}'::timestamp";
+                return $"'{dateTime:yyyy-MM-dd HH:mm:ss.fffffff}'::timestamp";
             }
             else
             {
-                return $"'{dateTime:yyyy-MM-dd HH:mm:ss.fff}'::timestamptz";
+                return $"'{dateTime:yyyy-MM-dd HH:mm:ss.fffffff}'::timestamptz";
             }
         }
 
