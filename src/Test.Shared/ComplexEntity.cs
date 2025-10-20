@@ -10,6 +10,10 @@ namespace Test.Shared
     [Entity("complex_entities")]
     public class ComplexEntity
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
+        #region Public-Members
+
         /// <summary>
         /// Gets or sets the unique identifier for the complex entity.
         /// </summary>
@@ -100,6 +104,21 @@ namespace Test.Shared
         [Property("price")]
         public decimal Price { get; set; }
 
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ComplexEntity"/> class.
+        /// </summary>
+        public ComplexEntity()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Returns a string representation of the complex entity including key information.
         /// </summary>
@@ -109,5 +128,9 @@ namespace Test.Shared
             return $"ComplexEntity: Id={Id}, Name={Name}, CreatedDate={CreatedDate:yyyy-MM-dd HH:mm:ss}, " +
                    $"UniqueId={UniqueId}, Status={Status}, TagCount={Tags?.Length ?? 0}";
         }
+
+        #endregion
+
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

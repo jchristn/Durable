@@ -8,6 +8,21 @@ namespace Test.Shared.Validation
     /// </summary>
     public class ValidCompanyIdAttribute : ValidationAttribute
     {
+#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidCompanyIdAttribute"/> class.
+        /// </summary>
+        public ValidCompanyIdAttribute()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Validates the specified value
         /// </summary>
@@ -35,5 +50,9 @@ namespace Test.Shared.Validation
         {
             return $"The {name} field must be a positive number when specified.";
         }
+
+        #endregion
+
+#pragma warning restore CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
     }
 }

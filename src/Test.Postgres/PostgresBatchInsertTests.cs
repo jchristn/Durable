@@ -182,7 +182,7 @@ namespace Test.Postgres
 
             // Verify data integrity
             Person firstPerson = createdLarge.First();
-            Person? retrievedPerson = await repository.ReadByIdAsync(firstPerson.Id);
+            Person retrievedPerson = await repository.ReadByIdAsync(firstPerson.Id);
             Assert.NotNull(retrievedPerson);
             bool dataIntegrityOk = retrievedPerson != null &&
                                  retrievedPerson.FirstName == firstPerson.FirstName &&
@@ -194,7 +194,7 @@ namespace Test.Postgres
 
             // Test with transaction
             await repository.DeleteAllAsync();
-            ITransaction? transaction = null;
+            ITransaction transaction = null;
             try
             {
                 int transactionSize = config.EnableMultiRowInsert ? 100 : 25;
@@ -351,7 +351,7 @@ namespace Test.Postgres
 
                 List<Person> testData = GenerateTestPeople(batchSize);
 
-                ITransaction? transaction = null;
+                ITransaction transaction = null;
                 try
                 {
                     transaction = await repository.BeginTransactionAsync();
@@ -383,7 +383,7 @@ namespace Test.Postgres
             _output.WriteLine("\n--- Transaction Rollback Testing ---");
             await SetupDatabase(repository);
 
-            ITransaction? rollbackTransaction = null;
+            ITransaction rollbackTransaction = null;
             try
             {
                 rollbackTransaction = await repository.BeginTransactionAsync();

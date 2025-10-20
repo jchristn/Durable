@@ -10,6 +10,10 @@ namespace Test.Shared
     [Entity("categories")]
     public class Category
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
+        #region Public-Members
+
         /// <summary>
         /// Gets or sets the unique identifier for the category.
         /// </summary>
@@ -37,6 +41,21 @@ namespace Test.Shared
         [ManyToManyNavigationProperty(typeof(AuthorCategory), "CategoryId", "AuthorId")]
         public List<Author> Authors { get; set; } = new List<Author>();
 
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Category"/> class.
+        /// </summary>
+        public Category()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Returns a string representation of the category.
         /// </summary>
@@ -45,5 +64,9 @@ namespace Test.Shared
         {
             return $"Category: Id={Id}, Name={Name}, Description={Description}, Authors Count={Authors?.Count ?? 0}";
         }
+
+        #endregion
+
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

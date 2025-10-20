@@ -15,7 +15,7 @@ namespace Test.Sqlite
         #region Private-Members
 
         private const string TestConnectionString = "Data Source=InMemorySharedTest;Mode=Memory;Cache=Shared";
-        private SqliteConnection? _KeepAliveConnection;
+        private SqliteConnection _KeepAliveConnection;
         private bool _Disposed = false;
 
         #endregion

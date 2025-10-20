@@ -10,6 +10,10 @@ namespace Test.Shared
     [Entity("authors")]
     public class Author
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
+        #region Public-Members
+
         /// <summary>
         /// Gets or sets the unique identifier for the author.
         /// </summary>
@@ -57,6 +61,21 @@ namespace Test.Shared
         [VersionColumn(VersionColumnType.Integer)]
         public int Version { get; set; } = 1;
 
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Author"/> class.
+        /// </summary>
+        public Author()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Returns a string representation of the author including ID, name, company information, and counts of books and categories.
         /// </summary>
@@ -65,5 +84,9 @@ namespace Test.Shared
         {
             return $"Author: Id={Id}, Name={Name}, CompanyId={CompanyId}, Company={Company?.Name ?? "null"}, Books Count={Books?.Count ?? 0}, Categories Count={Categories?.Count ?? 0}, Version={Version}";
         }
+
+        #endregion
+
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

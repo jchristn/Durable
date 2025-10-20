@@ -100,7 +100,7 @@ namespace Test.Postgres
 
             // Test retrieval
             _output.WriteLine("Retrieving entity...");
-            ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+            ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
             Assert.NotNull(retrieved);
             _output.WriteLine("Entity retrieved successfully");
@@ -146,7 +146,7 @@ namespace Test.Postgres
             ComplexEntity created = await repository.CreateAsync(entityWithNulls);
 
             _output.WriteLine("Retrieving entity with null values...");
-            ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+            ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
             Assert.NotNull(retrieved);
             Assert.Equal("Null Test Entity", retrieved.Name);
@@ -192,7 +192,7 @@ namespace Test.Postgres
                 };
 
                 ComplexEntity created = await repository.CreateAsync(entity);
-                ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+                ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
                 Assert.NotNull(retrieved);
                 Assert.Equal(status, retrieved.Status);
@@ -235,7 +235,7 @@ namespace Test.Postgres
             ComplexEntity created = await repository.CreateAsync(entity);
 
             _output.WriteLine("Retrieving entity with collections...");
-            ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+            ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
             Assert.NotNull(retrieved);
             Assert.NotNull(retrieved.Tags);
@@ -297,7 +297,7 @@ namespace Test.Postgres
             ComplexEntity created = await repository.CreateAsync(entity);
 
             _output.WriteLine("Retrieving entity with JSON-serialized objects...");
-            ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+            ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
             Assert.NotNull(retrieved);
             Assert.NotNull(retrieved.Metadata);
@@ -382,7 +382,7 @@ namespace Test.Postgres
                 };
 
                 ComplexEntity created = await repository.CreateAsync(entity);
-                ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+                ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
                 Assert.NotNull(retrieved);
                 // Allow small differences due to database precision
@@ -443,7 +443,7 @@ namespace Test.Postgres
                 };
 
                 ComplexEntity created = await repository.CreateAsync(entity);
-                ComplexEntity? retrieved = await repository.ReadByIdAsync(created.Id);
+                ComplexEntity retrieved = await repository.ReadByIdAsync(created.Id);
 
                 Assert.NotNull(retrieved);
                 Assert.Equal(testGuid, retrieved.UniqueId);

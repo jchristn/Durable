@@ -3,9 +3,15 @@ namespace Test.Sqlite
     using System;
     using Durable;
 
+    /// <summary>
+    /// Represents a test person entity for testing purposes.
+    /// </summary>
     [Entity("TestPerson")]
     public class TestPerson
     {
+        /// <summary>
+        /// Gets or sets the unique identifier.
+        /// </summary>
         [Property("Id", Flags.PrimaryKey)]
         public int Id { get; set; }
         
@@ -36,7 +42,17 @@ namespace Test.Sqlite
         [Property("YearsOfService")]
         public int YearsOfService { get; set; }
         
+        /// <summary>
+        /// Gets or sets the email address.
+        /// </summary>
         [Property("Email", Flags.String, 128)]
         public string Email { get; set; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestPerson"/> class.
+        /// </summary>
+        public TestPerson()
+        {
+        }
     }
 }
