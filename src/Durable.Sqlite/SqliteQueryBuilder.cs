@@ -913,9 +913,15 @@
             }
 
             // LIMIT/OFFSET
+            // SQLite requires LIMIT when using OFFSET
+            // LIMIT -1 means "return all remaining rows"
             if (_TakeCount.HasValue)
             {
                 sql.Append($" LIMIT {_TakeCount.Value}");
+            }
+            else if (_SkipCount.HasValue)
+            {
+                sql.Append(" LIMIT -1");
             }
 
             if (_SkipCount.HasValue)

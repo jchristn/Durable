@@ -9,6 +9,10 @@ namespace Test.Shared.Validation
     /// </summary>
     public class ValidAuthorNameAttribute : ValidationAttribute
     {
+#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
+
+        #region Private-Members
+
         /// <summary>
         /// Array of reserved words that are not allowed in author names
         /// </summary>
@@ -18,6 +22,21 @@ namespace Test.Shared.Validation
         /// Array of invalid characters that are not allowed in author names
         /// </summary>
         private readonly char[] InvalidChars = { '<', '>', '&', '"', '\'' };
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidAuthorNameAttribute"/> class.
+        /// </summary>
+        public ValidAuthorNameAttribute()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
 
         /// <summary>
         /// Validates the specified value
@@ -53,5 +72,9 @@ namespace Test.Shared.Validation
         {
             return $"The {name} field contains invalid characters or reserved words. Avoid: {string.Join(", ", ReservedWords)} and special HTML characters.";
         }
+
+        #endregion
+
+#pragma warning restore CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
     }
 }

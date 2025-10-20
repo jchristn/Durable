@@ -54,18 +54,18 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Test Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Creating author...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _output.WriteLine($"Created: ID={created.Id}, Version={created.Version}, Name={created.Name}");
 
                     Assert.True(created.Id > 0);
@@ -74,7 +74,7 @@ namespace Test.MySql
 
                     _output.WriteLine("Updating author...");
                     created.Name = "Updated Author";
-                    AuthorWithVersion updated = repo.Update(created);
+                    Author updated = repo.Update(created);
                     _output.WriteLine($"Updated: ID={updated.Id}, Version={updated.Version}, Name={updated.Name}");
 
                     Assert.Equal(2, updated.Version);
@@ -101,30 +101,30 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Creating author for conflict test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _output.WriteLine($"Created: ID={created.Id}, Version={created.Version}");
 
                     // Get two copies of the same entity
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     Assert.Equal(copy1.Version, copy2.Version);
 
                     // Update the first copy successfully
                     copy1.Name = "Update 1";
                     _output.WriteLine("Performing first update...");
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _output.WriteLine($"First update successful: Version={updated1.Version}");
 
                     // Attempt to update the second copy - this should throw
@@ -159,32 +159,32 @@ namespace Test.MySql
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new ClientWinsResolver<AuthorWithVersion>();
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Setting up Client Wins conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update first copy
                     copy1.Name = "Database Update";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _output.WriteLine($"Database update: Name='{updated1.Name}', Version={updated1.Version}");
 
                     // Update second copy - should use Client Wins resolver
                     copy2.Name = "Client Update";
                     _output.WriteLine("Attempting client update with Client Wins resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _output.WriteLine($"Client Wins result: Name='{resolved.Name}', Version={resolved.Version}");
 
@@ -213,32 +213,32 @@ namespace Test.MySql
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new DatabaseWinsResolver<AuthorWithVersion>();
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new DatabaseWinsResolver<Author>();
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Conflict Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Setting up Database Wins conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update first copy
                     copy1.Name = "Database Update";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _output.WriteLine($"Database update: Name='{updated1.Name}', Version={updated1.Version}");
 
                     // Update second copy - should use Database Wins resolver
                     copy2.Name = "Client Update";
                     _output.WriteLine("Attempting client update with Database Wins resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _output.WriteLine($"Database Wins result: Name='{resolved.Name}', Version={resolved.Version}");
 
@@ -268,32 +268,32 @@ namespace Test.MySql
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new MergeChangesResolver<AuthorWithVersion>("Id", "Version");
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new MergeChangesResolver<Author>("Id", "Version");
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Original Name",
                         CompanyId = 50
                     };
 
                     _output.WriteLine("Setting up Merge Changes conflict resolution test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _output.WriteLine($"Created: Name='{created.Name}', CompanyId={created.CompanyId}, Version={created.Version}");
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Update different fields in each copy
                     copy1.Name = "Updated Name";
-                    AuthorWithVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _output.WriteLine($"First update (Name): Name='{updated1.Name}', CompanyId={updated1.CompanyId}, Version={updated1.Version}");
 
                     copy2.CompanyId = 100;
                     _output.WriteLine("Attempting second update (CompanyId) with Merge Changes resolver...");
-                    AuthorWithVersion resolved = repo.Update(copy2);
+                    Author resolved = repo.Update(copy2);
 
                     _output.WriteLine($"Merge result: Name='{resolved.Name}', CompanyId={resolved.CompanyId}, Version={resolved.Version}");
 
@@ -331,24 +331,24 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Async Test Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Testing async concurrency operations...");
-                    AuthorWithVersion created = await repo.CreateAsync(author);
+                    Author created = await repo.CreateAsync(author);
                     _output.WriteLine($"Async created: ID={created.Id}, Version={created.Version}");
 
                     Assert.Equal(1, created.Version);
 
                     created.Name = "Async Updated Author";
-                    AuthorWithVersion updated = await repo.UpdateAsync(created);
+                    Author updated = await repo.UpdateAsync(created);
                     _output.WriteLine($"Async updated: Version={updated.Version}, Name='{updated.Name}'");
 
                     Assert.Equal(2, updated.Version);
@@ -375,50 +375,50 @@ namespace Test.MySql
 
             try
             {
-                IConcurrencyConflictResolver<AuthorWithVersion> resolver = new ClientWinsResolver<AuthorWithVersion>();
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver))
+                IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString, null, null, resolver))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Concurrent Test Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Setting up concurrent updates test...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
                     // Create multiple tasks that will attempt concurrent updates
-                    Task<AuthorWithVersion> task1 = Task.Run(async () =>
+                    Task<Author> task1 = Task.Run(async () =>
                     {
-                        using var repo1 = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo1.ReadById(created.Id);
+                        using var repo1 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
+                        Author copy = repo1.ReadById(created.Id);
                         copy.Name = "Update from Task 1";
                         await Task.Delay(50); // Simulate some work
                         return repo1.Update(copy);
                     });
 
-                    Task<AuthorWithVersion> task2 = Task.Run(async () =>
+                    Task<Author> task2 = Task.Run(async () =>
                     {
-                        using var repo2 = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo2.ReadById(created.Id);
+                        using var repo2 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
+                        Author copy = repo2.ReadById(created.Id);
                         copy.Name = "Update from Task 2";
                         await Task.Delay(50); // Simulate some work
                         return repo2.Update(copy);
                     });
 
-                    Task<AuthorWithVersion> task3 = Task.Run(async () =>
+                    Task<Author> task3 = Task.Run(async () =>
                     {
-                        using var repo3 = new MySqlRepository<AuthorWithVersion>(_connectionString, null, null, resolver);
-                        AuthorWithVersion copy = repo3.ReadById(created.Id);
+                        using var repo3 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
+                        Author copy = repo3.ReadById(created.Id);
                         copy.Name = "Update from Task 3";
                         await Task.Delay(50); // Simulate some work
                         return repo3.Update(copy);
                     });
 
                     // Wait for all tasks to complete
-                    AuthorWithVersion[] results = await Task.WhenAll(task1, task2, task3);
+                    Author[] results = await Task.WhenAll(task1, task2, task3);
 
                     _output.WriteLine("Concurrent updates completed:");
                     for (int i = 0; i < results.Length; i++)
@@ -430,7 +430,7 @@ namespace Test.MySql
                     Assert.All(results, result => Assert.True(result.Version > created.Version));
 
                     // Get the final state
-                    AuthorWithVersion final = repo.ReadById(created.Id);
+                    Author final = repo.ReadById(created.Id);
                     _output.WriteLine($"Final state: Name='{final.Name}', Version={final.Version}");
 
                     _output.WriteLine("✅ Concurrent updates test completed successfully");
@@ -454,31 +454,31 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithoutVersion> repo = new MySqlRepository<AuthorWithoutVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     // Clean up any existing data
                     repo.DeleteAll();
 
-                    AuthorWithoutVersion author = new AuthorWithoutVersion
+                    Author author = new Author
                     {
                         Name = "No Version Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Testing entity without version column...");
-                    AuthorWithoutVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _output.WriteLine($"Created: ID={created.Id}, Name='{created.Name}'");
 
-                    AuthorWithoutVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithoutVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     copy1.Name = "Update 1";
-                    AuthorWithoutVersion updated1 = repo.Update(copy1);
+                    Author updated1 = repo.Update(copy1);
                     _output.WriteLine($"First update: Name='{updated1.Name}'");
 
                     // This should succeed without conflict checking
                     copy2.Name = "Update 2";
-                    AuthorWithoutVersion updated2 = repo.Update(copy2);
+                    Author updated2 = repo.Update(copy2);
                     _output.WriteLine($"Second update: Name='{updated2.Name}'");
 
                     Assert.Equal("Update 2", updated2.Name);
@@ -504,18 +504,18 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Version Test Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Testing version increment behavior...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
                     _output.WriteLine($"Initial version: {created.Version}");
                     Assert.Equal(1, created.Version);
 
@@ -549,21 +549,21 @@ namespace Test.MySql
 
             try
             {
-                using (MySqlRepository<AuthorWithVersion> repo = new MySqlRepository<AuthorWithVersion>(_connectionString))
+                using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
                 {
                     CleanupTestData(repo);
 
-                    AuthorWithVersion author = new AuthorWithVersion
+                    Author author = new Author
                     {
                         Name = "Delete Test Author",
                         CompanyId = null
                     };
 
                     _output.WriteLine("Testing concurrency with delete operations...");
-                    AuthorWithVersion created = repo.Create(author);
+                    Author created = repo.Create(author);
 
-                    AuthorWithVersion copy1 = repo.ReadById(created.Id);
-                    AuthorWithVersion copy2 = repo.ReadById(created.Id);
+                    Author copy1 = repo.ReadById(created.Id);
+                    Author copy2 = repo.ReadById(created.Id);
 
                     // Delete the entity using first copy
                     bool deleted = repo.Delete(copy1);
@@ -591,7 +591,7 @@ namespace Test.MySql
             }
         }
 
-        private void CleanupTestData(MySqlRepository<AuthorWithVersion> repo)
+        private void CleanupTestData(MySqlRepository<Author> repo)
         {
             try
             {
@@ -610,7 +610,7 @@ namespace Test.MySql
             {
                 try
                 {
-                    using var repo = new MySqlRepository<AuthorWithVersion>(_connectionString);
+                    using var repo = new MySqlRepository<Author>(_connectionString);
                     CleanupTestData(repo);
                 }
                 catch (Exception ex)

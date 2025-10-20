@@ -9,11 +9,30 @@ namespace Test.Shared.Validation
     /// </summary>
     public class ValidBookTitleAttribute : ValidationAttribute
     {
+#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
+
+        #region Private-Members
+
         /// <summary>
         /// Array of profanity words that are not allowed in book titles
         /// </summary>
         private readonly string[] ProfanityWords = { "damn", "hell" }; // Mild example words
-        
+
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidBookTitleAttribute"/> class.
+        /// </summary>
+        public ValidBookTitleAttribute()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Validates the specified value
         /// </summary>
@@ -44,5 +63,9 @@ namespace Test.Shared.Validation
         {
             return $"The {name} field contains inappropriate content or invalid format.";
         }
+
+        #endregion
+
+#pragma warning restore CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
     }
 }

@@ -1,6 +1,7 @@
 namespace Durable.MySql
 {
     using System;
+    using System.Globalization;
     using System.Text;
     using System.Text.RegularExpressions;
 
@@ -170,8 +171,9 @@ namespace Durable.MySql
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0",
                 Guid g => SanitizeString(g.ToString()), // GUIDs must be quoted for VARCHAR columns
-                DateTime dt => SanitizeString(dt.ToString("yyyy-MM-dd HH:mm:ss")),
-                DateTimeOffset dto => SanitizeString(dto.ToString("yyyy-MM-dd HH:mm:ss")),
+                Enum e => SanitizeString(e.ToString()),
+                DateTime dt => SanitizeString(dt.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture)),
+                DateTimeOffset dto => SanitizeString(dto.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture)),
                 TimeSpan ts => SanitizeString(ts.ToString()),
                 char c => SanitizeString(c.ToString()),
                 _ when !RequiresSanitization(value) => value.ToString() ?? "NULL",

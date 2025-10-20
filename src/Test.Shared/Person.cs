@@ -10,6 +10,8 @@
     [Entity("people")]
     public class Person
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
         #region Public-Members
 
         /// <summary>
@@ -78,6 +80,13 @@
 
         #region Constructors-and-Factories
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Person"/> class.
+        /// </summary>
+        public Person()
+        {
+        }
+
         #endregion
 
         #region Public-Methods
@@ -96,6 +105,7 @@
         #region Private-Methods
 
         #endregion
-    }
 
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+    }
 }

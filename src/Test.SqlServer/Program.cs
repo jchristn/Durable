@@ -1,770 +1,163 @@
-#nullable enable
-
 namespace Test.SqlServer
 {
     using System;
-    using System.Collections.Generic;
-    using System.Data;
-    using System.Diagnostics;
     using System.Linq;
-    using System.Linq.Expressions;
-    using System.Threading;
     using System.Threading.Tasks;
-    using Durable;
-    using Durable.SqlServer;
-    using Microsoft.Data.SqlClient;
     using Test.Shared;
 
     /// <summary>
-    /// Comprehensive SQL Server test program demonstrating ORM functionality and expression parsing.
-    /// Tests both synchronous and asynchronous operations.
+    /// Entry point for SQL Server test suite execution.
     /// </summary>
     class Program
     {
-        #region Private-Members
-
-        private static readonly List<TestResult> _TestResults = new List<TestResult>();
-        private static string _ConnectionString = "";
-
-        #endregion
-
-        #region Public-Methods
-
-        static async Task Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
+            if (args.Contains("--help") || args.Contains("-h") || args.Contains("/?"))
+            {
+                ShowUsage();
+                return 0;
+            }
+
+            // If no arguments provided, show usage and exit
+            if (args.Length == 0)
+            {
+                ShowUsage();
+                return 1;
+            }
+
             try
             {
-                Console.WriteLine("Starting SQL Server ORM Test Program...");
+                string connectionString = BuildConnectionString(args);
 
-                // Check command line arguments for special modes
-                if (args.Length > 0 && args[0].ToLower() == "createdatabases")
+                if (string.IsNullOrEmpty(connectionString))
                 {
-                    // For create databases mode, use master database connection
-                    _ConnectionString = BuildConnectionString(true);
-                    await CreateAllDatabases();
-                    return;
+                    ShowUsage();
+                    return 1;
                 }
 
-                Console.WriteLine("=== SQL Server Comprehensive Integration Test Suite ===\n");
-
-                // Parse command line arguments with priority: CLI args > Environment vars > Interactive prompt > Default
-                if (args.Length > 0)
-                {
-                    _ConnectionString = args[0];
-                    Console.WriteLine($"Using connection string from command line: {MaskConnectionString(_ConnectionString)}\n");
-                }
-                else
-                {
-                    _ConnectionString = BuildConnectionString();
-                    Console.WriteLine("Tip: You can specify a custom SQL Server connection string by passing it as an argument.");
-                    Console.WriteLine("     Example: dotnet Test.SqlServer.dll \"Server=localhost;Database=mydb;User=sa;Password=secret;TrustServerCertificate=true;\"\n");
-                }
-
-                // Check if SQL Server is available
-                if (!await IsMyServerAvailable())
-                {
-                    Console.WriteLine("❌ SQL Server is not available. Please check your connection.");
-                    Console.WriteLine("   Connection string: " + MaskConnectionString(_ConnectionString));
-                    return;
-                }
-
-                // Run comprehensive integration tests
-                await SqlServerTestRunner.RunAllTests();
-                Console.WriteLine("\n=== Basic Repository Pattern Demo ===\n");
-
-                await InitializeDatabase();
-
-                // Create repository
-                SqlServerRepository<Person> repository = new SqlServerRepository<Person>(_ConnectionString);
-
-                Console.WriteLine("========== BASIC FUNCTIONALITY TESTS ==========");
-                await RunTest("Basic Repository Creation", () => TestRepositoryCreation(repository));
-                await RunTest("Database Schema Creation", () => TestSchemaCreation(repository));
-
-                Console.WriteLine("\n========== CRUD OPERATIONS TESTS ==========");
-                await RunTest("Create Operations", () => TestCreateOperations(repository));
-                await RunTest("Read Operations", () => TestReadOperations(repository));
-                await RunTest("Update Operations", () => TestUpdateOperations(repository));
-                await RunTest("Delete Operations", () => TestDeleteOperations(repository));
-
-                Console.WriteLine("\n========== EXPRESSION PARSING TESTS ==========");
-                await RunTest("Simple Where Expressions", () => TestSimpleExpressions(repository));
-                await RunTest("Complex Where Expressions", () => TestComplexExpressions(repository));
-                await RunTest("String Method Expressions", () => TestStringMethods(repository));
-                await RunTest("Math Operations", () => TestMathOperations(repository));
-                // DateTime operations removed - Person class doesn't have DateTime properties
-                await RunTest("Collection Operations", () => TestCollectionOperations(repository));
-
-                Console.WriteLine("\n========== QUERY BUILDER TESTS ==========");
-                await RunTest("OrderBy Operations", () => TestOrderByOperations(repository));
-                await RunTest("Take/Skip Operations", () => TestTakeSkipOperations(repository));
-                await RunTest("Distinct Operations", () => TestDistinctOperations(repository));
-
-                Console.WriteLine("\n========== SQL GENERATION TESTS ==========");
-                await RunTest("SQL Generation Quality", () => TestSqlGeneration(repository));
-                await RunTest("Parentheses Optimization", () => TestParenthesesOptimization(repository));
-
-                Console.WriteLine("\n========== ASYNC OPERATIONS TESTS ==========");
-                await RunTest("Async Create Operations", () => TestAsyncCreateOperations(repository));
-                await RunTest("Async Read Operations", () => TestAsyncReadOperations(repository));
-
-                // Cleanup
-                repository.Dispose();
-
-                PrintTestResults();
+                using SqlServerRepositoryProvider provider = new SqlServerRepositoryProvider(connectionString);
+                int exitCode = await SharedTestRunner.RunAllTestsAsync(provider);
+                return exitCode;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Fatal error: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                Console.WriteLine($"Fatal error: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+                return 1;
             }
         }
 
-        #endregion
-
-        #region Private-Methods
-
-        private static async Task<bool> IsMyServerAvailable()
+        static void ShowUsage()
         {
-            try
+            Console.WriteLine("====================================================");
+            Console.WriteLine("     SQL SERVER INTEGRATION TEST SUITE");
+            Console.WriteLine("====================================================");
+            Console.WriteLine();
+            Console.WriteLine("USAGE:");
+            Console.WriteLine("  Test.SqlServer.exe --server <host> --database <db> [--user <username>] [--password <pwd>] [--port <port>]");
+            Console.WriteLine("  Test.SqlServer.exe --connection-string <connection-string>");
+            Console.WriteLine("  Test.SqlServer.exe --help");
+            Console.WriteLine();
+            Console.WriteLine("OPTIONS:");
+            Console.WriteLine("  --server, -s          SQL Server hostname (default: localhost)");
+            Console.WriteLine("  --port, -p            SQL Server port (default: 1433)");
+            Console.WriteLine("  --database, -d        Database name (default: durable_test)");
+            Console.WriteLine("  --user, -u            SQL Server username (optional, uses Windows auth if not specified)");
+            Console.WriteLine("  --password, -pw       SQL Server password (required if --user is specified)");
+            Console.WriteLine("  --trusted             Use Windows Integrated Authentication (default if no user specified)");
+            Console.WriteLine("  --connection-string   Full SQL Server connection string");
+            Console.WriteLine("  --help, -h, /?        Show this help message");
+            Console.WriteLine();
+            Console.WriteLine("EXAMPLES:");
+            Console.WriteLine("  # Use Windows Authentication (default)");
+            Console.WriteLine("  Test.SqlServer.exe");
+            Console.WriteLine();
+            Console.WriteLine("  # Use SQL Server Authentication");
+            Console.WriteLine("  Test.SqlServer.exe --server myserver.com --user sa --password MyPassword123");
+            Console.WriteLine();
+            Console.WriteLine("  # Use full connection string");
+            Console.WriteLine("  Test.SqlServer.exe --connection-string \"Server=localhost;Database=durable_test;Trusted_Connection=True;\"");
+            Console.WriteLine();
+            Console.WriteLine("SETUP INSTRUCTIONS:");
+            Console.WriteLine("  If SQL Server is not installed, you can use Docker:");
+            Console.WriteLine();
+            Console.WriteLine("    docker run -d --name durable-sqlserver-test \\");
+            Console.WriteLine("      -e 'ACCEPT_EULA=Y' \\");
+            Console.WriteLine("      -e 'SA_PASSWORD=YourStrong@Passw0rd' \\");
+            Console.WriteLine("      -p 1433:1433 \\");
+            Console.WriteLine("      mcr.microsoft.com/mssql/server:2022-latest");
+            Console.WriteLine();
+            Console.WriteLine("    # Create database");
+            Console.WriteLine("    docker exec durable-sqlserver-test /opt/mssql-tools/bin/sqlcmd \\");
+            Console.WriteLine("      -S localhost -U sa -P 'YourStrong@Passw0rd' \\");
+            Console.WriteLine("      -Q \"CREATE DATABASE durable_test\"");
+            Console.WriteLine();
+            Console.WriteLine("  Then run: Test.SqlServer.exe --user sa --password YourStrong@Passw0rd");
+            Console.WriteLine();
+        }
+
+        static string BuildConnectionString(string[] args)
+        {
+            // Check for full connection string first
+            for (int i = 0; i < args.Length - 1; i++)
             {
-                using var connection = new SqlConnection(_ConnectionString);
-                await connection.OpenAsync();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static async Task InitializeDatabase()
-        {
-            try
-            {
-                using var connection = new SqlConnection(_ConnectionString);
-                await connection.OpenAsync();
-
-                // Drop and recreate Person table
-                string createTableSql = @"
-                    IF OBJECT_ID('people', 'U') IS NOT NULL
-                        DROP TABLE people;
-
-                    CREATE TABLE people (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        first VARCHAR(64) NOT NULL,
-                        last VARCHAR(64) NOT NULL,
-                        age INT NOT NULL DEFAULT 0,
-                        email VARCHAR(128),
-                        salary DECIMAL(10,2) DEFAULT 0.00,
-                        department VARCHAR(32)
-                    );";
-
-                using var createCommand = new SqlCommand(createTableSql, connection);
-                await createCommand.ExecuteNonQueryAsync();
-
-                Console.WriteLine("✅ Database initialized successfully");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Database initialization failed: {ex.Message}");
-                throw;
-            }
-        }
-
-        private static async Task RunTest(string testName, Func<Task> testAction)
-        {
-            var stopwatch = Stopwatch.StartNew();
-            try
-            {
-                await testAction();
-                stopwatch.Stop();
-                _TestResults.Add(new TestResult { Name = testName, Success = true, Duration = stopwatch.Elapsed });
-                Console.WriteLine($"✅ {testName} - {stopwatch.ElapsedMilliseconds}ms");
-            }
-            catch (Exception ex)
-            {
-                stopwatch.Stop();
-                _TestResults.Add(new TestResult { Name = testName, Success = false, Duration = stopwatch.Elapsed, Error = ex.Message });
-                Console.WriteLine($"❌ {testName} - Failed: {ex.Message}");
-            }
-        }
-
-        private static async Task TestRepositoryCreation(SqlServerRepository<Person> repository)
-        {
-            // Test that repository implements expected interfaces
-            if (!(repository is IRepository<Person>))
-                throw new Exception("Repository doesn't implement IRepository<Person>");
-
-            if (!(repository is ISqlCapture sqlCapture))
-                throw new Exception("Repository doesn't implement ISqlCapture");
-
-            // Test basic properties
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestSchemaCreation(SqlServerRepository<Person> repository)
-        {
-            // Test that we can query the schema
-            int count = repository.Count();
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestCreateOperations(SqlServerRepository<Person> repository)
-        {
-            // Clear existing data
-            repository.DeleteAll();
-
-            // Test single create
-            Person person = new Person
-            {
-                FirstName = "John",
-                LastName = "Doe",
-                Age = 30,
-                Email = "john.doe@example.com",
-                Salary = 50000.00m,
-                Department = "Engineering"
-            };
-
-            Person created = repository.Create(person);
-            if (created.Id == 0)
-                throw new Exception("Created person should have an ID");
-
-            // Test batch create
-            List<Person> people = new List<Person>
-            {
-                new Person { FirstName = "Jane", LastName = "Smith", Age = 25, Email = "jane@example.com" },
-                new Person { FirstName = "Bob", LastName = "Johnson", Age = 35, Email = "bob@example.com" },
-                new Person { FirstName = "Alice", LastName = "Brown", Age = 28, Email = "alice@example.com" }
-            };
-
-            IEnumerable<Person> batchCreated = repository.CreateMany(people);
-            if (batchCreated.Count() != 3)
-                throw new Exception("Should have created 3 people");
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestReadOperations(SqlServerRepository<Person> repository)
-        {
-            // Test read all
-            IEnumerable<Person> allPeople = repository.ReadAll();
-            if (allPeople.Count() < 1)
-                throw new Exception("Should have at least 1 person");
-
-            // Test read by ID
-            Person? first = allPeople.First();
-            Person? byId = repository.ReadById(first.Id);
-            if (byId == null || byId.Id != first.Id)
-                throw new Exception("ReadById failed");
-
-            // Test count
-            int count = repository.Count();
-            if (count < 1)
-                throw new Exception("Count should be at least 1");
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestUpdateOperations(SqlServerRepository<Person> repository)
-        {
-            Person? person = repository.ReadAll().First();
-            string originalEmail = person.Email ?? "";
-
-            person.Email = "updated@example.com";
-            Person updated = repository.Update(person);
-
-            if (updated.Email != "updated@example.com")
-                throw new Exception("Update failed");
-
-            // Restore original
-            person.Email = originalEmail;
-            repository.Update(person);
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestDeleteOperations(SqlServerRepository<Person> repository)
-        {
-            int originalCount = repository.Count();
-
-            // Create a person to delete
-            Person toDelete = repository.Create(new Person
-            {
-                FirstName = "Delete",
-                LastName = "Me",
-                Age = 99,
-                Email = "delete@example.com"
-            });
-
-            // Test delete by ID
-            bool deleted = repository.DeleteById(toDelete.Id);
-            if (!deleted)
-                throw new Exception("DeleteById should return true");
-
-            int newCount = repository.Count();
-            if (newCount != originalCount)
-                throw new Exception("Count should be back to original");
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestSimpleExpressions(SqlServerRepository<Person> repository)
-        {
-            // Test equality
-            IEnumerable<Person> johns = repository.Query()
-                .Where(p => p.FirstName == "John")
-                .Execute();
-
-            // Test comparison
-            IEnumerable<Person> adults = repository.Query()
-                .Where(p => p.Age >= 25)
-                .Execute();
-
-            // Test logical AND
-            IEnumerable<Person> filtered = repository.Query()
-                .Where(p => p.FirstName == "John" && p.Age > 25)
-                .Execute();
-
-            // Test logical OR
-            IEnumerable<Person> multipleNames = repository.Query()
-                .Where(p => p.FirstName == "John" || p.FirstName == "Jane")
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestComplexExpressions(SqlServerRepository<Person> repository)
-        {
-            // Test complex logical expression
-            IEnumerable<Person> complex = repository.Query()
-                .Where(p => (p.FirstName == "John" && p.Age > 25) || (p.FirstName == "Jane" && p.Age < 30))
-                .Execute();
-
-            // Test null comparisons
-            IEnumerable<Person> withEmail = repository.Query()
-                .Where(p => p.Email != null)
-                .Execute();
-
-            // Test math operations
-            IEnumerable<Person> salaryBonus = repository.Query()
-                .Where(p => p.Salary * 1.1m > 50000)
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestStringMethods(SqlServerRepository<Person> repository)
-        {
-            // Test Contains
-            IEnumerable<Person> containsTest = repository.Query()
-                .Where(p => p.Email.Contains("example"))
-                .Execute();
-
-            // Test StartsWith
-            IEnumerable<Person> startsWithTest = repository.Query()
-                .Where(p => p.FirstName.StartsWith("J"))
-                .Execute();
-
-            // Test EndsWith
-            IEnumerable<Person> endsWithTest = repository.Query()
-                .Where(p => p.Email.EndsWith(".com"))
-                .Execute();
-
-            // Test ToUpper
-            IEnumerable<Person> upperTest = repository.Query()
-                .Where(p => p.FirstName.ToUpper() == "JOHN")
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestMathOperations(SqlServerRepository<Person> repository)
-        {
-            // Test addition
-            IEnumerable<Person> addTest = repository.Query()
-                .Where(p => p.Age + 5 > 30)
-                .Execute();
-
-            // Test subtraction
-            IEnumerable<Person> subtractTest = repository.Query()
-                .Where(p => p.Age - 5 < 40)
-                .Execute();
-
-            // Test multiplication
-            IEnumerable<Person> multiplyTest = repository.Query()
-                .Where(p => p.Salary * 2 > 80000)
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-
-        private static async Task TestCollectionOperations(SqlServerRepository<Person> repository)
-        {
-            // Test IN operation with array
-            string[] names = { "John", "Jane", "Bob" };
-            IEnumerable<Person> inTest = repository.Query()
-                .Where(p => names.Contains(p.FirstName))
-                .Execute();
-
-            // Test IN operation with list
-            List<int> ages = new List<int> { 25, 30, 35 };
-            IEnumerable<Person> ageInTest = repository.Query()
-                .Where(p => ages.Contains(p.Age))
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestOrderByOperations(SqlServerRepository<Person> repository)
-        {
-            // Test OrderBy
-            IEnumerable<Person> orderedByAge = repository.Query()
-                .OrderBy(p => p.Age)
-                .Execute();
-
-            // Test OrderByDescending
-            IEnumerable<Person> orderedByNameDesc = repository.Query()
-                .OrderByDescending(p => p.FirstName)
-                .Execute();
-
-            // Test multiple OrderBy
-            IEnumerable<Person> multipleOrder = repository.Query()
-                .OrderBy(p => p.LastName)
-                .ThenBy(p => p.FirstName)
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestTakeSkipOperations(SqlServerRepository<Person> repository)
-        {
-            // Test Take (SQL Server requires ORDER BY with OFFSET/FETCH)
-            IEnumerable<Person> firstTwo = repository.Query()
-                .OrderBy(p => p.Id)
-                .Take(2)
-                .Execute();
-
-            if (firstTwo.Count() > 2)
-                throw new Exception("Take(2) should return at most 2 items");
-
-            // Test Skip (SQL Server requires ORDER BY with OFFSET/FETCH)
-            IEnumerable<Person> skipFirst = repository.Query()
-                .OrderBy(p => p.Id)
-                .Skip(1)
-                .Execute();
-
-            // Test Take + Skip
-            IEnumerable<Person> paging = repository.Query()
-                .OrderBy(p => p.Id)
-                .Skip(1)
-                .Take(2)
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestDistinctOperations(SqlServerRepository<Person> repository)
-        {
-            // Test Distinct
-            IEnumerable<Person> distinct = repository.Query()
-                .Distinct()
-                .Execute();
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestSqlGeneration(SqlServerRepository<Person> repository)
-        {
-            // Enable SQL capture
-            repository.CaptureSql = true;
-
-            // Execute a query
-            repository.Query()
-                .Where(p => p.FirstName == "John" && p.Age > 25)
-                .OrderBy(p => p.LastName)
-                .Take(5)
-                .Execute();
-
-            string? sql = repository.LastExecutedSql;
-            if (string.IsNullOrEmpty(sql))
-                throw new Exception("Should have captured SQL");
-
-            if (!sql.Contains("SELECT"))
-                throw new Exception("SQL should contain SELECT");
-
-            if (!sql.Contains("WHERE"))
-                throw new Exception("SQL should contain WHERE clause");
-
-            if (!sql.Contains("ORDER BY"))
-                throw new Exception("SQL should contain ORDER BY clause");
-
-            // SQL Server uses OFFSET/FETCH instead of LIMIT
-            if (!sql.Contains("OFFSET") || !sql.Contains("FETCH"))
-                throw new Exception("SQL should contain OFFSET/FETCH clause for pagination");
-
-            Console.WriteLine($"   Generated SQL: {sql}");
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestParenthesesOptimization(SqlServerRepository<Person> repository)
-        {
-            repository.CaptureSql = true;
-
-            // Test that parentheses are optimized
-            repository.Query()
-                .Where(p => p.FirstName == "John" && p.Age > 25)
-                .Execute();
-
-            string? sql = repository.LastExecutedSql;
-            if (string.IsNullOrEmpty(sql))
-                throw new Exception("Should have captured SQL");
-
-            // Should not have excessive parentheses like ((`FirstName` = 'John') AND (`Age` > 25))
-            if (sql.Contains("((`") || sql.Contains("`) AND (`"))
-                throw new Exception($"SQL has excessive parentheses: {sql}");
-
-            Console.WriteLine($"   Optimized SQL: {sql}");
-
-            await Task.CompletedTask;
-        }
-
-        private static async Task TestAsyncCreateOperations(SqlServerRepository<Person> repository)
-        {
-            // Clear existing data
-            repository.DeleteAll();
-
-            Person person = new Person
-            {
-                FirstName = "Async",
-                LastName = "Test",
-                Age = 25,
-                Email = "async@example.com"
-            };
-
-            Person created = await repository.CreateAsync(person);
-            if (created.Id == 0)
-                throw new Exception("Async created person should have an ID");
-        }
-
-        private static async Task TestAsyncReadOperations(SqlServerRepository<Person> repository)
-        {
-            List<Person> allPeople = new List<Person>();
-            await foreach (Person person in repository.ReadAllAsync())
-            {
-                allPeople.Add(person);
-            }
-
-            if (allPeople.Count < 1)
-                throw new Exception("Async ReadAll should return at least 1 person");
-
-            Person? first = allPeople.First();
-            Person? byId = await repository.ReadByIdAsync(first.Id);
-            if (byId == null || byId.Id != first.Id)
-                throw new Exception("Async ReadById failed");
-
-            int count = await repository.CountAsync();
-            if (count < 1)
-                throw new Exception("Async Count should be at least 1");
-        }
-
-        private static void PrintTestResults()
-        {
-            Console.WriteLine("\n========== TEST RESULTS SUMMARY ==========");
-
-            int passed = _TestResults.Count(t => t.Success);
-            int failed = _TestResults.Count(t => !t.Success);
-            double totalMs = _TestResults.Sum(t => t.Duration.TotalMilliseconds);
-
-            Console.WriteLine($"Tests run: {_TestResults.Count}");
-            Console.WriteLine($"✅ Passed: {passed}");
-            Console.WriteLine($"❌ Failed: {failed}");
-            Console.WriteLine($"⏱️  Total time: {totalMs:F2}ms");
-            Console.WriteLine($"📊 Success rate: {(passed * 100.0 / _TestResults.Count):F1}%");
-
-            if (failed > 0)
-            {
-                Console.WriteLine("\n❌ Failed tests:");
-                foreach (TestResult failure in _TestResults.Where(t => !t.Success))
+                if (args[i] == "--connection-string")
                 {
-                    Console.WriteLine($"   • {failure.Name}: {failure.Error}");
+                    return args[i + 1];
                 }
             }
 
-            Console.WriteLine($"\n🎉 SQL Server ORM Test Complete - Expression parsing and CRUD operations verified!");
-        }
+            // Build connection string from individual parameters
+            string server = "localhost";
+            string port = "1433";
+            string database = "durable_test";
+            string user = null;
+            string password = null;
+            bool useTrustedConnection = true;
 
-        /// <summary>
-        /// Builds the connection string from environment variables or prompts user.
-        /// </summary>
-        /// <param name="useMaster">If true, connects to master database instead of test database.</param>
-        /// <returns>A SQL Server connection string.</returns>
-        private static string BuildConnectionString(bool useMaster = false)
-        {
-            string server = Environment.GetEnvironmentVariable("SQLSERVER_SERVER") ?? "";
-            string database = Environment.GetEnvironmentVariable("SQLSERVER_DATABASE") ?? "";
-            string user = Environment.GetEnvironmentVariable("SQLSERVER_USER") ?? "";
-            string password = Environment.GetEnvironmentVariable("SQLSERVER_PASSWORD") ?? "";
-
-            // If any required value is missing, prompt for all of them
-            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(password))
+            for (int i = 0; i < args.Length - 1; i++)
             {
-                Console.WriteLine("=== SQL Server Connection Setup ===");
-
-                if (string.IsNullOrEmpty(server))
+                switch (args[i].ToLower())
                 {
-                    Console.Write("Enter SQL Server host and port (e.g., 'localhost' or 'server.com,1433'): ");
-                    Console.Write("(or press Enter for default 'localhost'): ");
-                    server = Console.ReadLine() ?? "";
-                    if (string.IsNullOrEmpty(server))
-                    {
-                        server = "localhost";
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Using server from environment: {server}");
-                }
-
-                if (string.IsNullOrEmpty(user))
-                {
-                    Console.Write("Enter SQL Server username (or press Enter for default 'sa'): ");
-                    user = Console.ReadLine() ?? "";
-                    if (string.IsNullOrEmpty(user))
-                    {
-                        user = "sa";
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Using username from environment: {user}");
-                }
-
-                if (string.IsNullOrEmpty(password))
-                {
-                    Console.Write("Enter SQL Server password (or press Enter for default 'P@ssw0rd4Sql'): ");
-                    password = Console.ReadLine() ?? "";
-                    if (string.IsNullOrEmpty(password))
-                    {
-                        password = "P@ssw0rd4Sql";
-                    }
-                }
-
-                if (string.IsNullOrEmpty(database) && !useMaster)
-                {
-                    Console.Write("Enter database name (or press Enter for default 'durable_integration_test'): ");
-                    database = Console.ReadLine() ?? "";
-                    if (string.IsNullOrEmpty(database))
-                    {
-                        database = "durable_integration_test";
-                    }
-                }
-                else if (!useMaster)
-                {
-                    Console.WriteLine($"Using database from environment: {database}");
-                }
-
-                Console.WriteLine();
-            }
-
-            // Override database if useMaster is true
-            if (useMaster)
-            {
-                database = "master";
-            }
-            else if (string.IsNullOrEmpty(database))
-            {
-                database = "durable_integration_test";
-            }
-
-            return $"Server={server};Database={database};User={user};Password={password};TrustServerCertificate=true;Encrypt=false;";
-        }
-
-        /// <summary>
-        /// Masks the password in a connection string for safe display.
-        /// </summary>
-        /// <param name="connectionString">The connection string to mask.</param>
-        /// <returns>Connection string with password hidden.</returns>
-        private static string MaskConnectionString(string connectionString)
-        {
-            if (string.IsNullOrEmpty(connectionString))
-                return connectionString;
-
-            int passwordIndex = connectionString.IndexOf("Password=", StringComparison.OrdinalIgnoreCase);
-            if (passwordIndex == -1)
-                return connectionString;
-
-            int passwordStart = passwordIndex + "Password=".Length;
-            int semicolonIndex = connectionString.IndexOf(';', passwordStart);
-
-            if (semicolonIndex == -1)
-                return connectionString.Substring(0, passwordStart) + "***";
-
-            return connectionString.Substring(0, passwordStart) + "***" + connectionString.Substring(semicolonIndex);
-        }
-
-        /// <summary>
-        /// Creates all required test databases if they don't exist
-        /// </summary>
-        private static async Task CreateAllDatabases()
-        {
-            string masterConnectionString = _ConnectionString;
-
-            string[] databases = new[] {
-                "durable_integration_test",
-                "durable_advanced_test",
-                "durable_include_test",
-                "durable_groupby_test",
-                "durable_projection_test",
-                "durable_expression_test",
-                "durable_transaction_test",
-                "durable_concurrency_test",
-                "durable_datatype_test",
-                "durable_batch_test",
-                "durable_test"
-            };
-
-            Console.WriteLine("Creating SQL Server test databases...\n");
-
-            await using SqlConnection connection = new SqlConnection(masterConnectionString);
-            await connection.OpenAsync();
-
-            foreach (string dbName in databases)
-            {
-                await using SqlCommand checkCommand = connection.CreateCommand();
-                checkCommand.CommandText = $"SELECT COUNT(*) FROM sys.databases WHERE name = '{dbName}'";
-                int count = (int)(await checkCommand.ExecuteScalarAsync())!;
-
-                if (count == 0)
-                {
-                    await using SqlCommand createCommand = connection.CreateCommand();
-                    createCommand.CommandText = $"CREATE DATABASE {dbName}";
-                    await createCommand.ExecuteNonQueryAsync();
-                    Console.WriteLine($"✅ Created database: {dbName}");
-                }
-                else
-                {
-                    Console.WriteLine($"ℹ️  Database already exists: {dbName}");
+                    case "--server":
+                    case "-s":
+                        server = args[i + 1];
+                        break;
+                    case "--port":
+                    case "-p":
+                        port = args[i + 1];
+                        break;
+                    case "--database":
+                    case "-d":
+                        database = args[i + 1];
+                        break;
+                    case "--user":
+                    case "-u":
+                        user = args[i + 1];
+                        useTrustedConnection = false;
+                        break;
+                    case "--password":
+                    case "-pw":
+                        password = args[i + 1];
+                        break;
                 }
             }
 
-            Console.WriteLine("\n✅ All databases created successfully!");
+            if (args.Contains("--trusted"))
+            {
+                useTrustedConnection = true;
+            }
+
+            string serverWithPort = port != "1433" ? $"{server},{port}" : server;
+
+            if (useTrustedConnection)
+            {
+                return $"Server={serverWithPort};Database={database};Trusted_Connection=True;TrustServerCertificate=True;";
+            }
+            else
+            {
+                return $"Server={serverWithPort};Database={database};User Id={user};Password={password};TrustServerCertificate=True;";
+            }
         }
-
-        #endregion
-
-        #region Nested-Classes
-
-        private class TestResult
-        {
-            public string Name { get; set; } = "";
-            public bool Success { get; set; }
-            public TimeSpan Duration { get; set; }
-            public string Error { get; set; } = "";
-        }
-
-        #endregion
     }
 }

@@ -238,10 +238,21 @@ namespace Durable.MySql
 
             // TimeSpan handling - MySQL returns TimeSpan objects for TIME type
             // MySQL TIME can store values from '-838:59:59' to '838:59:59' (extended range)
+            // When stored as BIGINT, it represents HHMMSS format (e.g., 623045 = 62:30:45)
             if (targetType == typeof(TimeSpan))
             {
                 if (value is TimeSpan ts)
                     return ts;
+                // Handle BIGINT storage (HHMMSS format)
+                if (IsNumericType(value.GetType()))
+                {
+                    long hhmmss = Convert.ToInt64(value);
+                    // Parse HHMMSS format: e.g., 623045 = 62 hours, 30 minutes, 45 seconds
+                    int seconds = (int)(hhmmss % 100);
+                    int minutes = (int)((hhmmss / 100) % 100);
+                    int hours = (int)(hhmmss / 10000);
+                    return new TimeSpan(hours, minutes, seconds);
+                }
                 if (value is string tsStr)
                 {
                     // Try to parse MySQL TIME format which can have hours > 24

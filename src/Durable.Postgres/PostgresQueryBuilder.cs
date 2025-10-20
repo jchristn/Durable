@@ -821,9 +821,15 @@ namespace Durable.Postgres
             }
 
             // LIMIT and OFFSET (PostgreSQL syntax)
+            // PostgreSQL requires LIMIT when using OFFSET
+            // Use "LIMIT ALL" to return all remaining rows
             if (_TakeCount.HasValue)
             {
                 sqlParts.Add($"LIMIT {_TakeCount.Value}");
+            }
+            else if (_SkipCount.HasValue)
+            {
+                sqlParts.Add("LIMIT ALL");
             }
 
             if (_SkipCount.HasValue)

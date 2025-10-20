@@ -166,6 +166,7 @@ namespace Durable.SqlServer
                 null => "NULL",
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0", // SQL Server uses BIT type (0/1)
+                Enum e => SanitizeString(e.ToString()),
                 DateTime dt => FormatDateTime(dt),
                 DateTimeOffset dto => FormatDateTimeOffset(dto),
                 DateOnly dateOnly => SanitizeString(dateOnly.ToString("yyyy-MM-dd")),

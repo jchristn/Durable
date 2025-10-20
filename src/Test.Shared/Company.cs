@@ -10,6 +10,10 @@ namespace Test.Shared
     [Entity("companies")]
     public class Company
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
+        #region Public-Members
+
         /// <summary>
         /// Gets or sets the unique identifier for the company.
         /// </summary>
@@ -43,6 +47,21 @@ namespace Test.Shared
         [InverseNavigationProperty("PublisherId")]
         public List<Book> PublishedBooks { get; set; } = new List<Book>();
 
+        #endregion
+
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Company"/> class.
+        /// </summary>
+        public Company()
+        {
+        }
+
+        #endregion
+
+        #region Public-Methods
+
         /// <summary>
         /// Returns a string representation of the company.
         /// </summary>
@@ -51,5 +70,9 @@ namespace Test.Shared
         {
             return $"Company: Id={Id}, Name={Name}, Industry={Industry}, Employees={Employees?.Count ?? 0}, Published Books={PublishedBooks?.Count ?? 0}";
         }
+
+        #endregion
+
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }
