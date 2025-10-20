@@ -14,9 +14,8 @@ namespace Test.SqlServer
     {
         #region Private-Members
 
-        private const string TestConnectionString = "Server=localhost;Database=durable_test;Trusted_Connection=True;";
+        private readonly string _ConnectionString;
         private bool _Disposed = false;
-        private bool _DatabaseAvailable = false;
 
         #endregion
 
@@ -29,6 +28,19 @@ namespace Test.SqlServer
 
         #endregion
 
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SqlServerRepositoryProvider"/> class.
+        /// </summary>
+        /// <param name="connectionString">The SQL Server connection string to use for tests.</param>
+        public SqlServerRepositoryProvider(string connectionString)
+        {
+            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        }
+
+        #endregion
+
         #region Public-Methods
 
         /// <summary>
@@ -38,7 +50,7 @@ namespace Test.SqlServer
         /// <returns>A configured repository instance.</returns>
         public IRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new SqlServerRepository<T>(TestConnectionString);
+            return new SqlServerRepository<T>(_ConnectionString);
         }
 
         /// <summary>
@@ -134,14 +146,12 @@ namespace Test.SqlServer
         {
             try
             {
-                using SqlConnection connection = new SqlConnection(TestConnectionString);
+                using SqlConnection connection = new SqlConnection(_ConnectionString);
                 await connection.OpenAsync();
-                _DatabaseAvailable = true;
                 return true;
             }
             catch
             {
-                _DatabaseAvailable = false;
                 return false;
             }
         }

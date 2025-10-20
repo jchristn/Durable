@@ -14,10 +14,8 @@ namespace Test.MySql
     {
         #region Private-Members
 
-        private const string TestConnectionString = "Server=localhost;Database=durable_test;User=test_user;Password=test_password;";
-        private const string TestDatabaseName = "durable_test";
+        private readonly string _ConnectionString;
         private bool _Disposed = false;
-        private bool _DatabaseAvailable = false;
 
         #endregion
 
@@ -30,6 +28,19 @@ namespace Test.MySql
 
         #endregion
 
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MySqlRepositoryProvider"/> class.
+        /// </summary>
+        /// <param name="connectionString">The MySQL connection string to use for tests.</param>
+        public MySqlRepositoryProvider(string connectionString)
+        {
+            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        }
+
+        #endregion
+
         #region Public-Methods
 
         /// <summary>
@@ -39,7 +50,7 @@ namespace Test.MySql
         /// <returns>A configured repository instance.</returns>
         public IRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new MySqlRepository<T>(TestConnectionString);
+            return new MySqlRepository<T>(_ConnectionString);
         }
 
         /// <summary>
@@ -131,14 +142,12 @@ namespace Test.MySql
         {
             try
             {
-                using MySqlConnection connection = new MySqlConnection(TestConnectionString);
+                using MySqlConnection connection = new MySqlConnection(_ConnectionString);
                 await connection.OpenAsync();
-                _DatabaseAvailable = true;
                 return true;
             }
             catch
             {
-                _DatabaseAvailable = false;
                 return false;
             }
         }

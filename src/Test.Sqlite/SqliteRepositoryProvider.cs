@@ -14,7 +14,7 @@ namespace Test.Sqlite
     {
         #region Private-Members
 
-        private const string TestConnectionString = "Data Source=InMemorySharedTest;Mode=Memory;Cache=Shared";
+        private readonly string _ConnectionString;
         private SqliteConnection _KeepAliveConnection;
         private bool _Disposed = false;
 
@@ -34,8 +34,10 @@ namespace Test.Sqlite
         /// <summary>
         /// Initializes a new instance of the <see cref="SqliteRepositoryProvider"/> class.
         /// </summary>
-        public SqliteRepositoryProvider()
+        /// <param name="connectionString">The SQLite connection string to use for tests. If null, uses in-memory database.</param>
+        public SqliteRepositoryProvider(string connectionString = null)
         {
+            _ConnectionString = connectionString ?? "Data Source=InMemorySharedTest;Mode=Memory;Cache=Shared";
         }
 
         #endregion
@@ -49,7 +51,7 @@ namespace Test.Sqlite
         /// <returns>A configured repository instance.</returns>
         public IRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new SqliteRepository<T>(TestConnectionString);
+            return new SqliteRepository<T>(_ConnectionString);
         }
 
         /// <summary>
@@ -58,7 +60,7 @@ namespace Test.Sqlite
         /// <returns>A task representing the asynchronous setup operation.</returns>
         public async Task SetupDatabaseAsync()
         {
-            _KeepAliveConnection = new SqliteConnection(TestConnectionString);
+            _KeepAliveConnection = new SqliteConnection(_ConnectionString);
             _KeepAliveConnection.Open();
 
             IRepository<Person> personRepo = CreateRepository<Person>();

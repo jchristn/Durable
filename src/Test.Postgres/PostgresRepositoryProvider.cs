@@ -14,9 +14,8 @@ namespace Test.Postgres
     {
         #region Private-Members
 
-        private const string TestConnectionString = "Host=localhost;Database=durable_test;Username=test_user;Password=test_password;";
+        private readonly string _ConnectionString;
         private bool _Disposed = false;
-        private bool _DatabaseAvailable = false;
 
         #endregion
 
@@ -29,6 +28,19 @@ namespace Test.Postgres
 
         #endregion
 
+        #region Constructors-and-Factories
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PostgresRepositoryProvider"/> class.
+        /// </summary>
+        /// <param name="connectionString">The PostgreSQL connection string to use for tests.</param>
+        public PostgresRepositoryProvider(string connectionString)
+        {
+            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        }
+
+        #endregion
+
         #region Public-Methods
 
         /// <summary>
@@ -38,7 +50,7 @@ namespace Test.Postgres
         /// <returns>A configured repository instance.</returns>
         public IRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new PostgresRepository<T>(TestConnectionString);
+            return new PostgresRepository<T>(_ConnectionString);
         }
 
         /// <summary>
@@ -130,14 +142,12 @@ namespace Test.Postgres
         {
             try
             {
-                using NpgsqlConnection connection = new NpgsqlConnection(TestConnectionString);
+                using NpgsqlConnection connection = new NpgsqlConnection(_ConnectionString);
                 await connection.OpenAsync();
-                _DatabaseAvailable = true;
                 return true;
             }
             catch
             {
-                _DatabaseAvailable = false;
                 return false;
             }
         }
