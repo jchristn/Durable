@@ -106,9 +106,8 @@ namespace Test.MySql
                 CREATE TABLE IF NOT EXISTS books (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     title VARCHAR(200) NOT NULL,
-                    isbn VARCHAR(20) NOT NULL,
-                    published_date DATETIME NOT NULL,
-                    author_id INT NOT NULL
+                    author_id INT NOT NULL,
+                    publisher_id INT
                 ) ENGINE=InnoDB
             ");
         }

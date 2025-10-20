@@ -1,6 +1,7 @@
 namespace Test.Shared
 {
     using System;
+    using System.Collections.Generic;
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
@@ -67,8 +68,11 @@ namespace Test.Shared
             Assert.Single(authorsWithBooks);
             Assert.NotNull(authorsWithBooks[0].Books);
             Assert.Equal(2, authorsWithBooks[0].Books.Count);
-            Assert.True(ValidationHelpers.AreStringsEqual("Harry Potter 1", authorsWithBooks[0].Books[0].Title));
-            Assert.True(ValidationHelpers.AreStringsEqual("Harry Potter 2", authorsWithBooks[0].Books[1].Title));
+
+            // Check that both books exist (order-independent)
+            List<string> bookTitles = authorsWithBooks[0].Books.Select(b => b.Title).ToList();
+            Assert.Contains("Harry Potter 1", bookTitles);
+            Assert.Contains("Harry Potter 2", bookTitles);
 
             Console.WriteLine($"     Loaded author with {authorsWithBooks[0].Books.Count} books");
         }
