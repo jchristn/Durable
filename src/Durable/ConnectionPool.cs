@@ -79,7 +79,21 @@ namespace Durable
                     {
                         pooledConnection.LastUsed = DateTime.UtcNow;
                         pooledConnection.IsInUse = true;
-                        return pooledConnection.Connection;
+
+                        // Reopen the connection if it was closed when returned to pool
+                        try
+                        {
+                            if (pooledConnection.Connection.State != System.Data.ConnectionState.Open)
+                            {
+                                await pooledConnection.Connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                            }
+                            return pooledConnection.Connection;
+                        }
+                        catch
+                        {
+                            // If reopen fails, dispose and create new connection
+                            await DisposePooledConnectionAsync(pooledConnection);
+                        }
                     }
                     else
                     {
@@ -119,7 +133,21 @@ namespace Durable
                     {
                         pooledConnection.LastUsed = DateTime.UtcNow;
                         pooledConnection.IsInUse = true;
-                        return pooledConnection.Connection;
+
+                        // Reopen the connection if it was closed when returned to pool
+                        try
+                        {
+                            if (pooledConnection.Connection.State != System.Data.ConnectionState.Open)
+                            {
+                                pooledConnection.Connection.Open();
+                            }
+                            return pooledConnection.Connection;
+                        }
+                        catch
+                        {
+                            // If reopen fails, dispose and create new connection
+                            DisposePooledConnection(pooledConnection);
+                        }
                     }
                     else
                     {
@@ -152,6 +180,22 @@ namespace Durable
                 pooledConnection.IsInUse = false;
                 pooledConnection.LastUsed = DateTime.UtcNow;
 
+                // Close the connection to return it to ADO.NET's pool
+                try
+                {
+                    if (connection.State != System.Data.ConnectionState.Closed)
+                    {
+                        await connection.CloseAsync().ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    // If close fails, dispose the connection entirely
+                    await DisposePooledConnectionAsync(pooledConnection);
+                    _Semaphore.Release();
+                    return;
+                }
+
                 if (IsConnectionValid(pooledConnection))
                 {
                     _AvailableConnections.Enqueue(pooledConnection);
@@ -179,6 +223,22 @@ namespace Durable
             {
                 pooledConnection.IsInUse = false;
                 pooledConnection.LastUsed = DateTime.UtcNow;
+
+                // Close the connection to return it to ADO.NET's pool
+                try
+                {
+                    if (connection.State != System.Data.ConnectionState.Closed)
+                    {
+                        connection.Close();
+                    }
+                }
+                catch
+                {
+                    // If close fails, dispose the connection entirely
+                    DisposePooledConnection(pooledConnection);
+                    _Semaphore.Release();
+                    return;
+                }
 
                 if (IsConnectionValid(pooledConnection))
                 {
@@ -233,7 +293,7 @@ namespace Durable
                 try
                 {
                     DbConnection connection = _ConnectionFactory();
-                    connection.Open(); // Ensure connections are opened during initialization
+                    // Create connection but don't keep it open - will be opened when retrieved
                     PooledConnection pooledConnection = new PooledConnection(connection);
                     _AllConnections.Add(pooledConnection);
                     _AvailableConnections.Enqueue(pooledConnection);
@@ -278,7 +338,9 @@ namespace Durable
             try
             {
                 DbConnection connection = pooledConnection.Connection;
-                return connection.State == System.Data.ConnectionState.Open &&
+                // Connection can be closed (returned to ADO.NET pool) but still valid for reuse
+                // Check if it hasn't exceeded idle timeout and is not disposed
+                return (connection.State == System.Data.ConnectionState.Open || connection.State == System.Data.ConnectionState.Closed) &&
                        DateTime.UtcNow - pooledConnection.LastUsed < _Options.IdleTimeout;
             }
             catch

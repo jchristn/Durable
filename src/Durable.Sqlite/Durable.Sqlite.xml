@@ -2084,12 +2084,13 @@
             <param name="value">The value to check</param>
             <returns>True if the value needs sanitization, false otherwise</returns>
         </member>
-        <member name="M:Durable.Sqlite.SqliteSanitizer.FormatValue(System.Object)">
+        <member name="M:Durable.Sqlite.SqliteSanitizer.FormatValue(System.Object,System.Reflection.PropertyInfo)">
             <summary>
             Formats a value for safe SQL insertion, applying sanitization as needed.
             This is the main method that should be used for formatting any value.
             </summary>
             <param name="value">The value to format</param>
+            <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
             <returns>A safely formatted value for SQL insertion</returns>
         </member>
         <member name="T:Durable.Sqlite.SqliteWindowedQueryBuilder`1">

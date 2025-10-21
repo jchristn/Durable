@@ -1,8 +1,10 @@
 namespace Durable.SqlServer
 {
     using System;
+    using System.Reflection;
     using System.Text;
     using System.Text.RegularExpressions;
+    using Durable;
 
     /// <summary>
     /// SQL Server-specific implementation of ISanitizer that provides secure sanitization
@@ -158,20 +160,40 @@ namespace Durable.SqlServer
         /// Handles SQL Server-specific types including UNIQUEIDENTIFIER, BIT, DATETIME2, and binary types.
         /// </summary>
         /// <param name="value">The value to format</param>
+        /// <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
         /// <returns>A safely formatted value for SQL insertion</returns>
-        public string FormatValue(object value)
+        public string FormatValue(object value, PropertyInfo? propertyInfo = null)
         {
+            if (value == null)
+                return "NULL";
+
+            // Handle enums - check if they should be stored as integers or strings
+            if (value is Enum enumValue)
+            {
+                PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
+                if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)
+                {
+                    // Store as integer if String flag is NOT set
+                    return Convert.ToInt32(enumValue).ToString();
+                }
+                // Default to string representation
+                return SanitizeString(enumValue.ToString());
+            }
+
+            // Handle TimeSpan - store as BIGINT (ticks) to support durations > 24 hours
+            if (value is TimeSpan ts)
+            {
+                return ts.Ticks.ToString();
+            }
+
             return value switch
             {
-                null => "NULL",
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0", // SQL Server uses BIT type (0/1)
-                Enum e => SanitizeString(e.ToString()),
                 DateTime dt => FormatDateTime(dt),
                 DateTimeOffset dto => FormatDateTimeOffset(dto),
                 DateOnly dateOnly => SanitizeString(dateOnly.ToString("yyyy-MM-dd")),
                 TimeOnly timeOnly => SanitizeString(timeOnly.ToString("HH:mm:ss.fffffff")),
-                TimeSpan ts => SanitizeString(ts.ToString()),
                 Guid guid => FormatGuid(guid),
                 char c => SanitizeString(c.ToString()),
                 byte[] bytes => FormatByteArray(bytes),

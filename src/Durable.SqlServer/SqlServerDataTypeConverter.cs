@@ -72,10 +72,11 @@ namespace Durable.SqlServer
                 return timeOnly.ToTimeSpan();
             }
 
-            // TimeSpan handling - preserve as TimeSpan for SQL Server time type
+            // TimeSpan handling - convert to ticks for SQL Server bigint storage
+            // TimeSpan.Ticks allows durations > 24 hours, unlike SQL Server TIME type
             if (valueType == typeof(TimeSpan))
             {
-                return value; // Keep as TimeSpan object
+                return ((TimeSpan)value).Ticks; // Store as bigint (ticks)
             }
 
             // Guid handling - preserve as Guid for SQL Server uniqueidentifier type
@@ -208,11 +209,15 @@ namespace Durable.SqlServer
                 }
             }
 
-            // TimeSpan handling - SQL Server returns TimeSpan objects for time type
+            // TimeSpan handling - SQL Server stores TimeSpan as bigint (ticks)
             if (targetType == typeof(TimeSpan))
             {
                 if (value is TimeSpan ts)
                     return ts;
+                if (value is long ticks)
+                    return TimeSpan.FromTicks(ticks);
+                if (value is int ticksInt)
+                    return TimeSpan.FromTicks(ticksInt);
                 if (value is string tsStr)
                     return TimeSpan.Parse(tsStr, CultureInfo.InvariantCulture);
                 return TimeSpan.Parse(value.ToString()!, CultureInfo.InvariantCulture);
@@ -338,7 +343,7 @@ namespace Durable.SqlServer
             if (type.Name == "TimeOnly")
                 return "TIME";
             if (type == typeof(TimeSpan))
-                return "TIME";
+                return "BIGINT"; // Store TimeSpan as ticks to support durations > 24 hours
             if (type == typeof(Guid))
                 return "UNIQUEIDENTIFIER";
             if (type == typeof(string))

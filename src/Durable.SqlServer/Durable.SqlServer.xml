@@ -2679,7 +2679,7 @@
         <member name="M:Durable.SqlServer.SqlServerRepository`1.Upsert(`0,Durable.ITransaction)">
             <summary>
             Inserts or updates an entity depending on whether it already exists in the repository.
-            Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+            Uses SQL Server's MERGE statement.
             </summary>
             <param name="entity">The entity to insert or update</param>
             <param name="transaction">Optional transaction to execute within</param>
@@ -2690,7 +2690,7 @@
         <member name="M:Durable.SqlServer.SqlServerRepository`1.UpsertMany(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
             <summary>
             Inserts or updates multiple entities depending on whether they already exist in the repository.
-            Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+            Uses SQL Server's MERGE statement within a transaction for consistency.
             </summary>
             <param name="entities">The entities to insert or update</param>
             <param name="transaction">Optional transaction to execute within</param>
@@ -2701,7 +2701,7 @@
         <member name="M:Durable.SqlServer.SqlServerRepository`1.UpsertAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Asynchronously inserts or updates an entity depending on whether it already exists in the repository.
-            Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+            Uses SQL Server's MERGE statement.
             </summary>
             <param name="entity">The entity to insert or update</param>
             <param name="transaction">Optional transaction to execute within</param>
@@ -2714,7 +2714,7 @@
         <member name="M:Durable.SqlServer.SqlServerRepository`1.UpsertManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
-            Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+            Uses SQL Server's MERGE statement within a transaction for consistency.
             </summary>
             <param name="entities">The entities to insert or update</param>
             <param name="transaction">Optional transaction to execute within</param>
@@ -3108,13 +3108,14 @@
             <param name="value">The value to check</param>
             <returns>True if the value needs sanitization, false otherwise</returns>
         </member>
-        <member name="M:Durable.SqlServer.SqlServerSanitizer.FormatValue(System.Object)">
+        <member name="M:Durable.SqlServer.SqlServerSanitizer.FormatValue(System.Object,System.Reflection.PropertyInfo)">
             <summary>
             Formats a value for safe SQL insertion, applying sanitization as needed.
             This is the main method that should be used for formatting any value.
             Handles SQL Server-specific types including UNIQUEIDENTIFIER, BIT, DATETIME2, and binary types.
             </summary>
             <param name="value">The value to format</param>
+            <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
             <returns>A safely formatted value for SQL insertion</returns>
         </member>
         <member name="M:Durable.SqlServer.SqlServerSanitizer.FormatGuid(System.Guid)">

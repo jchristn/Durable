@@ -1,5 +1,7 @@
 namespace Durable
 {
+    using System.Reflection;
+
     /// <summary>
     /// Interface for sanitizing values that will be inserted into SQL queries.
     /// Provides methods to safely format different types of values to prevent SQL injection.
@@ -43,7 +45,8 @@ namespace Durable
         /// This is the main method that should be used for formatting any value.
         /// </summary>
         /// <param name="value">The value to format</param>
+        /// <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
         /// <returns>A safely formatted value for SQL insertion</returns>
-        string FormatValue(object value);
+        string FormatValue(object value, PropertyInfo? propertyInfo = null);
     }
 }
