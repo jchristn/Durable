@@ -144,7 +144,9 @@ namespace Durable.Postgres
             _Sanitizer = new PostgresSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new PostgresDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -174,7 +176,9 @@ namespace Durable.Postgres
             _Sanitizer = new PostgresSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new PostgresDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -203,7 +207,9 @@ namespace Durable.Postgres
             _Sanitizer = new PostgresSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new PostgresDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -544,7 +550,7 @@ namespace Durable.Postgres
 
             token.ThrowIfCancellationRequested();
 
-            var expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+            PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
             string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
             string sql = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause})";
             object[] parameters = expressionParser.GetParameters().Cast<object>().ToArray();
@@ -679,7 +685,7 @@ namespace Durable.Postgres
             }
             else
             {
-                var expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
+                PostgresExpressionParser<T> expressionParser = new PostgresExpressionParser<T>(_ColumnMappings, _Sanitizer);
                 string whereClause = expressionParser.ParseExpressionWithParameters(predicate.Body);
                 sql = $"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause}";
                 parameters = expressionParser.GetParameters().Cast<object>().ToArray();
@@ -2158,7 +2164,7 @@ namespace Durable.Postgres
             else
             {
                 // Create our own transaction
-                using var localTransaction = BeginTransaction();
+                using ITransaction localTransaction = BeginTransaction();
                 try
                 {
                     foreach (T entity in entitiesList)
@@ -2297,7 +2303,7 @@ namespace Durable.Postgres
             else
             {
                 // Create our own transaction
-                using var localTransaction = await BeginTransactionAsync(token).ConfigureAwait(false);
+                using ITransaction localTransaction = await BeginTransactionAsync(token).ConfigureAwait(false);
                 try
                 {
                     foreach (T entity in entitiesList)
@@ -2356,11 +2362,11 @@ namespace Durable.Postgres
                     connection.Open();
                 }
 
-                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
                 AddParametersToCommand(command, parameters);
 
-                using var reader = command.ExecuteReader();
-                var mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
+                using NpgsqlDataReader reader = command.ExecuteReader();
+                PostgresEntityMapper<T> mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
 
                 while (reader.Read())
                 {
@@ -2417,7 +2423,7 @@ namespace Durable.Postgres
                     connection.Open();
                 }
 
-                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
                 AddParametersToCommand(command, parameters);
 
                 // Capture SQL if enabled
@@ -2427,7 +2433,7 @@ namespace Durable.Postgres
                     _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
                 }
 
-                using var reader = command.ExecuteReader();
+                using NpgsqlDataReader reader = command.ExecuteReader();
 
                 while (reader.Read())
                 {
@@ -2515,11 +2521,11 @@ namespace Durable.Postgres
             {
                 await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
-                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
                 AddParametersToCommand(command, parameters);
 
-                using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
-                var mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
+                using NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                PostgresEntityMapper<T> mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
 
                 while (await reader.ReadAsync(token).ConfigureAwait(false))
                 {
@@ -2573,7 +2579,7 @@ namespace Durable.Postgres
             {
                 await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
-                using var command = new NpgsqlCommand(sql, connection, sqlTransaction);
+                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
                 AddParametersToCommand(command, parameters);
 
                 // Capture SQL if enabled
@@ -2583,7 +2589,7 @@ namespace Durable.Postgres
                     _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
                 }
 
-                using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
 
                 while (await reader.ReadAsync(token).ConfigureAwait(false))
                 {
@@ -2761,19 +2767,19 @@ namespace Durable.Postgres
         /// <returns>The entity name or table name</returns>
         public string GetEntityName()
         {
-            var entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
+            EntityAttribute? entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
             return entityAttr?.Name ?? typeof(T).Name.ToLowerInvariant();
         }
 
-        private (string columnName, PropertyInfo property) GetPrimaryKeyInfo()
+        private PrimaryKeyInfo GetPrimaryKeyInfo()
         {
-            var properties = typeof(T).GetProperties();
-            foreach (var prop in properties)
+            PropertyInfo[] properties = typeof(T).GetProperties();
+            foreach (PropertyInfo prop in properties)
             {
                 if (prop.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))
                 {
-                    var propAttr = prop.GetCustomAttribute<PropertyAttribute>();
-                    return (propAttr?.Name ?? prop.Name.ToLowerInvariant(), prop);
+                    PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                    return new PrimaryKeyInfo(propAttr?.Name ?? prop.Name.ToLowerInvariant(), prop);
                 }
             }
             throw new InvalidOperationException($"No primary key property found for entity type {typeof(T).Name}");
@@ -2785,16 +2791,16 @@ namespace Durable.Postgres
         /// <returns>A dictionary mapping column names to PropertyInfo objects</returns>
         public Dictionary<string, PropertyInfo> GetColumnMappings()
         {
-            var mappings = new Dictionary<string, PropertyInfo>();
-            var properties = typeof(T).GetProperties();
+            Dictionary<string, PropertyInfo> mappings = new Dictionary<string, PropertyInfo>();
+            PropertyInfo[] properties = typeof(T).GetProperties();
 
-            foreach (var prop in properties)
+            foreach (PropertyInfo prop in properties)
             {
                 if (prop.GetCustomAttribute<NavigationPropertyAttribute>() != null ||
                     prop.GetCustomAttribute<InverseNavigationPropertyAttribute>() != null)
                     continue;
 
-                var propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
                 string columnName = propAttr?.Name ?? prop.Name.ToLowerInvariant();
                 mappings[columnName] = prop;
             }
@@ -2833,10 +2839,10 @@ namespace Durable.Postgres
             if (connection.State != ConnectionState.Open)
                 connection.Open();
 
-            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
-            foreach (var (name, value) in parameters)
+            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach ((string name, object? value) param in parameters)
             {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
             }
 
             // Capture SQL if enabled
@@ -2853,10 +2859,10 @@ namespace Durable.Postgres
         {
             await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
 
-            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
-            foreach (var (name, value) in parameters)
+            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach ((string name, object? value) param in parameters)
             {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
             }
 
             // Capture SQL if enabled
@@ -2874,10 +2880,10 @@ namespace Durable.Postgres
             if (connection.State != ConnectionState.Open)
                 connection.Open();
 
-            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
-            foreach (var (name, value) in parameters)
+            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach ((string name, object? value) param in parameters)
             {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
             }
 
             // Capture SQL if enabled
@@ -2898,10 +2904,10 @@ namespace Durable.Postgres
         {
             await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
 
-            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
-            foreach (var (name, value) in parameters)
+            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            foreach ((string name, object? value) param in parameters)
             {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
             }
 
             // Capture SQL if enabled
@@ -2961,7 +2967,7 @@ namespace Durable.Postgres
             while (processed < entities.Count)
             {
                 int currentBatchSize = Math.Min(batchSize, entities.Count - processed);
-                var batch = entities.Skip(processed).Take(currentBatchSize).ToList();
+                List<T> batch = entities.Skip(processed).Take(currentBatchSize).ToList();
 
                 // Build multi-row INSERT statement
                 List<string> valueRows = new List<string>();
@@ -3009,13 +3015,13 @@ namespace Durable.Postgres
 
                     if (transaction != null)
                     {
-                        using var command = new NpgsqlCommand(sql, (NpgsqlConnection)transaction.Connection, (NpgsqlTransaction)transaction.Transaction);
-                        foreach (var (name, value) in parameters)
+                        using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)transaction.Connection, (NpgsqlTransaction)transaction.Transaction);
+                        foreach ((string name, object value) in parameters)
                         {
                             command.Parameters.AddWithValue(name, value ?? DBNull.Value);
                         }
 
-                        using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                        using NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
                         while (await reader.ReadAsync(token).ConfigureAwait(false))
                         {
                             insertedIds.Add(reader.GetValue(0));
@@ -3029,13 +3035,13 @@ namespace Durable.Postgres
                             connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
                             await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
 
-                            using var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
-                            foreach (var (name, value) in parameters)
+                            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
+                            foreach ((string name, object value) in parameters)
                             {
                                 command.Parameters.AddWithValue(name, value ?? DBNull.Value);
                             }
 
-                            using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                            using NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
                             while (await reader.ReadAsync(token).ConfigureAwait(false))
                             {
                                 insertedIds.Add(reader.GetValue(0));

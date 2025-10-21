@@ -483,18 +483,18 @@ namespace Durable.Postgres
             try
             {
                 string sql = BuildSqlInternal();
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using NpgsqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (NpgsqlDataReader)command.ExecuteReader();
+                using NpgsqlDataReader reader = (NpgsqlDataReader)command.ExecuteReader();
                 return MapResults(reader).ToList(); // Materialize to avoid connection disposal issues
             }
             catch (Exception ex)
@@ -516,18 +516,18 @@ namespace Durable.Postgres
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await ((NpgsqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using NpgsqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (NpgsqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using NpgsqlDataReader reader = (NpgsqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
                 List<TResult> results = new List<TResult>();
 
                 await foreach (TResult result in MapResultsAsync(reader, token).ConfigureAwait(false))
@@ -552,7 +552,7 @@ namespace Durable.Postgres
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using var connection = _Repository._ConnectionFactory.GetConnection();
+            using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
 
             try
             {
@@ -561,12 +561,12 @@ namespace Durable.Postgres
                     await ((NpgsqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using NpgsqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (NpgsqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using NpgsqlDataReader reader = (NpgsqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
 
                 await foreach (TResult result in MapResultsAsync(reader, token).ConfigureAwait(false))
                 {

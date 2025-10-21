@@ -276,33 +276,32 @@ namespace Test.Sqlite
         {
             string dbFile = $"concurrency_test_{Guid.NewGuid()}.db";
             string connectionString = $"Data Source={dbFile}";
-            
+
             try
             {
                 // Clean up any existing database file
                 if (File.Exists(dbFile)) File.Delete(dbFile);
-                
-                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
+
+                using (SqliteRepository<Company> repo = new SqliteRepository<Company>(connectionString))
                 {
-                    CreateTestTableWithoutVersion(connectionString);
-                
-                Author author = new Author
+                    CreateCompanyTableWithoutVersion(connectionString);
+
+                Company company = new Company
                 {
-                    Name = "No Version Author",
-                    CompanyId = null
+                    Name = "Test Company"
                 };
-                
-                Author created = repo.Create(author);
-                
-                Author copy1 = repo.ReadById(created.Id);
-                Author copy2 = repo.ReadById(created.Id);
-                
+
+                Company created = repo.Create(company);
+
+                Company copy1 = repo.ReadById(created.Id);
+                Company copy2 = repo.ReadById(created.Id);
+
                 copy1.Name = "Update 1";
                 repo.Update(copy1);
-                
+
                 copy2.Name = "Update 2";
-                Author updated = repo.Update(copy2);
-                
+                Company updated = repo.Update(copy2);
+
                 Assert.Equal("Update 2", updated.Name);
                 }
             }
@@ -333,19 +332,19 @@ namespace Test.Sqlite
             }
         }
         
-        private void CreateTestTableWithoutVersion(string connectionString)
+        private void CreateCompanyTableWithoutVersion(string connectionString)
         {
-            using (Microsoft.Data.Sqlite.SqliteConnection connection = 
+            using (Microsoft.Data.Sqlite.SqliteConnection connection =
                 new Microsoft.Data.Sqlite.SqliteConnection(connectionString))
             {
                 connection.Open();
                 using (Microsoft.Data.Sqlite.SqliteCommand command = connection.CreateCommand())
                 {
                     command.CommandText = @"
-                        CREATE TABLE IF NOT EXISTS authors (
+                        CREATE TABLE IF NOT EXISTS companies (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             name TEXT NOT NULL,
-                            company_id INTEGER
+                            industry TEXT
                         )";
                     command.ExecuteNonQuery();
                 }

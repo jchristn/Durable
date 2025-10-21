@@ -537,8 +537,8 @@
         /// <exception cref="SqliteException">Thrown when a database error occurs during execution</exception>
         public IEnumerable<TEntity> Execute()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(_Transaction);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
@@ -579,9 +579,9 @@
             finally
             {
                 connectionResult.Command?.Dispose();
-                if (connectionResult.ShouldDispose)
+                if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    connectionResult.Connection?.Dispose();
+                    _Repository._ConnectionFactory.ReturnConnection(connectionResult.Connection);
                 }
             }
         }
@@ -596,8 +596,8 @@
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public async Task<IEnumerable<TEntity>> ExecuteAsync(CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
@@ -653,7 +653,7 @@
                 if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
                 if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await connectionResult.Connection.DisposeAsync();
+                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connectionResult.Connection);
                 }
             }
         }
@@ -668,8 +668,8 @@
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token</exception>
         public async IAsyncEnumerable<TEntity> ExecuteAsyncEnumerable([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
@@ -686,7 +686,7 @@
                 if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
                 if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await connectionResult.Connection.DisposeAsync();
+                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connectionResult.Connection);
                 }
             }
         }

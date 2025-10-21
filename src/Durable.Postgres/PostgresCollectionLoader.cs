@@ -202,7 +202,7 @@ namespace Durable.Postgres
             sql.Append($"SELECT * FROM {relatedTableName} WHERE {foreignKeyColumn} = ANY(@primaryKeys)");
 
             // Execute query and load related entities
-            using var command = new NpgsqlCommand(sql.ToString(), connection);
+            using NpgsqlCommand command = new NpgsqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (NpgsqlTransaction)transaction.Transaction;
 
@@ -210,7 +210,7 @@ namespace Durable.Postgres
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (NpgsqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -291,7 +291,7 @@ namespace Durable.Postgres
             sql.Append($"WHERE j.{parentForeignKeyColumn} = ANY(@primaryKeys)");
 
             // Execute query and load related entities
-            using var command = new NpgsqlCommand(sql.ToString(), connection);
+            using NpgsqlCommand command = new NpgsqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (NpgsqlTransaction)transaction.Transaction;
 
@@ -299,7 +299,7 @@ namespace Durable.Postgres
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (NpgsqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -353,7 +353,7 @@ namespace Durable.Postgres
             sql.Append($"SELECT * FROM {relatedTableName} WHERE {foreignKeyColumn} = ANY(@primaryKeys)");
 
             // Execute query and load related entities
-            using var command = new NpgsqlCommand(sql.ToString(), connection);
+            using NpgsqlCommand command = new NpgsqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (NpgsqlTransaction)transaction.Transaction;
 
@@ -361,7 +361,7 @@ namespace Durable.Postgres
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (NpgsqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {

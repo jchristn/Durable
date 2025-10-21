@@ -1040,8 +1040,15 @@ namespace Durable.SqlServer
             else
             {
                 // Get connection from factory
-                using var connection = _Repository._ConnectionFactory.GetConnection();
-                return ExecuteWithConnection(connection, sql);
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return ExecuteWithConnection(connection, sql);
+                }
+                finally
+                {
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
             }
         }
 
@@ -1054,12 +1061,12 @@ namespace Durable.SqlServer
                 connection.Open();
             }
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (_Transaction != null)
             {
-                command.Transaction = _Transaction.Transaction;
+                command.Transaction = (SqlTransaction)_Transaction.Transaction;
             }
 
             // Capture SQL if enabled
@@ -1070,7 +1077,7 @@ namespace Durable.SqlServer
 
             try
             {
-                using var reader = (SqlDataReader)command.ExecuteReader();
+                using SqlDataReader reader = (SqlDataReader)command.ExecuteReader();
 
                 // Check if we have includes that require advanced mapping
                 if (_IncludePaths.Count > 0)
@@ -1152,8 +1159,15 @@ namespace Durable.SqlServer
             else
             {
                 // Get connection from factory
-                using var connection = _Repository._ConnectionFactory.GetConnection();
-                return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connection);
+                }
             }
         }
 
@@ -1174,12 +1188,12 @@ namespace Durable.SqlServer
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (_Transaction != null)
             {
-                command.Transaction = _Transaction.Transaction;
+                command.Transaction = (SqlTransaction)_Transaction.Transaction;
             }
 
             // Capture SQL if enabled
@@ -1190,7 +1204,7 @@ namespace Durable.SqlServer
 
             try
             {
-                using var reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using SqlDataReader reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
 
                 // Check if we have includes that require advanced mapping
                 if (_IncludePaths.Count > 0)

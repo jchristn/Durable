@@ -200,13 +200,13 @@ namespace Durable.SqlServer
         {
             try
             {
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -233,13 +233,13 @@ namespace Durable.SqlServer
             {
                 token.ThrowIfCancellationRequested();
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -269,13 +269,13 @@ namespace Durable.SqlServer
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("SUM", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -308,13 +308,13 @@ namespace Durable.SqlServer
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("SUM", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -344,13 +344,13 @@ namespace Durable.SqlServer
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("AVG", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -383,13 +383,13 @@ namespace Durable.SqlServer
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("AVG", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -420,13 +420,13 @@ namespace Durable.SqlServer
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MAX", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -464,13 +464,13 @@ namespace Durable.SqlServer
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MAX", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -505,13 +505,13 @@ namespace Durable.SqlServer
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MIN", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -549,13 +549,13 @@ namespace Durable.SqlServer
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MIN", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -700,13 +700,13 @@ namespace Durable.SqlServer
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            using var connection = _Repository._ConnectionFactory.GetConnection();
+            using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
             if (connection.State != ConnectionState.Open)
             {
                 connection.Open();
             }
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = connection.CreateCommand();
             command.CommandText = BuildGroupKeysSql();
 
             _Repository.SetLastExecutedSql(command.CommandText);
@@ -737,13 +737,13 @@ namespace Durable.SqlServer
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            using var connection = _Repository._ConnectionFactory.GetConnection();
+            using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
             if (connection.State != ConnectionState.Open)
             {
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = connection.CreateCommand();
             command.CommandText = BuildGroupKeysSql();
 
             _Repository.SetLastExecutedSql(command.CommandText);

@@ -533,7 +533,7 @@
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.Dispose">
             <summary>
             Disposes of the connection factory and releases all managed resources including the connection pool.
-            All connections in the pool will be closed and disposed.
+            All connections in the pool will be closed and disposed, and SQLite's internal connection pool will be cleared.
             </summary>
         </member>
         <member name="T:Durable.Sqlite.SqliteConnectionFactoryExtensions">
@@ -1958,7 +1958,7 @@
             <summary>
             Gets the primary key column information for the current entity type.
             </summary>
-            <returns>A tuple containing the column name and PropertyInfo for the primary key.</returns>
+            <returns>A PrimaryKeyInfo object containing the column name and PropertyInfo for the primary key.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when the entity type does not have a primary key column.</exception>
         </member>
         <member name="M:Durable.Sqlite.SqliteRepository`1.GetColumnMappings">

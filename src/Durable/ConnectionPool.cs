@@ -205,11 +205,15 @@ namespace Durable
             _CleanupTimer?.Stop();
             _CleanupTimer?.Dispose();
 
-            // Dispose all connections
+            // Close and dispose all connections
             foreach (PooledConnection pooledConnection in _AllConnections)
             {
                 try
                 {
+                    if (pooledConnection.Connection.State != System.Data.ConnectionState.Closed)
+                    {
+                        pooledConnection.Connection.Close();
+                    }
                     pooledConnection.Connection.Dispose();
                 }
                 catch { }

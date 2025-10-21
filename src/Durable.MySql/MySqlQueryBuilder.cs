@@ -1197,12 +1197,12 @@ namespace Durable.MySql
                 connection.Open();
             }
 
-            using var command = connection.CreateCommand();
+            using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (_Transaction != null)
             {
-                command.Transaction = _Transaction.Transaction;
+                command.Transaction = (MySqlTransaction)_Transaction.Transaction;
             }
 
             // Capture SQL if enabled
@@ -1213,7 +1213,7 @@ namespace Durable.MySql
 
             try
             {
-                using var reader = (MySqlDataReader)command.ExecuteReader();
+                using MySqlDataReader reader = (MySqlDataReader)command.ExecuteReader();
 
                 // Check if we have includes that require advanced mapping
                 if (_IncludePaths.Count > 0)
@@ -1325,12 +1325,12 @@ namespace Durable.MySql
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
 
-            using var command = connection.CreateCommand();
+            using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (_Transaction != null)
             {
-                command.Transaction = _Transaction.Transaction;
+                command.Transaction = (MySqlTransaction)_Transaction.Transaction;
             }
 
             // Capture SQL if enabled
@@ -1341,7 +1341,7 @@ namespace Durable.MySql
 
             try
             {
-                using var reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using MySqlConnector.MySqlDataReader reader = (MySqlConnector.MySqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
 
                 // Check if we have includes that require advanced mapping
                 if (_IncludePaths.Count > 0)

@@ -43,7 +43,7 @@ namespace Durable
         public static async IAsyncEnumerable<T> AsAsyncEnumerable<T>(this Task<IAsyncDurableResult<T>> resultTask)
         {
             IAsyncDurableResult<T> result = await resultTask;
-            await foreach (var item in result.AsAsyncEnumerable())
+            await foreach (T item in result.AsAsyncEnumerable())
             {
                 yield return item;
             }
@@ -417,8 +417,8 @@ namespace Durable
                 instanceLevelSetting = config.IncludeQueryInResults;
             }
 
-            (bool effectiveSetting, string source) effectiveSettingResult = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
-            return effectiveSettingResult.effectiveSetting;
+            ConfigurationSettingResult effectiveSettingResult = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
+            return effectiveSettingResult.EffectiveSetting;
         }
 
         private static void EnableSqlCaptureTemporarily<T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()
