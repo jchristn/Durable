@@ -125,21 +125,24 @@ namespace Durable.Postgres
             StringBuilder joinBuilder = new StringBuilder();
 
             string baseAlias = "t0";
-            selectBuilder.Append($"{baseAlias}.*");
 
-            // Add base table column mappings
+            // Add base table column mappings (use SELECT t0.* like MySQL)
             Dictionary<string, PropertyInfo> baseColumns = _IncludeProcessor.GetColumnMappings(typeof(T));
             List<PostgresColumnMapping> baseMappings = new List<PostgresColumnMapping>();
+
+            selectBuilder.Append($"{baseAlias}.*");
+
             foreach (KeyValuePair<string, PropertyInfo> kvp in baseColumns)
             {
                 baseMappings.Add(new PostgresColumnMapping
                 {
-                    ColumnName = kvp.Key,
-                    Alias = null,
+                    ColumnName = kvp.Key,      // Original column name
+                    Alias = null,               // No alias for base table
                     Property = kvp.Value,
                     TableAlias = baseAlias
                 });
             }
+
             result.ColumnMappingsByAlias[baseAlias] = baseMappings;
 
             BuildJoinForIncludes(includes, baseAlias, baseTableName, selectBuilder, joinBuilder, result.ColumnMappingsByAlias, typeof(T));
@@ -226,22 +229,29 @@ namespace Durable.Postgres
             // Build the JOIN clause (using LEFT JOIN to include nulls)
             joinBuilder.AppendLine($"LEFT JOIN {joinTable} {joinAlias} ON {joinCondition}");
 
-            // Add columns to SELECT clause
-            selectBuilder.Append($", {joinAlias}.*");
-
-            // Add column mappings for the joined table
+            // Add columns to SELECT clause with explicit aliases
             Dictionary<string, PropertyInfo> includeColumns = _IncludeProcessor.GetColumnMappings(include.RelatedEntityType);
             List<PostgresColumnMapping> includeMappings = new List<PostgresColumnMapping>();
+            List<string> columnSelects = new List<string>();
+
             foreach (KeyValuePair<string, PropertyInfo> kvp in includeColumns)
             {
+                string columnName = kvp.Key;
+                string sanitizedColumn = _Sanitizer.SanitizeIdentifier(columnName);
+                string columnAlias = $"{joinAlias}_{columnName}";
+
+                columnSelects.Add($"{joinAlias}.{sanitizedColumn} AS {columnAlias}");
+
                 includeMappings.Add(new PostgresColumnMapping
                 {
-                    ColumnName = kvp.Key,
-                    Alias = null,
+                    ColumnName = kvp.Key,       // Original column name
+                    Alias = columnAlias,         // Prefixed alias (not sanitized)
                     Property = kvp.Value,
                     TableAlias = joinAlias
                 });
             }
+
+            selectBuilder.Append($", {string.Join(", ", columnSelects)}");
             columnMappingsByAlias[joinAlias] = includeMappings;
         }
 

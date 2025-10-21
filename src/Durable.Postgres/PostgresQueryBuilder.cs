@@ -781,7 +781,15 @@ namespace Durable.Postgres
             else
             {
                 string tableName = _Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName);
-                sqlParts.Add($"FROM {tableName}");
+                // If we have includes/joins, use the t0 alias that the JoinBuilder expects
+                if (joinResult != null && !string.IsNullOrEmpty(joinResult.JoinClause))
+                {
+                    sqlParts.Add($"FROM {tableName} t0");
+                }
+                else
+                {
+                    sqlParts.Add($"FROM {tableName}");
+                }
             }
 
             // JOIN clauses
@@ -911,8 +919,6 @@ namespace Durable.Postgres
 
         private async Task<IEnumerable<TEntity>> ExecuteSqlInternalAsync(string sql, CancellationToken token)
         {
-            List<TEntity> results = new List<TEntity>();
-
             DbConnection connection = await GetConnectionAsync().ConfigureAwait(false);
             bool shouldDisposeConnection = (_Transaction == null); // Only dispose if we created it
 
@@ -924,15 +930,29 @@ namespace Durable.Postgres
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
+                // Capture SQL if enabled
+                if (_Repository.CaptureSql)
+                {
+                    _Repository.SetLastExecutedSql(sql);
+                }
+
                 using (NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection))
                 {
                     using (NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false))
                     {
-                        while (await reader.ReadAsync(token).ConfigureAwait(false))
+                        // Check if we have includes that require advanced mapping
+                        if (_IncludePaths.Count > 0)
                         {
-                            token.ThrowIfCancellationRequested();
-                            TEntity entity = _EntityMapper.MapEntity(reader, _CachedJoinResult);
-                            results.Add(entity);
+                            // Use advanced EntityMapper for complex scenarios with navigation properties
+                            PostgresJoinBuilder.PostgresJoinResult joinResult = _CachedJoinResult ?? _JoinBuilder.BuildJoinSql<TEntity>(_Repository._TableName, _IncludePaths);
+
+                            _EntityMapper.ClearProcessingCache();
+                            return await _EntityMapper.MapJoinedResultsAsync(reader, joinResult, joinResult.Includes, token).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            // Use simple mapping for basic queries
+                            return await _EntityMapper.MapSimpleResultsAsync(reader, token).ConfigureAwait(false);
                         }
                     }
                 }
@@ -944,8 +964,6 @@ namespace Durable.Postgres
                     await _Repository._ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
-
-            return results;
         }
 
         private DbConnection GetConnection()

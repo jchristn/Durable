@@ -75,11 +75,25 @@ namespace Durable.Postgres
             Dictionary<object, T> primaryEntities = new Dictionary<object, T>();
             List<T> results = new List<T>();
 
+            // Get the base table column mappings from joinResult (with aliases)
+            Dictionary<string, PropertyInfo> baseColumnMappings = new Dictionary<string, PropertyInfo>();
+            if (joinResult.ColumnMappingsByAlias.ContainsKey("t0"))
+            {
+                foreach (PostgresJoinBuilder.PostgresColumnMapping mapping in joinResult.ColumnMappingsByAlias["t0"])
+                {
+                    baseColumnMappings[mapping.ColumnName] = mapping.Property;
+                }
+            }
+            else
+            {
+                baseColumnMappings = _BaseColumnMappings;
+            }
+
             while (reader.Read())
             {
                 try
                 {
-                    T primaryEntity = MapPrimaryEntity(reader, primaryEntities);
+                    T primaryEntity = MapSingleEntity(reader, baseColumnMappings);
 
                     object entityKey = GetEntityKey(primaryEntity);
                     if (!primaryEntities.ContainsKey(entityKey))
@@ -123,6 +137,40 @@ namespace Durable.Postgres
 
             while (reader.Read())
             {
+                try
+                {
+                    T entity = MapSingleEntity(reader, _BaseColumnMappings);
+                    results.Add(entity);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Error mapping entity from data reader at row {results.Count + 1}", ex);
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Asynchronously maps a simple PostgreSQL data reader to a list of entities without joins or navigation properties.
+        /// Provides enhanced type conversion compared to basic mapping implementations.
+        /// </summary>
+        /// <param name="reader">The PostgreSQL data reader containing the query results</param>
+        /// <param name="cancellationToken">Cancellation token for the async operation</param>
+        /// <returns>A list of mapped entities</returns>
+        /// <exception cref="ArgumentNullException">Thrown when reader is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when mapping encounters errors</exception>
+        public async Task<List<T>> MapSimpleResultsAsync(NpgsqlDataReader reader, CancellationToken cancellationToken = default)
+        {
+            if (reader == null)
+                throw new ArgumentNullException(nameof(reader));
+
+            List<T> results = new List<T>();
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 try
                 {
                     T entity = MapSingleEntity(reader, _BaseColumnMappings);
@@ -183,13 +231,27 @@ namespace Durable.Postgres
             Dictionary<object, T> primaryEntities = new Dictionary<object, T>();
             List<T> results = new List<T>();
 
+            // Get the base table column mappings from joinResult (with aliases)
+            Dictionary<string, PropertyInfo> baseColumnMappings = new Dictionary<string, PropertyInfo>();
+            if (joinResult.ColumnMappingsByAlias.ContainsKey("t0"))
+            {
+                foreach (PostgresJoinBuilder.PostgresColumnMapping mapping in joinResult.ColumnMappingsByAlias["t0"])
+                {
+                    baseColumnMappings[mapping.ColumnName] = mapping.Property;
+                }
+            }
+            else
+            {
+                baseColumnMappings = _BaseColumnMappings;
+            }
+
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 try
                 {
-                    T primaryEntity = MapPrimaryEntity(reader, primaryEntities);
+                    T primaryEntity = MapSingleEntity(reader, baseColumnMappings);
 
                     object entityKey = GetEntityKey(primaryEntity);
                     if (!primaryEntities.ContainsKey(entityKey))
@@ -414,20 +476,29 @@ namespace Durable.Postgres
         /// <returns>A unique key for the entity</returns>
         private object GetEntityKey(T entity)
         {
-            // Simple implementation - look for an "Id" property
-            PropertyInfo? idProperty = typeof(T).GetProperty("Id");
-            if (idProperty != null)
+            // Find the primary key property and use its value as the entity key
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _BaseColumnMappings)
             {
-                object? value = idProperty.GetValue(entity);
-                return value ?? Guid.NewGuid(); // Use a random GUID if ID is null
+                PropertyAttribute? attr = kvp.Value.GetCustomAttribute<PropertyAttribute>();
+                if (attr != null && (attr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey)
+                {
+                    object? keyValue = kvp.Value.GetValue(entity);
+                    if (keyValue != null)
+                    {
+                        // For value types, return the value directly to ensure proper dictionary equality
+                        return keyValue;
+                    }
+                    // If primary key is null, use entity hash code
+                    return entity.GetHashCode();
+                }
             }
 
-            // Fallback to object reference
-            return entity;
+            // Fallback to hash code if no primary key found
+            return entity.GetHashCode();
         }
 
         /// <summary>
-        /// Maps related entities from joined results (simplified implementation).
+        /// Maps related entities from joined results.
         /// </summary>
         /// <param name="reader">The data reader</param>
         /// <param name="primaryEntity">The primary entity</param>
@@ -435,10 +506,120 @@ namespace Durable.Postgres
         /// <param name="joinResult">Join result metadata</param>
         private void MapRelatedEntities(NpgsqlDataReader reader, T primaryEntity, List<PostgresIncludeInfo> includes, PostgresJoinBuilder.PostgresJoinResult joinResult)
         {
-            // This is a simplified implementation
-            // A full implementation would handle complex navigation property mapping
-            // based on the include information and join results
-            // For now, we'll skip this complex functionality
+            foreach (PostgresIncludeInfo include in includes)
+            {
+                try
+                {
+                    if (include.IsCollection)
+                    {
+                        MapCollectionNavigationProperty(reader, primaryEntity, include, joinResult);
+                    }
+                    else
+                    {
+                        MapSingleNavigationProperty(reader, primaryEntity, include, joinResult);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Error mapping navigation property '{include.PropertyPath}' on entity '{typeof(T).Name}'", ex);
+                }
+            }
+        }
+
+        private void MapSingleNavigationProperty(NpgsqlDataReader reader, T primaryEntity, PostgresIncludeInfo include, PostgresJoinBuilder.PostgresJoinResult joinResult)
+        {
+            object? relatedEntity = MapRelatedEntity(reader, include, joinResult);
+            if (relatedEntity != null)
+            {
+                include.NavigationProperty.SetValue(primaryEntity, relatedEntity);
+            }
+        }
+
+        private void MapCollectionNavigationProperty(NpgsqlDataReader reader, T primaryEntity, PostgresIncludeInfo include, PostgresJoinBuilder.PostgresJoinResult joinResult)
+        {
+            object? relatedEntity = MapRelatedEntity(reader, include, joinResult);
+            if (relatedEntity == null)
+                return;
+
+            object relatedEntityKey = GetEntityKeyForType(relatedEntity, include.RelatedEntityType);
+            string cacheKey = $"{include.PropertyPath}_{GetEntityKey(primaryEntity)}";
+
+            if (!_ProcessedEntities.ContainsKey(cacheKey))
+            {
+                _ProcessedEntities[cacheKey] = new HashSet<object>();
+            }
+
+            if (_ProcessedEntities[cacheKey].Contains(relatedEntityKey))
+            {
+                return;
+            }
+
+            _ProcessedEntities[cacheKey].Add(relatedEntityKey);
+
+            object? existingCollection = include.NavigationProperty.GetValue(primaryEntity);
+            if (existingCollection == null)
+            {
+                Type collectionType = typeof(List<>).MakeGenericType(include.RelatedEntityType);
+                existingCollection = Activator.CreateInstance(collectionType)!;
+                include.NavigationProperty.SetValue(primaryEntity, existingCollection);
+            }
+
+            System.Collections.IList collection = (System.Collections.IList)existingCollection;
+            collection.Add(relatedEntity);
+        }
+
+        private object? MapRelatedEntity(NpgsqlDataReader reader, PostgresIncludeInfo include, PostgresJoinBuilder.PostgresJoinResult joinResult)
+        {
+            if (!joinResult.ColumnMappingsByAlias.ContainsKey(include.JoinAlias))
+                return null;
+
+            List<PostgresJoinBuilder.PostgresColumnMapping> columnMappings = joinResult.ColumnMappingsByAlias[include.JoinAlias];
+            Dictionary<string, PropertyInfo> mappingsDict = new Dictionary<string, PropertyInfo>();
+            foreach (PostgresJoinBuilder.PostgresColumnMapping mapping in columnMappings)
+            {
+                mappingsDict[mapping.ColumnName] = mapping.Property;
+            }
+
+            bool hasNonNullValue = false;
+            foreach (PostgresJoinBuilder.PostgresColumnMapping mapping in columnMappings)
+            {
+                string columnName = mapping.Alias ?? mapping.ColumnName;
+                int columnIndex = GetColumnIndex(reader, columnName);
+                if (columnIndex != -1 && !reader.IsDBNull(columnIndex))
+                {
+                    hasNonNullValue = true;
+                    break;
+                }
+            }
+
+            if (!hasNonNullValue)
+                return null;
+
+            object relatedEntity = Activator.CreateInstance(include.RelatedEntityType)!;
+            foreach (PostgresJoinBuilder.PostgresColumnMapping mapping in columnMappings)
+            {
+                string columnName = mapping.Alias ?? mapping.ColumnName;
+                int columnIndex = GetColumnIndex(reader, columnName);
+                if (columnIndex != -1 && !reader.IsDBNull(columnIndex))
+                {
+                    object value = reader.GetValue(columnIndex);
+                    object? convertedValue = ConvertPostgresValue(value, mapping.Property.PropertyType);
+                    mapping.Property.SetValue(relatedEntity, convertedValue);
+                }
+            }
+
+            return relatedEntity;
+        }
+
+        private object GetEntityKeyForType(object entity, Type entityType)
+        {
+            PropertyInfo? idProperty = entityType.GetProperty("Id");
+            if (idProperty != null)
+            {
+                object? value = idProperty.GetValue(entity);
+                return value ?? Guid.NewGuid();
+            }
+            return entity;
         }
 
         /// <summary>

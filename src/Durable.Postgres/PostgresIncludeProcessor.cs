@@ -128,13 +128,12 @@ namespace Durable.Postgres
             PropertyInfo[] properties = entityType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             foreach (PropertyInfo property in properties)
             {
-                // Skip navigation properties for now
-                if (IsNavigationProperty(property))
-                    continue;
-
-                // Get column name from PropertyAttribute or use property name
-                string columnName = GetColumnName(property);
-                mappings[columnName] = property;
+                // Only include properties with PropertyAttribute
+                PropertyAttribute? propAttr = property.GetCustomAttribute<PropertyAttribute>();
+                if (propAttr != null)
+                {
+                    mappings[propAttr.Name] = property;
+                }
             }
 
             _ColumnMappingCache[entityType] = mappings;
@@ -205,7 +204,19 @@ namespace Durable.Postgres
 
         private void SetupRelationshipInfo(PostgresIncludeInfo includeInfo, Type parentType, PropertyInfo navigationProperty)
         {
-            // Check for ForeignKey attribute
+            // Check for NavigationProperty attribute (standard many-to-one)
+            NavigationPropertyAttribute? navAttr = navigationProperty.GetCustomAttribute<NavigationPropertyAttribute>();
+            if (navAttr != null)
+            {
+                PropertyInfo? foreignKeyProperty = parentType.GetProperty(navAttr.ForeignKeyProperty);
+                if (foreignKeyProperty != null)
+                {
+                    includeInfo.ForeignKeyProperty = foreignKeyProperty;
+                    includeInfo.ForeignKeyColumn = GetColumnName(foreignKeyProperty);
+                }
+            }
+
+            // Check for ForeignKey attribute (alternative syntax)
             ForeignKeyAttribute? foreignKeyAttr = navigationProperty.GetCustomAttribute<ForeignKeyAttribute>();
             if (foreignKeyAttr != null)
             {

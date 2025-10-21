@@ -35,6 +35,15 @@ namespace Test.Postgres
                     return 1;
                 }
 
+                // Debug mode
+                if (args.Contains("--debug"))
+                {
+                    using PostgresRepositoryProvider debugProvider = new PostgresRepositoryProvider(connectionString);
+                    await debugProvider.SetupDatabaseAsync();
+                    await DebugIncludeTest.RunAsync(connectionString);
+                    return 0;
+                }
+
                 using PostgresRepositoryProvider provider = new PostgresRepositoryProvider(connectionString);
                 int exitCode = await SharedTestRunner.RunAllTestsAsync(provider);
                 return exitCode;
