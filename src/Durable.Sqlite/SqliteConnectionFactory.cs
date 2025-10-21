@@ -93,7 +93,7 @@ namespace Durable.Sqlite
 
         /// <summary>
         /// Disposes of the connection factory and releases all managed resources including the connection pool.
-        /// All connections in the pool will be closed and disposed.
+        /// All connections in the pool will be closed and disposed, and SQLite's internal connection pool will be cleared.
         /// </summary>
         public void Dispose()
         {
@@ -102,6 +102,11 @@ namespace Durable.Sqlite
 
             _Disposed = true;
             _ConnectionPool?.Dispose();
+
+            // Clear SQLite's internal connection pool to ensure all file locks are released
+            // This is necessary because SQLite maintains its own ADO.NET connection pool
+            // independent of our custom ConnectionPool implementation
+            SqliteConnection.ClearAllPools();
         }
 
         #endregion

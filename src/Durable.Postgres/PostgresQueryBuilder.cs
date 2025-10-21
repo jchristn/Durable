@@ -900,9 +900,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    connection?.Dispose();
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
                 }
             }
 
@@ -939,9 +939,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection)
+                if (shouldDisposeConnection && connection != null)
                 {
-                    connection?.Dispose();
+                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
 

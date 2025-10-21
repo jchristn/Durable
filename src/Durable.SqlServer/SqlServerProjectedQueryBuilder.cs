@@ -482,18 +482,18 @@ namespace Durable.SqlServer
             try
             {
                 string sql = BuildSqlInternal();
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (SqlDataReader)command.ExecuteReader();
+                using SqlDataReader reader = (SqlDataReader)command.ExecuteReader();
                 return MapResults(reader).ToList(); // Materialize to avoid connection disposal issues
             }
             catch (Exception ex)
@@ -515,18 +515,18 @@ namespace Durable.SqlServer
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using var connection = _Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await ((SqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using SqlDataReader reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
                 List<TResult> results = new List<TResult>();
 
                 await foreach (TResult result in MapResultsAsync(reader, token).ConfigureAwait(false))
@@ -551,7 +551,7 @@ namespace Durable.SqlServer
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using var connection = _Repository._ConnectionFactory.GetConnection();
+            using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
 
             try
             {
@@ -560,12 +560,12 @@ namespace Durable.SqlServer
                     await ((SqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using var command = connection.CreateCommand();
+                using SqlCommand command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
 
-                using var reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                using SqlDataReader reader = (SqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false);
 
                 await foreach (TResult result in MapResultsAsync(reader, token).ConfigureAwait(false))
                 {

@@ -57,13 +57,13 @@
 
         public int Count(Expression<Func<TEntity, bool>> predicate = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
-                object result = connectionResult.Command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? 0 : Convert.ToInt32(result);
+                object scalarResult = connectionResult.Command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? 0 : Convert.ToInt32(scalarResult);
             }
             finally
             {
@@ -77,13 +77,13 @@
 
         public async Task<int> CountAsync(Expression<Func<TEntity, bool>> predicate = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
-                object result = await connectionResult.Command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? 0 : Convert.ToInt32(result);
+                object scalarResult = await connectionResult.Command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? 0 : Convert.ToInt32(scalarResult);
             }
             finally
             {
@@ -98,13 +98,13 @@
         public decimal Sum(Expression<Func<TEntity, decimal>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("SUM", column, null);
-                object result = connectionResult.Command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = connectionResult.Command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -119,13 +119,13 @@
         public async Task<decimal> SumAsync(Expression<Func<TEntity, decimal>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("SUM", column, null);
-                object result = await connectionResult.Command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = await connectionResult.Command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -140,13 +140,13 @@
         public decimal Average(Expression<Func<TEntity, decimal>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("AVG", column, null);
-                object result = connectionResult.Command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = connectionResult.Command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -161,13 +161,13 @@
         public async Task<decimal> AverageAsync(Expression<Func<TEntity, decimal>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("AVG", column, null);
-                object result = await connectionResult.Command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = await connectionResult.Command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -182,13 +182,13 @@
         public TResult Max<TResult>(Expression<Func<TEntity, TResult>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("MAX", column, null);
-                object result = connectionResult.Command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = connectionResult.Command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -203,13 +203,13 @@
         public async Task<TResult> MaxAsync<TResult>(Expression<Func<TEntity, TResult>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("MAX", column, null);
-                object result = await connectionResult.Command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = await connectionResult.Command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -224,13 +224,13 @@
         public TResult Min<TResult>(Expression<Func<TEntity, TResult>> selector)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("MIN", column, null);
-                object result = connectionResult.Command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = connectionResult.Command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -245,13 +245,13 @@
         public async Task<TResult> MinAsync<TResult>(Expression<Func<TEntity, TResult>> selector, CancellationToken token = default)
         {
             string column = _Repository.GetColumnFromExpression(selector.Body);
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildAggregateQuery("MIN", column, null);
-                object result = await connectionResult.Command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = await connectionResult.Command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -347,8 +347,8 @@
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(null);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(null);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildGroupKeysSql();
@@ -374,8 +374,8 @@
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(null, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(null, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildGroupKeysSql();

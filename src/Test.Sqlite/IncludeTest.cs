@@ -395,12 +395,18 @@ namespace Test.Sqlite
         private static void CleanupDatabase()
         {
             Console.WriteLine("\nCleaning up database...");
-            
+
+            // Dispose repositories and connection factory to release all connections
+            _BookRepository?.Dispose();
+            _AuthorRepository?.Dispose();
+            _CompanyRepository?.Dispose();
+            _ConnectionFactory?.Dispose();
+
             if (System.IO.File.Exists("include_test.db"))
             {
                 System.IO.File.Delete("include_test.db");
             }
-            
+
             Console.WriteLine("Database cleaned up.");
         }
     }

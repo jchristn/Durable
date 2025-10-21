@@ -466,8 +466,8 @@ namespace Durable.Sqlite
         /// <returns>An enumerable collection of projected results.</returns>
         public IEnumerable<TResult> Execute()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = _Repository.GetConnectionAndCommand(_Transaction);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = _Repository.GetConnectionAndCommand(_Transaction);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
@@ -498,8 +498,8 @@ namespace Durable.Sqlite
         /// <returns>A task that represents the asynchronous operation containing an enumerable collection of projected results.</returns>
         public async Task<IEnumerable<TResult>> ExecuteAsync(CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();
@@ -551,8 +551,8 @@ namespace Durable.Sqlite
         /// <returns>An async enumerable collection of projected results that can be consumed with await foreach.</returns>
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
-            ConnectionResult connectionResult = new ConnectionResult(connection, command, shouldReturnToPool);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await _Repository.GetConnectionAndCommandAsync(_Transaction, token);
+            ConnectionResult connectionResult = new ConnectionResult(result.Connection, result.Command, result.ShouldReturnToPool);
             try
             {
                 connectionResult.Command.CommandText = BuildSql();

@@ -533,7 +533,7 @@
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.Dispose">
             <summary>
             Disposes of the connection factory and releases all managed resources including the connection pool.
-            All connections in the pool will be closed and disposed.
+            All connections in the pool will be closed and disposed, and SQLite's internal connection pool will be cleared.
             </summary>
         </member>
         <member name="T:Durable.Sqlite.SqliteConnectionFactoryExtensions">
@@ -1958,7 +1958,7 @@
             <summary>
             Gets the primary key column information for the current entity type.
             </summary>
-            <returns>A tuple containing the column name and PropertyInfo for the primary key.</returns>
+            <returns>A PrimaryKeyInfo object containing the column name and PropertyInfo for the primary key.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when the entity type does not have a primary key column.</exception>
         </member>
         <member name="M:Durable.Sqlite.SqliteRepository`1.GetColumnMappings">
@@ -2084,12 +2084,13 @@
             <param name="value">The value to check</param>
             <returns>True if the value needs sanitization, false otherwise</returns>
         </member>
-        <member name="M:Durable.Sqlite.SqliteSanitizer.FormatValue(System.Object)">
+        <member name="M:Durable.Sqlite.SqliteSanitizer.FormatValue(System.Object,System.Reflection.PropertyInfo)">
             <summary>
             Formats a value for safe SQL insertion, applying sanitization as needed.
             This is the main method that should be used for formatting any value.
             </summary>
             <param name="value">The value to format</param>
+            <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
             <returns>A safely formatted value for SQL insertion</returns>
         </member>
         <member name="T:Durable.Sqlite.SqliteWindowedQueryBuilder`1">

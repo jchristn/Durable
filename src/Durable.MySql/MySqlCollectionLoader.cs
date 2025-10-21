@@ -209,7 +209,7 @@ namespace Durable.MySql
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new MySqlCommand(sql.ToString(), connection);
+            using MySqlCommand command = new MySqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (MySqlTransaction)transaction.Transaction;
 
@@ -220,7 +220,7 @@ namespace Durable.MySql
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (MySqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -309,7 +309,7 @@ namespace Durable.MySql
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new MySqlCommand(sql.ToString(), connection);
+            using MySqlCommand command = new MySqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (MySqlTransaction)transaction.Transaction;
 
@@ -320,7 +320,7 @@ namespace Durable.MySql
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (MySqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -382,7 +382,7 @@ namespace Durable.MySql
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new MySqlCommand(sql.ToString(), connection);
+            using MySqlCommand command = new MySqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (MySqlTransaction)transaction.Transaction;
 
@@ -393,7 +393,7 @@ namespace Durable.MySql
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (MySqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {

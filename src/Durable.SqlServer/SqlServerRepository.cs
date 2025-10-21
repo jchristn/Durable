@@ -141,9 +141,11 @@ namespace Durable.SqlServer
             _ConnectionFactory = new SqlServerConnectionFactory(connectionString);
             _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new SqlServerSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new SqlServerDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -171,9 +173,11 @@ namespace Durable.SqlServer
             _ConnectionFactory = new SqlServerConnectionFactory(connectionString);
             _OwnsConnectionFactory = true; // We created this factory, so we own it
             _Sanitizer = new SqlServerSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new SqlServerDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -200,9 +204,11 @@ namespace Durable.SqlServer
             _OwnsConnectionFactory = false; // External factory, we don't own it
             Settings = null!;
             _Sanitizer = new SqlServerSanitizer();
-            _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
+            _DataTypeConverter = dataTypeConverter ?? new SqlServerDataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -497,7 +503,7 @@ namespace Durable.SqlServer
             return entityAttr.Name;
         }
 
-        private (string column, PropertyInfo property) GetPrimaryKeyInfo()
+        private PrimaryKeyInfo GetPrimaryKeyInfo()
         {
             PropertyInfo[] properties = typeof(T).GetProperties();
             PropertyInfo? pkProperty = properties.FirstOrDefault(p =>
@@ -507,7 +513,7 @@ namespace Durable.SqlServer
                 throw new InvalidOperationException($"Type {typeof(T).Name} must have a property with [Property] attribute and PrimaryKey flag");
 
             PropertyAttribute? attr = pkProperty.GetCustomAttribute<PropertyAttribute>();
-            return (attr!.Name, pkProperty);
+            return new PrimaryKeyInfo(attr!.Name, pkProperty);
         }
 
         /// <summary>
@@ -616,7 +622,7 @@ namespace Durable.SqlServer
             List<string> columns = new List<string>();
             List<string> values = new List<string>();
 
-            foreach (var mapping in _ColumnMappings)
+            foreach (KeyValuePair<string, PropertyInfo> mapping in _ColumnMappings)
             {
                 string columnName = mapping.Key;
                 PropertyInfo property = mapping.Value;
@@ -628,7 +634,7 @@ namespace Durable.SqlServer
 
                 object? value = property.GetValue(entity);
                 columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
-                values.Add(_Sanitizer.FormatValue(value!));
+                values.Add(_Sanitizer.FormatValue(value!, property));
             }
 
             string sql = $"INSERT INTO [{_TableName}] ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)})";
@@ -666,20 +672,43 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (transaction != null)
             {
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
             }
 
             // Add parameters
-            foreach (var (name, value) in parameters)
+            foreach ((string name, object? value) param in parameters)
             {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
+                SqlParameter parameter = command.CreateParameter();
+                parameter.ParameterName = param.name;
+                parameter.Value = param.value ?? DBNull.Value;
+
+                // Explicitly set SqlDbType for known types to avoid inference issues
+                if (param.value != null)
+                {
+                    Type valueType = param.value.GetType();
+                    if (valueType == typeof(long) || valueType == typeof(long?))
+                        parameter.SqlDbType = System.Data.SqlDbType.BigInt;
+                    else if (valueType == typeof(int) || valueType == typeof(int?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Int;
+                    else if (valueType == typeof(Guid) || valueType == typeof(Guid?))
+                        parameter.SqlDbType = System.Data.SqlDbType.UniqueIdentifier;
+                    else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
+                    else if (valueType == typeof(DateTimeOffset) || valueType == typeof(DateTimeOffset?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTimeOffset;
+                    else if (valueType == typeof(bool) || valueType == typeof(bool?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Bit;
+                    else if (valueType == typeof(decimal) || valueType == typeof(decimal?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Decimal;
+                    else if (valueType == typeof(string))
+                        parameter.SqlDbType = System.Data.SqlDbType.NVarChar;
+                }
+
                 command.Parameters.Add(parameter);
             }
 
@@ -700,20 +729,43 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (transaction != null)
             {
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
             }
 
             // Add parameters
-            foreach (var (name, value) in parameters)
+            foreach ((string name, object? value) param in parameters)
             {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
+                SqlParameter parameter = command.CreateParameter();
+                parameter.ParameterName = param.name;
+                parameter.Value = param.value ?? DBNull.Value;
+
+                // Explicitly set SqlDbType for known types to avoid inference issues
+                if (param.value != null)
+                {
+                    Type valueType = param.value.GetType();
+                    if (valueType == typeof(long) || valueType == typeof(long?))
+                        parameter.SqlDbType = System.Data.SqlDbType.BigInt;
+                    else if (valueType == typeof(int) || valueType == typeof(int?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Int;
+                    else if (valueType == typeof(Guid) || valueType == typeof(Guid?))
+                        parameter.SqlDbType = System.Data.SqlDbType.UniqueIdentifier;
+                    else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
+                    else if (valueType == typeof(DateTimeOffset) || valueType == typeof(DateTimeOffset?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTimeOffset;
+                    else if (valueType == typeof(bool) || valueType == typeof(bool?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Bit;
+                    else if (valueType == typeof(decimal) || valueType == typeof(decimal?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Decimal;
+                    else if (valueType == typeof(string))
+                        parameter.SqlDbType = System.Data.SqlDbType.NVarChar;
+                }
+
                 command.Parameters.Add(parameter);
             }
 
@@ -752,20 +804,43 @@ namespace Durable.SqlServer
             token.ThrowIfCancellationRequested();
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (transaction != null)
             {
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
             }
 
             // Add parameters
-            foreach (var (name, value) in parameters)
+            foreach ((string name, object? value) param in parameters)
             {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
+                SqlParameter parameter = command.CreateParameter();
+                parameter.ParameterName = param.name;
+                parameter.Value = param.value ?? DBNull.Value;
+
+                // Explicitly set SqlDbType for known types to avoid inference issues
+                if (param.value != null)
+                {
+                    Type valueType = param.value.GetType();
+                    if (valueType == typeof(long) || valueType == typeof(long?))
+                        parameter.SqlDbType = System.Data.SqlDbType.BigInt;
+                    else if (valueType == typeof(int) || valueType == typeof(int?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Int;
+                    else if (valueType == typeof(Guid) || valueType == typeof(Guid?))
+                        parameter.SqlDbType = System.Data.SqlDbType.UniqueIdentifier;
+                    else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
+                    else if (valueType == typeof(DateTimeOffset) || valueType == typeof(DateTimeOffset?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTimeOffset;
+                    else if (valueType == typeof(bool) || valueType == typeof(bool?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Bit;
+                    else if (valueType == typeof(decimal) || valueType == typeof(decimal?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Decimal;
+                    else if (valueType == typeof(string))
+                        parameter.SqlDbType = System.Data.SqlDbType.NVarChar;
+                }
+
                 command.Parameters.Add(parameter);
             }
 
@@ -803,20 +878,43 @@ namespace Durable.SqlServer
             token.ThrowIfCancellationRequested();
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
 
             if (transaction != null)
             {
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
             }
 
             // Add parameters
-            foreach (var (name, value) in parameters)
+            foreach ((string name, object? value) param in parameters)
             {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
+                SqlParameter parameter = command.CreateParameter();
+                parameter.ParameterName = param.name;
+                parameter.Value = param.value ?? DBNull.Value;
+
+                // Explicitly set SqlDbType for known types to avoid inference issues
+                if (param.value != null)
+                {
+                    Type valueType = param.value.GetType();
+                    if (valueType == typeof(long) || valueType == typeof(long?))
+                        parameter.SqlDbType = System.Data.SqlDbType.BigInt;
+                    else if (valueType == typeof(int) || valueType == typeof(int?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Int;
+                    else if (valueType == typeof(Guid) || valueType == typeof(Guid?))
+                        parameter.SqlDbType = System.Data.SqlDbType.UniqueIdentifier;
+                    else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
+                    else if (valueType == typeof(DateTimeOffset) || valueType == typeof(DateTimeOffset?))
+                        parameter.SqlDbType = System.Data.SqlDbType.DateTimeOffset;
+                    else if (valueType == typeof(bool) || valueType == typeof(bool?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Bit;
+                    else if (valueType == typeof(decimal) || valueType == typeof(decimal?))
+                        parameter.SqlDbType = System.Data.SqlDbType.Decimal;
+                    else if (valueType == typeof(string))
+                        parameter.SqlDbType = System.Data.SqlDbType.NVarChar;
+                }
+
                 command.Parameters.Add(parameter);
             }
 
@@ -2201,7 +2299,7 @@ namespace Durable.SqlServer
                             originalEntity = CreateOriginalEntityApproximation(currentEntity, entity);
                         }
 
-                        var resolveResult = await _ConflictResolver.TryResolveConflictAsync(currentEntity, entity, originalEntity, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
+                        TryResolveConflictResult<T> resolveResult = await _ConflictResolver.TryResolveConflictAsync(currentEntity, entity, originalEntity, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
 
                         if (resolveResult.Success && resolveResult.ResolvedEntity != null)
                         {
@@ -2354,7 +2452,7 @@ namespace Durable.SqlServer
             return UpdateMany(predicate, entity =>
             {
                 // Compile and execute the update expression
-                var compiledUpdate = updateExpression.Compile();
+                Func<T, T> compiledUpdate = updateExpression.Compile();
                 T updatedEntity = compiledUpdate(entity);
 
                 // Copy updated values back to the original entity
@@ -2437,7 +2535,7 @@ namespace Durable.SqlServer
                 token.ThrowIfCancellationRequested();
 
                 // Compile and execute the update expression
-                var compiledUpdate = updateExpression.Compile();
+                Func<T, T> compiledUpdate = updateExpression.Compile();
                 T updatedEntity = compiledUpdate(entity);
 
                 // Copy updated values back to the original entity
@@ -2837,7 +2935,7 @@ namespace Durable.SqlServer
 
         /// <summary>
         /// Inserts or updates an entity depending on whether it already exists in the repository.
-        /// Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+        /// Uses SQL Server's MERGE statement.
         /// </summary>
         /// <param name="entity">The entity to insert or update</param>
         /// <param name="transaction">Optional transaction to execute within</param>
@@ -2873,11 +2971,13 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
+            command.Transaction = (SqlTransaction?)transaction;
 
-            List<string> columns = new List<string>();
-            List<string> parameters = new List<string>();
+            List<string> allColumns = new List<string>();
+            List<string> insertColumns = new List<string>();
+            List<string> insertSourceColumns = new List<string>();
+            List<string> allParameters = new List<string>();
             List<string> updatePairs = new List<string>();
             List<(string name, object? value)> parameterValues = new List<(string, object?)>();
 
@@ -2886,9 +2986,21 @@ namespace Durable.SqlServer
                 string columnName = kvp.Key;
                 PropertyInfo property = kvp.Value;
                 object? value = property.GetValue(entity);
+                PropertyAttribute? columnAttr = property.GetCustomAttribute<PropertyAttribute>();
 
-                columns.Add($"[{columnName}]");
-                parameters.Add($"@{columnName}");
+                bool isAutoIncrementPK = columnAttr != null &&
+                    (columnAttr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey &&
+                    (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement;
+
+                allColumns.Add($"[{columnName}]");
+                allParameters.Add($"@{columnName}");
+
+                // For INSERT: exclude auto-increment primary keys
+                if (!isAutoIncrementPK)
+                {
+                    insertColumns.Add($"[{columnName}]");
+                    insertSourceColumns.Add($"source.[{columnName}]");
+                }
 
                 object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)!;
                 parameterValues.Add((columnName, convertedValue));
@@ -2896,22 +3008,26 @@ namespace Durable.SqlServer
                 // For UPDATE part - exclude primary key from updates
                 if (columnName != _PrimaryKeyColumn)
                 {
-                    updatePairs.Add($"[{columnName}] = VALUES([{columnName}])");
+                    updatePairs.Add($"[{columnName}] = source.[{columnName}]");
                 }
             }
 
+            // Build MERGE statement for SQL Server
             StringBuilder sql = new StringBuilder();
-            sql.Append($"INSERT INTO [{_TableName}] ({string.Join(", ", columns)}) ");
-            sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-            sql.Append("ON DUPLICATE KEY UPDATE ");
-            sql.Append(string.Join(", ", updatePairs));
+            sql.Append($"MERGE [{_TableName}] AS target ");
+            sql.Append($"USING (VALUES ({string.Join(", ", allParameters)})) AS source ({string.Join(", ", allColumns)}) ");
+            sql.Append($"ON target.[{_PrimaryKeyColumn}] = source.[{_PrimaryKeyColumn}] ");
+            sql.Append("WHEN MATCHED THEN ");
+            sql.Append($"UPDATE SET {string.Join(", ", updatePairs)} ");
+            sql.Append("WHEN NOT MATCHED THEN ");
+            sql.Append($"INSERT ({string.Join(", ", insertColumns)}) VALUES ({string.Join(", ", insertSourceColumns)});");
 
             command.CommandText = sql.ToString();
 
             // Add parameters
-            foreach (var (name, value) in parameterValues)
+            foreach ((string name, object? value) param in parameterValues)
             {
-                SqlParameter parameter = new SqlParameter($"@{name}", value ?? DBNull.Value);
+                SqlParameter parameter = new SqlParameter($"@{param.name}", param.value ?? DBNull.Value);
                 command.Parameters.Add(parameter);
             }
 
@@ -2947,7 +3063,7 @@ namespace Durable.SqlServer
 
         /// <summary>
         /// Inserts or updates multiple entities depending on whether they already exist in the repository.
-        /// Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+        /// Uses SQL Server's MERGE statement within a transaction for consistency.
         /// </summary>
         /// <param name="entities">The entities to insert or update</param>
         /// <param name="transaction">Optional transaction to execute within</param>
@@ -3013,7 +3129,7 @@ namespace Durable.SqlServer
 
         /// <summary>
         /// Asynchronously inserts or updates an entity depending on whether it already exists in the repository.
-        /// Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax.
+        /// Uses SQL Server's MERGE statement.
         /// </summary>
         /// <param name="entity">The entity to insert or update</param>
         /// <param name="transaction">Optional transaction to execute within</param>
@@ -3055,11 +3171,13 @@ namespace Durable.SqlServer
 
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
+            command.Transaction = (SqlTransaction?)transaction;
 
-            List<string> columns = new List<string>();
-            List<string> parameters = new List<string>();
+            List<string> allColumns = new List<string>();
+            List<string> insertColumns = new List<string>();
+            List<string> insertSourceColumns = new List<string>();
+            List<string> allParameters = new List<string>();
             List<string> updatePairs = new List<string>();
             List<(string name, object? value)> parameterValues = new List<(string, object?)>();
 
@@ -3068,9 +3186,21 @@ namespace Durable.SqlServer
                 string columnName = kvp.Key;
                 PropertyInfo property = kvp.Value;
                 object? value = property.GetValue(entity);
+                PropertyAttribute? columnAttr = property.GetCustomAttribute<PropertyAttribute>();
 
-                columns.Add($"[{columnName}]");
-                parameters.Add($"@{columnName}");
+                bool isAutoIncrementPK = columnAttr != null &&
+                    (columnAttr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey &&
+                    (columnAttr.PropertyFlags & Flags.AutoIncrement) == Flags.AutoIncrement;
+
+                allColumns.Add($"[{columnName}]");
+                allParameters.Add($"@{columnName}");
+
+                // For INSERT: exclude auto-increment primary keys
+                if (!isAutoIncrementPK)
+                {
+                    insertColumns.Add($"[{columnName}]");
+                    insertSourceColumns.Add($"source.[{columnName}]");
+                }
 
                 object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)!;
                 parameterValues.Add((columnName, convertedValue));
@@ -3078,22 +3208,26 @@ namespace Durable.SqlServer
                 // For UPDATE part - exclude primary key from updates
                 if (columnName != _PrimaryKeyColumn)
                 {
-                    updatePairs.Add($"[{columnName}] = VALUES([{columnName}])");
+                    updatePairs.Add($"[{columnName}] = source.[{columnName}]");
                 }
             }
 
+            // Build MERGE statement for SQL Server
             StringBuilder sql = new StringBuilder();
-            sql.Append($"INSERT INTO [{_TableName}] ({string.Join(", ", columns)}) ");
-            sql.Append($"VALUES ({string.Join(", ", parameters)}) ");
-            sql.Append("ON DUPLICATE KEY UPDATE ");
-            sql.Append(string.Join(", ", updatePairs));
+            sql.Append($"MERGE [{_TableName}] AS target ");
+            sql.Append($"USING (VALUES ({string.Join(", ", allParameters)})) AS source ({string.Join(", ", allColumns)}) ");
+            sql.Append($"ON target.[{_PrimaryKeyColumn}] = source.[{_PrimaryKeyColumn}] ");
+            sql.Append("WHEN MATCHED THEN ");
+            sql.Append($"UPDATE SET {string.Join(", ", updatePairs)} ");
+            sql.Append("WHEN NOT MATCHED THEN ");
+            sql.Append($"INSERT ({string.Join(", ", insertColumns)}) VALUES ({string.Join(", ", insertSourceColumns)});");
 
             command.CommandText = sql.ToString();
 
             // Add parameters
-            foreach (var (name, value) in parameterValues)
+            foreach ((string name, object? value) param in parameterValues)
             {
-                SqlParameter parameter = new SqlParameter($"@{name}", value ?? DBNull.Value);
+                SqlParameter parameter = new SqlParameter($"@{param.name}", param.value ?? DBNull.Value);
                 command.Parameters.Add(parameter);
             }
 
@@ -3129,7 +3263,7 @@ namespace Durable.SqlServer
 
         /// <summary>
         /// Asynchronously inserts or updates multiple entities depending on whether they already exist in the repository.
-        /// Uses SQL Server's INSERT ... ON DUPLICATE KEY UPDATE syntax within a transaction for consistency.
+        /// Uses SQL Server's MERGE statement within a transaction for consistency.
         /// </summary>
         /// <param name="entities">The entities to insert or update</param>
         /// <param name="transaction">Optional transaction to execute within</param>
@@ -3236,10 +3370,10 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)
@@ -3257,7 +3391,7 @@ namespace Durable.SqlServer
 
             try
             {
-                using var reader = (SqlDataReader)command!.ExecuteReader();
+                using SqlDataReader reader = (SqlDataReader)command!.ExecuteReader();
                 List<T> results = new List<T>();
                 while (reader.Read())
                 {
@@ -3310,10 +3444,10 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)
@@ -3331,7 +3465,7 @@ namespace Durable.SqlServer
 
             try
             {
-                using var reader = (SqlDataReader)command!.ExecuteReader();
+                using SqlDataReader reader = (SqlDataReader)command!.ExecuteReader();
                 List<TResult> results = new List<TResult>();
                 while (reader.Read())
                 {
@@ -3383,10 +3517,10 @@ namespace Durable.SqlServer
         {
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)
@@ -3429,7 +3563,7 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                await foreach (var item in ExecuteFromSqlAsyncWithConnection(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
+                await foreach (T item in ExecuteFromSqlAsyncWithConnection(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
                 {
                     yield return item;
                 }
@@ -3440,7 +3574,7 @@ namespace Durable.SqlServer
                 try
                 {
                     connection = _ConnectionFactory.GetConnection();
-                    await foreach (var item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
+                    await foreach (T item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
                     {
                         yield return item;
                     }
@@ -3459,10 +3593,10 @@ namespace Durable.SqlServer
 
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)
@@ -3478,7 +3612,7 @@ namespace Durable.SqlServer
                 _LastExecutedSqlWithParameters = BuildSqlWithParameters((SqlCommand)command);
             }
 
-            using var reader = (SqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
+            using SqlDataReader reader = (SqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
             while (await reader.ReadAsync(token).ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested();
@@ -3504,7 +3638,7 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
+                await foreach (TResult item in ExecuteFromSqlAsyncWithConnection<TResult>(transaction.Connection, sql, transaction.Transaction, token, parameters).ConfigureAwait(false))
                 {
                     yield return item;
                 }
@@ -3515,7 +3649,7 @@ namespace Durable.SqlServer
                 try
                 {
                     connection = _ConnectionFactory.GetConnection();
-                    await foreach (var item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
+                    await foreach (TResult item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
                     {
                         yield return item;
                     }
@@ -3534,10 +3668,10 @@ namespace Durable.SqlServer
 
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)
@@ -3553,7 +3687,7 @@ namespace Durable.SqlServer
                 _LastExecutedSqlWithParameters = BuildSqlWithParameters((SqlCommand)command);
             }
 
-            using var reader = (SqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
+            using SqlDataReader reader = (SqlDataReader)await command!.ExecuteReaderAsync(token).ConfigureAwait(false);
             while (await reader.ReadAsync(token).ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested();
@@ -3602,10 +3736,10 @@ namespace Durable.SqlServer
 
             EnsureConnectionOpen(connection);
 
-            using var command = connection.CreateCommand();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
             command.CommandText = sql;
             if (transaction != null)
-                command.Transaction = transaction;
+                command.Transaction = (SqlTransaction)transaction;
 
             // Add parameters
             for (int i = 0; i < parameters.Length; i++)

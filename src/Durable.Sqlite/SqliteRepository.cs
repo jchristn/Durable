@@ -115,7 +115,9 @@
             _Sanitizer = new SqliteSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -144,7 +146,9 @@
             _Sanitizer = new SqliteSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -172,7 +176,9 @@
             _Sanitizer = new SqliteSanitizer();
             _DataTypeConverter = dataTypeConverter ?? new DataTypeConverter();
             _TableName = GetEntityName();
-            (_PrimaryKeyColumn, _PrimaryKeyProperty) = GetPrimaryKeyInfo();
+            PrimaryKeyInfo primaryKeyInfo = GetPrimaryKeyInfo();
+            _PrimaryKeyColumn = primaryKeyInfo.ColumnName;
+            _PrimaryKeyProperty = primaryKeyInfo.Property;
             _ColumnMappings = GetColumnMappings();
             _ForeignKeys = GetForeignKeys();
             _NavigationProperties = GetNavigationProperties();
@@ -377,7 +383,10 @@
         /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         public T ReadById(object id, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
@@ -409,7 +418,10 @@
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> ReadByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
@@ -441,7 +453,10 @@
         /// <returns>The maximum value of the selected property.</returns>
         public TResult Max<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -457,8 +472,8 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -477,7 +492,10 @@
         /// <returns>A task that represents the asynchronous operation containing the maximum value of the selected property.</returns>
         public async Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -493,16 +511,12 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = await command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -516,7 +530,10 @@
         /// <returns>The minimum value of the selected property.</returns>
         public TResult Min<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -532,8 +549,8 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
@@ -552,7 +569,10 @@
         /// <returns>A task that represents the asynchronous operation containing the minimum value of the selected property.</returns>
         public async Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -568,16 +588,12 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = await command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? default(TResult) : (TResult)Convert.ChangeType(result, typeof(TResult));
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? default(TResult) : (TResult)Convert.ChangeType(scalarResult, typeof(TResult));
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -590,7 +606,10 @@
         /// <returns>The average value of the selected property.</returns>
         public decimal Average(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -606,8 +625,8 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = command.ExecuteScalar();
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = command.ExecuteScalar();
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -625,7 +644,10 @@
         /// <returns>A task that represents the asynchronous operation containing the average value of the selected property.</returns>
         public async Task<decimal> AverageAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -641,16 +663,12 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = await command.ExecuteScalarAsync(token);
-                return result == DBNull.Value || result == null ? 0m : Convert.ToDecimal(result);
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return scalarResult == DBNull.Value || scalarResult == null ? 0m : Convert.ToDecimal(scalarResult);
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -663,7 +681,10 @@
         /// <returns>The sum of the selected property.</returns>
         public decimal Sum(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -679,8 +700,8 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = command.ExecuteScalar();
-                return Convert.ToDecimal(result);
+                object scalarResult = command.ExecuteScalar();
+                return Convert.ToDecimal(scalarResult);
             }
             finally
             {
@@ -698,7 +719,10 @@
         /// <returns>A task that represents the asynchronous operation containing the sum of the selected property.</returns>
         public async Task<decimal> SumAsync(Expression<Func<T, decimal>> selector, Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string column = GetColumnFromExpression(selector.Body);
@@ -714,16 +738,12 @@
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
 
-                object result = await command.ExecuteScalarAsync(token);
-                return Convert.ToDecimal(result);
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return Convert.ToDecimal(scalarResult);
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -737,7 +757,10 @@
         /// <returns>The number of entities that were updated.</returns>
         public int BatchUpdate(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 ExpressionParser<T> parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
@@ -764,7 +787,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
         public async Task<int> BatchUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 ExpressionParser<T> parser = new ExpressionParser<T>(_ColumnMappings, _Sanitizer);
@@ -777,11 +803,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -818,7 +840,10 @@
         /// <returns>An enumerable collection of entities returned by the query.</returns>
         public IEnumerable<T> FromSql(string sql, ITransaction transaction = null, params object[] parameters)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -853,7 +878,10 @@
         /// <returns>An async enumerable collection of entities returned by the query.</returns>
         public async IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -871,11 +899,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -890,7 +914,10 @@
         /// <returns>An async enumerable collection of entities of the specified type returned by the query.</returns>
         public async IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction transaction = null, [EnumeratorCancellation] CancellationToken token = default, params object[] parameters) where TResult : new()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -908,11 +935,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -926,7 +949,10 @@
         /// <returns>An enumerable collection of entities of the specified type returned by the query.</returns>
         public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction transaction = null, params object[] parameters) where TResult : new()
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -960,7 +986,10 @@
         /// <returns>The number of rows affected by the command.</returns>
         public int ExecuteSql(string sql, ITransaction transaction = null, params object[] parameters)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -988,7 +1017,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of rows affected by the command.</returns>
         public async Task<int> ExecuteSqlAsync(string sql, ITransaction transaction = null, CancellationToken token = default, params object[] parameters)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, CancellationToken.None);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = sql;
@@ -1002,11 +1034,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1050,7 +1078,10 @@
         /// <returns>True if any entity matches the predicate; otherwise, false.</returns>
         public bool Exists(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
@@ -1073,22 +1104,21 @@
         /// <returns>A task that represents the asynchronous operation containing true if any entity matches the predicate; otherwise, false.</returns>
         public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {whereClause} LIMIT 1);";
                 CaptureSqlFromCommand(command);
-                object result = await command.ExecuteScalarAsync(token);
-                return Convert.ToBoolean(result);
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return Convert.ToBoolean(scalarResult);
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1100,7 +1130,10 @@
         /// <returns>True if an entity with the specified primary key exists; otherwise, false.</returns>
         public bool ExistsById(object id, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
@@ -1123,22 +1156,21 @@
         /// <returns>A task that represents the asynchronous operation containing true if an entity with the specified primary key exists; otherwise, false.</returns>
         public async Task<bool> ExistsByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"SELECT EXISTS(SELECT 1 FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id LIMIT 1);";
                 command.Parameters.AddWithValue("@id", id);
                 CaptureSqlFromCommand(command);
-                object result = await command.ExecuteScalarAsync(token);
-                return Convert.ToBoolean(result);
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return Convert.ToBoolean(scalarResult);
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1151,7 +1183,10 @@
         /// <returns>The number of entities that match the predicate.</returns>
         public int Count(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 StringBuilder sql = new StringBuilder($"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
@@ -1182,7 +1217,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of entities that match the predicate.</returns>
         public async Task<int> CountAsync(Expression<Func<T, bool>> predicate = null, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 StringBuilder sql = new StringBuilder($"SELECT COUNT(*) FROM {_Sanitizer.SanitizeIdentifier(_TableName)}");
@@ -1196,16 +1234,12 @@
                 sql.Append(";");
                 command.CommandText = sql.ToString();
                 CaptureSqlFromCommand(command);
-                object result = await command.ExecuteScalarAsync(token);
-                return Convert.ToInt32(result);
+                object scalarResult = await command.ExecuteScalarAsync(token);
+                return Convert.ToInt32(scalarResult);
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1221,7 +1255,10 @@
         /// <exception cref="InvalidOperationException">Thrown when the entity violates database constraints.</exception>
         public T Create(T entity, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> columns = new List<string>();
@@ -1291,7 +1328,10 @@
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<T> CreateAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> columns = new List<string>();
@@ -1344,11 +1384,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1496,7 +1532,10 @@
         /// <exception cref="OptimisticConcurrencyException">Thrown when a concurrency conflict cannot be resolved automatically.</exception>
         public T Update(T entity, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> setPairs = new List<string>();
@@ -1602,7 +1641,10 @@
         /// <returns>A task that represents the asynchronous operation containing the updated entity.</returns>
         public async Task<T> UpdateAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> setPairs = new List<string>();
@@ -1673,14 +1715,14 @@
                         
                         // Try to resolve the conflict
                         ConflictResolutionStrategy strategy = _ConflictResolver.DefaultStrategy;
-                        TryResolveConflictResult<T> result = await _ConflictResolver.TryResolveConflictAsync(currentDbEntity, entity, originalEntity, strategy);
-                        
-                        if (result.Success && result.ResolvedEntity != null)
+                        TryResolveConflictResult<T> conflictResult = await _ConflictResolver.TryResolveConflictAsync(currentDbEntity, entity, originalEntity, strategy);
+
+                        if (conflictResult.Success && conflictResult.ResolvedEntity != null)
                         {
                             // Copy the current version from the database to the resolved entity
-                            _VersionColumnInfo.SetValue(result.ResolvedEntity, actualVersion);
+                            _VersionColumnInfo.SetValue(conflictResult.ResolvedEntity, actualVersion);
                             // Retry the update with the resolved entity
-                            return await UpdateAsync(result.ResolvedEntity, transaction, token);
+                            return await UpdateAsync(conflictResult.ResolvedEntity, transaction, token);
                         }
                         else
                         {
@@ -1695,11 +1737,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1817,7 +1855,7 @@
                 if (ownTransaction)
                 {
                     if (localTransaction != null) await localTransaction.DisposeAsync();
-                    if (connection != null) await connection.DisposeAsync();
+                    if (connection != null) await _ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
         }
@@ -1833,7 +1871,10 @@
         /// <returns>The number of entities that were updated.</returns>
         public int UpdateField<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
@@ -1865,7 +1906,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of entities that were updated.</returns>
         public async Task<int> UpdateFieldAsync<TField>(Expression<Func<T, bool>> predicate, Expression<Func<T, TField>> field, TField value, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
@@ -1881,11 +1925,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1924,7 +1964,10 @@
         /// <returns>True if the entity was deleted; otherwise, false.</returns>
         public bool DeleteById(object id, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
@@ -1948,7 +1991,10 @@
         /// <returns>A task that represents the asynchronous operation containing true if the entity was deleted; otherwise, false.</returns>
         public async Task<bool> DeleteByIdAsync(object id, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id;";
@@ -1959,11 +2005,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -1975,7 +2017,10 @@
         /// <returns>The number of entities that were deleted.</returns>
         public int DeleteMany(Expression<Func<T, bool>> predicate, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
@@ -1998,7 +2043,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
         public async Task<int> DeleteManyAsync(Expression<Func<T, bool>> predicate, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 string whereClause = BuildWhereClause(predicate);
@@ -2008,11 +2056,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -2023,7 +2067,10 @@
         /// <returns>The number of entities that were deleted.</returns>
         public int DeleteAll(ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
@@ -2044,7 +2091,10 @@
         /// <returns>A task that represents the asynchronous operation containing the number of entities that were deleted.</returns>
         public async Task<int> DeleteAllAsync(ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 command.CommandText = $"DELETE FROM {_Sanitizer.SanitizeIdentifier(_TableName)};";
@@ -2053,11 +2103,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -2070,7 +2116,10 @@
         /// <returns>The entity after the upsert operation, with any generated values populated.</returns>
         public T Upsert(T entity, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> columns = new List<string>();
@@ -2127,7 +2176,10 @@
         /// <returns>A task that represents the asynchronous operation containing the entity after the upsert operation, with any generated values populated.</returns>
         public async Task<T> UpsertAsync(T entity, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldDispose) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldDispose = result.ShouldReturnToPool;
             try
             {
                 List<string> columns = new List<string>();
@@ -2171,11 +2223,7 @@
             }
             finally
             {
-                if (command != null) await command.DisposeAsync();
-                if (shouldDispose && connection != null)
-                {
-                    await connection.DisposeAsync();
-                }
+                await CleanupConnectionAsync(connection, command, shouldDispose);
             }
         }
 
@@ -2281,7 +2329,7 @@
                 if (ownTransaction)
                 {
                     if (localTransaction != null) await localTransaction.DisposeAsync();
-                    if (connection != null) await connection.DisposeAsync();
+                    if (connection != null) await _ConnectionFactory.ReturnConnectionAsync(connection);
                 }
             }
         }
@@ -2353,7 +2401,10 @@
         
         private T ReadByIdAtVersion(object id, object version, ITransaction transaction = null)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             try
             {
                 string sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
@@ -2388,7 +2439,10 @@
         
         private async Task<T> ReadByIdAtVersionAsync(object id, object version, ITransaction transaction = null, CancellationToken token = default)
         {
-            (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            SqliteCommand command = result.Command;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             try
             {
                 string sql = $"SELECT * FROM {_Sanitizer.SanitizeIdentifier(_TableName)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
@@ -2458,7 +2512,7 @@
             }
         }
 
-        internal (SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool) GetConnectionAndCommand(ITransaction transaction)
+        internal ConnectionCommandResult<SqliteConnection, SqliteCommand> GetConnectionAndCommand(ITransaction transaction)
         {
             // Use provided transaction or check for ambient transaction
             ITransaction effectiveTransaction = transaction ?? TransactionScope.Current?.Transaction;
@@ -2468,7 +2522,7 @@
                 SqliteCommand command = new SqliteCommand();
                 command.Connection = (SqliteConnection)effectiveTransaction.Connection;
                 command.Transaction = (SqliteTransaction)effectiveTransaction.Transaction;
-                return ((SqliteConnection)effectiveTransaction.Connection, command, false);
+                return new ConnectionCommandResult<SqliteConnection, SqliteCommand>((SqliteConnection)effectiveTransaction.Connection, command, false);
             }
             else
             {
@@ -2479,11 +2533,11 @@
                 }
                 SqliteCommand command = new SqliteCommand();
                 command.Connection = connection;
-                return (connection, command, true);
+                return new ConnectionCommandResult<SqliteConnection, SqliteCommand>(connection, command, true);
             }
         }
 
-        internal async Task<(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
+        internal async Task<ConnectionCommandResult<SqliteConnection, SqliteCommand>> GetConnectionAndCommandAsync(ITransaction transaction, CancellationToken token)
         {
             // Use provided transaction or check for ambient transaction
             ITransaction effectiveTransaction = transaction ?? TransactionScope.Current?.Transaction;
@@ -2493,7 +2547,7 @@
                 SqliteCommand command = new SqliteCommand();
                 command.Connection = (SqliteConnection)effectiveTransaction.Connection;
                 command.Transaction = (SqliteTransaction)effectiveTransaction.Transaction;
-                return ((SqliteConnection)effectiveTransaction.Connection, command, false);
+                return new ConnectionCommandResult<SqliteConnection, SqliteCommand>((SqliteConnection)effectiveTransaction.Connection, command, false);
             }
             else
             {
@@ -2504,7 +2558,7 @@
                 }
                 SqliteCommand command = new SqliteCommand();
                 command.Connection = connection;
-                return (connection, command, true);
+                return new ConnectionCommandResult<SqliteConnection, SqliteCommand>(connection, command, true);
             }
         }
 
@@ -2524,16 +2578,16 @@
         /// <summary>
         /// Gets the primary key column information for the current entity type.
         /// </summary>
-        /// <returns>A tuple containing the column name and PropertyInfo for the primary key.</returns>
+        /// <returns>A PrimaryKeyInfo object containing the column name and PropertyInfo for the primary key.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the entity type does not have a primary key column.</exception>
-        public (string columnName, PropertyInfo property) GetPrimaryKeyInfo()
+        public PrimaryKeyInfo GetPrimaryKeyInfo()
         {
             foreach (PropertyInfo prop in typeof(T).GetProperties())
             {
                 PropertyAttribute attr = prop.GetCustomAttribute<PropertyAttribute>();
                 if (attr != null && (attr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey)
                 {
-                    return (attr.Name, prop);
+                    return new PrimaryKeyInfo(attr.Name, prop);
                 }
             }
 
@@ -2725,7 +2779,9 @@
 
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction transaction)
         {
-            (SqliteConnection connection, SqliteCommand _, bool shouldReturnToPool) = GetConnectionAndCommand(transaction);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+            SqliteConnection connection = result.Connection;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             List<T> results = new List<T>();
             
             try
@@ -2783,7 +2839,9 @@
         
         private async Task<IEnumerable<T>> CreateManyOptimizedAsync(IList<T> entities, ITransaction transaction, CancellationToken token)
         {
-            (SqliteConnection connection, SqliteCommand _, bool shouldReturnToPool) = await GetConnectionAndCommandAsync(transaction, token);
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, token);
+            SqliteConnection connection = result.Connection;
+            bool shouldReturnToPool = result.ShouldReturnToPool;
             List<T> results = new List<T>();
             
             try

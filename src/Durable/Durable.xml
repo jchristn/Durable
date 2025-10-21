@@ -532,6 +532,33 @@
             <param name="strategy">The conflict resolution strategy (ignored)</param>
             <returns>A task containing a failure result with Success set to false</returns>
         </member>
+        <member name="T:Durable.ConfigurationSettingResult">
+            <summary>
+            Represents the result of resolving a configuration setting.
+            </summary>
+        </member>
+        <member name="P:Durable.ConfigurationSettingResult.EffectiveSetting">
+            <summary>
+            Gets or sets the effective setting value.
+            </summary>
+        </member>
+        <member name="P:Durable.ConfigurationSettingResult.Source">
+            <summary>
+            Gets or sets the source of the effective setting (e.g., "Instance", "ThreadLocal", "Global").
+            </summary>
+        </member>
+        <member name="M:Durable.ConfigurationSettingResult.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
+            </summary>
+        </member>
+        <member name="M:Durable.ConfigurationSettingResult.#ctor(System.Boolean,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
+            </summary>
+            <param name="effectiveSetting">The effective setting value.</param>
+            <param name="source">The source of the setting.</param>
+        </member>
         <member name="T:Durable.ConflictResolutionStrategy">
             <summary>
             Defines strategies for resolving conflicts during concurrent operations.
@@ -561,6 +588,41 @@
             <summary>
             Uses a custom conflict resolution strategy.
             </summary>
+        </member>
+        <member name="T:Durable.ConnectionCommandResult`2">
+            <summary>
+            Represents the result of retrieving a database connection and command.
+            </summary>
+            <typeparam name="TConnection">The type of database connection.</typeparam>
+            <typeparam name="TCommand">The type of database command.</typeparam>
+        </member>
+        <member name="P:Durable.ConnectionCommandResult`2.Connection">
+            <summary>
+            Gets or sets the database connection.
+            </summary>
+        </member>
+        <member name="P:Durable.ConnectionCommandResult`2.Command">
+            <summary>
+            Gets or sets the database command.
+            </summary>
+        </member>
+        <member name="P:Durable.ConnectionCommandResult`2.ShouldReturnToPool">
+            <summary>
+            Gets or sets a value indicating whether the connection should be returned to the pool when disposed.
+            </summary>
+        </member>
+        <member name="M:Durable.ConnectionCommandResult`2.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConnectionCommandResult`2"/> class.
+            </summary>
+        </member>
+        <member name="M:Durable.ConnectionCommandResult`2.#ctor(`0,`1,System.Boolean)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConnectionCommandResult`2"/> class.
+            </summary>
+            <param name="connection">The database connection.</param>
+            <param name="command">The database command.</param>
+            <param name="shouldReturnToPool">Whether the connection should be returned to the pool.</param>
         </member>
         <member name="T:Durable.ConnectionPool">
             <summary>
@@ -756,7 +818,7 @@
             3. Global configuration (GlobalIncludeQuery)
             </summary>
             <param name="instanceLevelSetting">The instance-level setting from the repository, or null if not configured</param>
-            <returns>A tuple containing the effective setting and the source of that setting for debugging</returns>
+            <returns>A ConfigurationSettingResult object containing the effective setting and the source of that setting for debugging</returns>
             <exception cref="T:System.ArgumentException">This method cannot throw exceptions as all inputs are valid</exception>
         </member>
         <member name="T:Durable.DurableResult`1">
@@ -2300,12 +2362,13 @@
             <param name="value">The value to check</param>
             <returns>True if the value needs sanitization, false otherwise</returns>
         </member>
-        <member name="M:Durable.ISanitizer.FormatValue(System.Object)">
+        <member name="M:Durable.ISanitizer.FormatValue(System.Object,System.Reflection.PropertyInfo)">
             <summary>
             Formats a value for safe SQL insertion, applying sanitization as needed.
             This is the main method that should be used for formatting any value.
             </summary>
             <param name="value">The value to format</param>
+            <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
             <returns>A safely formatted value for SQL insertion</returns>
         </member>
         <member name="T:Durable.ISavepoint">
@@ -2813,6 +2876,33 @@
             </summary>
             <param name="connection">The database connection to wrap.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when connection is null.</exception>
+        </member>
+        <member name="T:Durable.PrimaryKeyInfo">
+            <summary>
+            Represents information about a primary key column and its corresponding property.
+            </summary>
+        </member>
+        <member name="P:Durable.PrimaryKeyInfo.ColumnName">
+            <summary>
+            Gets or sets the name of the primary key column in the database.
+            </summary>
+        </member>
+        <member name="P:Durable.PrimaryKeyInfo.Property">
+            <summary>
+            Gets or sets the PropertyInfo for the primary key property on the entity.
+            </summary>
+        </member>
+        <member name="M:Durable.PrimaryKeyInfo.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.PrimaryKeyInfo"/> class.
+            </summary>
+        </member>
+        <member name="M:Durable.PrimaryKeyInfo.#ctor(System.String,System.Reflection.PropertyInfo)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.PrimaryKeyInfo"/> class.
+            </summary>
+            <param name="columnName">The name of the primary key column.</param>
+            <param name="property">The PropertyInfo for the primary key property.</param>
         </member>
         <member name="T:Durable.PropertyAttribute">
             <summary>

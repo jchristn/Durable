@@ -209,7 +209,7 @@ namespace Durable.SqlServer
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new SqlCommand(sql.ToString(), connection);
+            using SqlCommand command = new SqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (SqlTransaction)transaction.Transaction;
 
@@ -220,7 +220,7 @@ namespace Durable.SqlServer
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (SqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -309,7 +309,7 @@ namespace Durable.SqlServer
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new SqlCommand(sql.ToString(), connection);
+            using SqlCommand command = new SqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (SqlTransaction)transaction.Transaction;
 
@@ -320,7 +320,7 @@ namespace Durable.SqlServer
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (SqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
@@ -382,7 +382,7 @@ namespace Durable.SqlServer
             sql.Append(")");
 
             // Execute query and load related entities
-            using var command = new SqlCommand(sql.ToString(), connection);
+            using SqlCommand command = new SqlCommand(sql.ToString(), connection);
             if (transaction != null)
                 command.Transaction = (SqlTransaction)transaction.Transaction;
 
@@ -393,7 +393,7 @@ namespace Durable.SqlServer
 
             Dictionary<object, List<object>> relatedEntitiesByParentKey = new Dictionary<object, List<object>>();
 
-            using (var reader = command.ExecuteReader())
+            using (SqlDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {

@@ -130,8 +130,9 @@ namespace Durable.Sqlite
         /// This is the main method that should be used for formatting any value.
         /// </summary>
         /// <param name="value">The value to format</param>
+        /// <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
         /// <returns>A safely formatted value for SQL insertion</returns>
-        public string FormatValue(object value)
+        public string FormatValue(object value, System.Reflection.PropertyInfo? propertyInfo = null)
         {
             return value switch
             {
@@ -139,6 +140,7 @@ namespace Durable.Sqlite
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0",
                 Enum e => SanitizeString(e.ToString()),
+                Guid g => SanitizeString(g.ToString()),
                 DateTime dt => SanitizeString(dt.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture)),
                 DateTimeOffset dto => SanitizeString(dto.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture)),
                 TimeSpan ts => SanitizeString(ts.ToString()),

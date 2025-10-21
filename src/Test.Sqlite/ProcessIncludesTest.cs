@@ -42,34 +42,35 @@ namespace Test.Sqlite
 
         private static void RunIncludeTests(string connectionString)
         {
-            // Setup repositories
-            var companyRepo = new SqliteRepository<Company>(connectionString);
-            var authorRepo = new SqliteRepository<Author>(connectionString);
-            var bookRepo = new SqliteRepository<Book>(connectionString);
-
             // Create tables
             CreateTables(connectionString);
 
-            // Create test data
-            var companies = CreateTestCompanies(companyRepo);
-            var authors = CreateTestAuthors(authorRepo, companies);
-            var books = CreateTestBooks(bookRepo, authors, companies);
+            // Setup repositories with proper disposal
+            using (SqliteRepository<Company> companyRepo = new SqliteRepository<Company>(connectionString))
+            using (SqliteRepository<Author> authorRepo = new SqliteRepository<Author>(connectionString))
+            using (SqliteRepository<Book> bookRepo = new SqliteRepository<Book>(connectionString))
+            {
+                // Create test data
+                List<Company> companies = CreateTestCompanies(companyRepo);
+                List<Author> authors = CreateTestAuthors(authorRepo, companies);
+                List<Book> books = CreateTestBooks(bookRepo, authors, companies);
 
-            Console.WriteLine("Test data created successfully");
+                Console.WriteLine("Test data created successfully");
 
-            // Test 1: Simple Include - Book with Author
-            TestSimpleInclude(bookRepo);
+                // Test 1: Simple Include - Book with Author
+                TestSimpleInclude(bookRepo);
 
-            // Test 2: Nested Include - Book with Author and Author's Company
-            TestNestedInclude(bookRepo);
+                // Test 2: Nested Include - Book with Author and Author's Company
+                TestNestedInclude(bookRepo);
 
-            // Test 3: Multiple Includes - Book with both Author and Publisher
-            TestMultipleIncludes(bookRepo);
+                // Test 3: Multiple Includes - Book with both Author and Publisher
+                TestMultipleIncludes(bookRepo);
 
-            // Test 4: Include with Where clause
-            TestIncludeWithWhere(bookRepo);
+                // Test 4: Include with Where clause
+                TestIncludeWithWhere(bookRepo);
 
-            Console.WriteLine("All tests passed!");
+                Console.WriteLine("All tests passed!");
+            }
         }
 
         private static void CreateTables(string connectionString)

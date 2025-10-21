@@ -74,8 +74,9 @@ namespace Test.SqlServer
                 )
             ");
 
+            // Drop and recreate complex_entities table to ensure correct schema
+            await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'complex_entities') DROP TABLE complex_entities");
             await personRepo.ExecuteSqlAsync(@"
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'complex_entities')
                 CREATE TABLE complex_entities (
                     id INT IDENTITY(1,1) PRIMARY KEY,
                     name NVARCHAR(100) NOT NULL,
@@ -110,9 +111,8 @@ namespace Test.SqlServer
                 CREATE TABLE books (
                     id INT IDENTITY(1,1) PRIMARY KEY,
                     title NVARCHAR(200) NOT NULL,
-                    isbn NVARCHAR(20) NOT NULL,
-                    published_date DATETIME2 NOT NULL,
-                    author_id INT NOT NULL
+                    author_id INT NOT NULL,
+                    publisher_id INT
                 )
             ");
         }

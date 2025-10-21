@@ -166,8 +166,9 @@ namespace Durable.Postgres
         /// Handles PostgreSQL-specific types including arrays, JSON, UUID, timestamps, and geometric types.
         /// </summary>
         /// <param name="value">The value to format</param>
+        /// <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
         /// <returns>A safely formatted value for SQL insertion</returns>
-        public string FormatValue(object value)
+        public string FormatValue(object value, System.Reflection.PropertyInfo? propertyInfo = null)
         {
             return value switch
             {
