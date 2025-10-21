@@ -46,10 +46,17 @@ namespace Durable.Postgres
 
             Type valueType = value.GetType();
 
-            // DateTime handling - preserve as DateTime for PostgreSQL parameter binding
+            // DateTime handling - convert to Unspecified to avoid timezone conversion with TIMESTAMP columns
             if (valueType == typeof(DateTime))
             {
-                return value; // Keep as DateTime object
+                DateTime dt = (DateTime)value;
+                // Convert to Unspecified to prevent Npgsql from applying timezone conversion
+                // when storing to TIMESTAMP columns (TIMESTAMPTZ handles timezones properly)
+                if (dt.Kind != DateTimeKind.Unspecified)
+                {
+                    return DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+                }
+                return value;
             }
 
             // DateTimeOffset handling - preserve as DateTimeOffset for PostgreSQL parameter binding

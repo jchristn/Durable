@@ -1441,6 +1441,7 @@ namespace Durable.Postgres
             List<string> setPairs = new List<string>();
             List<(string name, object? value)> parameters = new List<(string, object?)>();
             object? idValue = null;
+            object? currentVersion = null;
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -1451,6 +1452,15 @@ namespace Durable.Postgres
                 if (columnName == _PrimaryKeyColumn)
                 {
                     idValue = value;
+                }
+                else if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
+                {
+                    currentVersion = value;
+                    object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion!);
+                    setPairs.Add($"{_Sanitizer.SanitizeIdentifier(columnName)} = @new_version");
+                    object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion!, _VersionColumnInfo.PropertyType, property);
+                    parameters.Add(("@new_version", convertedNewVersion));
+                    _VersionColumnInfo.SetValue(entity, newVersion);
                 }
                 else
                 {
@@ -1465,7 +1475,16 @@ namespace Durable.Postgres
 
             parameters.Add(("@id", idValue));
 
-            string sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+            string sql;
+            if (_VersionColumnInfo != null)
+            {
+                sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id AND {_Sanitizer.SanitizeIdentifier(_VersionColumnInfo.ColumnName)} = @current_version";
+                parameters.Add(("@current_version", currentVersion));
+            }
+            else
+            {
+                sql = $"UPDATE {_Sanitizer.SanitizeIdentifier(_TableName)} SET {string.Join(", ", setPairs)} WHERE {_Sanitizer.SanitizeIdentifier(_PrimaryKeyColumn)} = @id";
+            }
 
             int rowsAffected;
             if (transaction != null)
@@ -1489,6 +1508,10 @@ namespace Durable.Postgres
 
             if (rowsAffected == 0)
             {
+                if (_VersionColumnInfo != null)
+                {
+                    throw new OptimisticConcurrencyException($"Optimistic concurrency conflict detected for entity with ID {idValue}. The entity was modified or deleted by another process.");
+                }
                 throw new InvalidOperationException($"No rows were affected during update for entity with ID {idValue}");
             }
 
@@ -2796,13 +2819,11 @@ namespace Durable.Postgres
 
             foreach (PropertyInfo prop in properties)
             {
-                if (prop.GetCustomAttribute<NavigationPropertyAttribute>() != null ||
-                    prop.GetCustomAttribute<InverseNavigationPropertyAttribute>() != null)
-                    continue;
-
                 PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
-                string columnName = propAttr?.Name ?? prop.Name.ToLowerInvariant();
-                mappings[columnName] = prop;
+                if (propAttr != null)
+                {
+                    mappings[propAttr.Name] = prop;
+                }
             }
 
             return mappings;
@@ -3121,7 +3142,27 @@ namespace Durable.Postgres
         /// <returns>Version column information or null if not available</returns>
         public VersionColumnInfo? GetVersionColumnInfo()
         {
-            return new VersionColumnInfo();
+            PropertyInfo[] properties = typeof(T).GetProperties();
+            foreach (PropertyInfo property in properties)
+            {
+                VersionColumnAttribute? attr = property.GetCustomAttribute<VersionColumnAttribute>();
+                if (attr != null)
+                {
+                    PropertyAttribute? propAttr = property.GetCustomAttribute<PropertyAttribute>();
+                    if (propAttr == null)
+                        throw new InvalidOperationException($"Version column property {property.Name} must have [Property] attribute");
+
+                    return new VersionColumnInfo
+                    {
+                        Property = property,
+                        ColumnName = propAttr.Name,
+                        Type = attr.Type,
+                        PropertyType = property.PropertyType
+                    };
+                }
+            }
+
+            return null; // No version column
         }
 
         /// <summary>

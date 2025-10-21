@@ -461,6 +461,17 @@
             <exception cref="T:System.ArgumentNullException">Thrown when reader is null</exception>
             <exception cref="T:System.InvalidOperationException">Thrown when mapping encounters errors</exception>
         </member>
+        <member name="M:Durable.Postgres.PostgresEntityMapper`1.MapSimpleResultsAsync(Npgsql.NpgsqlDataReader,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously maps a simple PostgreSQL data reader to a list of entities without joins or navigation properties.
+            Provides enhanced type conversion compared to basic mapping implementations.
+            </summary>
+            <param name="reader">The PostgreSQL data reader containing the query results</param>
+            <param name="cancellationToken">Cancellation token for the async operation</param>
+            <returns>A list of mapped entities</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when reader is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when mapping encounters errors</exception>
+        </member>
         <member name="M:Durable.Postgres.PostgresEntityMapper`1.MapEntity(Npgsql.NpgsqlDataReader,Durable.Postgres.PostgresJoinBuilder.PostgresJoinResult)">
             <summary>
             Maps a single entity from the current row of a PostgreSQL data reader.
@@ -526,7 +537,7 @@
         </member>
         <member name="M:Durable.Postgres.PostgresEntityMapper`1.MapRelatedEntities(Npgsql.NpgsqlDataReader,`0,System.Collections.Generic.List{Durable.Postgres.PostgresIncludeInfo},Durable.Postgres.PostgresJoinBuilder.PostgresJoinResult)">
             <summary>
-            Maps related entities from joined results (simplified implementation).
+            Maps related entities from joined results.
             </summary>
             <param name="reader">The data reader</param>
             <param name="primaryEntity">The primary entity</param>

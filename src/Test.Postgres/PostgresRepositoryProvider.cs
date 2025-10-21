@@ -61,8 +61,14 @@ namespace Test.Postgres
         {
             IRepository<Person> personRepo = CreateRepository<Person>();
 
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people CASCADE");
+
             await personRepo.ExecuteSqlAsync(@"
-                CREATE TABLE IF NOT EXISTS people (
+                CREATE TABLE people (
                     id SERIAL PRIMARY KEY,
                     first VARCHAR(64) NOT NULL,
                     last VARCHAR(64) NOT NULL,
@@ -74,13 +80,13 @@ namespace Test.Postgres
             ");
 
             await personRepo.ExecuteSqlAsync(@"
-                CREATE TABLE IF NOT EXISTS complex_entities (
+                CREATE TABLE complex_entities (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
                     created_date TIMESTAMP NOT NULL,
                     updated_date TIMESTAMPTZ,
                     unique_id UUID NOT NULL,
-                    duration BIGINT NOT NULL,
+                    duration INTERVAL NOT NULL,
                     status VARCHAR(50) NOT NULL,
                     status_int INT NOT NULL,
                     tags JSONB,
@@ -94,7 +100,7 @@ namespace Test.Postgres
             ");
 
             await personRepo.ExecuteSqlAsync(@"
-                CREATE TABLE IF NOT EXISTS authors (
+                CREATE TABLE authors (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(200) NOT NULL,
                     company_id INT,
@@ -103,12 +109,11 @@ namespace Test.Postgres
             ");
 
             await personRepo.ExecuteSqlAsync(@"
-                CREATE TABLE IF NOT EXISTS books (
+                CREATE TABLE books (
                     id SERIAL PRIMARY KEY,
                     title VARCHAR(200) NOT NULL,
-                    isbn VARCHAR(20) NOT NULL,
-                    published_date TIMESTAMP NOT NULL,
-                    author_id INT NOT NULL
+                    author_id INT NOT NULL,
+                    publisher_id INT
                 )
             ");
         }
