@@ -7,6 +7,8 @@ namespace Durable
     /// </summary>
     public sealed class PrimaryKeyInfo
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
         /// <summary>
         /// Gets or sets the name of the primary key column in the database.
         /// </summary>
@@ -34,5 +36,7 @@ namespace Durable
             ColumnName = columnName;
             Property = property;
         }
+
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }
