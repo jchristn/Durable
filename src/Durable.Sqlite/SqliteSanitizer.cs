@@ -119,8 +119,11 @@ namespace Durable.Sqlite
             // Nullable versions of safe types
             Type underlyingType = Nullable.GetUnderlyingType(type);
             if (underlyingType != null)
-                return RequiresSanitization(Activator.CreateInstance(underlyingType));
-            
+            {
+                object instance = Activator.CreateInstance(underlyingType);
+                return RequiresSanitization(instance);
+            }
+
             // Everything else (strings, objects, etc.) needs sanitization
             return true;
         }
@@ -132,11 +135,12 @@ namespace Durable.Sqlite
         /// <param name="value">The value to format</param>
         /// <param name="propertyInfo">Optional property information for attribute-based formatting hints.</param>
         /// <returns>A safely formatted value for SQL insertion</returns>
-        public string FormatValue(object value, System.Reflection.PropertyInfo? propertyInfo = null)
+        public string FormatValue(object value, System.Reflection.PropertyInfo propertyInfo = null)
         {
+            if (value == null) return "NULL";
+
             return value switch
             {
-                null => "NULL",
                 string s => SanitizeString(s),
                 bool b => b ? "1" : "0",
                 Enum e => SanitizeString(e.ToString()),

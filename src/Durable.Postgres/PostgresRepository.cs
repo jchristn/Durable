@@ -22,6 +22,7 @@ namespace Durable.Postgres
     /// <typeparam name="T">The entity type that this repository manages. Must be a class with a parameterless constructor.</typeparam>
     public class PostgresRepository<T> : IRepository<T>, IBatchInsertConfiguration, ISqlCapture, ISqlTrackingConfiguration, IDisposable where T : class, new()
     {
+#pragma warning disable CS8600
 
         #region Public-Members
 
@@ -3057,7 +3058,9 @@ namespace Durable.Postgres
                             await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
 
                             using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
+#pragma warning disable CS8600
                             foreach ((string name, object value) in parameters)
+#pragma warning restore CS8600
                             {
                                 command.Parameters.AddWithValue(name, value ?? DBNull.Value);
                             }
@@ -3265,5 +3268,7 @@ namespace Durable.Postgres
         }
 
         #endregion
+        
+#pragma warning restore CS8600
     }
 }
