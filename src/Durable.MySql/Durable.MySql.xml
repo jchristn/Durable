@@ -1593,6 +1593,112 @@
             <param name="token">The cancellation token.</param>
             <returns>An async durable result for streaming projected data.</returns>
         </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Count">
+            <summary>
+            Counts the number of entities matching the query.
+            </summary>
+            <returns>The count of matching entities.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Count operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.CountAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously counts the number of entities matching the query.
+            </summary>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the count of matching entities.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Count operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Sum``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Calculates the sum of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to sum.</typeparam>
+            <param name="selector">The expression to select the property to sum.</param>
+            <returns>The sum of the property values.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Sum operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the sum of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to sum.</typeparam>
+            <param name="selector">The expression to select the property to sum.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the sum of the property values.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Sum operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Average``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Calculates the average of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to average.</typeparam>
+            <param name="selector">The expression to select the property to average.</param>
+            <returns>The average of the property values.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Average operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the average of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to average.</typeparam>
+            <param name="selector">The expression to select the property to average.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the average of the property values.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Average operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Min``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Finds the minimum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <returns>The minimum property value.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Min operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the minimum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the minimum property value.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Min operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Max``1(System.Linq.Expressions.Expression{System.Func{`1,``0}})">
+            <summary>
+            Finds the maximum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <returns>The maximum property value.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Max operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`1,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the maximum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the maximum property value.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Max operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.Delete">
+            <summary>
+            Deletes all entities matching the query.
+            </summary>
+            <returns>The number of entities deleted.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Delete operations are not supported on projected queries.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.DeleteAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes all entities matching the query.
+            </summary>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the number of entities deleted.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown as Delete operations are not supported on projected queries.</exception>
+        </member>
         <member name="M:Durable.MySql.MySqlProjectedQueryBuilder`2.ParseSelector">
             <summary>
             Parses the selector expression to build column mappings for projection.
@@ -2062,6 +2168,113 @@
             </summary>
             <param name="token">Cancellation token for the async operation.</param>
             <returns>An async durable result containing both the query results stream and the SQL string.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Count">
+            <summary>
+            Counts the number of entities matching the query.
+            </summary>
+            <returns>The count of matching entities.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.CountAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously counts the number of entities matching the query.
+            </summary>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the count of matching entities.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Calculates the sum of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to sum.</typeparam>
+            <param name="selector">The expression to select the property to sum.</param>
+            <returns>The sum of the property values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the sum of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to sum.</typeparam>
+            <param name="selector">The expression to select the property to sum.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the sum of the property values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Calculates the average of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to average.</typeparam>
+            <param name="selector">The expression to select the property to average.</param>
+            <returns>The average of the property values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously calculates the average of a numeric property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property to average.</typeparam>
+            <param name="selector">The expression to select the property to average.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the average of the property values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Finds the minimum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <returns>The minimum property value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the minimum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the minimum property value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <summary>
+            Finds the maximum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <returns>The maximum property value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously finds the maximum value of a property for entities matching the query.
+            </summary>
+            <typeparam name="TProperty">The type of the property.</typeparam>
+            <param name="selector">The expression to select the property.</param>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the maximum property value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.Delete">
+            <summary>
+            Deletes all entities matching the query.
+            </summary>
+            <returns>The number of entities deleted.</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlQueryBuilder`1.DeleteAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously deletes all entities matching the query.
+            </summary>
+            <param name="token">The cancellation token.</param>
+            <returns>A task representing the asynchronous operation with the number of entities deleted.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled.</exception>
         </member>
         <member name="M:Durable.MySql.MySqlQueryBuilder`1.UpdateNavigationPropertyAliases">
             <summary>

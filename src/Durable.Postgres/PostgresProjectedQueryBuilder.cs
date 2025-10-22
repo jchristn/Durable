@@ -616,6 +616,148 @@ namespace Durable.Postgres
             return new AsyncDurableResult<TResult>(sql, ExecuteAsyncEnumerable(token));
         }
 
+        /// <summary>
+        /// Counts the number of entities matching the query.
+        /// </summary>
+        /// <returns>The count of matching entities.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Count operations are not supported on projected queries.</exception>
+        public long Count()
+        {
+            throw new NotSupportedException("Count operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously counts the number of entities matching the query.
+        /// </summary>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the count of matching entities.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Count operations are not supported on projected queries.</exception>
+        public Task<long> CountAsync(CancellationToken token = default)
+        {
+            throw new NotSupportedException("Count operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Calculates the sum of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
+        /// <param name="selector">The expression to select the property to sum.</param>
+        /// <returns>The sum of the property values.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Sum operations are not supported on projected queries.</exception>
+        public decimal Sum<TProperty>(Expression<Func<TResult, TProperty>> selector)
+        {
+            throw new NotSupportedException("Sum operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously calculates the sum of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
+        /// <param name="selector">The expression to select the property to sum.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the sum of the property values.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Sum operations are not supported on projected queries.</exception>
+        public Task<decimal> SumAsync<TProperty>(Expression<Func<TResult, TProperty>> selector, CancellationToken token = default)
+        {
+            throw new NotSupportedException("Sum operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Calculates the average of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
+        /// <param name="selector">The expression to select the property to average.</param>
+        /// <returns>The average of the property values.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Average operations are not supported on projected queries.</exception>
+        public decimal Average<TProperty>(Expression<Func<TResult, TProperty>> selector)
+        {
+            throw new NotSupportedException("Average operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously calculates the average of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
+        /// <param name="selector">The expression to select the property to average.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the average of the property values.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Average operations are not supported on projected queries.</exception>
+        public Task<decimal> AverageAsync<TProperty>(Expression<Func<TResult, TProperty>> selector, CancellationToken token = default)
+        {
+            throw new NotSupportedException("Average operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Finds the minimum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <returns>The minimum property value.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Min operations are not supported on projected queries.</exception>
+        public TProperty Min<TProperty>(Expression<Func<TResult, TProperty>> selector)
+        {
+            throw new NotSupportedException("Min operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously finds the minimum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the minimum property value.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Min operations are not supported on projected queries.</exception>
+        public Task<TProperty> MinAsync<TProperty>(Expression<Func<TResult, TProperty>> selector, CancellationToken token = default)
+        {
+            throw new NotSupportedException("Min operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Finds the maximum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <returns>The maximum property value.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Max operations are not supported on projected queries.</exception>
+        public TProperty Max<TProperty>(Expression<Func<TResult, TProperty>> selector)
+        {
+            throw new NotSupportedException("Max operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously finds the maximum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the maximum property value.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Max operations are not supported on projected queries.</exception>
+        public Task<TProperty> MaxAsync<TProperty>(Expression<Func<TResult, TProperty>> selector, CancellationToken token = default)
+        {
+            throw new NotSupportedException("Max operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Deletes all entities matching the query.
+        /// </summary>
+        /// <returns>The number of entities deleted.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Delete operations are not supported on projected queries.</exception>
+        public int Delete()
+        {
+            throw new NotSupportedException("Delete operations are not supported on projected queries.");
+        }
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the query.
+        /// </summary>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the number of entities deleted.</returns>
+        /// <exception cref="NotSupportedException">Always thrown as Delete operations are not supported on projected queries.</exception>
+        public Task<int> DeleteAsync(CancellationToken token = default)
+        {
+            throw new NotSupportedException("Delete operations are not supported on projected queries.");
+        }
+
         #endregion
 
         #region Private-Methods

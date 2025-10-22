@@ -684,6 +684,192 @@ namespace Durable.Postgres
             return BuildSql(true);
         }
 
+        /// <summary>
+        /// Counts the number of entities matching the query.
+        /// </summary>
+        /// <returns>The count of matching entities.</returns>
+        public long Count()
+        {
+            string sql = BuildCountSql();
+            return ExecuteScalarInternal<long>(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously counts the number of entities matching the query.
+        /// </summary>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the count of matching entities.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<long> CountAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            string sql = BuildCountSql();
+            return await ExecuteScalarInternalAsync<long>(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Calculates the sum of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
+        /// <param name="selector">The expression to select the property to sum.</param>
+        /// <returns>The sum of the property values.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        public decimal Sum<TProperty>(Expression<Func<TEntity, TProperty>> selector)
+        {
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("SUM", column);
+            return ExecuteScalarInternal<decimal>(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously calculates the sum of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
+        /// <param name="selector">The expression to select the property to sum.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the sum of the property values.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<decimal> SumAsync<TProperty>(Expression<Func<TEntity, TProperty>> selector, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("SUM", column);
+            return await ExecuteScalarInternalAsync<decimal>(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Calculates the average of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
+        /// <param name="selector">The expression to select the property to average.</param>
+        /// <returns>The average of the property values.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        public decimal Average<TProperty>(Expression<Func<TEntity, TProperty>> selector)
+        {
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("AVG", column);
+            return ExecuteScalarInternal<decimal>(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously calculates the average of a numeric property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
+        /// <param name="selector">The expression to select the property to average.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the average of the property values.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<decimal> AverageAsync<TProperty>(Expression<Func<TEntity, TProperty>> selector, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("AVG", column);
+            return await ExecuteScalarInternalAsync<decimal>(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Finds the minimum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <returns>The minimum property value.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        public TProperty Min<TProperty>(Expression<Func<TEntity, TProperty>> selector)
+        {
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("MIN", column);
+            return ExecuteScalarInternal<TProperty>(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously finds the minimum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the minimum property value.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<TProperty> MinAsync<TProperty>(Expression<Func<TEntity, TProperty>> selector, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("MIN", column);
+            return await ExecuteScalarInternalAsync<TProperty>(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Finds the maximum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <returns>The maximum property value.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        public TProperty Max<TProperty>(Expression<Func<TEntity, TProperty>> selector)
+        {
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("MAX", column);
+            return ExecuteScalarInternal<TProperty>(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously finds the maximum value of a property for entities matching the query.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="selector">The expression to select the property.</param>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the maximum property value.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<TProperty> MaxAsync<TProperty>(Expression<Func<TEntity, TProperty>> selector, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            string column = _ExpressionParser.GetColumnFromExpression(selector.Body);
+            string sql = BuildAggregateSql("MAX", column);
+            return await ExecuteScalarInternalAsync<TProperty>(sql, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Deletes all entities matching the query.
+        /// </summary>
+        /// <returns>The number of entities deleted.</returns>
+        public int Delete()
+        {
+            string sql = BuildDeleteSql();
+            return ExecuteNonQueryInternal(sql);
+        }
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the query.
+        /// </summary>
+        /// <param name="token">The cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation with the number of entities deleted.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<int> DeleteAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            string sql = BuildDeleteSql();
+            return await ExecuteNonQueryInternalAsync(sql, token).ConfigureAwait(false);
+        }
+
         #endregion
 
         #region Private-Methods
@@ -1241,6 +1427,339 @@ namespace Durable.Postgres
             if (value is DateTime dt) return $"'{dt:yyyy-MM-dd HH:mm:ss}'";
             if (value is bool b) return b ? "true" : "false";
             return value.ToString() ?? "NULL";
+        }
+
+        private string BuildCountSql()
+        {
+            List<string> sqlParts = new List<string>();
+
+            sqlParts.Add("SELECT COUNT(*)");
+            string tableName = _Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName);
+            sqlParts.Add($"FROM {tableName}");
+
+            if (_WhereClauses.Count > 0)
+            {
+                sqlParts.Add($"WHERE {string.Join(" AND ", _WhereClauses)}");
+            }
+
+            return string.Join(" ", sqlParts);
+        }
+
+        private string BuildAggregateSql(string function, string column)
+        {
+            List<string> sqlParts = new List<string>();
+
+            sqlParts.Add($"SELECT {function}({column})");
+            string tableName = _Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName);
+            sqlParts.Add($"FROM {tableName}");
+
+            if (_WhereClauses.Count > 0)
+            {
+                sqlParts.Add($"WHERE {string.Join(" AND ", _WhereClauses)}");
+            }
+
+            return string.Join(" ", sqlParts);
+        }
+
+        private string BuildDeleteSql()
+        {
+            List<string> sqlParts = new List<string>();
+
+            string tableName = _Repository._Sanitizer.SanitizeIdentifier(_Repository._TableName);
+            sqlParts.Add($"DELETE FROM {tableName}");
+
+            if (_WhereClauses.Count > 0)
+            {
+                sqlParts.Add($"WHERE {string.Join(" AND ", _WhereClauses)}");
+            }
+
+            return string.Join(" ", sqlParts);
+        }
+
+        private TResult ExecuteScalarInternal<TResult>(string sql)
+        {
+            if (_Transaction != null)
+            {
+                return ExecuteScalarWithConnection<TResult>(_Transaction.Connection, sql);
+            }
+            else
+            {
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return ExecuteScalarWithConnection<TResult>(connection, sql);
+                }
+                finally
+                {
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        private TResult ExecuteScalarWithConnection<TResult>(DbConnection connection, string sql)
+        {
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (_Transaction != null)
+            {
+                command.Transaction = (NpgsqlTransaction)_Transaction.Transaction;
+            }
+
+            if (_Repository.CaptureSql)
+            {
+                _Repository.SetLastExecutedSql(sql);
+            }
+
+            try
+            {
+                object? result = command.ExecuteScalar();
+
+                if (result == null || result == DBNull.Value)
+                {
+                    return default(TResult)!;
+                }
+
+                if (typeof(TResult) == typeof(long))
+                {
+                    return (TResult)(object)Convert.ToInt64(result);
+                }
+                else if (typeof(TResult) == typeof(decimal))
+                {
+                    return (TResult)(object)Convert.ToDecimal(result);
+                }
+                else if (typeof(TResult) == typeof(int))
+                {
+                    return (TResult)(object)Convert.ToInt32(result);
+                }
+                else if (typeof(TResult) == typeof(double))
+                {
+                    return (TResult)(object)Convert.ToDouble(result);
+                }
+                else if (typeof(TResult) == typeof(float))
+                {
+                    return (TResult)(object)Convert.ToSingle(result);
+                }
+                else if (typeof(TResult) == typeof(DateTime))
+                {
+                    return (TResult)(object)Convert.ToDateTime(result);
+                }
+                else if (typeof(TResult) == typeof(string))
+                {
+                    return (TResult)(object)Convert.ToString(result)!;
+                }
+                else
+                {
+                    return (TResult)result;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing scalar SQL: {sql}", ex);
+            }
+        }
+
+        private async Task<TResult> ExecuteScalarInternalAsync<TResult>(string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (_Transaction != null)
+            {
+                return await ExecuteScalarWithConnectionAsync<TResult>(_Transaction.Connection, sql, token).ConfigureAwait(false);
+            }
+            else
+            {
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return await ExecuteScalarWithConnectionAsync<TResult>(connection, sql, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        private async Task<TResult> ExecuteScalarWithConnectionAsync<TResult>(DbConnection connection, string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(token).ConfigureAwait(false);
+            }
+
+            using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (_Transaction != null)
+            {
+                command.Transaction = (NpgsqlTransaction)_Transaction.Transaction;
+            }
+
+            if (_Repository.CaptureSql)
+            {
+                _Repository.SetLastExecutedSql(sql);
+            }
+
+            try
+            {
+                object? result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
+
+                if (result == null || result == DBNull.Value)
+                {
+                    return default(TResult)!;
+                }
+
+                if (typeof(TResult) == typeof(long))
+                {
+                    return (TResult)(object)Convert.ToInt64(result);
+                }
+                else if (typeof(TResult) == typeof(decimal))
+                {
+                    return (TResult)(object)Convert.ToDecimal(result);
+                }
+                else if (typeof(TResult) == typeof(int))
+                {
+                    return (TResult)(object)Convert.ToInt32(result);
+                }
+                else if (typeof(TResult) == typeof(double))
+                {
+                    return (TResult)(object)Convert.ToDouble(result);
+                }
+                else if (typeof(TResult) == typeof(float))
+                {
+                    return (TResult)(object)Convert.ToSingle(result);
+                }
+                else if (typeof(TResult) == typeof(DateTime))
+                {
+                    return (TResult)(object)Convert.ToDateTime(result);
+                }
+                else if (typeof(TResult) == typeof(string))
+                {
+                    return (TResult)(object)Convert.ToString(result)!;
+                }
+                else
+                {
+                    return (TResult)result;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing scalar SQL: {sql}", ex);
+            }
+        }
+
+        private int ExecuteNonQueryInternal(string sql)
+        {
+            if (_Transaction != null)
+            {
+                return ExecuteNonQueryWithConnection(_Transaction.Connection, sql);
+            }
+            else
+            {
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return ExecuteNonQueryWithConnection(connection, sql);
+                }
+                finally
+                {
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        private int ExecuteNonQueryWithConnection(DbConnection connection, string sql)
+        {
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (_Transaction != null)
+            {
+                command.Transaction = (NpgsqlTransaction)_Transaction.Transaction;
+            }
+
+            if (_Repository.CaptureSql)
+            {
+                _Repository.SetLastExecutedSql(sql);
+            }
+
+            try
+            {
+                int rowsAffected = command.ExecuteNonQuery();
+                return rowsAffected;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing non-query SQL: {sql}", ex);
+            }
+        }
+
+        private async Task<int> ExecuteNonQueryInternalAsync(string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (_Transaction != null)
+            {
+                return await ExecuteNonQueryWithConnectionAsync(_Transaction.Connection, sql, token).ConfigureAwait(false);
+            }
+            else
+            {
+                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                try
+                {
+                    return await ExecuteNonQueryWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        private async Task<int> ExecuteNonQueryWithConnectionAsync(DbConnection connection, string sql, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(token).ConfigureAwait(false);
+            }
+
+            using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (_Transaction != null)
+            {
+                command.Transaction = (NpgsqlTransaction)_Transaction.Transaction;
+            }
+
+            if (_Repository.CaptureSql)
+            {
+                _Repository.SetLastExecutedSql(sql);
+            }
+
+            try
+            {
+                int rowsAffected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                return rowsAffected;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error executing non-query SQL: {sql}", ex);
+            }
         }
 
         #endregion
