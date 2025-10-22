@@ -614,17 +614,17 @@ namespace Test.SqlServer
         {
             try
             {
-                // Create the table if it doesn't exist
+                // Drop and recreate the table with version column
                 repo.ExecuteSql(@"
-                    IF OBJECT_ID('dbo.authors_with_version', 'U') IS NULL
-                    BEGIN
-                        CREATE TABLE authors_with_version (
-                            id INT IDENTITY(1,1) PRIMARY KEY,
-                            name VARCHAR(100) NOT NULL,
-                            company_id INT NULL,
-                            version INT NOT NULL DEFAULT 1
-                        )
-                    END
+                    IF OBJECT_ID('dbo.authors', 'U') IS NOT NULL
+                        DROP TABLE authors;
+
+                    CREATE TABLE authors (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(200) NOT NULL,
+                        company_id INT NULL,
+                        version INT NOT NULL DEFAULT 1
+                    );
                 ");
             }
             catch (Exception ex)
@@ -637,16 +637,16 @@ namespace Test.SqlServer
         {
             try
             {
-                // Create the table if it doesn't exist (without version column)
+                // Drop and recreate the table without version column
                 repo.ExecuteSql(@"
-                    IF OBJECT_ID('dbo.authors_without_version', 'U') IS NULL
-                    BEGIN
-                        CREATE TABLE authors_without_version (
-                            id INT IDENTITY(1,1) PRIMARY KEY,
-                            name VARCHAR(100) NOT NULL,
-                            company_id INT NULL
-                        )
-                    END
+                    IF OBJECT_ID('dbo.authors', 'U') IS NOT NULL
+                        DROP TABLE authors;
+
+                    CREATE TABLE authors (
+                        id INT IDENTITY(1,1) PRIMARY KEY,
+                        name NVARCHAR(200) NOT NULL,
+                        company_id INT NULL
+                    );
                 ");
             }
             catch (Exception ex)

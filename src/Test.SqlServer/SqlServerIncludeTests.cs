@@ -616,6 +616,7 @@ namespace Test.SqlServer
                     id INT IDENTITY(1,1) PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
                     company_id INT NULL,
+                    version INT NOT NULL DEFAULT 1,
                     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL
                 )");
 

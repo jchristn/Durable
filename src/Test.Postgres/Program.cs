@@ -40,7 +40,6 @@ namespace Test.Postgres
                 {
                     using PostgresRepositoryProvider debugProvider = new PostgresRepositoryProvider(connectionString);
                     await debugProvider.SetupDatabaseAsync();
-                    await DebugIncludeTest.RunAsync(connectionString);
                     return 0;
                 }
 
