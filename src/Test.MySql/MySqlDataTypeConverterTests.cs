@@ -34,11 +34,15 @@ namespace Test.MySql
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new MySqlConnector.MySqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (MySqlConnector.MySqlConnection connection = new MySqlConnector.MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (MySqlConnector.MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("MySQL data type converter tests initialized successfully");
             }
             catch (Exception ex)
@@ -56,8 +60,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Basic Data Type Storage ===");
 
@@ -101,9 +106,10 @@ namespace Test.MySql
             Assert.NotNull(retrieved);
             _output.WriteLine("Entity retrieved successfully");
 
-            _output.WriteLine("Verifying data integrity...");
-            await VerifyDataIntegrity(testEntity, retrieved);
-            _output.WriteLine("✅ Basic data type storage test passed!");
+                _output.WriteLine("Verifying data integrity...");
+                await VerifyDataIntegrity(testEntity, retrieved);
+                _output.WriteLine("✅ Basic data type storage test passed!");
+            }
         }
 
         /// <summary>
@@ -114,8 +120,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Null Value Handling ===");
 
@@ -155,6 +162,7 @@ namespace Test.MySql
             Assert.Empty(retrieved.Scores);
 
             _output.WriteLine("✅ Null value handling test passed!");
+            }
         }
 
         /// <summary>
@@ -165,8 +173,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Enum Handling ===");
 
@@ -197,6 +206,7 @@ namespace Test.MySql
             }
 
             _output.WriteLine("✅ Enum handling test passed!");
+            }
         }
 
         /// <summary>
@@ -207,8 +217,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Collection Handling ===");
 
@@ -242,6 +253,7 @@ namespace Test.MySql
             _output.WriteLine($"✓ Tags array: [{string.Join(", ", retrieved.Tags)}]");
             _output.WriteLine($"✓ Scores list: [{string.Join(", ", retrieved.Scores)}]");
             _output.WriteLine("✅ Collection handling test passed!");
+            }
         }
 
         /// <summary>
@@ -252,8 +264,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing JSON Serialization ===");
 
@@ -318,6 +331,7 @@ namespace Test.MySql
             _output.WriteLine($"✓ Metadata: {retrieved.Metadata.Count} keys");
             _output.WriteLine($"✓ Address: {retrieved.Address.Street}, {retrieved.Address.City}");
             _output.WriteLine("✅ JSON serialization test passed!");
+            }
         }
 
         /// <summary>
@@ -328,13 +342,14 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing DateTime Handling ===");
 
             // Test various DateTime scenarios
-            var testCases = new[]
+            object[] testCases = new object[]
             {
                 new
                 {
@@ -359,7 +374,7 @@ namespace Test.MySql
                 }
             };
 
-            foreach (var testCase in testCases)
+            foreach (dynamic testCase in testCases)
             {
                 ComplexEntity entity = new ComplexEntity
                 {
@@ -397,6 +412,7 @@ namespace Test.MySql
             }
 
             _output.WriteLine("✅ DateTime handling test passed!");
+            }
         }
 
         /// <summary>
@@ -407,12 +423,13 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing GUID Handling ===");
 
-            var testGuids = new[]
+            Guid[] testGuids = new[]
             {
                 Guid.Empty,
                 Guid.NewGuid(),
@@ -442,6 +459,7 @@ namespace Test.MySql
             }
 
             _output.WriteLine("✅ GUID handling test passed!");
+            }
         }
 
         /// <summary>
@@ -452,8 +470,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing UpdateField with Type Conversion ===");
 
@@ -509,6 +528,7 @@ namespace Test.MySql
             Assert.Equal(newDuration, updated.Duration);
 
             _output.WriteLine("✅ UpdateField operations with type conversion test passed!");
+            }
         }
 
         /// <summary>
@@ -519,8 +539,9 @@ namespace Test.MySql
         {
             if (_skipTests) return;
 
-            using var repository = new MySqlRepository<ComplexEntity>(_connectionString);
-            await CreateTableAsync(repository);
+            using (MySqlRepository<ComplexEntity> repository = new MySqlRepository<ComplexEntity>(_connectionString))
+            {
+                await CreateTableAsync(repository);
 
             // Clear existing test data to ensure isolation
             await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
@@ -529,7 +550,7 @@ namespace Test.MySql
             _output.WriteLine("=== Testing Query Operations with Type Conversion ===");
 
             // Create test data
-            var entities = new[]
+            ComplexEntity[] entities = new[]
             {
                 new ComplexEntity
                 {
@@ -566,7 +587,7 @@ namespace Test.MySql
                 }
             };
 
-            foreach (var entity in entities)
+            foreach (ComplexEntity entity in entities)
             {
                 await repository.CreateAsync(entity);
             }
@@ -574,7 +595,7 @@ namespace Test.MySql
             _output.WriteLine("Created 3 test entities");
 
             // Query by enum
-            var activeEntities = repository.Query()
+            List<ComplexEntity> activeEntities = repository.Query()
                 .Where(e => e.Status == Status.Active)
                 .Execute()
                 .ToList();
@@ -585,7 +606,7 @@ namespace Test.MySql
             // Query by DateTime range
             DateTime startDate = new DateTime(2024, 3, 1);
             DateTime endDate = new DateTime(2024, 9, 1);
-            var midYearEntities = repository.Query()
+            List<ComplexEntity> midYearEntities = repository.Query()
                 .Where(e => e.CreatedDate > startDate && e.CreatedDate < endDate)
                 .Execute()
                 .ToList();
@@ -594,7 +615,7 @@ namespace Test.MySql
             _output.WriteLine($"✓ Query by DateTime range: Found {midYearEntities.Count} mid-year entities");
 
             // Query by boolean
-            var inactiveEntities = repository.Query()
+            List<ComplexEntity> inactiveEntities = repository.Query()
                 .Where(e => e.IsActive == false)
                 .Execute()
                 .ToList();
@@ -603,7 +624,7 @@ namespace Test.MySql
             _output.WriteLine($"✓ Query by boolean: Found {inactiveEntities.Count} inactive entities");
 
             // Query by decimal range
-            var expensiveEntities = repository.Query()
+            List<ComplexEntity> expensiveEntities = repository.Query()
                 .Where(e => e.Price > 60.00m)
                 .Execute()
                 .ToList();
@@ -612,6 +633,7 @@ namespace Test.MySql
             _output.WriteLine($"✓ Query by decimal: Found {expensiveEntities.Count} expensive entities");
 
             _output.WriteLine("✅ Query operations with type conversion test passed!");
+            }
         }
 
         /// <summary>

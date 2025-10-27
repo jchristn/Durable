@@ -87,6 +87,7 @@
         internal readonly VersionColumnInfo _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
+        internal readonly Dictionary<PropertyInfo, (DefaultValueAttribute, IDefaultValueProvider)> _DefaultValueProviders;
 
         private readonly AsyncLocal<string> _LastExecutedSql = new AsyncLocal<string>();
         private readonly AsyncLocal<string> _LastExecutedSqlWithParameters = new AsyncLocal<string>();
@@ -125,6 +126,7 @@
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         /// <summary>
@@ -156,6 +158,7 @@
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         /// <summary>
@@ -186,6 +189,7 @@
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         #endregion
@@ -1281,11 +1285,11 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     object value = property.GetValue(entity);
-                    
+
                     // Set default version for version columns if not already set
                     if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
                     {
-                        if (value == null || (value is int intValue && intValue == 0) || 
+                        if (value == null || (value is int intValue && intValue == 0) ||
                             (value is DateTime dtValue && dtValue == DateTime.MinValue) ||
                             (value is Guid guidValue && guidValue == Guid.Empty))
                         {
@@ -1293,7 +1297,19 @@
                             _VersionColumnInfo.SetValue(entity, value);
                         }
                     }
-                    
+
+                    // Apply default value providers if configured
+                    if (_DefaultValueProviders.TryGetValue(property, out (DefaultValueAttribute, IDefaultValueProvider) providerInfo))
+                    {
+                        DefaultValueAttribute attr = providerInfo.Item1;
+                        IDefaultValueProvider provider = providerInfo.Item2;
+                        if (provider.ShouldApply(value, property.PropertyType))
+                        {
+                            value = provider.GetDefaultValue(property, entity);
+                            property.SetValue(entity, value);
+                        }
+                    }
+
                     object convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
@@ -1354,11 +1370,11 @@
                     columns.Add(_Sanitizer.SanitizeIdentifier(columnName));
                     parameters.Add($"@{columnName}");
                     object value = property.GetValue(entity);
-                    
+
                     // Set default version for version columns if not already set
                     if (_VersionColumnInfo != null && columnName == _VersionColumnInfo.ColumnName)
                     {
-                        if (value == null || (value is int intValue && intValue == 0) || 
+                        if (value == null || (value is int intValue && intValue == 0) ||
                             (value is DateTime dtValue && dtValue == DateTime.MinValue) ||
                             (value is Guid guidValue && guidValue == Guid.Empty))
                         {
@@ -1366,7 +1382,19 @@
                             _VersionColumnInfo.SetValue(entity, value);
                         }
                     }
-                    
+
+                    // Apply default value providers if configured
+                    if (_DefaultValueProviders.TryGetValue(property, out (DefaultValueAttribute, IDefaultValueProvider) providerInfo))
+                    {
+                        DefaultValueAttribute attr = providerInfo.Item1;
+                        IDefaultValueProvider provider = providerInfo.Item2;
+                        if (provider.ShouldApply(value, property.PropertyType))
+                        {
+                            value = provider.GetDefaultValue(property, entity);
+                            property.SetValue(entity, value);
+                        }
+                    }
+
                     object convertedValue = _DataTypeConverter.ConvertToDatabase(value, property.PropertyType, property);
                     command.Parameters.AddWithValue($"@{columnName}", convertedValue);
                 }
@@ -2686,6 +2714,92 @@
         }
 
         /// <summary>
+        /// Gets the default value providers for properties with DefaultValueAttribute
+        /// </summary>
+        /// <returns>A dictionary mapping properties to their default value providers and attributes</returns>
+        public Dictionary<PropertyInfo, (DefaultValueAttribute, IDefaultValueProvider)> GetDefaultValueProviders()
+        {
+            Dictionary<PropertyInfo, (DefaultValueAttribute, IDefaultValueProvider)> providers =
+                new Dictionary<PropertyInfo, (DefaultValueAttribute, IDefaultValueProvider)>();
+
+            foreach (PropertyInfo prop in typeof(T).GetProperties())
+            {
+                DefaultValueAttribute? attr = prop.GetCustomAttribute<DefaultValueAttribute>();
+                if (attr == null)
+                    continue;
+
+                IDefaultValueProvider? provider = null;
+
+                // Create provider based on attribute configuration
+                switch (attr.ValueType)
+                {
+                    case DefaultValueType.CurrentDateTimeUtc:
+                        provider = new DefaultValueProviders.CurrentDateTimeUtcProvider();
+                        break;
+
+                    case DefaultValueType.CurrentDateTimeLocal:
+                        provider = new DefaultValueProviders.DelegateValueProvider(() => DateTime.Now, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.NewGuid:
+                        provider = new DefaultValueProviders.NewGuidProvider();
+                        break;
+
+                    case DefaultValueType.SequentialGuid:
+                        provider = new DefaultValueProviders.SequentialGuidProvider();
+                        break;
+
+                    case DefaultValueType.EmptyGuid:
+                        provider = new DefaultValueProviders.StaticValueProvider(Guid.Empty, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.EmptyString:
+                        provider = new DefaultValueProviders.StaticValueProvider(string.Empty, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.Zero:
+                        provider = new DefaultValueProviders.StaticValueProvider(0, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.CurrentDateUtc:
+                        provider = new DefaultValueProviders.DelegateValueProvider(() => DateTime.UtcNow.Date, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.CurrentDateLocal:
+                        provider = new DefaultValueProviders.DelegateValueProvider(() => DateTime.Now.Date, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.True:
+                        provider = new DefaultValueProviders.StaticValueProvider(true, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.False:
+                        provider = new DefaultValueProviders.StaticValueProvider(false, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.StaticValue:
+                        if (attr.StaticValue != null)
+                            provider = new DefaultValueProviders.StaticValueProvider(attr.StaticValue, attr.OnlyIfNull);
+                        break;
+
+                    case DefaultValueType.CustomProvider:
+                        if (attr.ProviderType != null)
+                        {
+                            provider = (IDefaultValueProvider?)Activator.CreateInstance(attr.ProviderType);
+                        }
+                        break;
+                }
+
+                if (provider != null)
+                {
+                    providers[prop] = (attr, provider);
+                }
+            }
+
+            return providers;
+        }
+
+        /// <summary>
         /// Gets the primary key value from the specified entity.
         /// </summary>
         /// <param name="entity">The entity to get the primary key value from.</param>
@@ -3085,6 +3199,662 @@
             }
 
             return value.ToString();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <inheritdoc/>
+        public void InitializeTable(Type entityType, ITransaction transaction = null)
+        {
+            if (entityType == null)
+                throw new ArgumentNullException(nameof(entityType));
+
+            List<string> errors;
+            List<string> warnings;
+            if (!ValidateTable(entityType, out errors, out warnings))
+            {
+                string errorMessage = "Table validation failed:\n" + string.Join("\n", errors);
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // Log warnings if any
+            foreach (string warning in warnings)
+            {
+                // Could add logging here if ILogger is available
+                System.Diagnostics.Debug.WriteLine($"Warning: {warning}");
+            }
+
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = GetConnectionAndCommand(transaction);
+
+            try
+            {
+                // Get table name
+                EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+                string tableName = entityAttr!.Name; // Already validated in ValidateTable
+
+                // Check if table exists
+                bool tableExists = SqliteSchemaBuilder.TableExists(tableName, result.Connection);
+
+                if (!tableExists)
+                {
+                    // Create the table
+                    SqliteSchemaBuilder schemaBuilder = new SqliteSchemaBuilder(_Sanitizer, _DataTypeConverter);
+                    string createTableSql = schemaBuilder.BuildCreateTableSql(entityType);
+
+                    result.Command.CommandText = createTableSql;
+                    result.Command.ExecuteNonQuery();
+                }
+                else
+                {
+                    // Table exists - validate schema matches
+                    List<ColumnInfo> existingColumns = SqliteSchemaBuilder.GetTableColumns(tableName, result.Connection);
+                    List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
+
+                    // Get expected columns from entity
+                    List<string> expectedColumnNames = new List<string>();
+                    foreach (PropertyInfo prop in entityType.GetProperties())
+                    {
+                        PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                        if (propAttr != null)
+                        {
+                            expectedColumnNames.Add(propAttr.Name);
+                        }
+                    }
+
+                    // Check for missing columns in database
+                    foreach (string expectedColumn in expectedColumnNames)
+                    {
+                        if (!existingColumnNames.Contains(expectedColumn, StringComparer.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                $"Table '{tableName}' exists but column '{expectedColumn}' is missing. " +
+                                "Schema migration is not supported - please update the database schema manually or drop and recreate the table.");
+                        }
+                    }
+
+                    // Check for extra columns (warning only, not an error)
+                    foreach (string existingColumn in existingColumnNames)
+                    {
+                        if (!expectedColumnNames.Contains(existingColumn, StringComparer.OrdinalIgnoreCase))
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Warning: Table '{tableName}' contains column '{existingColumn}' which is not defined in the entity type '{entityType.Name}'");
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                CleanupConnection(result.Connection, result.Command, result.ShouldReturnToPool);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (entityType == null)
+                throw new ArgumentNullException(nameof(entityType));
+
+            List<string> errors;
+            List<string> warnings;
+            if (!ValidateTable(entityType, out errors, out warnings))
+            {
+                string errorMessage = "Table validation failed:\n" + string.Join("\n", errors);
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // Log warnings if any
+            foreach (string warning in warnings)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: {warning}");
+            }
+
+            ConnectionCommandResult<SqliteConnection, SqliteCommand> result = await GetConnectionAndCommandAsync(transaction, cancellationToken);
+
+            try
+            {
+                // Get table name
+                EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+                string tableName = entityAttr!.Name;
+
+                // Check if table exists
+                bool tableExists = SqliteSchemaBuilder.TableExists(tableName, result.Connection);
+
+                if (!tableExists)
+                {
+                    // Create the table
+                    SqliteSchemaBuilder schemaBuilder = new SqliteSchemaBuilder(_Sanitizer, _DataTypeConverter);
+                    string createTableSql = schemaBuilder.BuildCreateTableSql(entityType);
+
+                    result.Command.CommandText = createTableSql;
+                    await result.Command.ExecuteNonQueryAsync(cancellationToken);
+                }
+                else
+                {
+                    // Table exists - validate schema matches
+                    List<ColumnInfo> existingColumns = SqliteSchemaBuilder.GetTableColumns(tableName, result.Connection);
+                    List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
+
+                    // Get expected columns from entity
+                    List<string> expectedColumnNames = new List<string>();
+                    foreach (PropertyInfo prop in entityType.GetProperties())
+                    {
+                        PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                        if (propAttr != null)
+                        {
+                        expectedColumnNames.Add(propAttr.Name);
+                        }
+                    }
+
+                    // Check for missing columns in database
+                    foreach (string expectedColumn in expectedColumnNames)
+                    {
+                        if (!existingColumnNames.Contains(expectedColumn, StringComparer.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                $"Table '{tableName}' exists but column '{expectedColumn}' is missing. " +
+                                "Schema migration is not supported - please update the database schema manually or drop and recreate the table.");
+                        }
+                    }
+
+                    // Check for extra columns (warning only)
+                    foreach (string existingColumn in existingColumnNames)
+                    {
+                        if (!expectedColumnNames.Contains(existingColumn, StringComparer.OrdinalIgnoreCase))
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Warning: Table '{tableName}' contains column '{existingColumn}' which is not defined in the entity type '{entityType.Name}'");
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                await CleanupConnectionAsync(result.Connection, result.Command, result.ShouldReturnToPool);
+            }
+        }
+
+        /// <inheritdoc/>
+        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null)
+        {
+            if (entityTypes == null)
+                throw new ArgumentNullException(nameof(entityTypes));
+
+            ITransaction localTransaction = transaction;
+            bool ownTransaction = false;
+
+            try
+            {
+                // Create transaction if not provided
+                if (localTransaction == null)
+                {
+                    localTransaction = BeginTransaction();
+                    ownTransaction = true;
+                }
+
+                foreach (Type entityType in entityTypes)
+                {
+                    InitializeTable(entityType, localTransaction);
+                }
+
+                // Commit if we own the transaction
+                if (ownTransaction)
+                {
+                    localTransaction.Commit();
+                }
+            }
+            catch
+            {
+                // Rollback if we own the transaction
+                if (ownTransaction && localTransaction != null)
+                {
+                    try { localTransaction.Rollback(); } catch { }
+                }
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction && localTransaction != null)
+                {
+                    localTransaction.Dispose();
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (entityTypes == null)
+                throw new ArgumentNullException(nameof(entityTypes));
+
+            ITransaction localTransaction = transaction;
+            bool ownTransaction = false;
+
+            try
+            {
+                // Create transaction if not provided
+                if (localTransaction == null)
+                {
+                    localTransaction = await BeginTransactionAsync(cancellationToken);
+                    ownTransaction = true;
+                }
+
+                foreach (Type entityType in entityTypes)
+                {
+                    await InitializeTableAsync(entityType, localTransaction, cancellationToken);
+                }
+
+                // Commit if we own the transaction
+                if (ownTransaction)
+                {
+                    await localTransaction.CommitAsync(cancellationToken);
+                }
+            }
+            catch
+            {
+                // Rollback if we own the transaction
+                if (ownTransaction && localTransaction != null)
+                {
+                    try { await localTransaction.RollbackAsync(cancellationToken); } catch { }
+                }
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction && localTransaction != null)
+                {
+                    localTransaction.Dispose();
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public bool ValidateTable(Type entityType, out List<string> errors, out List<string> warnings)
+        {
+            if (entityType == null)
+                throw new ArgumentNullException(nameof(entityType));
+
+            errors = new List<string>();
+            warnings = new List<string>();
+            bool isValid = true;
+
+            // Check for Entity attribute
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+            {
+                errors.Add($"Type '{entityType.Name}' must have an Entity attribute");
+                isValid = false;
+                return isValid; // Can't continue without entity attribute
+            }
+
+            string tableName = entityAttr.Name;
+            PropertyInfo? primaryKeyProperty = null;
+            List<PropertyInfo> columnProperties = new List<PropertyInfo>();
+
+            // Scan properties
+            foreach (PropertyInfo prop in entityType.GetProperties())
+            {
+                PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                if (propAttr == null)
+                    continue;
+
+                columnProperties.Add(prop);
+
+                // Check for primary key
+                if ((propAttr.PropertyFlags & Flags.PrimaryKey) == Flags.PrimaryKey)
+                {
+                    if (primaryKeyProperty != null)
+                    {
+                        errors.Add($"Type '{entityType.Name}' has multiple primary key columns: '{primaryKeyProperty.Name}' and '{prop.Name}'");
+                        isValid = false;
+                    }
+                    primaryKeyProperty = prop;
+                }
+            }
+
+            // Validate primary key exists
+            if (primaryKeyProperty == null)
+            {
+                errors.Add($"Type '{entityType.Name}' must have a primary key column");
+                isValid = false;
+            }
+
+            // Validate at least one column exists
+            if (columnProperties.Count == 0)
+            {
+                errors.Add($"Type '{entityType.Name}' must have at least one property with a Property attribute");
+                isValid = false;
+            }
+
+            // If table exists, check schema compatibility
+            try
+            {
+                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                {
+                    if (SqliteSchemaBuilder.TableExists(tableName, connection))
+                    {
+                        List<ColumnInfo> existingColumns = SqliteSchemaBuilder.GetTableColumns(tableName, connection);
+                        List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
+
+                        // Check if entity columns exist in database
+                        foreach (PropertyInfo prop in columnProperties)
+                        {
+                            PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                            if (propAttr != null)
+                            {
+                                if (!existingColumnNames.Contains(propAttr.Name, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    errors.Add($"Table '{tableName}' exists but column '{propAttr.Name}' (for property '{prop.Name}') does not exist");
+                                    isValid = false;
+                                }
+                            }
+                        }
+
+                        // Check for extra columns in database
+                        List<string> entityColumnNames = columnProperties
+                            .Select(p => p.GetCustomAttribute<PropertyAttribute>()?.Name)
+                            .Where(name => name != null)
+                            .ToList()!;
+
+                        foreach (string existingColumn in existingColumnNames)
+                        {
+                            if (!entityColumnNames.Contains(existingColumn, StringComparer.OrdinalIgnoreCase))
+                            {
+                                warnings.Add($"Table '{tableName}' contains column '{existingColumn}' which is not defined in entity type '{entityType.Name}'");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        warnings.Add($"Table '{tableName}' does not exist and will be created during initialization");
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Could not check if table '{tableName}' exists: {ex.Message}");
+            }
+
+            return isValid;
+        }
+
+        /// <inheritdoc/>
+        public bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings)
+        {
+            if (entityTypes == null)
+                throw new ArgumentNullException(nameof(entityTypes));
+
+            errors = new List<string>();
+            warnings = new List<string>();
+            bool allValid = true;
+
+            foreach (Type entityType in entityTypes)
+            {
+                List<string> typeErrors;
+                List<string> typeWarnings;
+
+                bool isValid = ValidateTable(entityType, out typeErrors, out typeWarnings);
+                if (!isValid)
+                {
+                    allValid = false;
+                }
+
+                errors.AddRange(typeErrors);
+                warnings.AddRange(typeWarnings);
+            }
+
+            return allValid;
+        }
+
+        /// <inheritdoc/>
+        public void CreateIndexes(Type entityType, ITransaction? transaction = null)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+
+            SqliteSchemaBuilder schemaBuilder = new SqliteSchemaBuilder(_Sanitizer, _DataTypeConverter);
+            List<string> indexSqlStatements = schemaBuilder.BuildCreateIndexSql(entityType);
+
+            if (indexSqlStatements.Count == 0)
+            {
+                return; // No indexes to create
+            }
+
+            if (transaction != null)
+            {
+                SqliteConnection connection = (SqliteConnection)transaction.Connection;
+                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+
+                foreach (string sql in indexSqlStatements)
+                {
+                    using (SqliteCommand command = connection.CreateCommand())
+                    {
+                        command.Transaction = sqliteTransaction;
+                        command.CommandText = sql;
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            else
+            {
+                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                {
+                    foreach (string sql in indexSqlStatements)
+                    {
+                        using (SqliteCommand command = connection.CreateCommand())
+                        {
+                            command.CommandText = sql;
+                            command.ExecuteNonQuery();
+                        }
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task CreateIndexesAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            SqliteSchemaBuilder schemaBuilder = new SqliteSchemaBuilder(_Sanitizer, _DataTypeConverter);
+            List<string> indexSqlStatements = schemaBuilder.BuildCreateIndexSql(entityType);
+
+            if (indexSqlStatements.Count == 0)
+            {
+                return; // No indexes to create
+            }
+
+            if (transaction != null)
+            {
+                SqliteConnection connection = (SqliteConnection)transaction.Connection;
+                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+
+                foreach (string sql in indexSqlStatements)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    using (SqliteCommand command = connection.CreateCommand())
+                    {
+                        command.Transaction = sqliteTransaction;
+                        command.CommandText = sql;
+                        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+            else
+            {
+                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                {
+                    foreach (string sql in indexSqlStatements)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        using (SqliteCommand command = connection.CreateCommand())
+                        {
+                            command.CommandText = sql;
+                            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public void DropIndex(string indexName, ITransaction? transaction = null)
+        {
+            if (string.IsNullOrWhiteSpace(indexName))
+                throw new ArgumentNullException(nameof(indexName), "Index name cannot be null or empty");
+
+            string sql = $"DROP INDEX IF EXISTS {_Sanitizer.SanitizeIdentifier(indexName)}";
+
+            if (transaction != null)
+            {
+                SqliteConnection connection = (SqliteConnection)transaction.Connection;
+                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+
+                using (SqliteCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = sqliteTransaction;
+                    command.CommandText = sql;
+                    command.ExecuteNonQuery();
+                }
+            }
+            else
+            {
+                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                {
+                    using (SqliteCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = sql;
+                        command.ExecuteNonQuery();
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task DropIndexAsync(string indexName, ITransaction? transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(indexName))
+                throw new ArgumentNullException(nameof(indexName), "Index name cannot be null or empty");
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string sql = $"DROP INDEX IF EXISTS {_Sanitizer.SanitizeIdentifier(indexName)}";
+
+            if (transaction != null)
+            {
+                SqliteConnection connection = (SqliteConnection)transaction.Connection;
+                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+
+                using (SqliteCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = sqliteTransaction;
+                    command.CommandText = sql;
+                    await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                {
+                    using (SqliteCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = sql;
+                        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public List<string> GetIndexes(Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+
+            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            {
+                List<IndexInfo> indexes = SqliteSchemaBuilder.GetExistingIndexes(tableName, connection);
+                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+
+                _ConnectionFactory.ReturnConnection(connection);
+
+                return indexNames;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<List<string>> GetIndexesAsync(Type entityType, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+
+            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            {
+                await Task.Run(() =>
+                {
+                    // SQLite operations are synchronous
+                }, cancellationToken).ConfigureAwait(false);
+
+                List<IndexInfo> indexes = SqliteSchemaBuilder.GetExistingIndexes(tableName, connection);
+                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+
+                _ConnectionFactory.ReturnConnection(connection);
+
+                return indexNames;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void CreateDatabaseIfNotExists()
+        {
+            // For SQLite, opening a connection creates the database file if it doesn't exist
+            // This is handled automatically by SqliteConnection when Mode is ReadWriteCreate (default)
+
+            // Just verify we can connect
+            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            {
+                // Connection created successfully
+                _ConnectionFactory.ReturnConnection(connection);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task CreateDatabaseIfNotExistsAsync(CancellationToken cancellationToken = default)
+        {
+            // For SQLite, opening a connection creates the database file if it doesn't exist
+            // This is handled automatically by SqliteConnection when Mode is ReadWriteCreate (default)
+
+            // Just verify we can connect
+            using (SqliteConnection connection = (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken))
+            {
+                // Connection created successfully
+                await _ConnectionFactory.ReturnConnectionAsync(connection);
+            }
         }
 
         #endregion

@@ -150,7 +150,7 @@ namespace Durable.MySql
         /// Builds a MySQL connection string from the current settings
         /// </summary>
         /// <returns>A MySQL connection string</returns>
-        /// <exception cref="InvalidOperationException">Thrown when required properties (Hostname, Database) are null or empty</exception>
+        /// <exception cref="InvalidOperationException">Thrown when Hostname is null or empty</exception>
         public override string BuildConnectionString()
         {
             if (string.IsNullOrWhiteSpace(Hostname))
@@ -158,16 +158,16 @@ namespace Durable.MySql
                 throw new InvalidOperationException("Hostname is required for MySQL connection string");
             }
 
-            if (string.IsNullOrWhiteSpace(Database))
-            {
-                throw new InvalidOperationException("Database is required for MySQL connection string");
-            }
-
             MySqlConnectionStringBuilder builder = new MySqlConnectionStringBuilder
             {
-                Server = Hostname,
-                Database = Database
+                Server = Hostname
             };
+
+            // Database is optional - only add if specified
+            if (!string.IsNullOrWhiteSpace(Database))
+            {
+                builder.Database = Database;
+            }
 
             if (Port.HasValue)
             {

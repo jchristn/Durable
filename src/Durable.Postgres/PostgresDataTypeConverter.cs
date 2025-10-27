@@ -85,10 +85,20 @@ namespace Durable.Postgres
                 return value; // Keep as TimeSpan object
             }
 
-            // Guid handling - preserve as Guid for PostgreSQL uuid type
+            // Guid handling - check if property is marked as String, otherwise preserve as Guid for PostgreSQL uuid type
             if (valueType == typeof(Guid))
             {
-                return value; // Keep as Guid object
+                // Check if property has Flags.String attribute
+                if (propertyInfo != null)
+                {
+                    PropertyAttribute propAttr = propertyInfo.GetCustomAttribute<PropertyAttribute>();
+                    if (propAttr != null && propAttr.PropertyFlags.HasFlag(Flags.String))
+                    {
+                        // Store as string if property is marked with Flags.String
+                        return ((Guid)value).ToString();
+                    }
+                }
+                return value; // Keep as Guid object for UUID columns
             }
 
             // Enum handling

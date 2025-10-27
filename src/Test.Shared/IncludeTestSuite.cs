@@ -42,6 +42,7 @@ namespace Test.Shared
             IRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
             IRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
 
+            await authorRepo.ExecuteSqlAsync("DELETE FROM author_categories");
             await authorRepo.ExecuteSqlAsync("DELETE FROM books");
             await authorRepo.ExecuteSqlAsync("DELETE FROM authors");
 
@@ -86,6 +87,7 @@ namespace Test.Shared
             IRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
             IRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
 
+            await authorRepo.ExecuteSqlAsync("DELETE FROM author_categories");
             await authorRepo.ExecuteSqlAsync("DELETE FROM books");
             await authorRepo.ExecuteSqlAsync("DELETE FROM authors");
 

@@ -36,11 +36,15 @@ namespace Test.MySql
             try
             {
                 // Test connection availability
-                using var connection = new MySqlConnector.MySqlConnection(_ConnectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (MySqlConnector.MySqlConnection connection = new MySqlConnector.MySqlConnection(_ConnectionString))
+                {
+                    connection.Open();
+                    using (MySqlConnector.MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
 
                 // Initialize repositories
                 _AuthorRepository = new MySqlRepository<Author>(_ConnectionString);
@@ -556,63 +560,43 @@ namespace Test.MySql
         /// </summary>
         private async Task SetupDatabaseAsync()
         {
-            // Create tables in dependency order
+            // Create database if it doesn't exist
+            _CompanyRepository.CreateDatabaseIfNotExists();
+
+            // Disable foreign key checks to allow dropping tables in any order
+            await _CompanyRepository.ExecuteSqlAsync("SET FOREIGN_KEY_CHECKS=0");
+
+            // Drop tables (order doesn't matter with foreign key checks disabled)
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS books");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS authors");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS categories");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS companies");
 
-            await _CompanyRepository.ExecuteSqlAsync(@"
-                CREATE TABLE companies (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    industry VARCHAR(50),
-                    INDEX idx_name (name)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            // Re-enable foreign key checks
+            await _CompanyRepository.ExecuteSqlAsync("SET FOREIGN_KEY_CHECKS=1");
 
-            await _CategoryRepository.ExecuteSqlAsync(@"
-                CREATE TABLE categories (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    description VARCHAR(255),
-                    UNIQUE KEY uk_name (name)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            // Create tables using InitializeTable (respects entity attributes including version columns)
+            // Create in dependency order (parent tables first)
+            _CompanyRepository.InitializeTable(typeof(Company));
+            _CategoryRepository.InitializeTable(typeof(Category));
+            _AuthorRepository.InitializeTable(typeof(Author));
+            _BookRepository.InitializeTable(typeof(Book));
+            _AuthorCategoryRepository.InitializeTable(typeof(AuthorCategory));
 
-            await _AuthorRepository.ExecuteSqlAsync(@"
-                CREATE TABLE authors (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    company_id INT NULL,
-                    INDEX idx_name (name),
-                    INDEX idx_company_id (company_id),
-                    FOREIGN KEY (company_id) REFERENCES companies(id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-            await _BookRepository.ExecuteSqlAsync(@"
-                CREATE TABLE books (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    title VARCHAR(200) NOT NULL,
-                    author_id INT NOT NULL,
-                    publisher_id INT NULL,
-                    INDEX idx_title (title),
-                    INDEX idx_author_id (author_id),
-                    INDEX idx_publisher_id (publisher_id),
-                    FOREIGN KEY (author_id) REFERENCES authors(id),
-                    FOREIGN KEY (publisher_id) REFERENCES companies(id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-            await _AuthorCategoryRepository.ExecuteSqlAsync(@"
-                CREATE TABLE author_categories (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    author_id INT NOT NULL,
-                    category_id INT NOT NULL,
-                    INDEX idx_author_id (author_id),
-                    INDEX idx_category_id (category_id),
-                    UNIQUE KEY uk_author_category (author_id, category_id),
-                    FOREIGN KEY (author_id) REFERENCES authors(id),
-                    FOREIGN KEY (category_id) REFERENCES categories(id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            // Debug: Verify the authors table schema
+            System.Data.Common.DbConnection debugConnection = new MySqlConnector.MySqlConnection(_ConnectionString);
+            debugConnection.Open();
+            System.Data.Common.DbCommand debugCmd = debugConnection.CreateCommand();
+            debugCmd.CommandText = "DESCRIBE authors";
+            System.Data.Common.DbDataReader debugReader = debugCmd.ExecuteReader();
+            _Output.WriteLine("Authors table schema:");
+            while (debugReader.Read())
+            {
+                _Output.WriteLine($"  {debugReader.GetString(0)} - {debugReader.GetString(1)}");
+            }
+            debugReader.Close();
+            debugConnection.Close();
 
             _Output.WriteLine("Database tables created successfully with proper foreign key constraints");
         }

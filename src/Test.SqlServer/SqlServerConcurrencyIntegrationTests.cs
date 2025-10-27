@@ -31,11 +31,15 @@ namespace Test.SqlServer
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new SqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (Microsoft.Data.SqlClient.SqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("SQL Server concurrency integration tests initialized successfully");
             }
             catch (Exception ex)
@@ -393,29 +397,35 @@ namespace Test.SqlServer
                     // Create multiple tasks that will attempt concurrent updates
                     Task<Author> task1 = Task.Run(async () =>
                     {
-                        using var repo1 = new SqlServerRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo1.ReadById(created.Id);
-                        copy.Name = "Update from Task 1";
-                        await Task.Delay(50); // Simulate some work
-                        return repo1.Update(copy);
+                        using (SqlServerRepository<Author> repo1 = new SqlServerRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo1.ReadById(created.Id);
+                            copy.Name = "Update from Task 1";
+                            await Task.Delay(50); // Simulate some work
+                            return repo1.Update(copy);
+                        }
                     });
 
                     Task<Author> task2 = Task.Run(async () =>
                     {
-                        using var repo2 = new SqlServerRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo2.ReadById(created.Id);
-                        copy.Name = "Update from Task 2";
-                        await Task.Delay(50); // Simulate some work
-                        return repo2.Update(copy);
+                        using (SqlServerRepository<Author> repo2 = new SqlServerRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo2.ReadById(created.Id);
+                            copy.Name = "Update from Task 2";
+                            await Task.Delay(50); // Simulate some work
+                            return repo2.Update(copy);
+                        }
                     });
 
                     Task<Author> task3 = Task.Run(async () =>
                     {
-                        using var repo3 = new SqlServerRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo3.ReadById(created.Id);
-                        copy.Name = "Update from Task 3";
-                        await Task.Delay(50); // Simulate some work
-                        return repo3.Update(copy);
+                        using (SqlServerRepository<Author> repo3 = new SqlServerRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo3.ReadById(created.Id);
+                            copy.Name = "Update from Task 3";
+                            await Task.Delay(50); // Simulate some work
+                            return repo3.Update(copy);
+                        }
                     });
 
                     // Wait for all tasks to complete
@@ -661,8 +671,10 @@ namespace Test.SqlServer
             {
                 try
                 {
-                    using var repo = new SqlServerRepository<Author>(_connectionString);
-                    CleanupTestData(repo);
+                    using (SqlServerRepository<Author> repo = new SqlServerRepository<Author>(_connectionString))
+                    {
+                        CleanupTestData(repo);
+                    }
                 }
                 catch (Exception ex)
                 {

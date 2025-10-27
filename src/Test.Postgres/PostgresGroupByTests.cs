@@ -320,11 +320,11 @@ namespace Test.Postgres
 
             Console.WriteLine("\n=== COMPREHENSIVE DEPARTMENT STATISTICS ===");
 
-            var departmentReport = new List<DepartmentStatistics>();
+            List<DepartmentStatistics> departmentReport = new List<DepartmentStatistics>();
 
             foreach (IGrouping<string, Person> group in groupList)
             {
-                var stats = new DepartmentStatistics
+                DepartmentStatistics stats = new DepartmentStatistics
                 {
                     Department = group.Key,
                     EmployeeCount = group.Count(),
@@ -365,34 +365,31 @@ namespace Test.Postgres
 
             // Generate company-wide statistics
             Console.WriteLine("\n=== COMPANY-WIDE STATISTICS ===");
-            var companyStats = new
-            {
-                TotalEmployees = departmentReport.Sum(d => d.EmployeeCount),
-                TotalPayroll = departmentReport.Sum(d => d.TotalSalary),
-                AverageCompanySalary = departmentReport.Sum(d => d.TotalSalary) / departmentReport.Sum(d => d.EmployeeCount),
-                DepartmentCount = departmentReport.Count,
-                HighestPaidDepartment = departmentReport.OrderByDescending(d => d.AverageSalary).First(),
-                LargestDepartment = departmentReport.OrderByDescending(d => d.EmployeeCount).First(),
-                TotalSeniorEmployees = departmentReport.Sum(d => d.SeniorEmployees),
-                TotalHighEarners = departmentReport.Sum(d => d.HighEarners)
-            };
+            int totalEmployees = departmentReport.Sum(d => d.EmployeeCount);
+            decimal totalPayroll = departmentReport.Sum(d => d.TotalSalary);
+            decimal averageCompanySalary = departmentReport.Sum(d => d.TotalSalary) / departmentReport.Sum(d => d.EmployeeCount);
+            int departmentCount = departmentReport.Count;
+            DepartmentStatistics highestPaidDepartment = departmentReport.OrderByDescending(d => d.AverageSalary).First();
+            DepartmentStatistics largestDepartment = departmentReport.OrderByDescending(d => d.EmployeeCount).First();
+            int totalSeniorEmployees = departmentReport.Sum(d => d.SeniorEmployees);
+            int totalHighEarners = departmentReport.Sum(d => d.HighEarners);
 
-            Console.WriteLine($"Total Employees: {companyStats.TotalEmployees}");
-            Console.WriteLine($"Total Payroll: ${companyStats.TotalPayroll:N2}");
-            Console.WriteLine($"Average Company Salary: ${companyStats.AverageCompanySalary:N2}");
-            Console.WriteLine($"Number of Departments: {companyStats.DepartmentCount}");
-            Console.WriteLine($"Highest Paid Department: {companyStats.HighestPaidDepartment.Department} (${companyStats.HighestPaidDepartment.AverageSalary:N2})");
-            Console.WriteLine($"Largest Department: {companyStats.LargestDepartment.Department} ({companyStats.LargestDepartment.EmployeeCount} employees)");
-            Console.WriteLine($"Total Senior Employees: {companyStats.TotalSeniorEmployees}");
-            Console.WriteLine($"Total High Earners: {companyStats.TotalHighEarners}");
+            Console.WriteLine($"Total Employees: {totalEmployees}");
+            Console.WriteLine($"Total Payroll: ${totalPayroll:N2}");
+            Console.WriteLine($"Average Company Salary: ${averageCompanySalary:N2}");
+            Console.WriteLine($"Number of Departments: {departmentCount}");
+            Console.WriteLine($"Highest Paid Department: {highestPaidDepartment.Department} (${highestPaidDepartment.AverageSalary:N2})");
+            Console.WriteLine($"Largest Department: {largestDepartment.Department} ({largestDepartment.EmployeeCount} employees)");
+            Console.WriteLine($"Total Senior Employees: {totalSeniorEmployees}");
+            Console.WriteLine($"Total High Earners: {totalHighEarners}");
 
             // Verify company statistics
-            Assert.True(companyStats.TotalEmployees >= 10); // We inserted 10+ people
-            Assert.True(companyStats.TotalPayroll > 0);
-            Assert.True(companyStats.AverageCompanySalary > 0);
-            Assert.True(companyStats.DepartmentCount >= 4);
-            Assert.NotNull(companyStats.HighestPaidDepartment);
-            Assert.NotNull(companyStats.LargestDepartment);
+            Assert.True(totalEmployees >= 10); // We inserted 10+ people
+            Assert.True(totalPayroll > 0);
+            Assert.True(averageCompanySalary > 0);
+            Assert.True(departmentCount >= 4);
+            Assert.NotNull(highestPaidDepartment);
+            Assert.NotNull(largestDepartment);
 
             Console.WriteLine("✅ Complex statistics generation test passed!");
         }
@@ -416,7 +413,7 @@ namespace Test.Postgres
 
             Console.WriteLine($"Found {groupList.Count} department/age group combinations");
 
-            foreach (var group in groupList)
+            foreach (IGrouping<object, Person> group in groupList)
             {
                 int count = group.Count();
                 decimal avgSalary = group.Average(p => p.Salary);
@@ -588,7 +585,7 @@ namespace Test.Postgres
 
             Console.WriteLine("Seeding test data for GROUP BY functionality...");
 
-            var testPeople = new List<Person>
+            List<Person> testPeople = new List<Person>
             {
                 // IT Department (4 people)
                 new Person { FirstName = "John", LastName = "Doe", Age = 30, Email = "john.doe@company.com", Salary = 75000, Department = "IT" },

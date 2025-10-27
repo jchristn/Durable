@@ -13,6 +13,7 @@ namespace Durable.MySql
     using System.Threading.Tasks;
     using MySqlConnector;
     using Durable.ConcurrencyConflictResolvers;
+    using Durable.DefaultValueProviders;
 
     /// <summary>
     /// MySQL Repository Implementation with Full Transaction Support and Connection Pooling.
@@ -113,6 +114,7 @@ namespace Durable.MySql
         internal readonly VersionColumnInfo? _VersionColumnInfo;
         internal readonly IConcurrencyConflictResolver<T> _ConflictResolver;
         internal readonly IChangeTracker<T> _ChangeTracker;
+        internal readonly Dictionary<PropertyInfo, DefaultValueProviderInfo> _DefaultValueProviders;
 
         private volatile string? _LastExecutedSql;
         private volatile string? _LastExecutedSqlWithParameters;
@@ -153,6 +155,7 @@ namespace Durable.MySql
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         /// <summary>
@@ -185,6 +188,7 @@ namespace Durable.MySql
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         /// <summary>
@@ -216,6 +220,7 @@ namespace Durable.MySql
             _VersionColumnInfo = GetVersionColumnInfo();
             _ConflictResolver = conflictResolver ?? new DefaultConflictResolver<T>(ConflictResolutionStrategy.ThrowException);
             _ChangeTracker = new SimpleChangeTracker<T>(_ColumnMappings);
+            _DefaultValueProviders = GetDefaultValueProviders();
         }
 
         #endregion
@@ -645,6 +650,48 @@ namespace Durable.MySql
             return null; // No version column
         }
 
+        /// <summary>
+        /// Gets the default value providers for properties with DefaultValueAttribute.
+        /// </summary>
+        /// <returns>A dictionary mapping PropertyInfo to DefaultValueProviderInfo</returns>
+        private Dictionary<PropertyInfo, DefaultValueProviderInfo> GetDefaultValueProviders()
+        {
+            Dictionary<PropertyInfo, DefaultValueProviderInfo> providers = new Dictionary<PropertyInfo, DefaultValueProviderInfo>();
+            PropertyInfo[] properties = typeof(T).GetProperties();
+
+            foreach (PropertyInfo property in properties)
+            {
+                DefaultValueAttribute? attr = property.GetCustomAttribute<DefaultValueAttribute>();
+                if (attr != null)
+                {
+                    IDefaultValueProvider provider;
+
+                    // Create provider based on attribute configuration
+                    if (attr.ProviderType != null)
+                    {
+                        // Custom provider type specified
+                        provider = (IDefaultValueProvider)Activator.CreateInstance(attr.ProviderType)!;
+                    }
+                    else
+                    {
+                        // Use built-in provider based on DefaultValueType
+                        provider = attr.ValueType switch
+                        {
+                            DefaultValueType.CurrentDateTimeUtc => new CurrentDateTimeUtcProvider(),
+                            DefaultValueType.NewGuid => new NewGuidProvider(),
+                            DefaultValueType.SequentialGuid => new SequentialGuidProvider(),
+                            DefaultValueType.StaticValue => new StaticValueProvider(attr.StaticValue),
+                            _ => throw new InvalidOperationException($"Unknown DefaultValueType: {attr.ValueType}")
+                        };
+                    }
+
+                    providers[property] = new DefaultValueProviderInfo(attr, provider);
+                }
+            }
+
+            return providers;
+        }
+
         private Expression<Func<T, bool>> BuildIdPredicate(object id)
         {
             ParameterExpression parameter = Expression.Parameter(typeof(T), "x");
@@ -693,10 +740,10 @@ namespace Durable.MySql
 
         private int ExecuteNonQueryWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction)
         {
-            return ExecuteNonQueryWithConnection(connection, sql, transaction, Array.Empty<(string, object?)>());
+            return ExecuteNonQueryWithConnection(connection, sql, transaction, Array.Empty<SqlParameter>());
         }
 
-        private int ExecuteNonQueryWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params (string name, object? value)[] parameters)
+        private int ExecuteNonQueryWithConnection(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params SqlParameter[] parameters)
         {
             EnsureConnectionOpen(connection);
 
@@ -709,11 +756,11 @@ namespace Durable.MySql
             }
 
             // Add parameters
-            foreach ((string name, object? value) param in parameters)
+            foreach (SqlParameter param in parameters)
             {
                 MySqlParameter parameter = command.CreateParameter();
-                parameter.ParameterName = param.name;
-                parameter.Value = param.value ?? DBNull.Value;
+                parameter.ParameterName = param.Name;
+                parameter.Value = param.Value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
             }
 
@@ -730,7 +777,7 @@ namespace Durable.MySql
             }
         }
 
-        private TResult ExecuteScalarWithConnection<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params (string name, object? value)[] parameters)
+        private TResult ExecuteScalarWithConnection<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, params SqlParameter[] parameters)
         {
             EnsureConnectionOpen(connection);
 
@@ -743,11 +790,11 @@ namespace Durable.MySql
             }
 
             // Add parameters
-            foreach ((string name, object? value) param in parameters)
+            foreach (SqlParameter param in parameters)
             {
                 MySqlParameter parameter = command.CreateParameter();
-                parameter.ParameterName = param.name;
-                parameter.Value = param.value ?? DBNull.Value;
+                parameter.ParameterName = param.Name;
+                parameter.Value = param.Value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
             }
 
@@ -781,7 +828,7 @@ namespace Durable.MySql
         /// <returns>The scalar result of the command execution</returns>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        private async Task<TResult> ExecuteScalarWithConnectionAsync<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
+        private async Task<TResult> ExecuteScalarWithConnectionAsync<TResult>(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params SqlParameter[] parameters)
         {
             token.ThrowIfCancellationRequested();
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
@@ -795,11 +842,11 @@ namespace Durable.MySql
             }
 
             // Add parameters
-            foreach ((string name, object? value) param in parameters)
+            foreach (SqlParameter param in parameters)
             {
                 MySqlParameter parameter = command.CreateParameter();
-                parameter.ParameterName = param.name;
-                parameter.Value = param.value ?? DBNull.Value;
+                parameter.ParameterName = param.Name;
+                parameter.Value = param.Value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
             }
 
@@ -832,7 +879,7 @@ namespace Durable.MySql
         /// <returns>The number of rows affected by the command</returns>
         /// <exception cref="InvalidOperationException">Thrown when SQL execution fails</exception>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        private async Task<int> ExecuteNonQueryWithConnectionAsync(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
+        private async Task<int> ExecuteNonQueryWithConnectionAsync(System.Data.Common.DbConnection connection, string sql, System.Data.Common.DbTransaction? transaction, CancellationToken token, params SqlParameter[] parameters)
         {
             token.ThrowIfCancellationRequested();
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
@@ -846,11 +893,11 @@ namespace Durable.MySql
             }
 
             // Add parameters
-            foreach ((string name, object? value) param in parameters)
+            foreach (SqlParameter param in parameters)
             {
                 MySqlParameter parameter = command.CreateParameter();
-                parameter.ParameterName = param.name;
-                parameter.Value = param.value ?? DBNull.Value;
+                parameter.ParameterName = param.Name;
+                parameter.Value = param.Value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
             }
 
@@ -1116,14 +1163,14 @@ namespace Durable.MySql
             transaction ??= TransactionScope.Current?.Transaction;
 
             string sql = $"SELECT COUNT(*) FROM `{_TableName}`";
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql += $" WHERE {whereClause}";
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1153,14 +1200,14 @@ namespace Durable.MySql
             transaction ??= TransactionScope.Current?.Transaction;
 
             string sql = $"SELECT COUNT(*) FROM `{_TableName}`";
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 MySqlExpressionParser<T> parser = new MySqlExpressionParser<T>(_ColumnMappings, _Sanitizer);
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql += $" WHERE {whereClause}";
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1194,13 +1241,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT MAX({column}) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1236,13 +1283,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT MIN({column}) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1278,13 +1325,13 @@ namespace Durable.MySql
             // MySQL doesn't need explicit casting like SQLite, AVG function works with numeric types
             StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG({column}), 0) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1319,13 +1366,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1365,13 +1412,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT MAX({column}) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1411,13 +1458,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT MIN({column}) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1456,13 +1503,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT COALESCE(AVG({column}), 0) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1501,13 +1548,13 @@ namespace Durable.MySql
 
             StringBuilder sql = new StringBuilder($"SELECT COALESCE(SUM({column}), 0) FROM `{_TableName}`");
 
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             if (predicate != null)
             {
                 string whereClause = parser.ParseExpressionWithParameters(predicate.Body);
                 sql.Append($" WHERE {whereClause}");
-                parameters.AddRange(parser.GetParameters());
+                foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
             }
 
             if (transaction != null)
@@ -1537,8 +1584,29 @@ namespace Durable.MySql
             // Use ambient transaction if no explicit transaction provided
             transaction ??= TransactionScope.Current?.Transaction;
 
+            // Apply default values from providers before insert
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                PropertyInfo property = kvp.Value;
+
+                // Check if this property has a default value provider
+                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo providerInfo))
+                {
+                    DefaultValueAttribute attr = providerInfo.Attribute;
+                    IDefaultValueProvider provider = providerInfo.Provider;
+                    object? value = property.GetValue(entity);
+
+                    // Apply default value if provider says we should
+                    if (provider.ShouldApply(value, property.PropertyType))
+                    {
+                        value = provider.GetDefaultValue(property, entity);
+                        property.SetValue(entity, value);
+                    }
+                }
+            }
+
             List<string> columns = new List<string>();
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -1552,10 +1620,10 @@ namespace Durable.MySql
 
                 object? value = property.GetValue(entity);
                 columns.Add($"`{columnName}`");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
+                parameters.Add(new SqlParameter($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
             }
 
-            string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.name))})";
+            string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.Name))})";
 
             // Check if we have an auto-increment primary key
             PropertyAttribute? pkAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
@@ -1655,8 +1723,29 @@ namespace Durable.MySql
             // Use ambient transaction if no explicit transaction provided
             transaction ??= TransactionScope.Current?.Transaction;
 
+            // Apply default values from providers before insert
+            foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
+            {
+                PropertyInfo property = kvp.Value;
+
+                // Check if this property has a default value provider
+                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo providerInfo))
+                {
+                    DefaultValueAttribute attr = providerInfo.Attribute;
+                    IDefaultValueProvider provider = providerInfo.Provider;
+                    object? value = property.GetValue(entity);
+
+                    // Apply default value if provider says we should
+                    if (provider.ShouldApply(value, property.PropertyType))
+                    {
+                        value = provider.GetDefaultValue(property, entity);
+                        property.SetValue(entity, value);
+                    }
+                }
+            }
+
             List<string> columns = new List<string>();
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -1670,10 +1759,10 @@ namespace Durable.MySql
 
                 object? value = property.GetValue(entity);
                 columns.Add($"`{columnName}`");
-                parameters.Add(($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
+                parameters.Add(new SqlParameter($"@{columnName}", _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property)));
             }
 
-            string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.name))})";
+            string insertSql = $"INSERT INTO `{_TableName}` ({string.Join(", ", columns)}) VALUES ({string.Join(", ", parameters.Select(p => p.Name))})";
 
             // Check if we have an auto-increment primary key
             PropertyAttribute? pkAttr = _PrimaryKeyProperty.GetCustomAttribute<PropertyAttribute>();
@@ -1771,7 +1860,7 @@ namespace Durable.MySql
             if (entity == null) throw new ArgumentNullException(nameof(entity));
 
             List<string> setPairs = new List<string>();
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
             object? idValue = null;
             object? currentVersion = null;
 
@@ -1791,27 +1880,27 @@ namespace Durable.MySql
                     object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion!);
                     setPairs.Add($"`{columnName}` = @new_version");
                     object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion!, _VersionColumnInfo.PropertyType, property);
-                    parameters.Add(("@new_version", convertedNewVersion));
+                    parameters.Add(new SqlParameter($"@new_version", convertedNewVersion));
                     _VersionColumnInfo.SetValue(entity, newVersion);
                 }
                 else
                 {
                     setPairs.Add($"`{columnName}` = @{columnName}");
                     object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
-                    parameters.Add(($"@{columnName}", convertedValue));
+                    parameters.Add(new SqlParameter($"@{columnName}", convertedValue));
                 }
             }
 
             if (idValue == null)
                 throw new InvalidOperationException("Cannot update entity with null primary key");
 
-            parameters.Add(("@id", idValue));
+            parameters.Add(new SqlParameter($"@id", idValue));
 
             string sql;
             if (_VersionColumnInfo != null)
             {
                 sql = $"UPDATE `{_TableName}` SET {string.Join(", ", setPairs)} WHERE `{_PrimaryKeyColumn}` = @id AND `{_VersionColumnInfo.ColumnName}` = @current_version";
-                parameters.Add(("@current_version", currentVersion));
+                parameters.Add(new SqlParameter($"@current_version", currentVersion));
             }
             else
             {
@@ -1945,7 +2034,8 @@ namespace Durable.MySql
 
             // Build WHERE clause with parameters
             string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
-            List<(string name, object? value)> parameters = parser.GetParameters();
+            List<SqlParameter> parameters = new List<SqlParameter>();
+            foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
 
             // Get column name from field expression
             string columnName = parser.GetColumnFromExpression(field.Body);
@@ -1956,7 +2046,7 @@ namespace Durable.MySql
             // Convert value to database format
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
             object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
-            parameters.Add(("@value", convertedValue));
+            parameters.Add(new SqlParameter($"@value", convertedValue));
 
             int rowsAffected;
             if (transaction != null)
@@ -1989,7 +2079,7 @@ namespace Durable.MySql
             token.ThrowIfCancellationRequested();
 
             List<string> setPairs = new List<string>();
-            List<(string name, object? value)> parameters = new List<(string, object?)>();
+            List<SqlParameter> parameters = new List<SqlParameter>();
             object? idValue = null;
             object? currentVersion = null;
 
@@ -2009,27 +2099,27 @@ namespace Durable.MySql
                     object? newVersion = _VersionColumnInfo.IncrementVersion(currentVersion!);
                     setPairs.Add($"`{columnName}` = @new_version");
                     object? convertedNewVersion = _DataTypeConverter.ConvertToDatabase(newVersion!, _VersionColumnInfo.PropertyType, property);
-                    parameters.Add(("@new_version", convertedNewVersion));
+                    parameters.Add(new SqlParameter($"@new_version", convertedNewVersion));
                     _VersionColumnInfo.SetValue(entity, newVersion);
                 }
                 else
                 {
                     setPairs.Add($"`{columnName}` = @{columnName}");
                     object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
-                    parameters.Add(($"@{columnName}", convertedValue));
+                    parameters.Add(new SqlParameter($"@{columnName}", convertedValue));
                 }
             }
 
             if (idValue == null)
                 throw new InvalidOperationException("Cannot update entity with null primary key");
 
-            parameters.Add(("@id", idValue));
+            parameters.Add(new SqlParameter($"@id", idValue));
 
             string sql;
             if (_VersionColumnInfo != null)
             {
                 sql = $"UPDATE `{_TableName}` SET {string.Join(", ", setPairs)} WHERE `{_PrimaryKeyColumn}` = @id AND `{_VersionColumnInfo.ColumnName}` = @current_version";
-                parameters.Add(("@current_version", currentVersion));
+                parameters.Add(new SqlParameter($"@current_version", currentVersion));
             }
             else
             {
@@ -2172,7 +2262,8 @@ namespace Durable.MySql
 
             // Build WHERE clause with parameters
             string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
-            List<(string name, object? value)> parameters = parser.GetParameters();
+            List<SqlParameter> parameters = new List<SqlParameter>();
+            foreach (var p in parser.GetParameters()) parameters.Add(new SqlParameter(p.name, p.value));
 
             // Get column name from field expression
             string columnName = parser.GetColumnFromExpression(field.Body);
@@ -2183,7 +2274,7 @@ namespace Durable.MySql
             // Convert value to database format
             PropertyInfo? fieldProperty = GetPropertyFromExpression(field.Body);
             object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, typeof(TField), fieldProperty);
-            parameters.Add(("@value", convertedValue));
+            parameters.Add(new SqlParameter($"@value", convertedValue));
 
             int rowsAffected;
             if (transaction != null)
@@ -2249,7 +2340,7 @@ namespace Durable.MySql
 
             // Build WHERE clause with parameters
             string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
-            List<(string name, object? value)> parameters = parser.GetParameters();
+            List<SqlParameter> parameters = parser.GetParameters().Select(p => new SqlParameter(p.name, p.value)).ToList();
 
             // Build DELETE SQL
             string sql = $"DELETE FROM `{_TableName}` WHERE {whereClause}";
@@ -2327,7 +2418,7 @@ namespace Durable.MySql
 
             // Build WHERE clause with parameters
             string whereClause = parser.ParseExpressionWithParameters(predicate.Body, true);
-            List<(string name, object? value)> parameters = parser.GetParameters();
+            List<SqlParameter> parameters = parser.GetParameters().Select(p => new SqlParameter(p.name, p.value)).ToList();
 
             // Build DELETE SQL
             string sql = $"DELETE FROM `{_TableName}` WHERE {whereClause}";
@@ -2370,12 +2461,12 @@ namespace Durable.MySql
                 int rowsAffected;
                 if (transaction != null)
                 {
-                    rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, ("@id", id), ("@version", version));
+                    rowsAffected = ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, new SqlParameter("@id", id), new SqlParameter("@version", version));
                 }
                 else
                 {
                     using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
-                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id), ("@version", version));
+                    rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, new SqlParameter("@id", id), new SqlParameter("@version", version));
                 }
 
                 if (rowsAffected == 0)
@@ -2418,12 +2509,12 @@ namespace Durable.MySql
 
             if (transaction != null)
             {
-                return ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, ("@id", id)) > 0;
+                return ExecuteNonQueryWithConnection(transaction.Connection, sql, transaction.Transaction, new SqlParameter("@id", id)) > 0;
             }
             else
             {
                 using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
-                return ExecuteNonQueryWithConnection(connection, sql, null, ("@id", id)) > 0;
+                return ExecuteNonQueryWithConnection(connection, sql, null, new SqlParameter("@id", id)) > 0;
             }
         }
 
@@ -2501,12 +2592,12 @@ namespace Durable.MySql
                 int rowsAffected;
                 if (transaction != null)
                 {
-                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, new SqlParameter("@id", id), new SqlParameter("@version", version)).ConfigureAwait(false);
                 }
                 else
                 {
                     using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
-                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id), ("@version", version)).ConfigureAwait(false);
+                    rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, new SqlParameter("@id", id), new SqlParameter("@version", version)).ConfigureAwait(false);
                 }
 
                 if (rowsAffected == 0)
@@ -2553,12 +2644,12 @@ namespace Durable.MySql
             int rowsAffected;
             if (transaction != null)
             {
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, ("@id", id)).ConfigureAwait(false);
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(transaction.Connection, sql, transaction.Transaction, token, new SqlParameter("@id", id)).ConfigureAwait(false);
             }
             else
             {
                 using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
-                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, ("@id", id)).ConfigureAwait(false);
+                rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, new SqlParameter("@id", id)).ConfigureAwait(false);
             }
 
             return rowsAffected > 0;
@@ -2662,7 +2753,7 @@ namespace Durable.MySql
             List<string> columns = new List<string>();
             List<string> parameters = new List<string>();
             List<string> updatePairs = new List<string>();
-            List<(string name, object? value)> parameterValues = new List<(string, object?)>();
+            List<SqlParameter> parameterValues = new List<SqlParameter>();
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -2674,7 +2765,7 @@ namespace Durable.MySql
                 parameters.Add($"@{columnName}");
 
                 object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
-                parameterValues.Add((columnName, convertedValue));
+                parameterValues.Add(new SqlParameter($"@{columnName}", convertedValue));
 
                 // For UPDATE part - exclude primary key from updates
                 if (columnName != _PrimaryKeyColumn)
@@ -2692,9 +2783,9 @@ namespace Durable.MySql
             command.CommandText = sql.ToString();
 
             // Add parameters
-            foreach ((string name, object? value) param in parameterValues)
+            foreach (SqlParameter param in parameterValues)
             {
-                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@{param.name}", param.value ?? DBNull.Value);
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter(param.Name, param.Value ?? DBNull.Value);
                 command.Parameters.Add(parameter);
             }
 
@@ -2835,7 +2926,7 @@ namespace Durable.MySql
             List<string> columns = new List<string>();
             List<string> parameters = new List<string>();
             List<string> updatePairs = new List<string>();
-            List<(string name, object? value)> parameterValues = new List<(string, object?)>();
+            List<SqlParameter> parameterValues = new List<SqlParameter>();
 
             foreach (KeyValuePair<string, PropertyInfo> kvp in _ColumnMappings)
             {
@@ -2847,7 +2938,7 @@ namespace Durable.MySql
                 parameters.Add($"@{columnName}");
 
                 object? convertedValue = _DataTypeConverter.ConvertToDatabase(value!, property.PropertyType, property);
-                parameterValues.Add((columnName, convertedValue));
+                parameterValues.Add(new SqlParameter($"@{columnName}", convertedValue));
 
                 // For UPDATE part - exclude primary key from updates
                 if (columnName != _PrimaryKeyColumn)
@@ -2865,9 +2956,9 @@ namespace Durable.MySql
             command.CommandText = sql.ToString();
 
             // Add parameters
-            foreach ((string name, object? value) param in parameterValues)
+            foreach (SqlParameter param in parameterValues)
             {
-                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter($"@{param.name}", param.value ?? DBNull.Value);
+                MySqlConnector.MySqlParameter parameter = new MySqlConnector.MySqlParameter(param.Name, param.Value ?? DBNull.Value);
                 command.Parameters.Add(parameter);
             }
 
@@ -3850,6 +3941,723 @@ namespace Durable.MySql
         {
             cancellationToken.ThrowIfCancellationRequested();
             return (MySqlConnector.MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <inheritdoc/>
+        public void InitializeTable(Type entityType, ITransaction transaction = null)
+        {
+            if (entityType == null)
+                throw new ArgumentNullException(nameof(entityType));
+
+            List<string> errors;
+            List<string> warnings;
+            if (!ValidateTable(entityType, out errors, out warnings))
+            {
+                string errorMessage = "Table validation failed:\n" + string.Join("\n", errors);
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // Log warnings if any
+            foreach (string warning in warnings)
+            {
+                // Could add logging here if ILogger is available
+                System.Diagnostics.Debug.WriteLine($"Warning: {warning}");
+            }
+
+            // Get table name
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            string tableName = entityAttr!.Name; // Already validated in ValidateTable
+
+            // Check if table exists
+            bool tableExists;
+            if (transaction != null)
+            {
+                EnsureConnectionOpen(transaction.Connection);
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, Settings.Database, transaction.Connection, transaction.Transaction);
+            }
+            else
+            {
+                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                EnsureConnectionOpen(connection);
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, Settings.Database, connection);
+            }
+
+            if (!tableExists)
+            {
+                // Create the table
+                MySqlSchemaBuilder schemaBuilder = new MySqlSchemaBuilder(_Sanitizer, _DataTypeConverter);
+                string createTableSql = schemaBuilder.BuildCreateTableSql(entityType);
+
+                if (transaction != null)
+                {
+                    ExecuteNonQueryWithConnection(transaction.Connection, createTableSql, transaction.Transaction);
+                }
+                else
+                {
+                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    ExecuteNonQueryWithConnection(connection, createTableSql, null);
+                }
+            }
+            else
+            {
+                // Table exists - could add schema migration logic here in the future
+                // For now, we just validate that it exists
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (entityType == null)
+                throw new ArgumentNullException(nameof(entityType));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            List<string> errors;
+            List<string> warnings;
+            if (!ValidateTable(entityType, out errors, out warnings))
+            {
+                string errorMessage = "Table validation failed:\n" + string.Join("\n", errors);
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // Log warnings if any
+            foreach (string warning in warnings)
+            {
+                // Could add logging here if ILogger is available
+                System.Diagnostics.Debug.WriteLine($"Warning: {warning}");
+            }
+
+            // Get table name
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            string tableName = entityAttr!.Name; // Already validated in ValidateTable
+
+            // Check if table exists
+            bool tableExists;
+            if (transaction != null)
+            {
+                await EnsureConnectionOpenAsync(transaction.Connection, cancellationToken).ConfigureAwait(false);
+                string databaseName = Settings?.Database ?? ((MySqlConnection)transaction.Connection).Database;
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection, transaction.Transaction);
+            }
+            else
+            {
+                using MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
+                string databaseName = Settings?.Database ?? connection.Database;
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, connection);
+            }
+
+            if (!tableExists)
+            {
+                // Create the table
+                MySqlSchemaBuilder schemaBuilder = new MySqlSchemaBuilder(_Sanitizer, _DataTypeConverter);
+                string createTableSql = schemaBuilder.BuildCreateTableSql(entityType);
+
+                if (transaction != null)
+                {
+                    await ExecuteNonQueryWithConnectionAsync(transaction.Connection, createTableSql, transaction.Transaction, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    using MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                    await ExecuteNonQueryWithConnectionAsync(connection, createTableSql, null, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                // Table exists - could add schema migration logic here in the future
+                // For now, we just validate that it exists
+            }
+        }
+
+        /// <inheritdoc/>
+        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null)
+        {
+            if (entityTypes == null)
+                throw new ArgumentNullException(nameof(entityTypes));
+
+            ITransaction? localTransaction = transaction;
+            bool createdTransaction = false;
+
+            try
+            {
+                // Create a transaction if one wasn't provided
+                if (localTransaction == null)
+                {
+                    localTransaction = BeginTransaction();
+                    createdTransaction = true;
+                }
+
+                // Initialize each table within the transaction
+                foreach (Type entityType in entityTypes)
+                {
+                    InitializeTable(entityType, localTransaction);
+                }
+
+                // Commit if we created the transaction
+                if (createdTransaction)
+                {
+                    localTransaction.Commit();
+                }
+            }
+            catch
+            {
+                // Rollback if we created the transaction and something failed
+                if (createdTransaction && localTransaction != null)
+                {
+                    localTransaction.Rollback();
+                }
+                throw;
+            }
+            finally
+            {
+                // Dispose if we created the transaction
+                if (createdTransaction && localTransaction != null)
+                {
+                    localTransaction.Dispose();
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (entityTypes == null)
+                throw new ArgumentNullException(nameof(entityTypes));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            ITransaction? localTransaction = transaction;
+            bool createdTransaction = false;
+
+            try
+            {
+                // Create a transaction if one wasn't provided
+                if (localTransaction == null)
+                {
+                    localTransaction = await BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                    createdTransaction = true;
+                }
+
+                // Initialize each table within the transaction
+                foreach (Type entityType in entityTypes)
+                {
+                    await InitializeTableAsync(entityType, localTransaction, cancellationToken).ConfigureAwait(false);
+                }
+
+                // Commit if we created the transaction
+                if (createdTransaction)
+                {
+                    localTransaction.Commit();
+                }
+            }
+            catch
+            {
+                // Rollback if we created the transaction and something failed
+                if (createdTransaction && localTransaction != null)
+                {
+                    localTransaction.Rollback();
+                }
+                throw;
+            }
+            finally
+            {
+                // Dispose if we created the transaction
+                if (createdTransaction && localTransaction != null)
+                {
+                    localTransaction.Dispose();
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public bool ValidateTable(Type entityType, out List<string> errors, out List<string> warnings)
+        {
+            errors = new List<string>();
+            warnings = new List<string>();
+
+            if (entityType == null)
+            {
+                errors.Add("Entity type cannot be null");
+                return false;
+            }
+
+            // Check for Entity attribute
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+            {
+                errors.Add($"Type '{entityType.Name}' must have an [Entity] attribute");
+                return false;
+            }
+
+            // Check for at least one property with Property attribute
+            PropertyInfo[] properties = entityType.GetProperties();
+            List<PropertyInfo> mappedProperties = properties
+                .Where(p => p.GetCustomAttribute<PropertyAttribute>() != null)
+                .ToList();
+
+            if (mappedProperties.Count == 0)
+            {
+                errors.Add($"Type '{entityType.Name}' must have at least one property with [Property] attribute");
+                return false;
+            }
+
+            // Check for primary key
+            PropertyInfo? primaryKeyProperty = mappedProperties
+                .FirstOrDefault(p => p.GetCustomAttribute<PropertyAttribute>()?.PropertyFlags.HasFlag(Flags.PrimaryKey) == true);
+
+            if (primaryKeyProperty == null)
+            {
+                errors.Add($"Type '{entityType.Name}' must have a property with [Property] attribute and PrimaryKey flag");
+                return false;
+            }
+
+            // Validate foreign keys
+            foreach (PropertyInfo property in mappedProperties)
+            {
+                ForeignKeyAttribute? fkAttr = property.GetCustomAttribute<ForeignKeyAttribute>();
+                if (fkAttr != null)
+                {
+                    // Check that referenced type has Entity attribute
+                    EntityAttribute? refEntityAttr = fkAttr.ReferencedType.GetCustomAttribute<EntityAttribute>();
+                    if (refEntityAttr == null)
+                    {
+                        errors.Add($"Foreign key on property '{property.Name}' references type '{fkAttr.ReferencedType.Name}' which does not have an [Entity] attribute");
+                    }
+
+                    // Check that referenced property exists
+                    PropertyInfo? refProperty = fkAttr.ReferencedType.GetProperty(fkAttr.ReferencedProperty);
+                    if (refProperty == null)
+                    {
+                        errors.Add($"Foreign key on property '{property.Name}' references non-existent property '{fkAttr.ReferencedProperty}' on type '{fkAttr.ReferencedType.Name}'");
+                    }
+                    else
+                    {
+                        // Check that referenced property has Property attribute
+                        PropertyAttribute? refPropAttr = refProperty.GetCustomAttribute<PropertyAttribute>();
+                        if (refPropAttr == null)
+                        {
+                            errors.Add($"Foreign key on property '{property.Name}' references property '{fkAttr.ReferencedProperty}' on type '{fkAttr.ReferencedType.Name}' which does not have a [Property] attribute");
+                        }
+                    }
+                }
+            }
+
+            // If table exists, check schema compatibility
+            string tableName = entityAttr.Name;
+            try
+            {
+                MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                try
+                {
+                    if (MySqlSchemaBuilder.TableExists(tableName, Settings.Database, connection))
+                    {
+                        List<ColumnInfo> existingColumns = MySqlSchemaBuilder.GetTableColumns(tableName, connection);
+                        List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
+
+                        // Check if entity columns exist in database
+                        foreach (PropertyInfo prop in mappedProperties)
+                        {
+                            PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                            if (propAttr != null)
+                            {
+                                if (!existingColumnNames.Contains(propAttr.Name, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    errors.Add($"Table '{tableName}' exists but column '{propAttr.Name}' (for property '{prop.Name}') does not exist in the database");
+                                }
+                            }
+                        }
+
+                        // Check for extra columns in database (warning only)
+                        foreach (ColumnInfo dbColumn in existingColumns)
+                        {
+                            bool foundInEntity = false;
+                            foreach (PropertyInfo prop in mappedProperties)
+                            {
+                                PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                                if (propAttr != null && propAttr.Name.Equals(dbColumn.Name, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    foundInEntity = true;
+                                    break;
+                                }
+                            }
+
+                            if (!foundInEntity)
+                            {
+                                warnings.Add($"Table '{tableName}' has column '{dbColumn.Name}' which is not mapped to any property in type '{entityType.Name}'");
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Could not validate table schema against database: {ex.Message}");
+            }
+
+            return errors.Count == 0;
+        }
+
+        /// <inheritdoc/>
+        public bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings)
+        {
+            errors = new List<string>();
+            warnings = new List<string>();
+
+            if (entityTypes == null)
+            {
+                errors.Add("Entity types collection cannot be null");
+                return false;
+            }
+
+            bool allValid = true;
+            foreach (Type entityType in entityTypes)
+            {
+                List<string> typeErrors;
+                List<string> typeWarnings;
+
+                if (!ValidateTable(entityType, out typeErrors, out typeWarnings))
+                {
+                    allValid = false;
+                }
+
+                errors.AddRange(typeErrors);
+                warnings.AddRange(typeWarnings);
+            }
+
+            return allValid;
+        }
+
+        /// <inheritdoc/>
+        public void CreateIndexes(Type entityType, ITransaction? transaction = null)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+
+            MySqlSchemaBuilder schemaBuilder = new MySqlSchemaBuilder(_Sanitizer, _DataTypeConverter);
+            List<string> indexSqlStatements = schemaBuilder.BuildCreateIndexSql(entityType);
+
+            if (indexSqlStatements.Count == 0)
+            {
+                return; // No indexes to create
+            }
+
+            if (transaction != null)
+            {
+                MySqlConnection connection = (MySqlConnection)transaction.Connection;
+                MySqlTransaction mysqlTransaction = (MySqlTransaction)transaction.Transaction;
+
+                foreach (string sql in indexSqlStatements)
+                {
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.Transaction = mysqlTransaction;
+                        command.CommandText = sql;
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            else
+            {
+                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                {
+                    foreach (string sql in indexSqlStatements)
+                    {
+                        using (MySqlCommand command = connection.CreateCommand())
+                        {
+                            command.CommandText = sql;
+                            command.ExecuteNonQuery();
+                        }
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task CreateIndexesAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            MySqlSchemaBuilder schemaBuilder = new MySqlSchemaBuilder(_Sanitizer, _DataTypeConverter);
+            List<string> indexSqlStatements = schemaBuilder.BuildCreateIndexSql(entityType);
+
+            if (indexSqlStatements.Count == 0)
+            {
+                return; // No indexes to create
+            }
+
+            if (transaction != null)
+            {
+                MySqlConnection connection = (MySqlConnection)transaction.Connection;
+                MySqlTransaction mysqlTransaction = (MySqlTransaction)transaction.Transaction;
+
+                foreach (string sql in indexSqlStatements)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.Transaction = mysqlTransaction;
+                        command.CommandText = sql;
+                        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+            else
+            {
+                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                {
+                    foreach (string sql in indexSqlStatements)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        using (MySqlCommand command = connection.CreateCommand())
+                        {
+                            command.CommandText = sql;
+                            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public void DropIndex(string indexName, ITransaction? transaction = null)
+        {
+            if (string.IsNullOrWhiteSpace(indexName))
+                throw new ArgumentNullException(nameof(indexName), "Index name cannot be null or empty");
+
+            EntityAttribute? entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{typeof(T).Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+            string sql = $"DROP INDEX {_Sanitizer.SanitizeIdentifier(indexName)} ON {_Sanitizer.SanitizeIdentifier(tableName)}";
+
+            if (transaction != null)
+            {
+                MySqlConnection connection = (MySqlConnection)transaction.Connection;
+                MySqlTransaction mysqlTransaction = (MySqlTransaction)transaction.Transaction;
+
+                using (MySqlCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = mysqlTransaction;
+                    command.CommandText = sql;
+                    command.ExecuteNonQuery();
+                }
+            }
+            else
+            {
+                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                {
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = sql;
+                        command.ExecuteNonQuery();
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task DropIndexAsync(string indexName, ITransaction? transaction = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(indexName))
+                throw new ArgumentNullException(nameof(indexName), "Index name cannot be null or empty");
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            EntityAttribute? entityAttr = typeof(T).GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{typeof(T).Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+            string sql = $"DROP INDEX {_Sanitizer.SanitizeIdentifier(indexName)} ON {_Sanitizer.SanitizeIdentifier(tableName)}";
+
+            if (transaction != null)
+            {
+                MySqlConnection connection = (MySqlConnection)transaction.Connection;
+                MySqlTransaction mysqlTransaction = (MySqlTransaction)transaction.Transaction;
+
+                using (MySqlCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = mysqlTransaction;
+                    command.CommandText = sql;
+                    await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                {
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = sql;
+                        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public List<string> GetIndexes(Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+            string databaseName = Settings.Database;
+
+            using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+            {
+                List<IndexInfo> indexes = MySqlSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
+                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+
+                _ConnectionFactory.ReturnConnection(connection);
+
+                return indexNames;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<List<string>> GetIndexesAsync(Type entityType, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            EntityAttribute? entityAttr = entityType.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null)
+                throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
+
+            string tableName = entityAttr.Name;
+            string databaseName = Settings.Database;
+
+            using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+            {
+                await Task.Run(() =>
+                {
+                    // MySQL connector operations
+                }, cancellationToken).ConfigureAwait(false);
+
+                List<IndexInfo> indexes = MySqlSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
+                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+
+                _ConnectionFactory.ReturnConnection(connection);
+
+                return indexNames;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void CreateDatabaseIfNotExists()
+        {
+            if (Settings == null)
+            {
+                throw new InvalidOperationException("Cannot create database when Settings is null. Use a constructor that provides connection settings.");
+            }
+
+            string databaseName = Settings.Database;
+            if (string.IsNullOrWhiteSpace(databaseName))
+            {
+                throw new InvalidOperationException("Database name cannot be null or empty");
+            }
+
+            // Create a connection string without database specified
+            MySqlRepositorySettings tempSettings = new MySqlRepositorySettings
+            {
+                Hostname = Settings.Hostname,
+                Port = Settings.Port,
+                Username = Settings.Username,
+                Password = Settings.Password,
+                Database = string.Empty // No database specified
+            };
+
+            string connectionString = tempSettings.BuildConnectionString();
+
+            using (MySqlConnection connection = new MySqlConnection(connectionString))
+            {
+                connection.Open();
+
+                // Check if database exists
+                bool exists = MySqlSchemaBuilder.DatabaseExists(databaseName, connection);
+
+                if (!exists)
+                {
+                    // Create the database
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = $"CREATE DATABASE `{databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task CreateDatabaseIfNotExistsAsync(CancellationToken cancellationToken = default)
+        {
+            if (Settings == null)
+            {
+                throw new InvalidOperationException("Cannot create database when Settings is null. Use a constructor that provides connection settings.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string databaseName = Settings.Database;
+            if (string.IsNullOrWhiteSpace(databaseName))
+            {
+                throw new InvalidOperationException("Database name cannot be null or empty");
+            }
+
+            // Create a connection string without database specified
+            MySqlRepositorySettings tempSettings = new MySqlRepositorySettings
+            {
+                Hostname = Settings.Hostname,
+                Port = Settings.Port,
+                Username = Settings.Username,
+                Password = Settings.Password,
+                Database = string.Empty // No database specified
+            };
+
+            string connectionString = tempSettings.BuildConnectionString();
+
+            using (MySqlConnection connection = new MySqlConnection(connectionString))
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+                // Check if database exists
+                bool exists = MySqlSchemaBuilder.DatabaseExists(databaseName, connection);
+
+                if (!exists)
+                {
+                    // Create the database
+                    using (MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = $"CREATE DATABASE `{databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+                        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
         }
 
         #endregion

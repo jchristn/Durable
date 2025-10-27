@@ -61,7 +61,7 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
 
             Assert.NotNull(repository);
             Assert.IsAssignableFrom<IRepository<Person>>(repository);
@@ -77,7 +77,7 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Test basic connectivity with a simple SQL operation that affects rows
@@ -100,11 +100,11 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // CREATE
-            var newPerson = new Person
+            Person newPerson = new Person
             {
                 FirstName = "John",
                 LastName = "Doe",
@@ -151,11 +151,11 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Generate test data
-            var people = new List<Person>();
+            List<Person> people = new List<Person>();
             for (int i = 0; i < 100; i++)
             {
                 people.Add(new Person
@@ -192,11 +192,11 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Create test data
-            var testPeople = new[]
+            Person[] testPeople = new[]
             {
                 new Person { FirstName = "Alice", LastName = "Johnson", Age = 25, Email = "alice@test.com", Salary = 60000, Department = "Engineering" },
                 new Person { FirstName = "Bob", LastName = "Smith", Age = 35, Email = "bob@test.com", Salary = 80000, Department = "Engineering" },
@@ -207,16 +207,16 @@ namespace Test.MySql
             await repository.CreateManyAsync(testPeople);
 
             // Test Where clause
-            var engineeringPeople = new List<Person>();
-            await foreach (var person in repository.ReadManyAsync(p => p.Department == "Engineering"))
+            List<Person> engineeringPeople = new List<Person>();
+            await foreach (Person person in repository.ReadManyAsync(p => p.Department == "Engineering"))
             {
                 engineeringPeople.Add(person);
             }
             Assert.Equal(2, engineeringPeople.Count);
 
             // Test complex Where with AND
-            var youngEngineers = new List<Person>();
-            await foreach (var person in repository.ReadManyAsync(p => p.Department == "Engineering" && p.Age < 30))
+            List<Person> youngEngineers = new List<Person>();
+            await foreach (Person person in repository.ReadManyAsync(p => p.Department == "Engineering" && p.Age < 30))
             {
                 youngEngineers.Add(person);
             }
@@ -224,7 +224,7 @@ namespace Test.MySql
             Assert.Equal("Alice", youngEngineers.First().FirstName);
 
             // Test OrderBy with Take
-            var highestPaid = repository.Query()
+            List<Person> highestPaid = repository.Query()
                 .OrderByDescending(p => p.Salary)
                 .Take(2)
                 .Execute()
@@ -251,13 +251,13 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Test successful transaction
-            using (var transaction = await repository.BeginTransactionAsync())
+            using (ITransaction transaction = await repository.BeginTransactionAsync())
             {
-                var person1 = new Person
+                Person person1 = new Person
                 {
                     FirstName = "Trans1",
                     LastName = "Test",
@@ -267,7 +267,7 @@ namespace Test.MySql
                     Department = "IT"
                 };
 
-                var person2 = new Person
+                Person person2 = new Person
                 {
                     FirstName = "Trans2",
                     LastName = "Test",
@@ -292,9 +292,9 @@ namespace Test.MySql
 
             try
             {
-                using var transaction = await repository.BeginTransactionAsync();
+                ITransaction transaction = await repository.BeginTransactionAsync();
 
-                var person3 = new Person
+                Person person3 = new Person
                 {
                     FirstName = "Trans3",
                     LastName = "Test",
@@ -330,11 +330,11 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Create test data
-            var testPeople = new[]
+            Person[] testPeople = new[]
             {
                 new Person { FirstName = "Batch1", LastName = "Test", Age = 25, Email = "batch1@test.com", Salary = 50000, Department = "IT" },
                 new Person { FirstName = "Batch2", LastName = "Test", Age = 30, Email = "batch2@test.com", Salary = 60000, Department = "IT" },
@@ -352,8 +352,8 @@ namespace Test.MySql
             Assert.Equal(2, updatedCount);
 
             // Verify batch update
-            var itPeople = new List<Person>();
-            await foreach (var person in repository.ReadManyAsync(p => p.Department == "IT"))
+            List<Person> itPeople = new List<Person>();
+            await foreach (Person person in repository.ReadManyAsync(p => p.Department == "IT"))
             {
                 itPeople.Add(person);
             }
@@ -367,7 +367,7 @@ namespace Test.MySql
             int remainingCount = await repository.CountAsync();
             Assert.Equal(1, remainingCount);
 
-            var remaining = await repository.ReadFirstAsync();
+            Person remaining = await repository.ReadFirstAsync();
             Assert.Equal("HR", remaining.Department);
 
             // Clean up
@@ -382,11 +382,11 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Create test data
-            var testPeople = new[]
+            Person[] testPeople = new[]
             {
                 new Person { FirstName = "Query1", LastName = "Test", Age = 25, Email = "query1@test.com", Salary = 50000, Department = "Engineering" },
                 new Person { FirstName = "Query2", LastName = "Test", Age = 30, Email = "query2@test.com", Salary = 60000, Department = "Engineering" },
@@ -397,14 +397,14 @@ namespace Test.MySql
             await repository.CreateManyAsync(testPeople);
 
             // Test complex query with multiple conditions
-            var query = repository.Query()
+            IQueryBuilder<Person> query = repository.Query()
                 .Where(p => p.Department == "Engineering")
                 .Where(p => p.Age >= 30)
                 .OrderBy(p => p.Salary)
                 .Take(1);
 
-            var result = await query.ExecuteAsync();
-            var resultList = result.ToList();
+            IEnumerable<Person> result = await query.ExecuteAsync();
+            List<Person> resultList = result.ToList();
 
             Assert.Single(resultList);
             Assert.Equal("Query2", resultList.First().FirstName);
@@ -419,12 +419,12 @@ namespace Test.MySql
             Assert.Contains("COUNT", repository.LastExecutedSql);
 
             // Second test: Try query builder
-            var captureQuery = repository.Query()
+            IQueryBuilder<Person> captureQuery = repository.Query()
                 .Where(p => p.Salary > 65000)
                 .OrderByDescending(p => p.Age);
 
-            var captureResult = await captureQuery.ExecuteAsync();
-            var captureResultList = captureResult.ToList(); // Force enumeration to trigger SQL execution
+            IEnumerable<Person> captureResult = await captureQuery.ExecuteAsync();
+            List<Person> captureResultList = captureResult.ToList(); // Force enumeration to trigger SQL execution
 
             Assert.NotNull(repository.LastExecutedSql);
             Assert.Contains("WHERE", repository.LastExecutedSql);
@@ -442,7 +442,7 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Test null parameter handling
@@ -450,7 +450,7 @@ namespace Test.MySql
             await Assert.ThrowsAsync<ArgumentNullException>(() => repository.ReadByIdAsync(null));
 
             // Test invalid ID
-            var nonExistent = await repository.ReadByIdAsync(99999);
+            Person nonExistent = await repository.ReadByIdAsync(99999);
             Assert.Null(nonExistent);
 
             // Note: ReadManyAsync(null) is valid - null predicate means "no filter"
@@ -466,7 +466,7 @@ namespace Test.MySql
         {
             if (_SkipTests) return;
 
-            using var repository = new MySqlRepository<Person>(TestConnectionString);
+            MySqlRepository<Person> repository = new MySqlRepository<Person>(TestConnectionString);
             await SetupPersonTable(repository);
 
             // Create test data
@@ -537,10 +537,10 @@ namespace Test.MySql
             try
             {
                 // Test connection to database
-                using var connection = new MySqlConnection(TestConnectionString);
+                MySqlConnection connection = new MySqlConnection(TestConnectionString);
                 connection.Open();
 
-                using var command = connection.CreateCommand();
+                MySqlCommand command = connection.CreateCommand();
                 command.CommandText = "SELECT 1";
                 command.ExecuteScalar();
 

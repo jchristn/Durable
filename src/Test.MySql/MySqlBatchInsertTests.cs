@@ -33,11 +33,15 @@ namespace Test.MySql
             try
             {
                 // Test connection availability
-                using var connection = new MySqlConnector.MySqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (MySqlConnector.MySqlConnection connection = new MySqlConnector.MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (MySqlConnector.MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("MySQL batch insert tests initialized successfully");
             }
             catch (Exception ex)
@@ -135,7 +139,8 @@ namespace Test.MySql
             _output.WriteLine($"EnableMultiRowInsert: {config.EnableMultiRowInsert}");
             _output.WriteLine($"EnablePreparedStatementReuse: {config.EnablePreparedStatementReuse}");
 
-            using var repository = new MySqlRepository<Person>(_connectionString, config);
+            using (MySqlRepository<Person> repository = new MySqlRepository<Person>(_connectionString, config))
+            {
             await SetupDatabase(repository);
 
             // Adjust batch sizes based on whether multi-row inserts are enabled
@@ -218,6 +223,7 @@ namespace Test.MySql
             }
 
             _output.WriteLine($"✅ {configName} test completed successfully");
+            }
         }
 
         /// <summary>
@@ -233,7 +239,7 @@ namespace Test.MySql
             long compatibleTime;
 
             // Test optimized version (LargeBatch configuration)
-            using (var optimizedRepo = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
+            using (MySqlRepository<Person> optimizedRepo = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
             {
                 await SetupDatabase(optimizedRepo);
 
@@ -248,7 +254,7 @@ namespace Test.MySql
             }
 
             // Test compatible (non-optimized) version
-            using (var compatibleRepo = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
+            using (MySqlRepository<Person> compatibleRepo = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
             {
                 await SetupDatabase(compatibleRepo);
 
@@ -288,38 +294,41 @@ namespace Test.MySql
         {
             _output.WriteLine("\n=== Scalability Testing ===");
 
-            var testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
-            var configurations = new[]
+            int[] testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
+            (string, BatchInsertConfiguration)[] configurations = new[]
             {
                 ("Small Batch", BatchInsertConfiguration.SmallBatch),
                 ("Default", BatchInsertConfiguration.Default),
                 ("Large Batch", BatchInsertConfiguration.LargeBatch)
             };
 
-            foreach (var (configName, config) in configurations)
+            foreach ((string, BatchInsertConfiguration) item in configurations)
             {
+                string configName = item.Item1;
+                BatchInsertConfiguration config = item.Item2;
                 _output.WriteLine($"\n--- Scalability Test: {configName} ---");
 
-                using var repository = new MySqlRepository<Person>(_connectionString, config);
-
-                foreach (int testSize in testSizes)
+                using (MySqlRepository<Person> repository = new MySqlRepository<Person>(_connectionString, config))
                 {
-                    await SetupDatabase(repository);
+                    foreach (int testSize in testSizes)
+                    {
+                        await SetupDatabase(repository);
 
-                    List<Person> testData = GenerateTestPeople(testSize);
-                    Stopwatch sw = Stopwatch.StartNew();
-                    await repository.CreateManyAsync(testData);
-                    sw.Stop();
+                        List<Person> testData = GenerateTestPeople(testSize);
+                        Stopwatch sw = Stopwatch.StartNew();
+                        await repository.CreateManyAsync(testData);
+                        sw.Stop();
 
-                    int count = await repository.CountAsync();
-                    Assert.Equal(testSize, count);
+                        int count = await repository.CountAsync();
+                        Assert.Equal(testSize, count);
 
-                    double recordsPerSecond = testSize / (sw.ElapsedMilliseconds / 1000.0);
-                    _output.WriteLine($"Size: {testSize,5} | Time: {sw.ElapsedMilliseconds,4}ms | Rate: {recordsPerSecond:F0} records/sec");
+                        double recordsPerSecond = testSize / (sw.ElapsedMilliseconds / 1000.0);
+                        _output.WriteLine($"Size: {testSize,5} | Time: {sw.ElapsedMilliseconds,4}ms | Rate: {recordsPerSecond:F0} records/sec");
 
-                    // Force garbage collection to cleanup connections
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
+                        // Force garbage collection to cleanup connections
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                    }
                 }
             }
 
@@ -333,12 +342,13 @@ namespace Test.MySql
         {
             _output.WriteLine("\n=== Transaction Performance Testing ===");
 
-            using var repository = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.Default);
-            await SetupDatabase(repository);
+            using (MySqlRepository<Person> repository = new MySqlRepository<Person>(_connectionString, BatchInsertConfiguration.Default))
+            {
+                await SetupDatabase(repository);
 
             // Test transaction commit performance
             _output.WriteLine("\n--- Transaction Commit Performance ---");
-            var batchSizes = new[] { 50, 200, 500, 1000 };
+            int[] batchSizes = new[] { 50, 200, 500, 1000 };
 
             foreach (int batchSize in batchSizes)
             {
@@ -405,12 +415,13 @@ namespace Test.MySql
                 rollbackTransaction?.Dispose();
             }
 
-            // Verify rollback worked - count should be 0
-            int countAfterRollback = await repository.CountAsync();
-            Assert.Equal(0, countAfterRollback);
-            _output.WriteLine($"Rollback verification: {countAfterRollback} records (expected 0)");
+                // Verify rollback worked - count should be 0
+                int countAfterRollback = await repository.CountAsync();
+                Assert.Equal(0, countAfterRollback);
+                _output.WriteLine($"Rollback verification: {countAfterRollback} records (expected 0)");
 
-            _output.WriteLine("✅ Transaction performance testing completed successfully");
+                _output.WriteLine("✅ Transaction performance testing completed successfully");
+            }
         }
 
         /// <summary>

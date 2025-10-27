@@ -534,6 +534,153 @@
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         Task<ITransaction> BeginTransactionAsync(CancellationToken token = default);
 
+        #region Initialization
+
+        /// <summary>
+        /// Creates or validates the database table for the specified entity type.
+        /// If the table does not exist, it will be created based on the entity's attributes.
+        /// If the table exists, it will be validated against the entity definition.
+        /// </summary>
+        /// <param name="entityType">The entity type for which to initialize the table.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type is invalid or table validation fails.</exception>
+        void InitializeTable(Type entityType, ITransaction transaction = null);
+
+        /// <summary>
+        /// Asynchronously creates or validates the database table for the specified entity type.
+        /// If the table does not exist, it will be created based on the entity's attributes.
+        /// If the table exists, it will be validated against the entity definition.
+        /// </summary>
+        /// <param name="entityType">The entity type for which to initialize the table.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the entity type is invalid or table validation fails.</exception>
+        Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Creates or validates database tables for multiple entity types.
+        /// If a table does not exist, it will be created based on the entity's attributes.
+        /// If a table exists, it will be validated against the entity definition.
+        /// </summary>
+        /// <param name="entityTypes">The entity types for which to initialize tables.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when an entity type is invalid or table validation fails.</exception>
+        void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null);
+
+        /// <summary>
+        /// Asynchronously creates or validates database tables for multiple entity types.
+        /// If a table does not exist, it will be created based on the entity's attributes.
+        /// If a table exists, it will be validated against the entity definition.
+        /// </summary>
+        /// <param name="entityTypes">The entity types for which to initialize tables.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when an entity type is invalid or table validation fails.</exception>
+        Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Validates an entity type's definition without creating or modifying the database table.
+        /// Checks for required attributes, valid property configurations, and schema consistency if the table exists.
+        /// </summary>
+        /// <param name="entityType">The entity type to validate.</param>
+        /// <param name="errors">List of validation errors that would prevent table initialization.</param>
+        /// <param name="warnings">List of validation warnings about potential issues.</param>
+        /// <returns>True if the entity type is valid and can be initialized; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        bool ValidateTable(Type entityType, out List<string> errors, out List<string> warnings);
+
+        /// <summary>
+        /// Validates multiple entity types' definitions without creating or modifying database tables.
+        /// Checks for required attributes, valid property configurations, and schema consistency if tables exist.
+        /// </summary>
+        /// <param name="entityTypes">The entity types to validate.</param>
+        /// <param name="errors">List of validation errors that would prevent table initialization.</param>
+        /// <param name="warnings">List of validation warnings about potential issues.</param>
+        /// <returns>True if all entity types are valid and can be initialized; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings);
+
+        /// <summary>
+        /// Creates indexes for the specified entity type based on Index and CompositeIndex attributes.
+        /// This method is automatically called by InitializeTable when createIndexes parameter is true.
+        /// Indexes that already exist are skipped (idempotent operation).
+        /// </summary>
+        /// <param name="entityType">The entity type to create indexes for.</param>
+        /// <param name="transaction">Optional transaction to use for index creation.</param>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        void CreateIndexes(Type entityType, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Asynchronously creates indexes for the specified entity type based on Index and CompositeIndex attributes.
+        /// This method is automatically called by InitializeTableAsync when createIndexes parameter is true.
+        /// Indexes that already exist are skipped (idempotent operation).
+        /// </summary>
+        /// <param name="entityType">The entity type to create indexes for.</param>
+        /// <param name="transaction">Optional transaction to use for index creation.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        Task CreateIndexesAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Drops an index from the database.
+        /// </summary>
+        /// <param name="indexName">The name of the index to drop.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <exception cref="ArgumentNullException">Thrown when indexName is null or empty.</exception>
+        void DropIndex(string indexName, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Asynchronously drops an index from the database.
+        /// </summary>
+        /// <param name="indexName">The name of the index to drop.</param>
+        /// <param name="transaction">Optional transaction to use for the operation.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when indexName is null or empty.</exception>
+        Task DropIndexAsync(string indexName, ITransaction? transaction = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets a list of index names for the specified entity type.
+        /// </summary>
+        /// <param name="entityType">The entity type to get indexes for.</param>
+        /// <returns>A list of index names that exist in the database for this entity's table.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        List<string> GetIndexes(Type entityType);
+
+        /// <summary>
+        /// Asynchronously gets a list of index names for the specified entity type.
+        /// </summary>
+        /// <param name="entityType">The entity type to get indexes for.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation that returns a list of index names.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        Task<List<string>> GetIndexesAsync(Type entityType, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Creates the database if it does not exist.
+        /// For file-based databases (SQLite), this ensures the file is created.
+        /// For server-based databases, this executes CREATE DATABASE if needed.
+        /// </summary>
+        void CreateDatabaseIfNotExists();
+
+        /// <summary>
+        /// Asynchronously creates the database if it does not exist.
+        /// For file-based databases (SQLite), this ensures the file is created.
+        /// For server-based databases, this executes CREATE DATABASE if needed.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        Task CreateDatabaseIfNotExistsAsync(CancellationToken cancellationToken = default);
+
+        #endregion
+
         /// <summary>
         /// Gets the repository settings used to configure the connection
         /// </summary>

@@ -30,48 +30,54 @@ namespace Test.Sqlite
             int skippedTests = 0;
 
             // Run integration tests
-            var integrationResults = await RunTestClass<SqliteIntegrationTests>("SQLite Integration Tests");
+            TestResults integrationResults = await RunTestClass<SqliteIntegrationTests>("SQLite Integration Tests");
             totalTests += integrationResults.TotalTests;
             passedTests += integrationResults.PassedTests;
             failedTests += integrationResults.FailedTests;
             skippedTests += integrationResults.SkippedTests;
 
             // Run batch update tests
-            var batchUpdateResults = await RunTestClass<BatchUpdateTests>("SQLite Batch Update Tests");
+            TestResults batchUpdateResults = await RunTestClass<BatchUpdateTests>("SQLite Batch Update Tests");
             totalTests += batchUpdateResults.TotalTests;
             passedTests += batchUpdateResults.PassedTests;
             failedTests += batchUpdateResults.FailedTests;
             skippedTests += batchUpdateResults.SkippedTests;
 
-            var concurrencyResults = await RunTestClass<ConcurrencyIntegrationTest>("SQLite Concurrency Control Tests");
+            TestResults concurrencyResults = await RunTestClass<ConcurrencyIntegrationTest>("SQLite Concurrency Control Tests");
             totalTests += concurrencyResults.TotalTests;
             passedTests += concurrencyResults.PassedTests;
             failedTests += concurrencyResults.FailedTests;
             skippedTests += concurrencyResults.SkippedTests;
 
-            var mergeChangesResults = await RunTestClass<MergeChangesResolverTests>("SQLite Merge Changes Resolver Tests");
+            TestResults mergeChangesResults = await RunTestClass<MergeChangesResolverTests>("SQLite Merge Changes Resolver Tests");
             totalTests += mergeChangesResults.TotalTests;
             passedTests += mergeChangesResults.PassedTests;
             failedTests += mergeChangesResults.FailedTests;
             skippedTests += mergeChangesResults.SkippedTests;
 
-            var repositorySettingsResults = await RunTestClass<RepositorySettingsTests>("SQLite Repository Settings Tests");
+            TestResults repositorySettingsResults = await RunTestClass<RepositorySettingsTests>("SQLite Repository Settings Tests");
             totalTests += repositorySettingsResults.TotalTests;
             passedTests += repositorySettingsResults.PassedTests;
             failedTests += repositorySettingsResults.FailedTests;
             skippedTests += repositorySettingsResults.SkippedTests;
 
-            var changeTrackerResults = await RunTestClass<SimpleChangeTrackerTests>("SQLite Simple Change Tracker Tests");
+            TestResults changeTrackerResults = await RunTestClass<SimpleChangeTrackerTests>("SQLite Simple Change Tracker Tests");
             totalTests += changeTrackerResults.TotalTests;
             passedTests += changeTrackerResults.PassedTests;
             failedTests += changeTrackerResults.FailedTests;
             skippedTests += changeTrackerResults.SkippedTests;
 
-            var versionColumnResults = await RunTestClass<VersionColumnInfoTests>("SQLite Version Column Tests");
+            TestResults versionColumnResults = await RunTestClass<VersionColumnInfoTests>("SQLite Version Column Tests");
             totalTests += versionColumnResults.TotalTests;
             passedTests += versionColumnResults.PassedTests;
             failedTests += versionColumnResults.FailedTests;
             skippedTests += versionColumnResults.SkippedTests;
+
+            TestResults initializationResults = await RunTestClass<InitializationTests>("SQLite Initialization System Tests");
+            totalTests += initializationResults.TotalTests;
+            passedTests += initializationResults.PassedTests;
+            failedTests += initializationResults.FailedTests;
+            skippedTests += initializationResults.SkippedTests;
 
             // Summary
             Console.WriteLine();
@@ -112,14 +118,14 @@ namespace Test.Sqlite
             Console.WriteLine($"Running {testClassName}...");
             Console.WriteLine(new string('-', testClassName.Length + 11));
 
-            var results = new TestResults();
-            var testType = typeof(T);
+            TestResults results = new TestResults();
+            Type testType = typeof(T);
 
             // Try to create test instance with ITestOutputHelper constructor first, then parameterless
             T? testInstance;
             try
             {
-                var outputHelperConstructor = testType.GetConstructor(new[] { typeof(ITestOutputHelper) });
+                ConstructorInfo? outputHelperConstructor = testType.GetConstructor(new[] { typeof(ITestOutputHelper) });
                 if (outputHelperConstructor != null)
                 {
                     testInstance = (T)outputHelperConstructor.Invoke(new object[] { new TestOutputHelper() });
@@ -135,12 +141,12 @@ namespace Test.Sqlite
                 return results;
             }
 
-            var methods = testType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+            MethodInfo[] methods = testType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
 
-            foreach (var method in methods)
+            foreach (MethodInfo method in methods)
             {
                 // Check if method has [Fact] attribute
-                var factAttribute = method.GetCustomAttribute<FactAttribute>();
+                FactAttribute? factAttribute = method.GetCustomAttribute<FactAttribute>();
                 if (factAttribute == null) continue;
 
                 results.TotalTests++;
@@ -151,7 +157,7 @@ namespace Test.Sqlite
                     Console.Write($"  {testName}... ");
 
                     // Execute the test method
-                    var result = method.Invoke(testInstance, null);
+                    object? result = method.Invoke(testInstance, null);
 
                     // Handle async methods
                     if (result is Task task)
@@ -170,7 +176,7 @@ namespace Test.Sqlite
                 catch (Exception ex)
                 {
                     // Get the actual exception (unwrap TargetInvocationException)
-                    var actualException = ex.InnerException ?? ex;
+                    Exception actualException = ex.InnerException ?? ex;
 
                     Console.WriteLine($"❌ FAILED: {actualException.Message}");
                     results.FailedTests++;
@@ -179,8 +185,8 @@ namespace Test.Sqlite
                     Console.WriteLine($"     {actualException.GetType().Name}: {actualException.Message}");
                     if (actualException.StackTrace != null)
                     {
-                        var stackLines = actualException.StackTrace.Split('\n');
-                        foreach (var line in stackLines.Take(3)) // Show first 3 stack trace lines
+                        string[] stackLines = actualException.StackTrace.Split('\n');
+                        foreach (string line in stackLines.Take(3)) // Show first 3 stack trace lines
                         {
                             if (!string.IsNullOrWhiteSpace(line))
                                 Console.WriteLine($"     {line.Trim()}");

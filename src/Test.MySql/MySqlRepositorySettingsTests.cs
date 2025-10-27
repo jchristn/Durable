@@ -117,7 +117,7 @@ namespace Test.MySql
         }
 
         [Fact]
-        public void BuildConnectionString_MissingDatabase_ShouldThrowInvalidOperationException()
+        public void BuildConnectionString_MissingDatabase_ShouldSucceed()
         {
             // Arrange
             MySqlRepositorySettings settings = new MySqlRepositorySettings
@@ -125,8 +125,12 @@ namespace Test.MySql
                 Hostname = "localhost"
             };
 
-            // Act & Assert
-            Assert.Throws<InvalidOperationException>(() => settings.BuildConnectionString());
+            // Act
+            string connectionString = settings.BuildConnectionString();
+
+            // Assert - Database is now optional to support CreateDatabaseIfNotExists
+            Assert.NotNull(connectionString);
+            Assert.Contains("Server=localhost", connectionString);
         }
 
         [Fact]

@@ -37,11 +37,15 @@ namespace Test.Postgres
             try
             {
                 // Test connection availability
-                using var connection = new Npgsql.NpgsqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (Npgsql.NpgsqlConnection connection = new Npgsql.NpgsqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (Npgsql.NpgsqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("PostgreSQL batch insert tests initialized successfully");
             }
             catch (Exception ex)
@@ -139,7 +143,8 @@ namespace Test.Postgres
             _output.WriteLine($"EnableMultiRowInsert: {config.EnableMultiRowInsert}");
             _output.WriteLine($"EnablePreparedStatementReuse: {config.EnablePreparedStatementReuse}");
 
-            using var repository = new PostgresRepository<Person>(_connectionString, config);
+            using (PostgresRepository<Person> repository = new PostgresRepository<Person>(_connectionString, config))
+            {
             await SetupDatabase(repository);
 
             // Adjust batch sizes based on whether multi-row inserts are enabled
@@ -223,6 +228,7 @@ namespace Test.Postgres
             }
 
             _output.WriteLine($"✅ {configName} test completed successfully");
+            }
         }
 
         /// <summary>
@@ -238,7 +244,7 @@ namespace Test.Postgres
             long compatibleTime;
 
             // Test optimized version (LargeBatch configuration)
-            using (var optimizedRepo = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
+            using (PostgresRepository<Person> optimizedRepo = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
             {
                 await SetupDatabase(optimizedRepo);
 
@@ -253,7 +259,7 @@ namespace Test.Postgres
             }
 
             // Test compatible (non-optimized) version
-            using (var compatibleRepo = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
+            using (PostgresRepository<Person> compatibleRepo = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
             {
                 await SetupDatabase(compatibleRepo);
 
@@ -293,19 +299,22 @@ namespace Test.Postgres
         {
             _output.WriteLine("\n=== Scalability Testing ===");
 
-            var testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
-            var configurations = new[]
+            int[] testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
+            (string, BatchInsertConfiguration)[] configurations = new[]
             {
                 ("Small Batch", BatchInsertConfiguration.SmallBatch),
                 ("Default", BatchInsertConfiguration.Default),
                 ("Large Batch", BatchInsertConfiguration.LargeBatch)
             };
 
-            foreach (var (configName, config) in configurations)
+            foreach ((string, BatchInsertConfiguration) item in configurations)
             {
+                string configName = item.Item1;
+                BatchInsertConfiguration config = item.Item2;
                 _output.WriteLine($"\n--- Scalability Test: {configName} ---");
 
-                using var repository = new PostgresRepository<Person>(_connectionString, config);
+                using (PostgresRepository<Person> repository = new PostgresRepository<Person>(_connectionString, config))
+            {
 
                 foreach (int testSize in testSizes)
                 {
@@ -327,6 +336,7 @@ namespace Test.Postgres
                     GC.WaitForPendingFinalizers();
                 }
             }
+            }
 
             _output.WriteLine("✅ Scalability testing completed successfully");
         }
@@ -338,12 +348,12 @@ namespace Test.Postgres
         {
             _output.WriteLine("\n=== Transaction Performance Testing ===");
 
-            using var repository = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.Default);
+            PostgresRepository<Person> repository = new PostgresRepository<Person>(_connectionString, BatchInsertConfiguration.Default);
             await SetupDatabase(repository);
 
             // Test transaction commit performance
             _output.WriteLine("\n--- Transaction Commit Performance ---");
-            var batchSizes = new[] { 50, 200, 500, 1000 };
+            int[] batchSizes = new[] { 50, 200, 500, 1000 };
 
             foreach (int batchSize in batchSizes)
             {

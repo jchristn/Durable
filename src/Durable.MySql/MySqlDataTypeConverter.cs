@@ -374,7 +374,15 @@ namespace Durable.MySql
             PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
             if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
             {
-                return "TEXT";
+                // Use VARCHAR if MaxLength is specified, otherwise TEXT
+                if (attr.MaxLength > 0)
+                {
+                    return $"VARCHAR({attr.MaxLength})";
+                }
+                else
+                {
+                    return "TEXT";
+                }
             }
 
             // MySQL type mappings

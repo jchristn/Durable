@@ -223,8 +223,86 @@ namespace Durable.Postgres
 
         private string VisitBinary(BinaryExpression binary)
         {
-            string left = VisitWithPrecedence(binary.Left, binary.NodeType, true);
-            string right = VisitWithPrecedence(binary.Right, binary.NodeType, false);
+            // Check BEFORE visiting if we need special handling for GUID properties with Flags.String
+            PropertyInfo? leftProperty = null;
+            PropertyInfo? rightProperty = null;
+
+            if (binary.Left is MemberExpression leftMember &&
+                leftMember.Expression is ParameterExpression &&
+                leftMember.Member is PropertyInfo leftPropInfo)
+            {
+                leftProperty = leftPropInfo;
+            }
+
+            if (binary.Right is MemberExpression rightMember &&
+                rightMember.Expression is ParameterExpression &&
+                rightMember.Member is PropertyInfo rightPropInfo)
+            {
+                rightProperty = rightPropInfo;
+            }
+
+            // Special handling for GUID properties with Flags.String being compared to GUID values
+            bool leftIsGuidString = leftProperty != null &&
+                                    leftProperty.PropertyType == typeof(Guid) &&
+                                    leftProperty.GetCustomAttribute<PropertyAttribute>()?.PropertyFlags.HasFlag(Flags.String) == true;
+
+            bool rightIsGuidString = rightProperty != null &&
+                                     rightProperty.PropertyType == typeof(Guid) &&
+                                     rightProperty.GetCustomAttribute<PropertyAttribute>()?.PropertyFlags.HasFlag(Flags.String) == true;
+
+            string left;
+            string right;
+
+            // If left is a GUID property with Flags.String, and right is a value (not a property)
+            if (leftIsGuidString && rightProperty == null)
+            {
+                left = VisitWithPrecedence(binary.Left, binary.NodeType, true);
+                try
+                {
+                    object? rightValue = GetConstantValue(binary.Right);
+                    if (rightValue is Guid guidValue)
+                    {
+                        // Format as TEXT instead of UUID
+                        right = _Sanitizer.SanitizeString(guidValue.ToString());
+                    }
+                    else
+                    {
+                        right = VisitWithPrecedence(binary.Right, binary.NodeType, false);
+                    }
+                }
+                catch
+                {
+                    right = VisitWithPrecedence(binary.Right, binary.NodeType, false);
+                }
+            }
+            // If right is a GUID property with Flags.String, and left is a value (not a property)
+            else if (rightIsGuidString && leftProperty == null)
+            {
+                right = VisitWithPrecedence(binary.Right, binary.NodeType, false);
+                try
+                {
+                    object? leftValue = GetConstantValue(binary.Left);
+                    if (leftValue is Guid guidValue)
+                    {
+                        // Format as TEXT instead of UUID
+                        left = _Sanitizer.SanitizeString(guidValue.ToString());
+                    }
+                    else
+                    {
+                        left = VisitWithPrecedence(binary.Left, binary.NodeType, true);
+                    }
+                }
+                catch
+                {
+                    left = VisitWithPrecedence(binary.Left, binary.NodeType, true);
+                }
+            }
+            else
+            {
+                // Normal processing
+                left = VisitWithPrecedence(binary.Left, binary.NodeType, true);
+                right = VisitWithPrecedence(binary.Right, binary.NodeType, false);
+            }
 
             string op = binary.NodeType switch
             {

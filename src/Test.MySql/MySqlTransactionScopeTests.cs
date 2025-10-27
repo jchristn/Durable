@@ -32,16 +32,21 @@ namespace Test.MySql
             _output = output;
 
             // Check if MySQL is available and skip tests if not
-            string connectionString = "Server=localhost;Database=durable_test;User=test_user;Password=test_password;";
+            // Use a separate database to avoid conflicts with entity relationship tests
+            string connectionString = "Server=localhost;Database=durable_transaction_test;User=test_user;Password=test_password;";
 
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new MySqlConnector.MySqlConnection(connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (MySqlConnector.MySqlConnection connection = new MySqlConnector.MySqlConnection(connectionString))
+                {
+                    connection.Open();
+                    using (MySqlConnector.MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
 
                 _PersonRepository = new MySqlRepository<Person>(connectionString);
                 _CompanyRepository = new MySqlRepository<Company>(connectionString);
