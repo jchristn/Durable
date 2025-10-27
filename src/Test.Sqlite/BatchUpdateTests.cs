@@ -49,8 +49,8 @@ namespace Test.Sqlite
             
             // Clear existing data
             await Repository.ExecuteSqlAsync("DELETE FROM TestPerson");
-            
-            var people = new[]
+
+            TestPerson[] people = new[]
             {
                 new TestPerson { Id = 1, FirstName = "John", LastName = "Doe", Salary = 50000, Age = 30, Department = "IT", Bonus = 5000, Status = "Active", YearsOfService = 5, Email = "john@example.com" },
                 new TestPerson { Id = 2, FirstName = "Jane", LastName = "Smith", Salary = 60000, Age = 35, Department = "HR", Bonus = 6000, Status = "Active", YearsOfService = 7, Email = "jane@example.com" },
@@ -66,7 +66,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -83,7 +83,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -104,7 +104,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -128,7 +128,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -149,7 +149,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -168,7 +168,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -187,7 +187,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -203,8 +203,8 @@ namespace Test.Sqlite
         public async Task TestBatchUpdateIntegration()
         {
             await InsertTestDataAsync();
-            
-            var initialPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
+
+            List<TestPerson> initialPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
             
             int rowsAffected = await Repository.BatchUpdateAsync(
                 p => p.Department == "IT",
@@ -216,12 +216,12 @@ namespace Test.Sqlite
             );
             
             Assert.Equal(2, rowsAffected);
-            
-            var updatedPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
-            
-            foreach (var person in updatedPeople)
+
+            List<TestPerson> updatedPeople = Repository.ReadMany(p => p.Department == "IT").ToList();
+
+            foreach (TestPerson person in updatedPeople)
             {
-                var originalPerson = initialPeople.First(p => p.Id == person.Id);
+                TestPerson originalPerson = initialPeople.First(p => p.Id == person.Id);
                 Assert.Equal(Math.Round(originalPerson.Salary * 1.1m, 2), Math.Round(person.Salary, 2));
                 Assert.Equal(Math.Round(originalPerson.Salary * 0.15m, 2), Math.Round(person.Bonus, 2));
             }
@@ -249,7 +249,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -266,7 +266,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
@@ -285,7 +285,7 @@ namespace Test.Sqlite
         {
             await InsertTestDataAsync();
             
-            var parser = new ExpressionParser<TestPerson>(ColumnMappings);
+            ExpressionParser<TestPerson> parser = new ExpressionParser<TestPerson>(ColumnMappings);
             
             Expression<Func<TestPerson, TestPerson>> updateExpr = p => new TestPerson
             {
