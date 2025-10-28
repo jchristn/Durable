@@ -33,11 +33,15 @@ namespace Test.SqlServer
             try
             {
                 // Test connection availability
-                using var connection = new SqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (Microsoft.Data.SqlClient.SqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("SQL Server batch insert tests initialized successfully");
             }
             catch (Exception ex)
@@ -135,7 +139,8 @@ namespace Test.SqlServer
             _output.WriteLine($"EnableMultiRowInsert: {config.EnableMultiRowInsert}");
             _output.WriteLine($"EnablePreparedStatementReuse: {config.EnablePreparedStatementReuse}");
 
-            using var repository = new SqlServerRepository<Person>(_connectionString, config);
+            using (SqlServerRepository<Person> repository = new SqlServerRepository<Person>(_connectionString, config))
+            {
             await SetupDatabase(repository);
 
             // Adjust batch sizes based on whether multi-row inserts are enabled
@@ -218,6 +223,7 @@ namespace Test.SqlServer
             }
 
             _output.WriteLine($"✅ {configName} test completed successfully");
+            }
         }
 
         /// <summary>
@@ -233,7 +239,7 @@ namespace Test.SqlServer
             long compatibleTime;
 
             // Test optimized version (LargeBatch configuration)
-            using (var optimizedRepo = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
+            using (SqlServerRepository<Person> optimizedRepo = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.LargeBatch))
             {
                 await SetupDatabase(optimizedRepo);
 
@@ -248,7 +254,7 @@ namespace Test.SqlServer
             }
 
             // Test compatible (non-optimized) version
-            using (var compatibleRepo = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
+            using (SqlServerRepository<Person> compatibleRepo = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.Compatible))
             {
                 await SetupDatabase(compatibleRepo);
 
@@ -288,19 +294,22 @@ namespace Test.SqlServer
         {
             _output.WriteLine("\n=== Scalability Testing ===");
 
-            var testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
-            var configurations = new[]
+            int[] testSizes = new[] { 50, 100, 250, 500, 1000, 2000, 5000 };
+            (string, BatchInsertConfiguration)[] configurations = new[]
             {
                 ("Small Batch", BatchInsertConfiguration.SmallBatch),
                 ("Default", BatchInsertConfiguration.Default),
                 ("Large Batch", BatchInsertConfiguration.LargeBatch)
             };
 
-            foreach (var (configName, config) in configurations)
+            foreach ((string, BatchInsertConfiguration) item in configurations)
             {
+                string configName = item.Item1;
+                BatchInsertConfiguration config = item.Item2;
                 _output.WriteLine($"\n--- Scalability Test: {configName} ---");
 
-                using var repository = new SqlServerRepository<Person>(_connectionString, config);
+                using (SqlServerRepository<Person> repository = new SqlServerRepository<Person>(_connectionString, config))
+            {
 
                 foreach (int testSize in testSizes)
                 {
@@ -322,6 +331,7 @@ namespace Test.SqlServer
                     GC.WaitForPendingFinalizers();
                 }
             }
+            }
 
             _output.WriteLine("✅ Scalability testing completed successfully");
         }
@@ -333,12 +343,12 @@ namespace Test.SqlServer
         {
             _output.WriteLine("\n=== Transaction Performance Testing ===");
 
-            using var repository = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.Default);
+            SqlServerRepository<Person> repository = new SqlServerRepository<Person>(_connectionString, BatchInsertConfiguration.Default);
             await SetupDatabase(repository);
 
             // Test transaction commit performance
             _output.WriteLine("\n--- Transaction Commit Performance ---");
-            var batchSizes = new[] { 50, 200, 500, 1000 };
+            int[] batchSizes = new[] { 50, 200, 500, 1000 };
 
             foreach (int batchSize in batchSizes)
             {

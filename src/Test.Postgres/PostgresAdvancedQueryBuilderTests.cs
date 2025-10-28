@@ -72,7 +72,7 @@ namespace Test.Postgres
             if (_SkipTests) return;
 
             IEnumerable<Book> books = _BookRepository.ReadMany();
-            var grouped = books.GroupBy(b => b.AuthorId).ToList();
+            List<IGrouping<int, Book>> grouped = books.GroupBy(b => b.AuthorId).ToList();
 
             Assert.NotEmpty(grouped);
             Assert.All(grouped, g => Assert.True(g.Count() > 0));
@@ -101,7 +101,7 @@ namespace Test.Postgres
             if (_SkipTests) return;
 
             IEnumerable<Book> books = _BookRepository.ReadMany();
-            var grouped = books
+            List<IGrouping<int, Book>> grouped = books
                 .GroupBy(b => b.AuthorId)
                 .Where(g => g.Count() > 1)
                 .ToList();

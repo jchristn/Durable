@@ -30,72 +30,72 @@ namespace Test.MySql
             int skippedTests = 0;
 
             // Run integration tests
-            var integrationResults = await RunTestClass<MySqlIntegrationTests>("MySQL Integration Tests");
+            TestResults integrationResults = await RunTestClass<MySqlIntegrationTests>("MySQL Integration Tests");
             totalTests += integrationResults.TotalTests;
             passedTests += integrationResults.PassedTests;
             failedTests += integrationResults.FailedTests;
             skippedTests += integrationResults.SkippedTests;
 
             // Run advanced query builder tests
-            var advancedResults = await RunTestClass<MySqlAdvancedQueryBuilderTests>("MySQL Advanced Query Builder Tests");
+            TestResults advancedResults = await RunTestClass<MySqlAdvancedQueryBuilderTests>("MySQL Advanced Query Builder Tests");
             totalTests += advancedResults.TotalTests;
             passedTests += advancedResults.PassedTests;
             failedTests += advancedResults.FailedTests;
             skippedTests += advancedResults.SkippedTests;
 
             // Run include/join functionality tests
-            var includeResults = await RunTestClass<MySqlIncludeTests>("MySQL Include/Join Tests");
+            TestResults includeResults = await RunTestClass<MySqlIncludeTests>("MySQL Include/Join Tests");
             totalTests += includeResults.TotalTests;
             passedTests += includeResults.PassedTests;
             failedTests += includeResults.FailedTests;
             skippedTests += includeResults.SkippedTests;
 
             // Run GROUP BY functionality tests
-            var groupByResults = await RunTestClass<MySqlGroupByTests>("MySQL GROUP BY Tests");
+            TestResults groupByResults = await RunTestClass<MySqlGroupByTests>("MySQL GROUP BY Tests");
             totalTests += groupByResults.TotalTests;
             passedTests += groupByResults.PassedTests;
             failedTests += groupByResults.FailedTests;
             skippedTests += groupByResults.SkippedTests;
 
             // Run projection functionality tests
-            var projectionResults = await RunTestClass<MySqlProjectionTests>("MySQL Projection Tests");
+            TestResults projectionResults = await RunTestClass<MySqlProjectionTests>("MySQL Projection Tests");
             totalTests += projectionResults.TotalTests;
             passedTests += projectionResults.PassedTests;
             failedTests += projectionResults.FailedTests;
             skippedTests += projectionResults.SkippedTests;
 
             // Run complex expression functionality tests
-            var expressionResults = await RunTestClass<MySqlComplexExpressionTests>("MySQL Complex Expression Tests");
+            TestResults expressionResults = await RunTestClass<MySqlComplexExpressionTests>("MySQL Complex Expression Tests");
             totalTests += expressionResults.TotalTests;
             passedTests += expressionResults.PassedTests;
             failedTests += expressionResults.FailedTests;
             skippedTests += expressionResults.SkippedTests;
 
-            var transactionResults = await RunTestClass<MySqlTransactionScopeTests>("MySQL Transaction Scope Tests");
+            TestResults transactionResults = await RunTestClass<MySqlTransactionScopeTests>("MySQL Transaction Scope Tests");
             totalTests += transactionResults.TotalTests;
             passedTests += transactionResults.PassedTests;
             failedTests += transactionResults.FailedTests;
             skippedTests += transactionResults.SkippedTests;
 
-            var concurrencyResults = await RunTestClass<MySqlConcurrencyIntegrationTests>("MySQL Concurrency Control Tests");
+            TestResults concurrencyResults = await RunTestClass<MySqlConcurrencyIntegrationTests>("MySQL Concurrency Control Tests");
             totalTests += concurrencyResults.TotalTests;
             passedTests += concurrencyResults.PassedTests;
             failedTests += concurrencyResults.FailedTests;
             skippedTests += concurrencyResults.SkippedTests;
 
-            var dataTypeResults = await RunTestClass<MySqlDataTypeConverterTests>("MySQL Data Type Converter Tests");
+            TestResults dataTypeResults = await RunTestClass<MySqlDataTypeConverterTests>("MySQL Data Type Converter Tests");
             totalTests += dataTypeResults.TotalTests;
             passedTests += dataTypeResults.PassedTests;
             failedTests += dataTypeResults.FailedTests;
             skippedTests += dataTypeResults.SkippedTests;
 
-            var batchInsertResults = await RunTestClass<MySqlBatchInsertTests>("MySQL Performance & Configuration Tests");
+            TestResults batchInsertResults = await RunTestClass<MySqlBatchInsertTests>("MySQL Performance & Configuration Tests");
             totalTests += batchInsertResults.TotalTests;
             passedTests += batchInsertResults.PassedTests;
             failedTests += batchInsertResults.FailedTests;
             skippedTests += batchInsertResults.SkippedTests;
 
-            var entityRelationshipResults = await RunTestClass<MySqlEntityRelationshipTests>("MySQL Entity Relationships & Complex Models Tests");
+            TestResults entityRelationshipResults = await RunTestClass<MySqlEntityRelationshipTests>("MySQL Entity Relationships & Complex Models Tests");
             totalTests += entityRelationshipResults.TotalTests;
             passedTests += entityRelationshipResults.PassedTests;
             failedTests += entityRelationshipResults.FailedTests;
@@ -140,14 +140,14 @@ namespace Test.MySql
             Console.WriteLine($"Running {testClassName}...");
             Console.WriteLine(new string('-', testClassName.Length + 11));
 
-            var results = new TestResults();
-            var testType = typeof(T);
+            TestResults results = new TestResults();
+            Type testType = typeof(T);
 
             // Try to create test instance with ITestOutputHelper constructor first, then parameterless
             T testInstance;
             try
             {
-                var outputHelperConstructor = testType.GetConstructor(new[] { typeof(ITestOutputHelper) });
+                ConstructorInfo? outputHelperConstructor = testType.GetConstructor(new[] { typeof(ITestOutputHelper) });
                 if (outputHelperConstructor != null)
                 {
                     testInstance = (T)outputHelperConstructor.Invoke(new object[] { new TestOutputHelper() });
@@ -163,12 +163,12 @@ namespace Test.MySql
                 return results;
             }
 
-            var methods = testType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+            MethodInfo[] methods = testType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
 
-            foreach (var method in methods)
+            foreach (MethodInfo method in methods)
             {
                 // Check if method has [Fact] attribute
-                var factAttribute = method.GetCustomAttribute<FactAttribute>();
+                FactAttribute? factAttribute = method.GetCustomAttribute<FactAttribute>();
                 if (factAttribute == null) continue;
 
                 results.TotalTests++;
@@ -179,7 +179,7 @@ namespace Test.MySql
                     Console.Write($"  {testName}... ");
 
                     // Execute the test method
-                    var result = method.Invoke(testInstance, null);
+                    object? result = method.Invoke(testInstance, null);
 
                     // Handle async methods
                     if (result is Task task)
@@ -198,7 +198,7 @@ namespace Test.MySql
                 catch (Exception ex)
                 {
                     // Get the actual exception (unwrap TargetInvocationException)
-                    var actualException = ex.InnerException ?? ex;
+                    Exception actualException = ex.InnerException ?? ex;
 
                     Console.WriteLine($"❌ FAILED: {actualException.Message}");
                     results.FailedTests++;
@@ -207,8 +207,8 @@ namespace Test.MySql
                     Console.WriteLine($"     {actualException.GetType().Name}: {actualException.Message}");
                     if (actualException.StackTrace != null)
                     {
-                        var stackLines = actualException.StackTrace.Split('\n');
-                        foreach (var line in stackLines.Take(3)) // Show first 3 stack trace lines
+                        string[] stackLines = actualException.StackTrace.Split('\n');
+                        foreach (string line in stackLines.Take(3)) // Show first 3 stack trace lines
                         {
                             if (!string.IsNullOrWhiteSpace(line))
                                 Console.WriteLine($"     {line.Trim()}");

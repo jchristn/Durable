@@ -2387,6 +2387,12 @@
             </summary>
             <returns>VersionColumnInfo if entity has versioning, null otherwise</returns>
         </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.GetDefaultValueProviders">
+            <summary>
+            Gets the default value providers for properties with DefaultValueAttribute.
+            </summary>
+            <returns>A dictionary mapping PropertyInfo to (DefaultValueAttribute, IDefaultValueProvider)</returns>
+        </member>
         <member name="M:Durable.SqlServer.SqlServerRepository`1.ExecuteScalarWithConnectionAsync``1(System.Data.Common.DbConnection,System.String,System.Data.Common.DbTransaction,System.Threading.CancellationToken,System.ValueTuple{System.String,System.Object}[])">
             <summary>
             Asynchronously executes a scalar SQL command and returns the result.
@@ -3134,6 +3140,48 @@
             <returns>A SQL Server connection</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.InitializeTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.InitializeTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.CreateDatabaseIfNotExists">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.CreateDatabaseIfNotExistsAsync(System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.CreateIndexesAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.DropIndex(System.String,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.DropIndexAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.GetIndexes(System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerRepository`1.GetIndexesAsync(System.Type,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
         <member name="T:Durable.SqlServer.SqlServerRepositorySettings">
             <summary>
             Connection settings for SQL Server repositories
@@ -3436,6 +3484,80 @@
             Disposes of the savepoint.
             Note: SQL Server automatically releases savepoints on transaction commit,
             so no explicit cleanup is needed.
+            </summary>
+        </member>
+        <member name="T:Durable.SqlServer.SqlServerSchemaBuilder">
+            <summary>
+            Helper class for building SQL Server schema (CREATE TABLE) SQL from entity metadata
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.#ctor(Durable.ISanitizer,Durable.IDataTypeConverter)">
+            <summary>
+            Initializes a new instance of the SqlServerSchemaBuilder class
+            </summary>
+            <param name="sanitizer">The sanitizer for SQL identifiers</param>
+            <param name="dataTypeConverter">The data type converter for SQL type mapping</param>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.BuildCreateTableSql(System.Type)">
+            <summary>
+            Builds a CREATE TABLE statement for the specified entity type
+            </summary>
+            <param name="entityType">The entity type</param>
+            <returns>The CREATE TABLE SQL statement</returns>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.BuildColumnDefinition(System.Reflection.PropertyInfo,Durable.PropertyAttribute,System.Boolean@)">
+            <summary>
+            Builds a column definition for a property
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.BuildForeignKeyConstraint(System.String,Durable.ForeignKeyAttribute)">
+            <summary>
+            Builds a foreign key constraint
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.GetTableColumns(System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Gets the column information from the database for schema validation
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.TableExists(System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Checks if a table exists in the database
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.BuildCreateIndexSql(System.Type)">
+            <summary>
+            Builds CREATE INDEX SQL statements for the specified entity type
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.GetExistingIndexes(System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Gets existing indexes for a table from the database
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.IndexExists(System.String,System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Checks if an index exists in the database
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerSchemaBuilder.DatabaseExists(System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Checks if a database exists
+            </summary>
+        </member>
+        <member name="T:Durable.SqlServer.IndexPropertyInfo">
+            <summary>
+            Represents a property with its associated index attribute
+            </summary>
+        </member>
+        <member name="T:Durable.SqlServer.ColumnInfo">
+            <summary>
+            Represents column information from the database
+            </summary>
+        </member>
+        <member name="T:Durable.SqlServer.IndexInfo">
+            <summary>
+            Represents index information from the database
             </summary>
         </member>
         <member name="T:Durable.SqlServer.SqlServerSelectMapping">

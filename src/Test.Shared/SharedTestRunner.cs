@@ -97,6 +97,15 @@ namespace Test.Shared
                 passedTests += batchResults.PassedTests;
                 failedTests += batchResults.FailedTests;
                 skippedTests += batchResults.SkippedTests;
+
+                TestResults schemaResults = await RunTestClass<SchemaManagementTestSuite>(
+                    $"{provider.ProviderName} Schema Management Tests",
+                    provider
+                );
+                totalTests += schemaResults.TotalTests;
+                passedTests += schemaResults.PassedTests;
+                failedTests += schemaResults.FailedTests;
+                skippedTests += schemaResults.SkippedTests;
             }
             finally
             {

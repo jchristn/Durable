@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -112,7 +113,7 @@ namespace Test.Postgres
 
             // This test will fail until we implement PostgresRepository
             // For now, we'll just test the connection factory
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
 
             Assert.NotNull(connectionFactory);
             Assert.IsAssignableFrom<IConnectionFactory>(connectionFactory);
@@ -126,8 +127,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var connection = await connectionFactory.GetConnectionAsync();
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            NpgsqlConnection connection = (NpgsqlConnection)await connectionFactory.GetConnectionAsync();
 
             // Ensure connection is open (GetConnectionAsync might return an already open connection)
             if (connection.State != System.Data.ConnectionState.Open)
@@ -137,7 +138,7 @@ namespace Test.Postgres
 
             Assert.Equal(System.Data.ConnectionState.Open, connection.State);
 
-            using var command = new NpgsqlCommand("SELECT version()", (NpgsqlConnection)connection);
+            NpgsqlCommand command = new NpgsqlCommand("SELECT version()", (NpgsqlConnection)connection);
             string result = await command.ExecuteScalarAsync() as string ?? string.Empty;
 
             Assert.NotNull(result);
@@ -150,7 +151,7 @@ namespace Test.Postgres
         [Fact]
         public void PostgresSanitizerWorksCorrectly()
         {
-            var sanitizer = new PostgresSanitizer();
+            PostgresSanitizer sanitizer = new PostgresSanitizer();
 
             // Test string sanitization
             string sanitized = sanitizer.SanitizeString("test'value");
@@ -182,16 +183,16 @@ namespace Test.Postgres
         public void ConnectionFactoryExtensionsWork()
         {
             // Test local factory creation
-            using var localFactory = PostgresConnectionFactoryExtensions.CreateLocalPostgresFactory("test_db");
+            PostgresConnectionFactory localFactory = PostgresConnectionFactoryExtensions.CreateLocalPostgresFactory("test_db");
             Assert.NotNull(localFactory);
 
             // Test production factory creation
-            using var prodFactory = PostgresConnectionFactoryExtensions.CreateProductionPostgresFactory(
+            PostgresConnectionFactory prodFactory = PostgresConnectionFactoryExtensions.CreateProductionPostgresFactory(
                 "localhost", "test_db", "user", "pass");
             Assert.NotNull(prodFactory);
 
             // Test Unix socket factory creation
-            using var unixFactory = PostgresConnectionFactoryExtensions.CreateUnixSocketPostgresFactory("test_db");
+            PostgresConnectionFactory unixFactory = PostgresConnectionFactoryExtensions.CreateUnixSocketPostgresFactory("test_db");
             Assert.NotNull(unixFactory);
         }
 
@@ -202,8 +203,8 @@ namespace Test.Postgres
         public void PostgresInfrastructureIsSetup()
         {
             // This is a basic smoke test to ensure our infrastructure compiles and loads correctly
-            var sanitizer = new PostgresSanitizer();
-            using var connectionFactory = new PostgresConnectionFactory("Host=localhost;Database=test;Username=test;Password=test;");
+            PostgresSanitizer sanitizer = new PostgresSanitizer();
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory("Host=localhost;Database=test;Username=test;Password=test;");
 
             // Test that basic components were created successfully
             Assert.NotNull(sanitizer);
@@ -222,8 +223,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             // Create test table
             await CreateTestTableAsync(connectionFactory);
@@ -290,8 +291,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -300,7 +301,7 @@ namespace Test.Postgres
                 // Insert test data first
                 await InsertTestDataAsync(connectionFactory);
 
-                using var transaction = await repository.BeginTransactionAsync();
+                ITransaction transaction = await repository.BeginTransactionAsync();
 
                 // Test aggregations within transaction
                 decimal maxPrice = repository.Max(e => e.Price, null, transaction);
@@ -325,8 +326,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             // Test null selector argument
             Assert.Throws<ArgumentNullException>(() => repository.Max<decimal>(null!));
@@ -349,8 +350,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             // Create test table
             await CreateTestTableAsync(connectionFactory);
@@ -362,23 +363,23 @@ namespace Test.Postgres
 
                 // Test ReadAll synchronous
                 IEnumerable<ComplexEntity> allEntities = repository.ReadAll();
-                var allEntitiesList = allEntities.ToList();
+                List<ComplexEntity> allEntitiesList = allEntities.ToList();
                 Assert.True(allEntitiesList.Count >= 5);
 
                 // Test ReadMany without predicate (should be same as ReadAll)
                 IEnumerable<ComplexEntity> allEntitiesFromReadMany = repository.ReadMany();
-                var allFromReadManyList = allEntitiesFromReadMany.ToList();
+                List<ComplexEntity> allFromReadManyList = allEntitiesFromReadMany.ToList();
                 Assert.Equal(allEntitiesList.Count, allFromReadManyList.Count);
 
                 // Test ReadMany with predicate - simple equality
                 IEnumerable<ComplexEntity> entitiesWithHighPrice = repository.ReadMany(e => e.Price > 200);
-                var highPriceList = entitiesWithHighPrice.ToList();
+                List<ComplexEntity> highPriceList = entitiesWithHighPrice.ToList();
                 Assert.True(highPriceList.Count >= 2);
                 Assert.All(highPriceList, e => Assert.True(e.Price > 200));
 
                 // Test ReadMany with predicate - complex condition
                 IEnumerable<ComplexEntity> entitiesInRange = repository.ReadMany(e => e.Price >= 50 && e.Price <= 150);
-                var inRangeList = entitiesInRange.ToList();
+                List<ComplexEntity> inRangeList = entitiesInRange.ToList();
                 Assert.True(inRangeList.Count >= 1);
                 Assert.All(inRangeList, e =>
                 {
@@ -388,12 +389,12 @@ namespace Test.Postgres
 
                 // Test ReadMany with predicate - string operations
                 IEnumerable<ComplexEntity> entitiesWithNameFilter = repository.ReadMany(e => e.Name.StartsWith("Entity"));
-                var nameFilterList = entitiesWithNameFilter.ToList();
+                List<ComplexEntity> nameFilterList = entitiesWithNameFilter.ToList();
                 Assert.True(nameFilterList.Count >= 5);
                 Assert.All(nameFilterList, e => Assert.StartsWith("Entity", e.Name));
 
                 // Test async versions
-                var allEntitiesAsync = new List<ComplexEntity>();
+                List<ComplexEntity> allEntitiesAsync = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadAllAsync())
                 {
                     allEntitiesAsync.Add(entity);
@@ -401,7 +402,7 @@ namespace Test.Postgres
                 Assert.Equal(allEntitiesList.Count, allEntitiesAsync.Count);
 
                 // Test ReadManyAsync with predicate
-                var highPriceAsyncList = new List<ComplexEntity>();
+                List<ComplexEntity> highPriceAsyncList = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(e => e.Price > 200))
                 {
                     highPriceAsyncList.Add(entity);
@@ -409,7 +410,7 @@ namespace Test.Postgres
                 Assert.Equal(highPriceList.Count, highPriceAsyncList.Count);
 
                 // Test ReadManyAsync with null predicate (should be same as ReadAllAsync)
-                var allFromReadManyAsyncList = new List<ComplexEntity>();
+                List<ComplexEntity> allFromReadManyAsyncList = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(null))
                 {
                     allFromReadManyAsyncList.Add(entity);
@@ -418,13 +419,13 @@ namespace Test.Postgres
 
                 // Test with nullable field filters - debug version
                 IEnumerable<ComplexEntity> entitiesWithNullableInt = repository.ReadMany(e => e.NullableInt != null);
-                var withNullableList = entitiesWithNullableInt.ToList();
+                List<ComplexEntity> withNullableList = entitiesWithNullableInt.ToList();
                 Assert.True(withNullableList.Count >= 4, $"Expected at least 4 entities with non-null nullable_int, got {withNullableList.Count}"); // All entities except Entity4 which has null
                 Assert.All(withNullableList, e => Assert.True(e.NullableInt.HasValue, $"Entity {e.Name} should have a non-null nullable_int but doesn't"));
 
                 // Test equality filter
                 IEnumerable<ComplexEntity> specificEntity = repository.ReadMany(e => e.Name == "Entity1");
-                var specificList = specificEntity.ToList();
+                List<ComplexEntity> specificList = specificEntity.ToList();
                 Assert.Single(specificList);
                 Assert.Equal("Entity1", specificList[0].Name);
             }
@@ -443,8 +444,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -453,7 +454,7 @@ namespace Test.Postgres
                 // Insert test data first
                 await InsertTestDataAsync(connectionFactory);
 
-                using var transaction = await repository.BeginTransactionAsync();
+                ITransaction transaction = await repository.BeginTransactionAsync();
 
                 // Test collection operations within transaction
                 IEnumerable<ComplexEntity> allEntities = repository.ReadAll(transaction);
@@ -463,14 +464,14 @@ namespace Test.Postgres
                 Assert.True(filteredEntities.Count() >= 2);
 
                 // Test async versions within transaction
-                var asyncEntities = new List<ComplexEntity>();
+                List<ComplexEntity> asyncEntities = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadAllAsync(transaction))
                 {
                     asyncEntities.Add(entity);
                 }
                 Assert.Equal(allEntities.Count(), asyncEntities.Count);
 
-                var filteredAsyncEntities = new List<ComplexEntity>();
+                List<ComplexEntity> filteredAsyncEntities = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(e => e.Price > 100, transaction))
                 {
                     filteredAsyncEntities.Add(entity);
@@ -493,8 +494,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -508,14 +509,14 @@ namespace Test.Postgres
                 Assert.Empty(emptyFilteredResults);
 
                 // Test async versions with empty results
-                var emptyAsyncResults = new List<ComplexEntity>();
+                List<ComplexEntity> emptyAsyncResults = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadAllAsync())
                 {
                     emptyAsyncResults.Add(entity);
                 }
                 Assert.Empty(emptyAsyncResults);
 
-                var emptyFilteredAsyncResults = new List<ComplexEntity>();
+                List<ComplexEntity> emptyFilteredAsyncResults = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(e => e.Price > 0))
                 {
                     emptyFilteredAsyncResults.Add(entity);
@@ -528,7 +529,7 @@ namespace Test.Postgres
                 IEnumerable<ComplexEntity> noMatchResults = repository.ReadMany(e => e.Price > 10000);
                 Assert.Empty(noMatchResults);
 
-                var noMatchAsyncResults = new List<ComplexEntity>();
+                List<ComplexEntity> noMatchAsyncResults = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(e => e.Price > 10000))
                 {
                     noMatchAsyncResults.Add(entity);
@@ -549,8 +550,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -558,10 +559,10 @@ namespace Test.Postgres
             {
                 await InsertTestDataAsync(connectionFactory);
 
-                using var cts = new CancellationTokenSource();
+                CancellationTokenSource cts = new CancellationTokenSource();
 
                 // Test successful operations with valid token
-                var validResults = new List<ComplexEntity>();
+                List<ComplexEntity> validResults = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadAllAsync(token: cts.Token))
                 {
                     validResults.Add(entity);
@@ -569,7 +570,7 @@ namespace Test.Postgres
                 Assert.True(validResults.Count >= 5);
 
                 // Test ReadManyAsync with valid token
-                var validFilteredResults = new List<ComplexEntity>();
+                List<ComplexEntity> validFilteredResults = new List<ComplexEntity>();
                 await foreach (ComplexEntity entity in repository.ReadManyAsync(e => e.Price > 100, token: cts.Token))
                 {
                     validFilteredResults.Add(entity);
@@ -600,8 +601,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -719,8 +720,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -729,7 +730,7 @@ namespace Test.Postgres
                 await InsertTestDataAsync(connectionFactory);
 
                 // Test UpdateField within transaction - commit
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
                     int rowsUpdated = repository.UpdateField(e => e.Name == "Entity1", e => e.Price, 125.75m, transaction);
                     Assert.Equal(1, rowsUpdated);
@@ -746,7 +747,7 @@ namespace Test.Postgres
                 Assert.Equal(125.75m, committedEntities.First().Price);
 
                 // Test UpdateField within transaction - rollback
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
                     int rowsUpdated = repository.UpdateField(e => e.Name == "Entity2", e => e.Price, 999.99m, transaction);
                     Assert.Equal(1, rowsUpdated);
@@ -763,7 +764,7 @@ namespace Test.Postgres
                 Assert.NotEqual(999.99m, rolledBackEntities.First().Price);
 
                 // Test async update within transaction
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
                     int asyncRowsUpdated = await repository.UpdateFieldAsync(e => e.Name == "Entity3", e => e.NullableInt, 777, transaction);
                     Assert.Equal(1, asyncRowsUpdated);
@@ -817,8 +818,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -907,7 +908,7 @@ namespace Test.Postgres
                 Assert.Equal(0, asyncNoMatchBatch);
 
                 // Test cancellation support in async operations
-                using var cts = new CancellationTokenSource();
+                CancellationTokenSource cts = new CancellationTokenSource();
                 cts.Cancel();
 
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
@@ -930,16 +931,15 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
             try
             {
                 // Test 1: Upsert new entity (INSERT)
-                var newEntity = new ComplexEntity
-                {
+                ComplexEntity newEntity = new ComplexEntity {
                     Name = "UpsertTest1",
                     Price = 100.50m,
                     CreatedDate = DateTime.Now,
@@ -970,8 +970,7 @@ namespace Test.Postgres
                 Assert.Equal(200.75m, readBackEntity.Price);
 
                 // Test 3: UpsertAsync new entity (INSERT)
-                var newAsyncEntity = new ComplexEntity
-                {
+                ComplexEntity newAsyncEntity = new ComplexEntity {
                     Name = "UpsertAsyncTest1",
                     Price = 150.25m,
                     CreatedDate = DateTime.Now,
@@ -995,7 +994,7 @@ namespace Test.Postgres
                 Assert.Equal(asyncUpsertedEntity.Id, asyncUpdatedEntity.Id);
 
                 // Test 5: UpsertMany with mix of new and existing entities
-                var entityList = new List<ComplexEntity>
+                List<ComplexEntity> entityList = new List<ComplexEntity>
                 {
                     new ComplexEntity // New entity
                     {
@@ -1039,7 +1038,7 @@ namespace Test.Postgres
                 Assert.Equal(300.00m, verifyUpdated.Price);
 
                 // Test 6: UpsertManyAsync
-                var asyncEntityList = new List<ComplexEntity>
+                List<ComplexEntity> asyncEntityList = new List<ComplexEntity>
                 {
                     new ComplexEntity
                     {
@@ -1082,8 +1081,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await DropTestTableAsync(connectionFactory); // Clean up first
             await CreateTestTableAsync(connectionFactory);
@@ -1091,10 +1090,9 @@ namespace Test.Postgres
             try
             {
                 // Test 1: Upsert within transaction - commit
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
-                    var entity = new ComplexEntity
-                    {
+                    ComplexEntity entity = new ComplexEntity {
                         Name = "TransactionUpsert",
                         Price = 125.00m,
                         CreatedDate = DateTime.Now,
@@ -1120,7 +1118,7 @@ namespace Test.Postgres
 
                 // Test 2: Upsert within transaction - rollback
                 int originalId = committedEntity.Id;
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
                     // Update existing entity
                     committedEntity.Price = 999.99m;
@@ -1128,8 +1126,7 @@ namespace Test.Postgres
                     Assert.Equal(999.99m, updated.Price);
 
                     // Insert new entity
-                    var newEntity = new ComplexEntity
-                    {
+                    ComplexEntity newEntity = new ComplexEntity {
                         Name = "RollbackTest",
                         Price = 555.55m,
                         CreatedDate = DateTime.Now,
@@ -1152,9 +1149,9 @@ namespace Test.Postgres
                 Assert.Empty(rollbackTestEntities);
 
                 // Test 3: UpsertMany within transaction
-                using (var transaction = await repository.BeginTransactionAsync())
+                using (ITransaction transaction = await repository.BeginTransactionAsync())
                 {
-                    var entities = new List<ComplexEntity>
+                    List<ComplexEntity> entities = new List<ComplexEntity>
                     {
                         new ComplexEntity
                         {
@@ -1199,8 +1196,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await DropTestTableAsync(connectionFactory); // Clean up first
             await CreateTestTableAsync(connectionFactory);
@@ -1221,11 +1218,10 @@ namespace Test.Postgres
                 Assert.Empty(emptyAsyncResults);
 
                 // Test 3: Cancellation support in async operations
-                using var cts = new CancellationTokenSource();
+                CancellationTokenSource cts = new CancellationTokenSource();
                 cts.Cancel();
 
-                var entity = new ComplexEntity
-                {
+                ComplexEntity entity = new ComplexEntity {
                     Name = "CancelTest",
                     Price = 100.00m,
                     CreatedDate = DateTime.Now,
@@ -1239,13 +1235,13 @@ namespace Test.Postgres
                     repository.UpsertManyAsync(new[] { entity }, token: cts.Token));
 
                 // Test 4: Successful operations with valid cancellation token
-                using var validCts = new CancellationTokenSource();
+                CancellationTokenSource validCts = new CancellationTokenSource();
 
                 ComplexEntity validEntity = await repository.UpsertAsync(entity, token: validCts.Token);
                 Assert.NotNull(validEntity);
                 Assert.True(validEntity.Id > 0);
 
-                var entityList = new List<ComplexEntity> { entity };
+                List<ComplexEntity> entityList = new List<ComplexEntity> { entity };
                 IEnumerable<ComplexEntity> validResults = await repository.UpsertManyAsync(entityList, token: validCts.Token);
                 Assert.Single(validResults);
             }
@@ -1266,8 +1262,8 @@ namespace Test.Postgres
         {
             try
             {
-                using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-                using var connection = connectionFactory.GetConnection();
+                PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+                NpgsqlConnection connection = (NpgsqlConnection)connectionFactory.GetConnection();
 
                 // Ensure connection is open (GetConnection might return an already open connection)
                 if (connection.State != System.Data.ConnectionState.Open)
@@ -1276,7 +1272,7 @@ namespace Test.Postgres
                 }
 
                 // Test the connection with a simple query
-                using var command = new NpgsqlCommand("SELECT 1", (NpgsqlConnection)connection);
+                NpgsqlCommand command = new NpgsqlCommand("SELECT 1", (NpgsqlConnection)connection);
                 command.ExecuteScalar();
 
                 // If we get here, the connection works
@@ -1295,7 +1291,7 @@ namespace Test.Postgres
         /// </summary>
         private async Task CreateTestTableAsync(PostgresConnectionFactory connectionFactory)
         {
-            using var connection = await connectionFactory.GetConnectionAsync();
+            NpgsqlConnection connection = (NpgsqlConnection)await connectionFactory.GetConnectionAsync();
 
             // Ensure connection is open (GetConnectionAsync might return an already open connection)
             if (connection.State != System.Data.ConnectionState.Open)
@@ -1322,7 +1318,7 @@ namespace Test.Postgres
                     price DECIMAL(10,2)
                 );";
 
-            using var command = new NpgsqlCommand(createTableSql, (NpgsqlConnection)connection);
+            NpgsqlCommand command = new NpgsqlCommand(createTableSql, (NpgsqlConnection)connection);
             await command.ExecuteNonQueryAsync();
         }
 
@@ -1331,7 +1327,7 @@ namespace Test.Postgres
         /// </summary>
         private async Task InsertTestDataAsync(PostgresConnectionFactory connectionFactory)
         {
-            using var connection = await connectionFactory.GetConnectionAsync();
+            NpgsqlConnection connection = (NpgsqlConnection)await connectionFactory.GetConnectionAsync();
 
             if (connection.State != System.Data.ConnectionState.Open)
             {
@@ -1346,7 +1342,7 @@ namespace Test.Postgres
                 ('Entity4', 300.00, NOW(), gen_random_uuid(), null),
                 ('Entity5', 50.00, NOW(), gen_random_uuid(), 5);";
 
-            using var command = new NpgsqlCommand(insertSql, (NpgsqlConnection)connection);
+            NpgsqlCommand command = new NpgsqlCommand(insertSql, (NpgsqlConnection)connection);
             await command.ExecuteNonQueryAsync();
         }
 
@@ -1357,7 +1353,7 @@ namespace Test.Postgres
         {
             try
             {
-                using var connection = await connectionFactory.GetConnectionAsync();
+                NpgsqlConnection connection = (NpgsqlConnection)await connectionFactory.GetConnectionAsync();
 
                 // Ensure connection is open (GetConnectionAsync might return an already open connection)
                 if (connection.State != System.Data.ConnectionState.Open)
@@ -1366,7 +1362,7 @@ namespace Test.Postgres
                 }
 
                 string dropTableSql = "DROP TABLE IF EXISTS complex_entities;";
-                using var command = new NpgsqlCommand(dropTableSql, (NpgsqlConnection)connection);
+                NpgsqlCommand command = new NpgsqlCommand(dropTableSql, (NpgsqlConnection)connection);
                 await command.ExecuteNonQueryAsync();
             }
             catch
@@ -1383,8 +1379,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -1465,8 +1461,8 @@ namespace Test.Postgres
         {
             if (_SkipTests) return;
 
-            using var connectionFactory = new PostgresConnectionFactory(TestConnectionString);
-            using var repository = new PostgresRepository<ComplexEntity>(connectionFactory);
+            PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(TestConnectionString);
+            PostgresRepository<ComplexEntity> repository = new PostgresRepository<ComplexEntity>(connectionFactory);
 
             await CreateTestTableAsync(connectionFactory);
 
@@ -1477,7 +1473,7 @@ namespace Test.Postgres
 
                 // Test that Include method can be called without errors (even if ComplexEntity has no navigation properties)
                 // This tests the Include path parsing and query building infrastructure
-                var query = repository.Query();
+                IQueryBuilder<ComplexEntity> query = repository.Query();
 
                 // Test that the Include methods exist and can be chained
                 // Note: ComplexEntity doesn't have navigation properties, so this tests the syntax works
@@ -1487,30 +1483,30 @@ namespace Test.Postgres
                 Assert.NotNull(query);
 
                 // Test that basic query still works after adding Include infrastructure
-                var entities = query.Execute();
+                IEnumerable<ComplexEntity> entities = query.Execute();
                 Assert.True(entities.Any());
 
                 // Test Include infrastructure without executing (since ComplexEntity has no navigation properties)
                 // This tests that the Include methods exist and can be called
-                var includeQuery = repository.Query();
+                IQueryBuilder<ComplexEntity> includeQuery = repository.Query();
 
                 // Test Include method can be called (doesn't execute, just builds the query object)
                 Assert.NotNull(includeQuery);
 
                 // Test that the Include path parsing works correctly by testing the internal implementation
                 // Since we can't test with actual navigation properties on ComplexEntity, we test basic query functionality
-                var simpleQuery = repository.Query()
+                IQueryBuilder<ComplexEntity> simpleQuery = repository.Query()
                     .Where(e => e.Price > 50)
                     .OrderBy(e => e.Price)
                     .Take(3);
 
-                var simpleResult = simpleQuery.Execute();
+                IEnumerable<ComplexEntity> simpleResult = simpleQuery.Execute();
                 Assert.True(simpleResult.Any());
                 Assert.True(simpleResult.Count() <= 3);
 
                 // Test async execution without includes
-                var asyncQuery = repository.Query().Where(e => e.Price > 0);
-                var asyncResult = await asyncQuery.ExecuteAsync();
+                IQueryBuilder<ComplexEntity> asyncQuery = repository.Query().Where(e => e.Price > 0);
+                IEnumerable<ComplexEntity> asyncResult = await asyncQuery.ExecuteAsync();
                 Assert.True(asyncResult.Any());
 
                 // Verify that Include methods exist on the query builder (without executing problematic includes)

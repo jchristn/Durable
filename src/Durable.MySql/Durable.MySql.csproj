@@ -44,7 +44,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Durable" Version="1.0.0" />
+		<PackageReference Include="Durable" Version="0.1.9" />
 		<PackageReference Include="MySqlConnector" Version="2.3.7" />
 	</ItemGroup>
 

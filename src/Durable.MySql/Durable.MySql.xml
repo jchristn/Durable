@@ -2623,7 +2623,13 @@
             </summary>
             <returns>VersionColumnInfo if entity has versioning, null otherwise</returns>
         </member>
-        <member name="M:Durable.MySql.MySqlRepository`1.ExecuteScalarWithConnectionAsync``1(System.Data.Common.DbConnection,System.String,System.Data.Common.DbTransaction,System.Threading.CancellationToken,System.ValueTuple{System.String,System.Object}[])">
+        <member name="M:Durable.MySql.MySqlRepository`1.GetDefaultValueProviders">
+            <summary>
+            Gets the default value providers for properties with DefaultValueAttribute.
+            </summary>
+            <returns>A dictionary mapping PropertyInfo to DefaultValueProviderInfo</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.ExecuteScalarWithConnectionAsync``1(System.Data.Common.DbConnection,System.String,System.Data.Common.DbTransaction,System.Threading.CancellationToken,Durable.SqlParameter[])">
             <summary>
             Asynchronously executes a scalar SQL command and returns the result.
             </summary>
@@ -2637,7 +2643,7 @@
             <exception cref="T:System.InvalidOperationException">Thrown when SQL execution fails</exception>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
-        <member name="M:Durable.MySql.MySqlRepository`1.ExecuteNonQueryWithConnectionAsync(System.Data.Common.DbConnection,System.String,System.Data.Common.DbTransaction,System.Threading.CancellationToken,System.ValueTuple{System.String,System.Object}[])">
+        <member name="M:Durable.MySql.MySqlRepository`1.ExecuteNonQueryWithConnectionAsync(System.Data.Common.DbConnection,System.String,System.Data.Common.DbTransaction,System.Threading.CancellationToken,Durable.SqlParameter[])">
             <summary>
             Asynchronously executes a non-query SQL command and returns the number of affected rows.
             </summary>
@@ -3370,6 +3376,48 @@
             <returns>A MySQL connection</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.InitializeTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.InitializeTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.CreateIndexesAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.DropIndex(System.String,Durable.ITransaction)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.DropIndexAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetIndexes(System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.GetIndexesAsync(System.Type,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.CreateDatabaseIfNotExists">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.CreateDatabaseIfNotExistsAsync(System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
         <member name="T:Durable.MySql.MySqlRepositorySettings">
             <summary>
             Connection settings for MySQL repositories
@@ -3424,7 +3472,7 @@
             Builds a MySQL connection string from the current settings
             </summary>
             <returns>A MySQL connection string</returns>
-            <exception cref="T:System.InvalidOperationException">Thrown when required properties (Hostname, Database) are null or empty</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when Hostname is null or empty</exception>
         </member>
         <member name="T:Durable.MySql.MySqlRepositoryTransaction">
             <summary>
@@ -3613,6 +3661,80 @@
         <member name="M:Durable.MySql.MySqlSavepoint.Dispose">
             <summary>
             Disposes of the savepoint, automatically releasing it if it hasn't been released already.
+            </summary>
+        </member>
+        <member name="T:Durable.MySql.MySqlSchemaBuilder">
+            <summary>
+            Helper class for building MySQL schema (CREATE TABLE) SQL from entity metadata
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.#ctor(Durable.ISanitizer,Durable.IDataTypeConverter)">
+            <summary>
+            Initializes a new instance of the MySqlSchemaBuilder class
+            </summary>
+            <param name="sanitizer">The sanitizer for SQL identifiers</param>
+            <param name="dataTypeConverter">The data type converter for SQL type mapping</param>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.BuildCreateTableSql(System.Type)">
+            <summary>
+            Builds a CREATE TABLE statement for the specified entity type
+            </summary>
+            <param name="entityType">The entity type</param>
+            <returns>The CREATE TABLE SQL statement</returns>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.BuildColumnDefinition(System.Reflection.PropertyInfo,Durable.PropertyAttribute,System.Boolean@)">
+            <summary>
+            Builds a column definition for a property
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.BuildForeignKeyConstraint(System.String,Durable.ForeignKeyAttribute)">
+            <summary>
+            Builds a foreign key constraint
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.GetTableColumns(System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Gets the column information from the database for schema validation
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.TableExists(System.String,System.String,System.Data.Common.DbConnection,System.Data.Common.DbTransaction)">
+            <summary>
+            Checks if a table exists in the database
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.BuildCreateIndexSql(System.Type)">
+            <summary>
+            Builds CREATE INDEX SQL statements for the specified entity type
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.GetExistingIndexes(System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Gets existing indexes for a table from the database
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.IndexExists(System.String,System.String,System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Checks if an index exists in the database
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MySqlSchemaBuilder.DatabaseExists(System.String,System.Data.Common.DbConnection)">
+            <summary>
+            Checks if a database exists
+            </summary>
+        </member>
+        <member name="T:Durable.MySql.IndexPropertyInfo">
+            <summary>
+            Represents a property with its associated index attribute
+            </summary>
+        </member>
+        <member name="T:Durable.MySql.ColumnInfo">
+            <summary>
+            Represents column information from the database
+            </summary>
+        </member>
+        <member name="T:Durable.MySql.IndexInfo">
+            <summary>
+            Represents index information from the database
             </summary>
         </member>
         <member name="T:Durable.MySql.MySqlSelectMapping">

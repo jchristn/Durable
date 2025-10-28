@@ -36,11 +36,15 @@ namespace Test.SqlServer
             try
             {
                 // Test connection availability
-                using var connection = new SqlConnection(_ConnectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (SqlConnection connection = new SqlConnection(_ConnectionString))
+                {
+                    connection.Open();
+                    using (Microsoft.Data.SqlClient.SqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
 
                 // Initialize repositories
                 _AuthorRepository = new SqlServerRepository<Author>(_ConnectionString);

@@ -330,13 +330,13 @@ namespace Test.Sqlite
         [Fact]
         public void HasChanges_ReadOnlyProperty_IgnoresProperty()
         {
-            var mappings = new Dictionary<string, PropertyInfo>
+            Dictionary<string, PropertyInfo> mappings = new Dictionary<string, PropertyInfo>
             {
                 ["id"] = typeof(TestEntityWithReadOnlyProperty).GetProperty(nameof(TestEntityWithReadOnlyProperty.Id))!,
                 ["readonly_prop"] = typeof(TestEntityWithReadOnlyProperty).GetProperty(nameof(TestEntityWithReadOnlyProperty.ReadOnlyProperty))!
             };
 
-            var tracker = new SimpleChangeTracker<TestEntityWithReadOnlyProperty>(mappings);
+            SimpleChangeTracker<TestEntityWithReadOnlyProperty> tracker = new SimpleChangeTracker<TestEntityWithReadOnlyProperty>(mappings);
 
             TestEntityWithReadOnlyProperty entity = new TestEntityWithReadOnlyProperty { Id = 1 };
             tracker.TrackEntity(entity);

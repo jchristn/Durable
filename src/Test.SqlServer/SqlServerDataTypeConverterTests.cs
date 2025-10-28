@@ -35,11 +35,15 @@ namespace Test.SqlServer
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new SqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (Microsoft.Data.SqlClient.SqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("SQL Server data type converter tests initialized successfully");
             }
             catch (Exception ex)
@@ -57,7 +61,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Basic Data Type Storage ===");
@@ -105,6 +110,7 @@ namespace Test.SqlServer
             _output.WriteLine("Verifying data integrity...");
             await VerifyDataIntegrity(testEntity, retrieved);
             _output.WriteLine("✅ Basic data type storage test passed!");
+            }
         }
 
         /// <summary>
@@ -115,7 +121,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Null Value Handling ===");
@@ -156,6 +163,7 @@ namespace Test.SqlServer
             Assert.Empty(retrieved.Scores);
 
             _output.WriteLine("✅ Null value handling test passed!");
+            }
         }
 
         /// <summary>
@@ -166,7 +174,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Enum Handling ===");
@@ -198,6 +207,7 @@ namespace Test.SqlServer
             }
 
             _output.WriteLine("✅ Enum handling test passed!");
+            }
         }
 
         /// <summary>
@@ -208,7 +218,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing Collection Handling ===");
@@ -243,6 +254,7 @@ namespace Test.SqlServer
             _output.WriteLine($"✓ Tags array: [{string.Join(", ", retrieved.Tags)}]");
             _output.WriteLine($"✓ Scores list: [{string.Join(", ", retrieved.Scores)}]");
             _output.WriteLine("✅ Collection handling test passed!");
+            }
         }
 
         /// <summary>
@@ -253,7 +265,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing JSON Serialization ===");
@@ -319,6 +332,7 @@ namespace Test.SqlServer
             _output.WriteLine($"✓ Metadata: {retrieved.Metadata.Count} keys");
             _output.WriteLine($"✓ Address: {retrieved.Address.Street}, {retrieved.Address.City}");
             _output.WriteLine("✅ JSON serialization test passed!");
+            }
         }
 
         /// <summary>
@@ -329,13 +343,14 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing DateTime Handling ===");
 
             // Test various DateTime scenarios
-            var testCases = new[]
+            object[] testCases = new object[]
             {
                 new
                 {
@@ -360,7 +375,7 @@ namespace Test.SqlServer
                 }
             };
 
-            foreach (var testCase in testCases)
+            foreach (dynamic testCase in testCases)
             {
                 ComplexEntity entity = new ComplexEntity
                 {
@@ -398,6 +413,7 @@ namespace Test.SqlServer
             }
 
             _output.WriteLine("✅ DateTime handling test passed!");
+            }
         }
 
         /// <summary>
@@ -408,12 +424,13 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing GUID Handling ===");
 
-            var testGuids = new[]
+            Guid[] testGuids = new[]
             {
                 Guid.Empty,
                 Guid.NewGuid(),
@@ -443,6 +460,7 @@ namespace Test.SqlServer
             }
 
             _output.WriteLine("✅ GUID handling test passed!");
+            }
         }
 
         /// <summary>
@@ -453,7 +471,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             _output.WriteLine("=== Testing UpdateField with Type Conversion ===");
@@ -510,6 +529,7 @@ namespace Test.SqlServer
             Assert.Equal(newDuration, updated.Duration);
 
             _output.WriteLine("✅ UpdateField operations with type conversion test passed!");
+            }
         }
 
         /// <summary>
@@ -520,7 +540,8 @@ namespace Test.SqlServer
         {
             if (_skipTests) return;
 
-            using var repository = new SqlServerRepository<ComplexEntity>(_connectionString);
+            using (SqlServerRepository<ComplexEntity> repository = new SqlServerRepository<ComplexEntity>(_connectionString))
+            {
             await CreateTableAsync(repository);
 
             // Clear existing test data to ensure isolation
@@ -530,7 +551,7 @@ namespace Test.SqlServer
             _output.WriteLine("=== Testing Query Operations with Type Conversion ===");
 
             // Create test data
-            var entities = new[]
+            ComplexEntity[] entities = new[]
             {
                 new ComplexEntity
                 {
@@ -567,7 +588,7 @@ namespace Test.SqlServer
                 }
             };
 
-            foreach (var entity in entities)
+            foreach (ComplexEntity entity in entities)
             {
                 await repository.CreateAsync(entity);
             }
@@ -575,7 +596,7 @@ namespace Test.SqlServer
             _output.WriteLine("Created 3 test entities");
 
             // Query by enum
-            var activeEntities = repository.Query()
+            List<ComplexEntity> activeEntities = repository.Query()
                 .Where(e => e.Status == Status.Active)
                 .Execute()
                 .ToList();
@@ -586,7 +607,7 @@ namespace Test.SqlServer
             // Query by DateTime range
             DateTime startDate = new DateTime(2024, 3, 1);
             DateTime endDate = new DateTime(2024, 9, 1);
-            var midYearEntities = repository.Query()
+            List<ComplexEntity> midYearEntities = repository.Query()
                 .Where(e => e.CreatedDate > startDate && e.CreatedDate < endDate)
                 .Execute()
                 .ToList();
@@ -595,7 +616,7 @@ namespace Test.SqlServer
             _output.WriteLine($"✓ Query by DateTime range: Found {midYearEntities.Count} mid-year entities");
 
             // Query by boolean
-            var inactiveEntities = repository.Query()
+            List<ComplexEntity> inactiveEntities = repository.Query()
                 .Where(e => e.IsActive == false)
                 .Execute()
                 .ToList();
@@ -604,7 +625,7 @@ namespace Test.SqlServer
             _output.WriteLine($"✓ Query by boolean: Found {inactiveEntities.Count} inactive entities");
 
             // Query by decimal range
-            var expensiveEntities = repository.Query()
+            List<ComplexEntity> expensiveEntities = repository.Query()
                 .Where(e => e.Price > 60.00m)
                 .Execute()
                 .ToList();
@@ -613,6 +634,7 @@ namespace Test.SqlServer
             _output.WriteLine($"✓ Query by decimal: Found {expensiveEntities.Count} expensive entities");
 
             _output.WriteLine("✅ Query operations with type conversion test passed!");
+            }
         }
 
         /// <summary>

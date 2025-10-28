@@ -30,11 +30,15 @@ namespace Test.MySql
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new MySqlConnector.MySqlConnection(_connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (MySqlConnector.MySqlConnection connection = new MySqlConnector.MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (MySqlConnector.MySqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
                 _output.WriteLine("MySQL concurrency integration tests initialized successfully");
             }
             catch (Exception ex)
@@ -392,29 +396,35 @@ namespace Test.MySql
                     // Create multiple tasks that will attempt concurrent updates
                     Task<Author> task1 = Task.Run(async () =>
                     {
-                        using var repo1 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo1.ReadById(created.Id);
-                        copy.Name = "Update from Task 1";
-                        await Task.Delay(50); // Simulate some work
-                        return repo1.Update(copy);
+                        using (MySqlRepository<Author> repo1 = new MySqlRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo1.ReadById(created.Id);
+                            copy.Name = "Update from Task 1";
+                            await Task.Delay(50); // Simulate some work
+                            return repo1.Update(copy);
+                        }
                     });
 
                     Task<Author> task2 = Task.Run(async () =>
                     {
-                        using var repo2 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo2.ReadById(created.Id);
-                        copy.Name = "Update from Task 2";
-                        await Task.Delay(50); // Simulate some work
-                        return repo2.Update(copy);
+                        using (MySqlRepository<Author> repo2 = new MySqlRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo2.ReadById(created.Id);
+                            copy.Name = "Update from Task 2";
+                            await Task.Delay(50); // Simulate some work
+                            return repo2.Update(copy);
+                        }
                     });
 
                     Task<Author> task3 = Task.Run(async () =>
                     {
-                        using var repo3 = new MySqlRepository<Author>(_connectionString, null, null, resolver);
-                        Author copy = repo3.ReadById(created.Id);
-                        copy.Name = "Update from Task 3";
-                        await Task.Delay(50); // Simulate some work
-                        return repo3.Update(copy);
+                        using (MySqlRepository<Author> repo3 = new MySqlRepository<Author>(_connectionString, null, null, resolver))
+                        {
+                            Author copy = repo3.ReadById(created.Id);
+                            copy.Name = "Update from Task 3";
+                            await Task.Delay(50); // Simulate some work
+                            return repo3.Update(copy);
+                        }
                     });
 
                     // Wait for all tasks to complete
@@ -610,8 +620,10 @@ namespace Test.MySql
             {
                 try
                 {
-                    using var repo = new MySqlRepository<Author>(_connectionString);
-                    CleanupTestData(repo);
+                    using (MySqlRepository<Author> repo = new MySqlRepository<Author>(_connectionString))
+                    {
+                        CleanupTestData(repo);
+                    }
                 }
                 catch (Exception ex)
                 {

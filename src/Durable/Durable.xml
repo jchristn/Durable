@@ -119,6 +119,50 @@
             </summary>
             <returns>A string containing the complete SQL CASE expression.</returns>
         </member>
+        <member name="T:Durable.CompositeIndexAttribute">
+            <summary>
+            Attribute to define a composite (multi-column) index at the class level.
+            This provides an alternative to using multiple IndexAttribute declarations with the same name.
+            </summary>
+        </member>
+        <member name="P:Durable.CompositeIndexAttribute.Name">
+            <summary>
+            Gets the name of the composite index.
+            This is a required field.
+            </summary>
+        </member>
+        <member name="P:Durable.CompositeIndexAttribute.ColumnNames">
+            <summary>
+            Gets the column names that make up this composite index, in order.
+            Column names should match the Property attribute names, not the C# property names.
+            This is a required field.
+            </summary>
+        </member>
+        <member name="P:Durable.CompositeIndexAttribute.IsUnique">
+            <summary>
+            Gets or sets a value indicating whether this is a unique composite index.
+            Unique indexes enforce uniqueness constraints on the combination of indexed columns.
+            Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.CompositeIndexAttribute.IncludedColumns">
+            <summary>
+            Gets or sets additional columns to include in the index (covering index).
+            This is a database-specific optimization feature.
+            Included columns are not part of the index key but can improve query performance.
+            Not all database engines support this feature.
+            Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.CompositeIndexAttribute.#ctor(System.String,System.String[])">
+            <summary>
+            Initializes a new instance of the CompositeIndexAttribute class.
+            </summary>
+            <param name="name">The name of the composite index.</param>
+            <param name="columnNames">The column names that make up this index, in order. Must contain at least 2 columns.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when name or columnNames is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when columnNames contains fewer than 2 columns.</exception>
+        </member>
         <member name="T:Durable.ConcurrencyConflictException">
             <summary>
             Represents an exception that is thrown when a concurrency conflict occurs during data operations.
@@ -781,6 +825,223 @@
             <param name="propertyInfo">Optional property information for attribute-based type mapping hints.</param>
             <returns>The database type string (e.g., "TEXT", "INTEGER", "REAL").</returns>
         </member>
+        <member name="T:Durable.DefaultValueAttribute">
+            <summary>
+            Attribute to specify a default value for a property when creating new entities.
+            The default value is applied during Create operations if the property has not been explicitly set.
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueAttribute.ValueType">
+            <summary>
+            Gets the type of built-in default value to use (if applicable)
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueAttribute.StaticValue">
+            <summary>
+            Gets the static value to use as default (if applicable)
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueAttribute.ProviderType">
+            <summary>
+            Gets the custom provider type for generating default values (if applicable)
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueAttribute.OnlyIfNull">
+            <summary>
+            Gets whether to apply the default value only when the property is null/default
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueAttribute.#ctor(Durable.DefaultValueType,System.Boolean)">
+            <summary>
+            Initializes a new instance of the DefaultValueAttribute class with a built-in value type
+            </summary>
+            <param name="valueType">The type of default value to generate</param>
+            <param name="onlyIfNull">If true, only apply default when property is null/default. Default is true.</param>
+        </member>
+        <member name="M:Durable.DefaultValueAttribute.#ctor(System.Object,System.Boolean)">
+            <summary>
+            Initializes a new instance of the DefaultValueAttribute class with a static value
+            </summary>
+            <param name="staticValue">The static value to use as default</param>
+            <param name="onlyIfNull">If true, only apply default when property is null/default. Default is true.</param>
+        </member>
+        <member name="M:Durable.DefaultValueAttribute.#ctor(System.Type,System.Boolean)">
+            <summary>
+            Initializes a new instance of the DefaultValueAttribute class with a custom provider type
+            </summary>
+            <param name="providerType">The type implementing IDefaultValueProvider to generate default values</param>
+            <param name="onlyIfNull">If true, only apply default when property is null/default. Default is true.</param>
+        </member>
+        <member name="T:Durable.DefaultValueProviderInfo">
+            <summary>
+            Contains information about a default value provider for a property.
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueProviderInfo.Attribute">
+            <summary>
+            The default value attribute.
+            </summary>
+        </member>
+        <member name="P:Durable.DefaultValueProviderInfo.Provider">
+            <summary>
+            The default value provider implementation.
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviderInfo.#ctor(Durable.DefaultValueAttribute,Durable.IDefaultValueProvider)">
+            <summary>
+            Creates a new default value provider info.
+            </summary>
+        </member>
+        <member name="T:Durable.DefaultValueProviders.CurrentDateTimeUtcProvider">
+            <summary>
+            Provides the current UTC date and time as a default value
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.CurrentDateTimeUtcProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.CurrentDateTimeUtcProvider.ShouldApply(System.Object,System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Durable.DefaultValueProviders.DelegateValueProvider">
+            <summary>
+            Provides a default value generated by a delegate function
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.DelegateValueProvider.#ctor(System.Func{System.Object},System.Boolean)">
+            <summary>
+            Initializes a new instance of the DelegateValueProvider class
+            </summary>
+            <param name="valueFactory">Function that generates the default value</param>
+            <param name="onlyIfNull">If true, only apply when the current value is null/default</param>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.DelegateValueProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.DelegateValueProvider.ShouldApply(System.Object,System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Durable.DefaultValueProviders.NewGuidProvider">
+            <summary>
+            Provides a new GUID as a default value
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.NewGuidProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.NewGuidProvider.ShouldApply(System.Object,System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Durable.DefaultValueProviders.SequentialGuidProvider">
+            <summary>
+            Provides a sequential GUID optimized for database indexing as a default value.
+            Sequential GUIDs reduce index fragmentation compared to random GUIDs.
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.SequentialGuidProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.SequentialGuidProvider.ShouldApply(System.Object,System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.SequentialGuidProvider.GenerateSequentialGuid">
+            <summary>
+            Generates a sequential GUID by combining timestamp with random bytes
+            </summary>
+        </member>
+        <member name="T:Durable.DefaultValueProviders.StaticValueProvider">
+            <summary>
+            Provides a static value as a default value
+            </summary>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.StaticValueProvider.#ctor(System.Object,System.Boolean)">
+            <summary>
+            Initializes a new instance of the StaticValueProvider class
+            </summary>
+            <param name="value">The static value to provide</param>
+            <param name="onlyIfNull">If true, only apply when the current value is null/default</param>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.StaticValueProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Durable.DefaultValueProviders.StaticValueProvider.ShouldApply(System.Object,System.Type)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Durable.DefaultValueType">
+            <summary>
+            Specifies the type of built-in default value to generate for a property
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.None">
+            <summary>
+            No default value
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.CurrentDateTimeUtc">
+            <summary>
+            Current UTC date and time (DateTime.UtcNow)
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.CurrentDateTimeLocal">
+            <summary>
+            Current local date and time (DateTime.Now)
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.NewGuid">
+            <summary>
+            New globally unique identifier (Guid.NewGuid())
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.EmptyGuid">
+            <summary>
+            Empty GUID (Guid.Empty)
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.EmptyString">
+            <summary>
+            Empty string (string.Empty)
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.Zero">
+            <summary>
+            Zero value (0 for numeric types)
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.StaticValue">
+            <summary>
+            A static value specified in the attribute
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.CustomProvider">
+            <summary>
+            Value generated by a custom provider
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.SequentialGuid">
+            <summary>
+            New sequential GUID optimized for database indexing
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.CurrentDateUtc">
+            <summary>
+            Current date only (no time component) in UTC
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.CurrentDateLocal">
+            <summary>
+            Current date only (no time component) in local time
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.True">
+            <summary>
+            True boolean value
+            </summary>
+        </member>
+        <member name="F:Durable.DefaultValueType.False">
+            <summary>
+            False boolean value
+            </summary>
+        </member>
         <member name="T:Durable.DurableConfiguration">
             <summary>
             Provides global and thread-local configuration settings for Durable ORM behavior.
@@ -1276,6 +1537,40 @@
             <param name="connection">The database connection to return to the factory.</param>
             <returns>A task representing the asynchronous return operation.</returns>
         </member>
+        <member name="T:Durable.IDataSeeder`1">
+            <summary>
+            Interface for seeding initial/default data into database tables
+            </summary>
+            <typeparam name="T">The entity type to seed</typeparam>
+        </member>
+        <member name="M:Durable.IDataSeeder`1.GetSeedData">
+            <summary>
+            Gets the seed data to insert into the database
+            </summary>
+            <returns>Collection of entities to insert</returns>
+        </member>
+        <member name="M:Durable.IDataSeeder`1.GetSeedDataAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously gets the seed data to insert into the database
+            </summary>
+            <param name="cancellationToken">A cancellation token to cancel the operation</param>
+            <returns>A task representing the asynchronous operation with a collection of entities to insert</returns>
+        </member>
+        <member name="M:Durable.IDataSeeder`1.ShouldSeed(Durable.IRepository{`0})">
+            <summary>
+            Determines whether seeding should occur based on the current state of the repository
+            </summary>
+            <param name="repository">The repository to check</param>
+            <returns>True if seeding should occur; otherwise, false</returns>
+        </member>
+        <member name="M:Durable.IDataSeeder`1.ShouldSeedAsync(Durable.IRepository{`0},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously determines whether seeding should occur based on the current state of the repository
+            </summary>
+            <param name="repository">The repository to check</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation</param>
+            <returns>A task representing the asynchronous operation with a boolean indicating whether to seed</returns>
+        </member>
         <member name="T:Durable.IDataTypeConverter">
             <summary>
             Provides type conversion functionality between .NET types and database storage formats.
@@ -1313,6 +1608,27 @@
             <param name="type">The .NET type.</param>
             <param name="propertyInfo">Optional property information for attribute-based type mapping hints.</param>
             <returns>The database type string (e.g., "TEXT", "INTEGER", "REAL").</returns>
+        </member>
+        <member name="T:Durable.IDefaultValueProvider">
+            <summary>
+            Interface for generating default values for entity properties during Create operations
+            </summary>
+        </member>
+        <member name="M:Durable.IDefaultValueProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
+            <summary>
+            Gets a default value for the specified property on the given entity
+            </summary>
+            <param name="property">The property for which to generate a default value</param>
+            <param name="entity">The entity instance being created</param>
+            <returns>The default value to assign to the property</returns>
+        </member>
+        <member name="M:Durable.IDefaultValueProvider.ShouldApply(System.Object,System.Type)">
+            <summary>
+            Determines whether the default value should be applied based on the current property value
+            </summary>
+            <param name="currentValue">The current value of the property</param>
+            <param name="propertyType">The type of the property</param>
+            <returns>True if the default should be applied; otherwise, false</returns>
         </member>
         <member name="T:Durable.IDurableResult`1">
             <summary>
@@ -1443,6 +1759,62 @@
             <param name="selector">The property selector for finding the minimum.</param>
             <param name="token">The cancellation token.</param>
             <returns>A task representing the asynchronous operation with the minimum value of the selected property.</returns>
+        </member>
+        <member name="T:Durable.IndexAttribute">
+            <summary>
+            Attribute to mark a property for indexing in the database.
+            Can be applied to individual properties for single-column indexes or composite indexes.
+            </summary>
+        </member>
+        <member name="P:Durable.IndexAttribute.Name">
+            <summary>
+            Gets or sets the name of the index.
+            If null, the index name will be auto-generated based on the table and column names.
+            Default: null (auto-generated).
+            </summary>
+        </member>
+        <member name="P:Durable.IndexAttribute.IsUnique">
+            <summary>
+            Gets or sets a value indicating whether this is a unique index.
+            Unique indexes enforce uniqueness constraints on the indexed column(s).
+            Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.IndexAttribute.Order">
+            <summary>
+            Gets or sets the order of this column in a composite index.
+            Used when multiple properties have the same index name to create a multi-column index.
+            Lower values appear first in the index column order.
+            Default: 0.
+            </summary>
+        </member>
+        <member name="P:Durable.IndexAttribute.IncludedColumns">
+            <summary>
+            Gets or sets additional columns to include in the index (covering index).
+            This is a database-specific optimization feature.
+            Included columns are not part of the index key but can improve query performance.
+            Not all database engines support this feature.
+            Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.IndexAttribute.#ctor">
+            <summary>
+            Initializes a new instance of the IndexAttribute class with default settings.
+            Creates a non-unique index with auto-generated name.
+            </summary>
+        </member>
+        <member name="M:Durable.IndexAttribute.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the IndexAttribute class with a specific index name.
+            </summary>
+            <param name="name">The name of the index. Use the same name on multiple properties to create a composite index.</param>
+        </member>
+        <member name="M:Durable.IndexAttribute.#ctor(System.String,System.Boolean)">
+            <summary>
+            Initializes a new instance of the IndexAttribute class with a specific index name and unique constraint.
+            </summary>
+            <param name="name">The name of the index. Use the same name on multiple properties to create a composite index.</param>
+            <param name="isUnique">If true, creates a unique index that enforces uniqueness constraints.</param>
         </member>
         <member name="T:Durable.InverseNavigationPropertyAttribute">
             <summary>
@@ -2412,6 +2784,149 @@
             </summary>
             <param name="token">A cancellation token to cancel the operation.</param>
             <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
+        </member>
+        <member name="M:Durable.IRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
+            <summary>
+            Creates or validates the database table for the specified entity type.
+            If the table does not exist, it will be created based on the entity's attributes.
+            If the table exists, it will be validated against the entity definition.
+            </summary>
+            <param name="entityType">The entity type for which to initialize the table.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type is invalid or table validation fails.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.InitializeTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates or validates the database table for the specified entity type.
+            If the table does not exist, it will be created based on the entity's attributes.
+            If the table exists, it will be validated against the entity definition.
+            </summary>
+            <param name="entityType">The entity type for which to initialize the table.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity type is invalid or table validation fails.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.InitializeTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <summary>
+            Creates or validates database tables for multiple entity types.
+            If a table does not exist, it will be created based on the entity's attributes.
+            If a table exists, it will be validated against the entity definition.
+            </summary>
+            <param name="entityTypes">The entity types for which to initialize tables.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when an entity type is invalid or table validation fails.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates or validates database tables for multiple entity types.
+            If a table does not exist, it will be created based on the entity's attributes.
+            If a table exists, it will be validated against the entity definition.
+            </summary>
+            <param name="entityTypes">The entity types for which to initialize tables.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when an entity type is invalid or table validation fails.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <summary>
+            Validates an entity type's definition without creating or modifying the database table.
+            Checks for required attributes, valid property configurations, and schema consistency if the table exists.
+            </summary>
+            <param name="entityType">The entity type to validate.</param>
+            <param name="errors">List of validation errors that would prevent table initialization.</param>
+            <param name="warnings">List of validation warnings about potential issues.</param>
+            <returns>True if the entity type is valid and can be initialized; otherwise, false.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+            <summary>
+            Validates multiple entity types' definitions without creating or modifying database tables.
+            Checks for required attributes, valid property configurations, and schema consistency if tables exist.
+            </summary>
+            <param name="entityTypes">The entity types to validate.</param>
+            <param name="errors">List of validation errors that would prevent table initialization.</param>
+            <param name="warnings">List of validation warnings about potential issues.</param>
+            <returns>True if all entity types are valid and can be initialized; otherwise, false.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
+            <summary>
+            Creates indexes for the specified entity type based on Index and CompositeIndex attributes.
+            This method is automatically called by InitializeTable when createIndexes parameter is true.
+            Indexes that already exist are skipped (idempotent operation).
+            </summary>
+            <param name="entityType">The entity type to create indexes for.</param>
+            <param name="transaction">Optional transaction to use for index creation.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.CreateIndexesAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates indexes for the specified entity type based on Index and CompositeIndex attributes.
+            This method is automatically called by InitializeTableAsync when createIndexes parameter is true.
+            Indexes that already exist are skipped (idempotent operation).
+            </summary>
+            <param name="entityType">The entity type to create indexes for.</param>
+            <param name="transaction">Optional transaction to use for index creation.</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.DropIndex(System.String,Durable.ITransaction)">
+            <summary>
+            Drops an index from the database.
+            </summary>
+            <param name="indexName">The name of the index to drop.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null or empty.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.DropIndexAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously drops an index from the database.
+            </summary>
+            <param name="indexName">The name of the index to drop.</param>
+            <param name="transaction">Optional transaction to use for the operation.</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null or empty.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.GetIndexes(System.Type)">
+            <summary>
+            Gets a list of index names for the specified entity type.
+            </summary>
+            <param name="entityType">The entity type to get indexes for.</param>
+            <returns>A list of index names that exist in the database for this entity's table.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.GetIndexesAsync(System.Type,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously gets a list of index names for the specified entity type.
+            </summary>
+            <param name="entityType">The entity type to get indexes for.</param>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation that returns a list of index names.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.IRepository`1.CreateDatabaseIfNotExists">
+            <summary>
+            Creates the database if it does not exist.
+            For file-based databases (SQLite), this ensures the file is created.
+            For server-based databases, this executes CREATE DATABASE if needed.
+            </summary>
+        </member>
+        <member name="M:Durable.IRepository`1.CreateDatabaseIfNotExistsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates the database if it does not exist.
+            For file-based databases (SQLite), this ensures the file is created.
+            For server-based databases, this executes CREATE DATABASE if needed.
+            </summary>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
         </member>
         <member name="P:Durable.IRepository`1.Settings">
             <summary>
@@ -3559,6 +4074,26 @@
         <member name="M:Durable.SqlCaptureScope.Dispose">
             <summary>
             Restores the original SQL capture setting.
+            </summary>
+        </member>
+        <member name="T:Durable.SqlParameter">
+            <summary>
+            Represents a SQL parameter with a name and value.
+            </summary>
+        </member>
+        <member name="P:Durable.SqlParameter.Name">
+            <summary>
+            The parameter name (including @ prefix if applicable).
+            </summary>
+        </member>
+        <member name="P:Durable.SqlParameter.Value">
+            <summary>
+            The parameter value.
+            </summary>
+        </member>
+        <member name="M:Durable.SqlParameter.#ctor(System.String,System.Object)">
+            <summary>
+            Creates a new SQL parameter.
             </summary>
         </member>
         <member name="T:Durable.TransactionScope">

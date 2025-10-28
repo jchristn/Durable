@@ -624,7 +624,7 @@ namespace Test.SqlServer
 
             Console.WriteLine("Seeding test data for projection functionality...");
 
-            var testPeople = new List<Person>
+            List<Person> testPeople = new List<Person>
             {
                 // IT Department
                 new Person { FirstName = "Alice", LastName = "Anderson", Age = 28, Email = "alice.anderson@company.com", Salary = 72000, Department = "IT" },

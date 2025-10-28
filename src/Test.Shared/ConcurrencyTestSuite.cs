@@ -38,6 +38,7 @@ namespace Test.Shared
         public async Task VersionColumnIncrementsOnUpdate()
         {
             IRepository<Author> repository = _Provider.CreateRepository<Author>();
+            await repository.ExecuteSqlAsync("DELETE FROM author_categories");
             await repository.ExecuteSqlAsync("DELETE FROM authors");
 
             Author author = new Author
@@ -65,6 +66,7 @@ namespace Test.Shared
         public async Task ConcurrentUpdatesThrowException()
         {
             IRepository<Author> repository = _Provider.CreateRepository<Author>();
+            await repository.ExecuteSqlAsync("DELETE FROM author_categories");
             await repository.ExecuteSqlAsync("DELETE FROM authors");
 
             Author author = new Author

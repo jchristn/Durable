@@ -38,11 +38,15 @@ namespace Test.SqlServer
             try
             {
                 // Test connection availability with a simple query that doesn't require tables
-                using var connection = new SqlConnection(connectionString);
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                command.ExecuteScalar();
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+                    using (Microsoft.Data.SqlClient.SqlCommand command = connection.CreateCommand())
+                    {
+                        command.CommandText = "SELECT 1";
+                        command.ExecuteScalar();
+                    }
+                }
 
                 _PersonRepository = new SqlServerRepository<Person>(connectionString);
                 _CompanyRepository = new SqlServerRepository<Company>(connectionString);

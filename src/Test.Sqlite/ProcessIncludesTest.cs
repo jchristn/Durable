@@ -108,14 +108,14 @@ namespace Test.Sqlite
 
         private static List<Company> CreateTestCompanies(SqliteRepository<Company> repo)
         {
-            var companies = new List<Company>
+            List<Company> companies = new List<Company>
             {
                 new Company { Name = "Penguin Random House", Industry = "Publishing" },
                 new Company { Name = "HarperCollins", Industry = "Publishing" },
                 new Company { Name = "Microsoft", Industry = "Technology" }
             };
 
-            foreach (var company in companies)
+            foreach (Company company in companies)
             {
                 repo.Create(company);
             }
@@ -126,14 +126,14 @@ namespace Test.Sqlite
 
         private static List<Author> CreateTestAuthors(SqliteRepository<Author> repo, List<Company> companies)
         {
-            var authors = new List<Author>
+            List<Author> authors = new List<Author>
             {
                 new Author { Name = "Stephen King", CompanyId = companies[0].Id },
                 new Author { Name = "J.K. Rowling", CompanyId = companies[1].Id },
                 new Author { Name = "Independent Author", CompanyId = null }
             };
 
-            foreach (var author in authors)
+            foreach (Author author in authors)
             {
                 repo.Create(author);
             }
@@ -144,7 +144,7 @@ namespace Test.Sqlite
 
         private static List<Book> CreateTestBooks(SqliteRepository<Book> repo, List<Author> authors, List<Company> companies)
         {
-            var books = new List<Book>
+            List<Book> books = new List<Book>
             {
                 new Book { Title = "The Shining", AuthorId = authors[0].Id, PublisherId = companies[0].Id },
                 new Book { Title = "IT", AuthorId = authors[0].Id, PublisherId = companies[0].Id },
@@ -152,7 +152,7 @@ namespace Test.Sqlite
                 new Book { Title = "Self Published Book", AuthorId = authors[2].Id, PublisherId = null }
             };
 
-            foreach (var book in books)
+            foreach (Book book in books)
             {
                 repo.Create(book);
             }
@@ -165,14 +165,14 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test 1: Simple Include ---");
 
-            var books = bookRepo.Query()
+            List<Book> books = bookRepo.Query()
                 .Include(b => b.Author)
                 .Execute()
                 .ToList();
 
             Console.WriteLine($"Retrieved {books.Count} books with authors");
 
-            foreach (var book in books)
+            foreach (Book book in books)
             {
                 Console.WriteLine($"Book: {book.Title}");
                 
@@ -191,7 +191,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test 2: Nested Include ---");
 
-            var books = bookRepo.Query()
+            List<Book> books = bookRepo.Query()
                 .Include(b => b.Author)
                 .ThenInclude(a => a.Company)
                 .Execute()
@@ -199,7 +199,7 @@ namespace Test.Sqlite
 
             Console.WriteLine($"Retrieved {books.Count} books with authors and companies");
 
-            foreach (var book in books)
+            foreach (Book book in books)
             {
                 Console.WriteLine($"Book: {book.Title}");
                 
@@ -231,7 +231,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test 3: Multiple Includes ---");
 
-            var books = bookRepo.Query()
+            List<Book> books = bookRepo.Query()
                 .Include(b => b.Author)
                 .Include(b => b.Publisher)
                 .Execute()
@@ -239,7 +239,7 @@ namespace Test.Sqlite
 
             Console.WriteLine($"Retrieved {books.Count} books with authors and publishers");
 
-            foreach (var book in books)
+            foreach (Book book in books)
             {
                 Console.WriteLine($"Book: {book.Title}");
                 
@@ -271,7 +271,7 @@ namespace Test.Sqlite
         {
             Console.WriteLine("\n--- Test 4: Include with Where ---");
 
-            var books = bookRepo.Query()
+            List<Book> books = bookRepo.Query()
                 .Where(b => b.Title.Contains("Harry"))
                 .Include(b => b.Author)
                 .Include(b => b.Publisher)
@@ -285,7 +285,7 @@ namespace Test.Sqlite
                 throw new Exception($"Expected 1 Harry Potter book, got {books.Count}");
             }
 
-            var book = books[0];
+            Book book = books[0];
             
             if (book.Author == null)
             {

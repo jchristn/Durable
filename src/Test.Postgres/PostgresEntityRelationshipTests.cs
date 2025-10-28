@@ -548,66 +548,23 @@ namespace Test.Postgres
 
         private async Task SetupDatabaseAsync()
         {
+            // Create database if it doesn't exist
+            _CompanyRepository.CreateDatabaseIfNotExists();
+
+            // Drop tables with CASCADE to automatically drop dependent objects
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories CASCADE");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS books CASCADE");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS authors CASCADE");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS categories CASCADE");
             await _CompanyRepository.ExecuteSqlAsync("DROP TABLE IF EXISTS companies CASCADE");
 
-            await _CompanyRepository.ExecuteSqlAsync(@"
-                CREATE TABLE companies (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    industry VARCHAR(50)
-                )");
-
-            await _CompanyRepository.ExecuteSqlAsync("CREATE INDEX idx_companies_name ON companies(name)");
-
-            await _CategoryRepository.ExecuteSqlAsync(@"
-                CREATE TABLE categories (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    description VARCHAR(255),
-                    UNIQUE (name)
-                )");
-
-            await _AuthorRepository.ExecuteSqlAsync(@"
-                CREATE TABLE authors (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    company_id INTEGER NULL,
-                    FOREIGN KEY (company_id) REFERENCES companies(id)
-                )");
-
-            await _AuthorRepository.ExecuteSqlAsync("CREATE INDEX idx_authors_name ON authors(name)");
-            await _AuthorRepository.ExecuteSqlAsync("CREATE INDEX idx_authors_company_id ON authors(company_id)");
-
-            await _BookRepository.ExecuteSqlAsync(@"
-                CREATE TABLE books (
-                    id SERIAL PRIMARY KEY,
-                    title VARCHAR(200) NOT NULL,
-                    author_id INTEGER NOT NULL,
-                    publisher_id INTEGER NULL,
-                    FOREIGN KEY (author_id) REFERENCES authors(id),
-                    FOREIGN KEY (publisher_id) REFERENCES companies(id)
-                )");
-
-            await _BookRepository.ExecuteSqlAsync("CREATE INDEX idx_books_title ON books(title)");
-            await _BookRepository.ExecuteSqlAsync("CREATE INDEX idx_books_author_id ON books(author_id)");
-            await _BookRepository.ExecuteSqlAsync("CREATE INDEX idx_books_publisher_id ON books(publisher_id)");
-
-            await _AuthorCategoryRepository.ExecuteSqlAsync(@"
-                CREATE TABLE author_categories (
-                    id SERIAL PRIMARY KEY,
-                    author_id INTEGER NOT NULL,
-                    category_id INTEGER NOT NULL,
-                    UNIQUE (author_id, category_id),
-                    FOREIGN KEY (author_id) REFERENCES authors(id),
-                    FOREIGN KEY (category_id) REFERENCES categories(id)
-                )");
-
-            await _AuthorCategoryRepository.ExecuteSqlAsync("CREATE INDEX idx_author_categories_author_id ON author_categories(author_id)");
-            await _AuthorCategoryRepository.ExecuteSqlAsync("CREATE INDEX idx_author_categories_category_id ON author_categories(category_id)");
+            // Create tables using InitializeTable (respects entity attributes including version columns)
+            // Create in dependency order (parent tables first)
+            _CompanyRepository.InitializeTable(typeof(Company));
+            _CategoryRepository.InitializeTable(typeof(Category));
+            _AuthorRepository.InitializeTable(typeof(Author));
+            _BookRepository.InitializeTable(typeof(Book));
+            _AuthorCategoryRepository.InitializeTable(typeof(AuthorCategory));
 
             _Output.WriteLine("Database tables created successfully with proper foreign key constraints");
         }

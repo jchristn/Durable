@@ -145,8 +145,15 @@ namespace Test.MySql
                 await connection.OpenAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Database connection failed: {ex.Message}");
+                Console.WriteLine($"Connection string: {_ConnectionString}");
+                Console.WriteLine($"Exception type: {ex.GetType().Name}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
                 return false;
             }
         }
