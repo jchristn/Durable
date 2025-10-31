@@ -249,7 +249,7 @@ namespace Durable.MySql
                 }
 
                 // If database name is not provided, use the connection's database
-                string dbToCheck = databaseName;
+                string? dbToCheck = databaseName;
                 if (string.IsNullOrWhiteSpace(dbToCheck))
                 {
                     dbToCheck = connection.Database;

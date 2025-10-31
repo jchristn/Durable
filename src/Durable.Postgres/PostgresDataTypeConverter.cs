@@ -91,7 +91,7 @@ namespace Durable.Postgres
                 // Check if property has Flags.String attribute
                 if (propertyInfo != null)
                 {
-                    PropertyAttribute propAttr = propertyInfo.GetCustomAttribute<PropertyAttribute>();
+                    PropertyAttribute? propAttr = propertyInfo.GetCustomAttribute<PropertyAttribute>();
                     if (propAttr != null && propAttr.PropertyFlags.HasFlag(Flags.String))
                     {
                         // Store as string if property is marked with Flags.String

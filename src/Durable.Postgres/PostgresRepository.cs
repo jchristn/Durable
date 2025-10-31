@@ -3348,7 +3348,7 @@ namespace Durable.Postgres
         #region Initialization
 
         /// <inheritdoc/>
-        public void InitializeTable(Type entityType, ITransaction transaction = null)
+        public void InitializeTable(Type entityType, ITransaction? transaction = null)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -3413,7 +3413,7 @@ namespace Durable.Postgres
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTableAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -3480,7 +3480,7 @@ namespace Durable.Postgres
         }
 
         /// <inheritdoc/>
-        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null)
+        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -3529,7 +3529,7 @@ namespace Durable.Postgres
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -3971,7 +3971,7 @@ namespace Durable.Postgres
                 throw new InvalidOperationException("Cannot create database when Settings is null. Use a constructor that provides connection settings.");
             }
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");
@@ -4019,7 +4019,7 @@ namespace Durable.Postgres
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");
