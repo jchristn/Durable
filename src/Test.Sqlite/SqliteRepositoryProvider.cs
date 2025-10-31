@@ -114,6 +114,54 @@ namespace Test.Sqlite
                     publisher_id INTEGER
                 )
             ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS author_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    author_id INTEGER NOT NULL,
+                    category_id INTEGER NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    industry TEXT
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    first_name TEXT NOT NULL,
+                    last_name TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    department TEXT NOT NULL,
+                    hire_date TEXT NOT NULL,
+                    salary REAL NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    sku TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    price REAL NOT NULL,
+                    stock_quantity INTEGER NOT NULL,
+                    description TEXT
+                )
+            ");
         }
 
         /// <summary>
