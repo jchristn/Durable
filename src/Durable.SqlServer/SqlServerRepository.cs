@@ -4413,7 +4413,7 @@ namespace Durable.SqlServer
         #region Initialization
 
         /// <inheritdoc/>
-        public void InitializeTable(Type entityType, ITransaction transaction = null)
+        public void InitializeTable(Type entityType, ITransaction? transaction = null)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -4442,7 +4442,8 @@ namespace Durable.SqlServer
             if (transaction != null)
             {
                 EnsureConnectionOpen(transaction.Connection);
-                tableExists = SqlServerSchemaBuilder.TableExists(tableName, Settings.Database, transaction.Connection);
+                string databaseName = Settings?.Database ?? ((SqlConnection)transaction.Connection).Database;
+                tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection);
             }
             else
             {
@@ -4451,7 +4452,8 @@ namespace Durable.SqlServer
                 {
                     connection = _ConnectionFactory.GetConnection();
                     EnsureConnectionOpen(connection);
-                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, Settings.Database, connection);
+                    string databaseName = Settings?.Database ?? ((SqlConnection)connection).Database;
+                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
                 }
                 finally
                 {
@@ -4493,7 +4495,7 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTableAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -4524,7 +4526,8 @@ namespace Durable.SqlServer
             if (transaction != null)
             {
                 await EnsureConnectionOpenAsync(transaction.Connection, cancellationToken).ConfigureAwait(false);
-                tableExists = SqlServerSchemaBuilder.TableExists(tableName, Settings.Database, transaction.Connection);
+                string databaseName = Settings?.Database ?? ((SqlConnection)transaction.Connection).Database;
+                tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection);
             }
             else
             {
@@ -4533,7 +4536,8 @@ namespace Durable.SqlServer
                 {
                     connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
                     await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
-                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, Settings.Database, connection);
+                    string databaseName = Settings?.Database ?? ((SqlConnection)connection).Database;
+                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
                 }
                 finally
                 {
@@ -4575,7 +4579,7 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc/>
-        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null)
+        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -4624,7 +4628,7 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -4749,12 +4753,12 @@ namespace Durable.SqlServer
 
             // If table exists, check schema compatibility
             string tableName = entityAttr.Name;
-            string databaseName = Settings.Database;
             try
             {
                 SqlConnection connection = (SqlConnection)_ConnectionFactory.GetConnection();
                 try
                 {
+                    string databaseName = Settings?.Database ?? connection.Database;
                     if (SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection))
                     {
                         List<ColumnInfo> existingColumns = SqlServerSchemaBuilder.GetTableColumns(tableName, databaseName, connection);
@@ -4845,7 +4849,7 @@ namespace Durable.SqlServer
                 throw new InvalidOperationException("Cannot create database when Settings is null. Use a constructor that provides connection settings.");
             }
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");
@@ -4892,7 +4896,7 @@ namespace Durable.SqlServer
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");
@@ -5136,10 +5140,10 @@ namespace Durable.SqlServer
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string databaseName = Settings.Database;
 
             using (SqlConnection connection = (SqlConnection)_ConnectionFactory.GetConnection())
             {
+                string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
 
@@ -5160,10 +5164,10 @@ namespace Durable.SqlServer
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string databaseName = Settings.Database;
 
             using (SqlConnection connection = (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
             {
+                string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
 

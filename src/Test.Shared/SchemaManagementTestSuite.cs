@@ -266,7 +266,7 @@ namespace Test.Shared
 
             Assert.True(initialCount > 0, "No indexes found to drop");
 
-            string indexToDrop = indexesBeforeDrop.FirstOrDefault(idx =>
+            string? indexToDrop = indexesBeforeDrop.FirstOrDefault(idx =>
                 idx.Contains("idx_product_name", StringComparison.OrdinalIgnoreCase) ||
                 idx.Contains("name", StringComparison.OrdinalIgnoreCase));
 
@@ -303,7 +303,7 @@ namespace Test.Shared
 
             Assert.True(initialCount > 0, "No indexes found to drop");
 
-            string indexToDrop = indexesBeforeDrop.FirstOrDefault(idx =>
+            string? indexToDrop = indexesBeforeDrop.FirstOrDefault(idx =>
                 idx.Contains("idx_employee_email", StringComparison.OrdinalIgnoreCase) ||
                 idx.Contains("email", StringComparison.OrdinalIgnoreCase));
 

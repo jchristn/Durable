@@ -21,6 +21,10 @@ namespace Test.Sqlite
         private readonly string _testDatabasePath;
         private readonly List<string> _createdDatabases;
 
+        /// <summary>
+        /// Initializes a new instance of the InitializationTests class.
+        /// </summary>
+        /// <param name="output">Test output helper for logging test results.</param>
         public InitializationTests(ITestOutputHelper output)
         {
             _output = output;
@@ -28,6 +32,9 @@ namespace Test.Sqlite
             _createdDatabases = new List<string>();
         }
 
+        /// <summary>
+        /// Disposes resources and cleans up test database files.
+        /// </summary>
         public void Dispose()
         {
             // Clean up test databases
@@ -50,73 +57,135 @@ namespace Test.Sqlite
 
         #region Test Entities
 
+        /// <summary>
+        /// Test entity representing a product.
+        /// </summary>
         [Entity("test_products")]
         public class Product
         {
+            /// <summary>
+            /// Gets or sets the product ID.
+            /// </summary>
             [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
             public int Id { get; set; }
 
+            /// <summary>
+            /// Gets or sets the product name.
+            /// </summary>
             [Property("name")]
             public string Name { get; set; } = string.Empty;
 
+            /// <summary>
+            /// Gets or sets the UTC creation timestamp.
+            /// </summary>
             [Property("created_utc")]
             [DefaultValue(DefaultValueType.CurrentDateTimeUtc)]
             public DateTime CreatedUtc { get; set; }
 
+            /// <summary>
+            /// Gets or sets the product GUID.
+            /// </summary>
             [Property("guid")]
             [DefaultValue(DefaultValueType.NewGuid)]
             public Guid ProductGuid { get; set; }
 
+            /// <summary>
+            /// Gets or sets the product price.
+            /// </summary>
             [Property("price")]
             public decimal Price { get; set; }
         }
 
+        /// <summary>
+        /// Test entity representing a category.
+        /// </summary>
         [Entity("test_categories")]
         public class Category
         {
+            /// <summary>
+            /// Gets or sets the category ID.
+            /// </summary>
             [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
             public int Id { get; set; }
 
+            /// <summary>
+            /// Gets or sets the category name.
+            /// </summary>
             [Property("name")]
             public string Name { get; set; } = string.Empty;
 
+            /// <summary>
+            /// Gets or sets the category GUID.
+            /// </summary>
             [Property("guid")]
             [DefaultValue(DefaultValueType.SequentialGuid)]
             public Guid CategoryGuid { get; set; }
         }
 
+        /// <summary>
+        /// Test entity representing an order.
+        /// </summary>
         [Entity("test_orders")]
         public class Order
         {
+            /// <summary>
+            /// Gets or sets the order ID.
+            /// </summary>
             [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
             public int Id { get; set; }
 
+            /// <summary>
+            /// Gets or sets the product ID.
+            /// </summary>
             [Property("product_id")]
             [ForeignKey(typeof(Product), nameof(Product.Id))]
             public int ProductId { get; set; }
 
+            /// <summary>
+            /// Gets or sets the order quantity.
+            /// </summary>
             [Property("quantity")]
             public int Quantity { get; set; }
 
+            /// <summary>
+            /// Gets or sets the order date.
+            /// </summary>
             [Property("order_date")]
             [DefaultValue(DefaultValueType.CurrentDateTimeUtc)]
             public DateTime OrderDate { get; set; }
         }
 
-        // Entity without proper attributes (for validation testing)
+        /// <summary>
+        /// Invalid test entity without proper attributes (for validation testing).
+        /// </summary>
         public class InvalidEntity
         {
+            /// <summary>
+            /// Gets or sets the ID.
+            /// </summary>
             public int Id { get; set; }
+
+            /// <summary>
+            /// Gets or sets the name.
+            /// </summary>
             public string Name { get; set; } = string.Empty;
         }
 
-        // Entity with attributes but no primary key (for validation testing)
+        /// <summary>
+        /// Invalid test entity with attributes but no primary key (for validation testing).
+        /// </summary>
         [Entity("invalid_no_pk")]
         public class InvalidNoPrimaryKey
         {
+            /// <summary>
+            /// Gets or sets the ID.
+            /// </summary>
             [Property("id")]
             public int Id { get; set; }
 
+            /// <summary>
+            /// Gets or sets the name.
+            /// </summary>
             [Property("name")]
             public string Name { get; set; } = string.Empty;
         }
@@ -125,6 +194,9 @@ namespace Test.Sqlite
 
         #region Database Creation Tests
 
+        /// <summary>
+        /// Tests that CreateDatabaseIfNotExists creates a new database file.
+        /// </summary>
         [Fact]
         public void CreateDatabaseIfNotExists_CreatesNewDatabase()
         {
@@ -149,6 +221,9 @@ namespace Test.Sqlite
 
         #region Table Initialization Tests
 
+        /// <summary>
+        /// Tests that InitializeTable creates a new table in the database.
+        /// </summary>
         [Fact]
         public void InitializeTable_CreatesNewTable()
         {
@@ -170,6 +245,9 @@ namespace Test.Sqlite
             _output.WriteLine("✓ Table 'test_products' created successfully");
         }
 
+        /// <summary>
+        /// Tests that InitializeTable is idempotent and does not fail when called multiple times.
+        /// </summary>
         [Fact]
         public void InitializeTable_DoesNotFailIfTableExists()
         {
@@ -191,6 +269,9 @@ namespace Test.Sqlite
             _output.WriteLine("✓ InitializeTable is idempotent");
         }
 
+        /// <summary>
+        /// Tests that InitializeTables can create multiple tables in a single call.
+        /// </summary>
         [Fact]
         public void InitializeTables_CreatesMultipleTables()
         {
@@ -218,6 +299,9 @@ namespace Test.Sqlite
             _output.WriteLine("✓ Multiple tables created successfully");
         }
 
+        /// <summary>
+        /// Tests that InitializeTable properly creates tables with foreign key relationships.
+        /// </summary>
         [Fact]
         public void InitializeTable_WithForeignKey_CreatesRelatedTables()
         {
@@ -249,6 +333,9 @@ namespace Test.Sqlite
 
         #region Validation Tests
 
+        /// <summary>
+        /// Tests that ValidateTable returns true for a properly configured entity.
+        /// </summary>
         [Fact]
         public void ValidateTable_WithValidEntity_ReturnsTrue()
         {
@@ -269,6 +356,9 @@ namespace Test.Sqlite
             _output.WriteLine("✓ ValidateTable returned true for valid entity");
         }
 
+        /// <summary>
+        /// Tests that ValidateTable returns false for an entity missing required attributes.
+        /// </summary>
         [Fact]
         public void ValidateTable_WithInvalidEntity_ReturnsFalse()
         {
@@ -291,6 +381,9 @@ namespace Test.Sqlite
             _output.WriteLine($"✓ ValidateTable returned false with errors: {string.Join(", ", errors)}");
         }
 
+        /// <summary>
+        /// Tests that ValidateTable returns false for an entity without a primary key.
+        /// </summary>
         [Fact]
         public void ValidateTable_WithNoPrimaryKey_ReturnsFalse()
         {
@@ -313,6 +406,9 @@ namespace Test.Sqlite
             _output.WriteLine($"✓ ValidateTable correctly identified missing primary key");
         }
 
+        /// <summary>
+        /// Tests that ValidateTables validates multiple entities and detects invalid ones.
+        /// </summary>
         [Fact]
         public void ValidateTables_ValidatesMultipleEntities()
         {
@@ -339,6 +435,9 @@ namespace Test.Sqlite
 
         #region Default Value Provider Tests
 
+        /// <summary>
+        /// Tests that the CurrentDateTimeUtc default value provider sets the current UTC timestamp.
+        /// </summary>
         [Fact]
         public void DefaultValueProvider_CurrentDateTimeUtc_SetsValue()
         {
@@ -366,6 +465,9 @@ namespace Test.Sqlite
             _output.WriteLine($"✓ CurrentDateTimeUtc provider set value: {product.CreatedUtc}");
         }
 
+        /// <summary>
+        /// Tests that the NewGuid default value provider generates a new GUID.
+        /// </summary>
         [Fact]
         public void DefaultValueProvider_NewGuid_SetsValue()
         {
@@ -388,6 +490,9 @@ namespace Test.Sqlite
             _output.WriteLine($"✓ NewGuid provider set value: {product.ProductGuid}");
         }
 
+        /// <summary>
+        /// Tests that the SequentialGuid default value provider generates sequential GUIDs.
+        /// </summary>
         [Fact]
         public void DefaultValueProvider_SequentialGuid_SetsValue()
         {
@@ -414,6 +519,9 @@ namespace Test.Sqlite
             _output.WriteLine($"✓ SequentialGuid provider set values: {category1.CategoryGuid}, {category2.CategoryGuid}");
         }
 
+        /// <summary>
+        /// Tests that default value providers only apply when property values are at their default.
+        /// </summary>
         [Fact]
         public void DefaultValueProvider_OnlyAppliesWhenValueIsDefault()
         {
@@ -449,6 +557,9 @@ namespace Test.Sqlite
 
         #region Integration Tests
 
+        /// <summary>
+        /// Tests a full workflow of database initialization, table creation, validation, and data operations.
+        /// </summary>
         [Fact]
         public void FullWorkflow_InitializeAndUseDatabase()
         {

@@ -1590,7 +1590,7 @@ namespace Durable.MySql
                 PropertyInfo property = kvp.Value;
 
                 // Check if this property has a default value provider
-                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo providerInfo))
+                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo? providerInfo))
                 {
                     DefaultValueAttribute attr = providerInfo.Attribute;
                     IDefaultValueProvider provider = providerInfo.Provider;
@@ -1729,7 +1729,7 @@ namespace Durable.MySql
                 PropertyInfo property = kvp.Value;
 
                 // Check if this property has a default value provider
-                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo providerInfo))
+                if (_DefaultValueProviders.TryGetValue(property, out DefaultValueProviderInfo? providerInfo))
                 {
                     DefaultValueAttribute attr = providerInfo.Attribute;
                     IDefaultValueProvider provider = providerInfo.Provider;
@@ -3948,7 +3948,7 @@ namespace Durable.MySql
         #region Initialization
 
         /// <inheritdoc/>
-        public void InitializeTable(Type entityType, ITransaction transaction = null)
+        public void InitializeTable(Type entityType, ITransaction? transaction = null)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -3977,13 +3977,15 @@ namespace Durable.MySql
             if (transaction != null)
             {
                 EnsureConnectionOpen(transaction.Connection);
-                tableExists = MySqlSchemaBuilder.TableExists(tableName, Settings.Database, transaction.Connection, transaction.Transaction);
+                string databaseName = Settings?.Database ?? ((MySqlConnection)transaction.Connection).Database;
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection, transaction.Transaction);
             }
             else
             {
                 using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
                 EnsureConnectionOpen(connection);
-                tableExists = MySqlSchemaBuilder.TableExists(tableName, Settings.Database, connection);
+                string databaseName = Settings?.Database ?? connection.Database;
+                tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, connection);
             }
 
             if (!tableExists)
@@ -4010,7 +4012,7 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTableAsync(Type entityType, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTableAsync(Type entityType, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityType == null)
                 throw new ArgumentNullException(nameof(entityType));
@@ -4076,7 +4078,7 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc/>
-        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction transaction = null)
+        public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -4125,7 +4127,7 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc/>
-        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken cancellationToken = default)
         {
             if (entityTypes == null)
                 throw new ArgumentNullException(nameof(entityTypes));
@@ -4526,10 +4528,10 @@ namespace Durable.MySql
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string databaseName = Settings.Database;
 
             using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
             {
+                string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = MySqlSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
 
@@ -4550,7 +4552,6 @@ namespace Durable.MySql
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string databaseName = Settings.Database;
 
             using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
             {
@@ -4559,6 +4560,7 @@ namespace Durable.MySql
                     // MySQL connector operations
                 }, cancellationToken).ConfigureAwait(false);
 
+                string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = MySqlSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
 
@@ -4576,7 +4578,7 @@ namespace Durable.MySql
                 throw new InvalidOperationException("Cannot create database when Settings is null. Use a constructor that provides connection settings.");
             }
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");
@@ -4623,7 +4625,7 @@ namespace Durable.MySql
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            string databaseName = Settings.Database;
+            string? databaseName = Settings.Database;
             if (string.IsNullOrWhiteSpace(databaseName))
             {
                 throw new InvalidOperationException("Database name cannot be null or empty");

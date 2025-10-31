@@ -2,6 +2,7 @@
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
+		<NoWarn>$(NoWarn);CS8632</NoWarn>
 		<IsPackable>false</IsPackable>
 		<OutputType>Exe</OutputType>
 		<StartupObject>Test.MySql.Program</StartupObject>

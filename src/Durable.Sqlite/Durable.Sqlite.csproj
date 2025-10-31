@@ -2,6 +2,7 @@
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
+		<NoWarn>$(NoWarn);CS8632</NoWarn>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<ApplicationIcon>logo.ico</ApplicationIcon>
 		<DocumentationFile>Durable.Sqlite.xml</DocumentationFile>
