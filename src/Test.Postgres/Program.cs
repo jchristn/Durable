@@ -18,16 +18,19 @@ namespace Test.Postgres
                 return 0;
             }
 
-            // If no arguments provided, show usage and exit
-            if (args.Length == 0)
-            {
-                ShowUsage();
-                return 1;
-            }
-
             try
             {
-                string connectionString = BuildConnectionString(args);
+                string connectionString;
+
+                // If no arguments provided, use interactive mode
+                if (args.Length == 0)
+                {
+                    connectionString = PromptForConnectionParameters();
+                }
+                else
+                {
+                    connectionString = BuildConnectionString(args);
+                }
 
                 if (string.IsNullOrEmpty(connectionString))
                 {
@@ -62,6 +65,7 @@ namespace Test.Postgres
             Console.WriteLine("====================================================");
             Console.WriteLine();
             Console.WriteLine("USAGE:");
+            Console.WriteLine("  Test.Postgres.exe                                                                 (interactive mode)");
             Console.WriteLine("  Test.Postgres.exe --host <host> --database <db> --username <user> --password <pwd> [--port <port>]");
             Console.WriteLine("  Test.Postgres.exe --connection-string <connection-string>");
             Console.WriteLine("  Test.Postgres.exe --help");
@@ -75,8 +79,12 @@ namespace Test.Postgres
             Console.WriteLine("  --connection-string   Full PostgreSQL connection string");
             Console.WriteLine("  --help, -h, /?        Show this help message");
             Console.WriteLine();
+            Console.WriteLine("INTERACTIVE MODE:");
+            Console.WriteLine("  When run without arguments, you will be prompted for connection details.");
+            Console.WriteLine("  Press Enter to accept default values shown in brackets.");
+            Console.WriteLine();
             Console.WriteLine("EXAMPLES:");
-            Console.WriteLine("  # Use default connection (localhost, durable_test, test_user, test_password)");
+            Console.WriteLine("  # Interactive mode - prompts for connection details");
             Console.WriteLine("  Test.Postgres.exe");
             Console.WriteLine();
             Console.WriteLine("  # Specify custom server and credentials");
@@ -95,8 +103,78 @@ namespace Test.Postgres
             Console.WriteLine("      -p 5432:5432 \\");
             Console.WriteLine("      postgres:15");
             Console.WriteLine();
-            Console.WriteLine("  Then run: Test.Postgres.exe (uses default connection)");
+            Console.WriteLine("  Then run: Test.Postgres.exe (interactive mode with defaults)");
             Console.WriteLine();
+        }
+
+        static string PromptForConnectionParameters()
+        {
+            Console.WriteLine("====================================================");
+            Console.WriteLine("     POSTGRESQL INTEGRATION TEST SUITE");
+            Console.WriteLine("====================================================");
+            Console.WriteLine();
+            Console.WriteLine("No connection parameters provided. Please enter connection details:");
+            Console.WriteLine("(Press Enter to use default values shown in brackets)");
+            Console.WriteLine("(For password: Enter 'none' or leave blank for no password)");
+            Console.WriteLine();
+
+            string host = PromptWithDefault("Host", "localhost");
+            string port = PromptWithDefault("Port", "5432");
+            string database = PromptWithDefault("Database", "durable_test");
+            string username = PromptWithDefault("Username", "test_user");
+            string password = PromptWithOptional("Password", "test_password");
+
+            string connectionString;
+            if (string.IsNullOrEmpty(password))
+            {
+                connectionString = $"Host={host};Port={port};Database={database};Username={username};";
+            }
+            else
+            {
+                connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};";
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"Connection string: {connectionString}");
+            Console.WriteLine();
+            Console.WriteLine("Press Enter to start tests or Ctrl+C to cancel...");
+            Console.ReadLine();
+            Console.WriteLine();
+
+            return connectionString;
+        }
+
+        static string PromptWithDefault(string prompt, string defaultValue)
+        {
+            Console.Write($"{prompt} [{defaultValue}]: ");
+            string? input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return defaultValue;
+            }
+
+            return input.Trim();
+        }
+
+        static string PromptWithOptional(string prompt, string defaultValue)
+        {
+            Console.Write($"{prompt} [{defaultValue}, or 'none' for no password]: ");
+            string? input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return defaultValue;
+            }
+
+            string trimmedInput = input.Trim();
+
+            if (trimmedInput.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            return trimmedInput;
         }
 
         static string BuildConnectionString(string[] args)

@@ -61,11 +61,16 @@ namespace Test.Postgres
         {
             IRepository<Person> personRepo = CreateRepository<Person>();
 
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories CASCADE");
             await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books CASCADE");
             await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version CASCADE");
             await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS categories CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS companies CASCADE");
             await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees CASCADE");
             await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people CASCADE");
+            await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products CASCADE");
 
             await personRepo.ExecuteSqlAsync(@"
                 CREATE TABLE people (
@@ -116,6 +121,54 @@ namespace Test.Postgres
                     publisher_id INT
                 )
             ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE author_categories (
+                    id SERIAL PRIMARY KEY,
+                    author_id INT NOT NULL,
+                    category_id INT NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    description VARCHAR(255)
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE companies (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    industry VARCHAR(50)
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE employees (
+                    id SERIAL PRIMARY KEY,
+                    first_name VARCHAR(100) NOT NULL,
+                    last_name VARCHAR(100) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    department VARCHAR(100) NOT NULL,
+                    hire_date TIMESTAMP NOT NULL,
+                    salary NUMERIC(15,2) NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE products (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL,
+                    sku VARCHAR(50) NOT NULL,
+                    category VARCHAR(100) NOT NULL,
+                    price NUMERIC(15,2) NOT NULL,
+                    stock_quantity INT NOT NULL,
+                    description VARCHAR(1000)
+                )
+            ");
         }
 
         /// <summary>
@@ -128,11 +181,16 @@ namespace Test.Postgres
             {
                 IRepository<Person> personRepo = CreateRepository<Person>();
 
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS categories CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS companies CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people CASCADE");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products CASCADE");
             }
             catch
             {

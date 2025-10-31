@@ -3921,7 +3921,7 @@ namespace Durable.Postgres
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string schemaName = Settings?.Database ?? "public";
+            string schemaName = "public"; // PostgreSQL default schema
 
             using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
             {
@@ -3945,7 +3945,7 @@ namespace Durable.Postgres
                 throw new InvalidOperationException($"Type '{entityType.Name}' must have an Entity attribute");
 
             string tableName = entityAttr.Name;
-            string schemaName = Settings?.Database ?? "public";
+            string schemaName = "public"; // PostgreSQL default schema
 
             using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
             {
