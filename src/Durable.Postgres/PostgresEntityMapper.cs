@@ -371,7 +371,7 @@ namespace Durable.Postgres
             }
 
             // Handle PostgreSQL JSON and JSONB types
-            if (actualTargetType == typeof(string) && (value is Newtonsoft.Json.Linq.JToken || value.GetType().Name.Contains("Json")))
+            if (actualTargetType == typeof(string) && (value is System.Text.Json.JsonElement || value.GetType().Name.Contains("Json")))
             {
                 return value.ToString()!;
             }

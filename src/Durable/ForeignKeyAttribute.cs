@@ -7,7 +7,6 @@
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Specifies that a property represents a foreign key relationship to another entity.

@@ -1,7 +1,7 @@
 namespace Durable.Postgres
 {
-    using Newtonsoft.Json;
     using System;
+    using System.Text.Json;
     using System.Globalization;
     using System.Text;
     using System.Text.RegularExpressions;
@@ -231,7 +231,7 @@ namespace Durable.Postgres
             string jsonString = jsonValue switch
             {
                 string s => s,
-                _ => Newtonsoft.Json.JsonConvert.SerializeObject(jsonValue)
+                _ => JsonSerializer.Serialize(jsonValue)
             };
 
             string formattedJson = SanitizeString(jsonString);

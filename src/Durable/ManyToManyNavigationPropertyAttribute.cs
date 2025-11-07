@@ -7,7 +7,6 @@ namespace Durable
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Attribute to mark a property as a many-to-many navigation property with junction entity configuration.

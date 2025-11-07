@@ -7,7 +7,6 @@ namespace Durable
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Specifies the inverse navigation property for a relationship in the entity framework.
