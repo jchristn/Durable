@@ -7,6 +7,7 @@ namespace Durable
     using System.Linq;
     using System.Reflection;
     using System.Text.Json;
+    using Durable.Helpers;
 
     /// <summary>
     /// Provides type conversion functionality between .NET types and database storage formats.
@@ -157,11 +158,8 @@ namespace Durable
             {
                 if (value is string dateStr)
                 {
-                    if (DateTime.TryParseExact(dateStr, "yyyy-MM-dd HH:mm:ss.fffffff", 
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime result))
-                        return result;
-                    // Fallback to general parsing
-                    return DateTime.Parse(dateStr, CultureInfo.InvariantCulture);
+                    // Use DateTimeParser to handle microsecond precision and UTC kind correctly
+                    return DateTimeParser.ParseString(dateStr);
                 }
                 return Convert.ToDateTime(value);
             }
@@ -171,17 +169,14 @@ namespace Durable
             {
                 if (value is string dtoStr)
                 {
-                    if (DateTimeOffset.TryParseExact(dtoStr, "yyyy-MM-dd HH:mm:ss.fffffffzzz",
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset result))
-                        return result;
-                    // Fallback to general parsing
-                    return DateTimeOffset.Parse(dtoStr, CultureInfo.InvariantCulture);
+                    // Use DateTimeOffsetParser to handle microsecond precision and timezone offset correctly
+                    return DateTimeOffsetParser.ParseString(dtoStr);
                 }
                 if (value is DateTime dt)
                 {
                     return new DateTimeOffset(dt);
                 }
-                return DateTimeOffset.Parse(value.ToString()!, CultureInfo.InvariantCulture);
+                return DateTimeOffsetParser.ParseString(value.ToString()!);
             }
 
             // DateOnly handling (.NET 6+)

@@ -1335,6 +1335,193 @@
             <param name="referencedType">The type of the entity that this foreign key references.</param>
             <param name="referencedProperty">The name of the property in the referenced entity that this foreign key points to.</param>
         </member>
+        <member name="T:Durable.Helpers.DateTimeOffsetParser">
+            <summary>
+            A comprehensive DateTimeOffset parser that handles various database and standard datetime formats
+            while preserving timezone offset information and microsecond precision where available.
+            Unlike DateTime, DateTimeOffset can preserve the original timezone offset from the input string.
+            </summary>
+        </member>
+        <member name="P:Durable.Helpers.DateTimeOffsetParser.DefaultOffset">
+            <summary>
+            Gets or sets the default timezone offset to use when parsing datetime strings without timezone information.
+            Defaults to UTC (TimeSpan.Zero). Set this to your local offset or any other offset as needed.
+            </summary>
+            <remarks>
+            When a datetime string has no timezone indicator (e.g., "2024-01-15 14:30:45"), this offset will be applied.
+            For UTC, use TimeSpan.Zero (default).
+            For local time, use TimeSpan.FromHours(-8) for PST, TimeSpan.FromHours(5) for EST+DST, etc.
+            </remarks>
+        </member>
+        <member name="P:Durable.Helpers.DateTimeOffsetParser.Formats">
+            <summary>
+            Gets or sets the array of datetime format strings used for parsing.
+            Formats are ordered from most precise (7-digit microseconds) to least precise (date only).
+            Supports formats from MySQL, SQLite, SQL Server, Oracle, and PostgreSQL databases.
+            Setting to null or empty array will revert to default formats.
+            </summary>
+        </member>
+        <member name="P:Durable.Helpers.DateTimeOffsetParser.DefaultFormats">
+            <summary>
+            Gets the default format strings used for parsing datetime values across various database systems.
+            </summary>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.ParseString(System.String)">
+            <summary>
+            Parses a datetime string using the configured format list, preserving precision and timezone offset.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <returns>A DateTimeOffset object representing the parsed value with timezone offset preserved.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.ParseString(System.String,System.String[],System.TimeSpan)">
+            <summary>
+            Parses a datetime string using a custom format list, preserving precision and timezone offset.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="formats">Custom array of datetime format strings to use for parsing. If null or empty, uses default formats.</param>
+            <param name="defaultOffset">The timezone offset to use when the input has no timezone information.</param>
+            <returns>A DateTimeOffset object representing the parsed value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the provided formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.TryParseString(System.String,System.DateTimeOffset@)">
+            <summary>
+            Attempts to parse a datetime string using the configured format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="result">When this method returns, contains the DateTimeOffset value equivalent to the date and time contained in input, if the conversion succeeded, or DateTimeOffset.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.TryParseString(System.String,System.String[],System.TimeSpan,System.DateTimeOffset@)">
+            <summary>
+            Attempts to parse a datetime string using a custom format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="formats">Custom array of datetime format strings to use for parsing. If null or empty, uses default formats.</param>
+            <param name="defaultOffset">The timezone offset to use when the input has no timezone information.</param>
+            <param name="result">When this method returns, contains the DateTimeOffset value equivalent to the date and time contained in input, if the conversion succeeded, or DateTimeOffset.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.Parse(System.String)">
+            <summary>
+            Parses a datetime string using this instance's configured format list and default offset.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <returns>A DateTimeOffset object representing the parsed value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.TryParse(System.String,System.DateTimeOffset@)">
+            <summary>
+            Attempts to parse a datetime string using this instance's configured format list and default offset.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="result">When this method returns, contains the DateTimeOffset value equivalent to the date and time contained in input, if the conversion succeeded, or DateTimeOffset.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeOffsetParser.ResetToDefaults">
+            <summary>
+            Resets the instance formats to use the default format list and resets the default offset to UTC.
+            </summary>
+        </member>
+        <member name="T:Durable.Helpers.DateTimeParser">
+            <summary>
+            A comprehensive DateTime parser that handles various database and standard datetime formats
+            while preserving microsecond precision where available.
+            </summary>
+        </member>
+        <member name="P:Durable.Helpers.DateTimeParser.Formats">
+             <summary>
+             Gets or sets the array of datetime format strings used for parsing.
+             Formats are ordered from most precise (7-digit microseconds) to least precise (date only).
+             Supports formats from MySQL, SQLite, SQL Server, Oracle, and PostgreSQL databases.
+             Setting to null or empty array will revert to default formats.
+             </summary>
+             <remarks>
+             The default format list includes:
+             - ISO 8601 formats with various precision levels (up to 7 digits)
+             - Timezone-aware formats (with Z, +00, -00, zzz, K suffixes)
+             - Database-specific formats (Oracle with periods, MySQL compact, SQL Server with milliseconds)
+             - Culture-specific formats (US, European, with/without AM/PM)
+             - Unix timestamps and .NET ticks (handled separately in parsing logic)
+            
+             Custom format arrays can be assigned to optimize for specific database systems or requirements.
+             Setting this property to null or an empty array will use the default formats.
+             </remarks>
+        </member>
+        <member name="P:Durable.Helpers.DateTimeParser.DefaultFormats">
+            <summary>
+            Gets the default format strings used for parsing datetime values across various database systems.
+            </summary>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.ParseString(System.String)">
+            <summary>
+            Parses a datetime string using the configured format list, preserving precision up to microseconds.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <returns>A DateTime object representing the parsed value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.ParseString(System.String,System.String[])">
+            <summary>
+            Parses a datetime string using a custom format list, preserving precision up to microseconds.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="formats">Custom array of datetime format strings to use for parsing. If null or empty, uses default formats.</param>
+            <returns>A DateTime object representing the parsed value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the provided formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.TryParseString(System.String,System.DateTime@)">
+            <summary>
+            Attempts to parse a datetime string using the configured format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="result">When this method returns, contains the DateTime value equivalent to the date and time contained in input, if the conversion succeeded, or DateTime.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.TryParseString(System.String,System.String[],System.DateTime@)">
+            <summary>
+            Attempts to parse a datetime string using a custom format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="formats">Custom array of datetime format strings to use for parsing. If null or empty, uses default formats.</param>
+            <param name="result">When this method returns, contains the DateTime value equivalent to the date and time contained in input, if the conversion succeeded, or DateTime.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.Parse(System.String)">
+            <summary>
+            Parses a datetime string using this instance's configured format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <returns>A DateTime object representing the parsed value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when input is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.TryParse(System.String,System.DateTime@)">
+            <summary>
+            Attempts to parse a datetime string using this instance's configured format list.
+            </summary>
+            <param name="input">The datetime string to parse.</param>
+            <param name="result">When this method returns, contains the DateTime value equivalent to the date and time contained in input, if the conversion succeeded, or DateTime.MinValue if the conversion failed.</param>
+            <returns>true if the input was converted successfully; otherwise, false.</returns>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.ResetToDefaults">
+            <summary>
+            Resets the instance formats to use the default format list.
+            </summary>
+        </member>
+        <member name="M:Durable.Helpers.DateTimeParser.EnsureUtcKindForUtcIndicators(System.String,System.DateTime)">
+            <summary>
+            Post-processes a parsed DateTime to ensure that UTC indicators in the input string
+            result in Kind=Utc, even when .NET's literal format matching doesn't set it.
+            This handles cases like "+00", "-00", "+00:00", "-00:00" which are UTC but
+            .NET's literal format matching sets Kind=Unspecified or converts to Local.
+            </summary>
+        </member>
         <member name="T:Durable.IAsyncDurableResult`1">
             <summary>
             Represents the result of an asynchronous durable query operation.

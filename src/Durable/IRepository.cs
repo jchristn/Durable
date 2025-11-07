@@ -10,7 +10,6 @@
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Repository interface with transaction support for CRUD operations on entities of type T.

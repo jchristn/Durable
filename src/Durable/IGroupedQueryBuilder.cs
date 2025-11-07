@@ -7,7 +7,6 @@
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Provides methods for building and executing grouped queries with aggregate operations.

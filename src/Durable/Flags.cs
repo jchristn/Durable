@@ -7,7 +7,6 @@
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text;
-    using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Defines flags that can be applied to entity properties to specify their database characteristics.
