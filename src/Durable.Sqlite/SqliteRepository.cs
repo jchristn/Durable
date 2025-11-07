@@ -22,6 +22,8 @@
     /// <typeparam name="T">The entity type that this repository manages. Must be a class with a parameterless constructor.</typeparam>
     public class SqliteRepository<T> : IRepository<T>, IBatchInsertConfiguration, ISqlCapture, ISqlTrackingConfiguration, IDisposable where T : class, new()
     {
+#pragma warning disable CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
+
         #region Public-Members
 
         /// <summary>
@@ -3858,5 +3860,7 @@
         }
 
         #endregion
+
+#pragma warning restore CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
     }
 }
