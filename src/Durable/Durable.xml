@@ -1518,7 +1518,7 @@
             <summary>
             Post-processes a parsed DateTime to ensure that UTC indicators in the input string
             result in Kind=Utc, even when .NET's literal format matching doesn't set it.
-            This handles cases like "+00", "-00", "+00:00", "-00:00" which are UTC but
+            This handles cases like "Z", "+00", "-00", "+00:00", "-00:00" which are UTC but
             .NET's literal format matching sets Kind=Unspecified or converts to Local.
             </summary>
         </member>

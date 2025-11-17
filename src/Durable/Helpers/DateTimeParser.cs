@@ -368,7 +368,7 @@ namespace Durable.Helpers
         /// <summary>
         /// Post-processes a parsed DateTime to ensure that UTC indicators in the input string
         /// result in Kind=Utc, even when .NET's literal format matching doesn't set it.
-        /// This handles cases like "+00", "-00", "+00:00", "-00:00" which are UTC but
+        /// This handles cases like "Z", "+00", "-00", "+00:00", "-00:00" which are UTC but
         /// .NET's literal format matching sets Kind=Unspecified or converts to Local.
         /// </summary>
         private static DateTime EnsureUtcKindForUtcIndicators(string input, DateTime parsed)
@@ -377,7 +377,8 @@ namespace Durable.Helpers
             // Note: We check the trimmed input to handle whitespace
             string trimmedInput = input.TrimEnd();
 
-            if (trimmedInput.EndsWith("+00") ||
+            if (trimmedInput.EndsWith("Z") ||
+                trimmedInput.EndsWith("+00") ||
                 trimmedInput.EndsWith("-00") ||
                 trimmedInput.EndsWith("+00:00") ||
                 trimmedInput.EndsWith("-00:00"))
@@ -391,13 +392,13 @@ namespace Durable.Helpers
                 }
                 else if (parsed.Kind == DateTimeKind.Local)
                 {
-                    // The "zzz" format specifier converted to local time
+                    // The "zzz" format specifier or literal Z with local interpretation converted to local time
                     // We need to convert back to UTC since the input was actually UTC
                     return parsed.ToUniversalTime();
                 }
                 else // Unspecified
                 {
-                    // Literal format match (like "+00") - just set the kind
+                    // Literal format match (like "+00" or "Z") - just set the kind
                     return DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
                 }
             }
