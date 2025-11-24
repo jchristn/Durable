@@ -5,6 +5,7 @@ namespace Durable.MySql
     using System.Collections;
     using System.Collections.Generic;
     using System.Data;
+    using System.Data.Common;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -200,13 +201,13 @@ namespace Durable.MySql
         {
             try
             {
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -233,13 +234,13 @@ namespace Durable.MySql
             {
                 token.ThrowIfCancellationRequested();
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("COUNT(*)", null, predicate);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -269,13 +270,13 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("SUM", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -308,13 +309,13 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("SUM", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -344,13 +345,13 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("AVG", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -383,13 +384,13 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("AVG", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -420,13 +421,13 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MAX", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -464,13 +465,13 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MAX", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -505,13 +506,13 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MIN", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -549,13 +550,13 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = BuildAggregateQuery("MIN", column, null);
 
                 _Repository.SetLastExecutedSql(command.CommandText);
@@ -700,13 +701,13 @@ namespace Durable.MySql
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+            using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
             if (connection.State != ConnectionState.Open)
             {
                 connection.Open();
             }
 
-            using MySqlCommand command = connection.CreateCommand();
+            using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
             command.CommandText = BuildGroupKeysSql();
 
             _Repository.SetLastExecutedSql(command.CommandText);
@@ -737,13 +738,13 @@ namespace Durable.MySql
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+            using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
             if (connection.State != ConnectionState.Open)
             {
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
 
-            using MySqlCommand command = connection.CreateCommand();
+            using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
             command.CommandText = BuildGroupKeysSql();
 
             _Repository.SetLastExecutedSql(command.CommandText);

@@ -3,6 +3,7 @@ namespace Durable.SqlServer
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Data.Common;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -482,13 +483,13 @@ namespace Durable.SqlServer
             try
             {
                 string sql = BuildSqlInternal();
-                using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using SqlCommand command = connection.CreateCommand();
+                using SqlCommand command = (SqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -515,13 +516,13 @@ namespace Durable.SqlServer
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((SqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using SqlCommand command = connection.CreateCommand();
+                using SqlCommand command = (SqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -551,16 +552,16 @@ namespace Durable.SqlServer
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+            using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
 
             try
             {
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((SqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using SqlCommand command = connection.CreateCommand();
+                using SqlCommand command = (SqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);

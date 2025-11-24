@@ -3691,8 +3691,24 @@
         <member name="P:Durable.PooledConnectionHandle.InnerConnection">
             <summary>
             Gets the underlying database connection that this handle wraps.
-            Used internally by the connection pool to unwrap connections.
             </summary>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.GetInnerConnection``1">
+            <summary>
+            Gets the underlying connection as a specific provider type.
+            This is a helper to safely cast the wrapped connection.
+            </summary>
+            <typeparam name="T">The provider-specific connection type.</typeparam>
+            <returns>The inner connection cast to the specified type.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.Unwrap(System.Data.Common.DbConnection)">
+            <summary>
+            Unwraps a pooled connection handle to get the underlying provider-specific connection.
+            If the connection is not a PooledConnectionHandle, returns the connection as-is.
+            </summary>
+            <param name="connection">The connection to unwrap.</param>
+            <returns>The underlying connection if wrapped, or the original connection if not wrapped.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connection is null.</exception>
         </member>
         <member name="P:Durable.PooledConnectionHandle.ConnectionString">
             <summary>
@@ -3718,14 +3734,6 @@
             <summary>
             Gets the current state of the connection.
             </summary>
-        </member>
-        <member name="M:Durable.PooledConnectionHandle.Unwrap(System.Data.Common.DbConnection)">
-            <summary>
-            Unwraps a database connection if it's a PooledConnectionHandle, returning the inner connection.
-            If the connection is not wrapped, returns it as-is.
-            </summary>
-            <param name="connection">The connection to unwrap.</param>
-            <returns>The unwrapped database connection.</returns>
         </member>
         <member name="M:Durable.PooledConnectionHandle.ChangeDatabase(System.String)">
             <summary>

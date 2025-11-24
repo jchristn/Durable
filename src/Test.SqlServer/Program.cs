@@ -18,16 +18,19 @@ namespace Test.SqlServer
                 return 0;
             }
 
-            // If no arguments provided, show usage and exit
-            if (args.Length == 0)
-            {
-                ShowUsage();
-                return 1;
-            }
-
             try
             {
-                string connectionString = BuildConnectionString(args);
+                string connectionString;
+
+                // If no arguments provided, use interactive mode
+                if (args.Length == 0)
+                {
+                    connectionString = PromptForConnectionParameters();
+                }
+                else
+                {
+                    connectionString = BuildConnectionString(args);
+                }
 
                 if (string.IsNullOrEmpty(connectionString))
                 {
@@ -54,6 +57,7 @@ namespace Test.SqlServer
             Console.WriteLine("====================================================");
             Console.WriteLine();
             Console.WriteLine("USAGE:");
+            Console.WriteLine("  Test.SqlServer.exe                                                                 (interactive mode)");
             Console.WriteLine("  Test.SqlServer.exe --server <host> --database <db> [--user <username>] [--password <pwd>] [--port <port>]");
             Console.WriteLine("  Test.SqlServer.exe --connection-string <connection-string>");
             Console.WriteLine("  Test.SqlServer.exe --help");
@@ -68,8 +72,12 @@ namespace Test.SqlServer
             Console.WriteLine("  --connection-string   Full SQL Server connection string");
             Console.WriteLine("  --help, -h, /?        Show this help message");
             Console.WriteLine();
+            Console.WriteLine("INTERACTIVE MODE:");
+            Console.WriteLine("  When run without arguments, you will be prompted for connection details.");
+            Console.WriteLine("  Press Enter to accept default values shown in brackets.");
+            Console.WriteLine();
             Console.WriteLine("EXAMPLES:");
-            Console.WriteLine("  # Use Windows Authentication (default)");
+            Console.WriteLine("  # Interactive mode - prompts for connection details");
             Console.WriteLine("  Test.SqlServer.exe");
             Console.WriteLine();
             Console.WriteLine("  # Use SQL Server Authentication");
@@ -92,8 +100,94 @@ namespace Test.SqlServer
             Console.WriteLine("      -S localhost -U sa -P 'YourStrong@Passw0rd' \\");
             Console.WriteLine("      -Q \"CREATE DATABASE durable_test\"");
             Console.WriteLine();
-            Console.WriteLine("  Then run: Test.SqlServer.exe --user sa --password YourStrong@Passw0rd");
+            Console.WriteLine("  Then run: Test.SqlServer.exe (interactive mode with defaults)");
             Console.WriteLine();
+        }
+
+        static string PromptForConnectionParameters()
+        {
+            Console.WriteLine("====================================================");
+            Console.WriteLine("     SQL SERVER INTEGRATION TEST SUITE");
+            Console.WriteLine("====================================================");
+            Console.WriteLine();
+            Console.WriteLine("No connection parameters provided. Please enter connection details:");
+            Console.WriteLine("(Press Enter to use default values shown in brackets)");
+            Console.WriteLine();
+
+            string server = PromptWithDefault("Server", "localhost");
+            string port = PromptWithDefault("Port", "1433");
+            string database = PromptWithDefault("Database", "durable_test");
+
+            Console.WriteLine();
+            Console.WriteLine("Authentication mode:");
+            Console.WriteLine("  1. Windows Integrated Authentication (default)");
+            Console.WriteLine("  2. SQL Server Authentication (username/password)");
+            string authChoice = PromptWithDefault("Select (1 or 2)", "1");
+
+            string connectionString;
+            string serverWithPort = port != "1433" ? $"{server},{port}" : server;
+
+            if (authChoice == "2")
+            {
+                string user = PromptWithDefault("Username", "sa");
+                string password = PromptWithOptional("Password", "");
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    connectionString = $"Server={serverWithPort};Database={database};User Id={user};TrustServerCertificate=True;";
+                }
+                else
+                {
+                    connectionString = $"Server={serverWithPort};Database={database};User Id={user};Password={password};TrustServerCertificate=True;";
+                }
+            }
+            else
+            {
+                connectionString = $"Server={serverWithPort};Database={database};Trusted_Connection=True;TrustServerCertificate=True;";
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"Connection string: {connectionString}");
+            Console.WriteLine();
+            Console.WriteLine("Press Enter to start tests or Ctrl+C to cancel...");
+            Console.ReadLine();
+            Console.WriteLine();
+
+            return connectionString;
+        }
+
+        static string PromptWithDefault(string prompt, string defaultValue)
+        {
+            Console.Write($"{prompt} [{defaultValue}]: ");
+            string? input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return defaultValue;
+            }
+
+            return input.Trim();
+        }
+
+        static string PromptWithOptional(string prompt, string defaultValue)
+        {
+            string displayDefault = string.IsNullOrEmpty(defaultValue) ? "none" : defaultValue;
+            Console.Write($"{prompt} [{displayDefault}]: ");
+            string? input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return defaultValue;
+            }
+
+            string trimmedInput = input.Trim();
+
+            if (trimmedInput.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            return trimmedInput;
         }
 
         static string BuildConnectionString(string[] args)

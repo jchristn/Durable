@@ -44,9 +44,8 @@ namespace Durable
 
         /// <summary>
         /// Gets the underlying database connection that this handle wraps.
-        /// Used internally by the connection pool to unwrap connections.
         /// </summary>
-        internal DbConnection InnerConnection
+        public DbConnection InnerConnection
         {
             get
             {
@@ -54,6 +53,36 @@ namespace Durable
                     throw new ObjectDisposedException(nameof(PooledConnectionHandle));
                 return _InnerConnection;
             }
+        }
+
+        /// <summary>
+        /// Gets the underlying connection as a specific provider type.
+        /// This is a helper to safely cast the wrapped connection.
+        /// </summary>
+        /// <typeparam name="T">The provider-specific connection type.</typeparam>
+        /// <returns>The inner connection cast to the specified type.</returns>
+        public T GetInnerConnection<T>() where T : DbConnection
+        {
+            return (T)InnerConnection;
+        }
+
+        /// <summary>
+        /// Unwraps a pooled connection handle to get the underlying provider-specific connection.
+        /// If the connection is not a PooledConnectionHandle, returns the connection as-is.
+        /// </summary>
+        /// <param name="connection">The connection to unwrap.</param>
+        /// <returns>The underlying connection if wrapped, or the original connection if not wrapped.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when connection is null.</exception>
+        public static DbConnection Unwrap(DbConnection connection)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+
+            if (connection is PooledConnectionHandle handle)
+            {
+                return handle.InnerConnection;
+            }
+
+            return connection;
         }
 
         /// <summary>
@@ -88,21 +117,6 @@ namespace Durable
         #endregion
 
         #region Public-Methods
-
-        /// <summary>
-        /// Unwraps a database connection if it's a PooledConnectionHandle, returning the inner connection.
-        /// If the connection is not wrapped, returns it as-is.
-        /// </summary>
-        /// <param name="connection">The connection to unwrap.</param>
-        /// <returns>The unwrapped database connection.</returns>
-        public static DbConnection Unwrap(DbConnection connection)
-        {
-            if (connection is PooledConnectionHandle handle)
-            {
-                return handle.InnerConnection;
-            }
-            return connection;
-        }
 
         /// <summary>
         /// Changes the current database for the connection.
@@ -199,17 +213,22 @@ namespace Durable
         /// <returns>A task representing the asynchronous disposal operation.</returns>
         public override async ValueTask DisposeAsync()
         {
+            DbConnection? conn = null;
             lock (_Lock)
             {
                 if (!_Returned && _InnerConnection != null)
                 {
                     _Returned = true;
-                    DbConnection conn = _InnerConnection;
+                    conn = _InnerConnection;
                     _InnerConnection = null;
-                    // ConnectionPool doesn't have async ReturnConnection, use sync version
-                    _Pool.ReturnConnection(conn);
                 }
             }
+
+            if (conn != null)
+            {
+                await _Pool.ReturnConnectionAsync(conn).ConfigureAwait(false);
+            }
+
             await base.DisposeAsync().ConfigureAwait(false);
         }
 

@@ -304,10 +304,6 @@ namespace Durable.SqlServer
 
             // Check for PropertyAttribute
             PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
-            if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
-            {
-                return "NVARCHAR(MAX)";
-            }
 
             // SQL Server type mappings
             if (type == typeof(bool))
@@ -347,13 +343,25 @@ namespace Durable.SqlServer
             if (type == typeof(Guid))
                 return "UNIQUEIDENTIFIER";
             if (type == typeof(string))
+            {
+                // Use MaxLength from PropertyAttribute if specified
+                if (attr != null && attr.MaxLength > 0)
+                {
+                    return $"NVARCHAR({attr.MaxLength})";
+                }
                 return "NVARCHAR(MAX)";
+            }
             if (type == typeof(byte[]))
                 return "VARBINARY(MAX)";
             if (type.IsEnum)
             {
                 if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)
                     return "INT";
+                // Use MaxLength for enum string storage if specified
+                if (attr != null && attr.MaxLength > 0)
+                {
+                    return $"NVARCHAR({attr.MaxLength})";
+                }
                 return "NVARCHAR(MAX)";
             }
             if (type.IsArray || (type.IsGenericType && typeof(IEnumerable).IsAssignableFrom(type)))

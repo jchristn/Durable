@@ -66,8 +66,8 @@ namespace Test.MySql
             Console.WriteLine("  --server, -s          MySQL server hostname (default: localhost)");
             Console.WriteLine("  --port, -p            MySQL server port (default: 3306)");
             Console.WriteLine("  --database, -d        Database name (default: durable_test)");
-            Console.WriteLine("  --user, -u            MySQL username (default: test_user)");
-            Console.WriteLine("  --password, -pw       MySQL password (default: test_password)");
+            Console.WriteLine("  --user, -u            MySQL username (default: root)");
+            Console.WriteLine("  --password, -pw       MySQL password (default: password)");
             Console.WriteLine("  --connection-string   Full MySQL connection string");
             Console.WriteLine("  --help, -h, /?        Show this help message");
             Console.WriteLine();
@@ -91,8 +91,8 @@ namespace Test.MySql
             Console.WriteLine("    docker run -d --name durable-mysql-test \\");
             Console.WriteLine("      -e MYSQL_ROOT_PASSWORD=root_password \\");
             Console.WriteLine("      -e MYSQL_DATABASE=durable_test \\");
-            Console.WriteLine("      -e MYSQL_USER=test_user \\");
-            Console.WriteLine("      -e MYSQL_PASSWORD=test_password \\");
+            Console.WriteLine("      -e MYSQL_USER=root \\");
+            Console.WriteLine("      -e MYSQL_PASSWORD=password \\");
             Console.WriteLine("      -p 3306:3306 \\");
             Console.WriteLine("      mysql:8.0");
             Console.WriteLine();
@@ -114,8 +114,8 @@ namespace Test.MySql
             string server = PromptWithDefault("Server", "localhost");
             string port = PromptWithDefault("Port", "3306");
             string database = PromptWithDefault("Database", "durable_test");
-            string user = PromptWithDefault("Username", "test_user");
-            string password = PromptWithOptional("Password", "test_password");
+            string user = PromptWithDefault("Username", "root");
+            string password = PromptWithOptional("Password", "password");
 
             string connectionString;
             if (string.IsNullOrEmpty(password))
@@ -185,8 +185,8 @@ namespace Test.MySql
             string server = "localhost";
             string port = "3306";
             string database = "durable_test";
-            string user = "test_user";
-            string password = "test_password";
+            string user = "root";
+            string password = "password";
 
             for (int i = 0; i < args.Length - 1; i++)
             {

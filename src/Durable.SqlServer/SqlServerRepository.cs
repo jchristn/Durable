@@ -3169,6 +3169,7 @@ namespace Durable.SqlServer
                 return Enumerable.Empty<T>();
 
             bool ownTransaction = transaction == null;
+            DbConnection? dbConnection = null;
             SqlConnection? connection = null;
             SqlTransaction? localTransaction = null;
 
@@ -3176,7 +3177,8 @@ namespace Durable.SqlServer
             {
                 if (ownTransaction)
                 {
-                    connection = (SqlConnection)_ConnectionFactory.GetConnection();
+                    dbConnection = _ConnectionFactory.GetConnection();
+                    connection = (SqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
                     transaction = new SqlServerRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -3208,9 +3210,9 @@ namespace Durable.SqlServer
                 if (ownTransaction)
                 {
                     localTransaction?.Dispose();
-                    if (connection != null)
+                    if (dbConnection != null)
                     {
-                        _ConnectionFactory.ReturnConnection(connection);
+                        _ConnectionFactory.ReturnConnection(dbConnection);
                     }
                 }
             }
@@ -3373,6 +3375,7 @@ namespace Durable.SqlServer
                 return Enumerable.Empty<T>();
 
             bool ownTransaction = transaction == null;
+            DbConnection? dbConnection = null;
             SqlConnection? connection = null;
             SqlTransaction? localTransaction = null;
 
@@ -3380,7 +3383,8 @@ namespace Durable.SqlServer
             {
                 if (ownTransaction)
                 {
-                    connection = (SqlConnection)_ConnectionFactory.GetConnection();
+                    dbConnection = _ConnectionFactory.GetConnection();
+                    connection = (SqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
                     await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
                     localTransaction = (SqlTransaction)await connection.BeginTransactionAsync(token).ConfigureAwait(false);
                     transaction = new SqlServerRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -3415,8 +3419,8 @@ namespace Durable.SqlServer
                 {
                     if (localTransaction != null)
                         await localTransaction.DisposeAsync().ConfigureAwait(false);
-                    if (connection != null)
-                        await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    if (dbConnection != null)
+                        await _ConnectionFactory.ReturnConnectionAsync(dbConnection).ConfigureAwait(false);
                 }
             }
         }
@@ -3866,7 +3870,8 @@ namespace Durable.SqlServer
         /// <returns>The created entities with any auto-generated values populated</returns>
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction? transaction)
         {
-            DbConnection connection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
+            DbConnection dbConnection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
+            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
             List<T> results = new List<T>();
 
             try
@@ -3887,7 +3892,7 @@ namespace Durable.SqlServer
                     else
                     {
                         using SqlCommand command = new SqlCommand();
-                        command.Connection = (SqlConnection)connection;
+                        command.Connection = connection;
                         if (transaction != null)
                             command.Transaction = (SqlTransaction)transaction.Transaction;
 
@@ -3896,7 +3901,7 @@ namespace Durable.SqlServer
 
                         if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
                         {
-                            SqlCommand newPreparedCommand = new SqlCommand(command.CommandText, (SqlConnection)connection);
+                            SqlCommand newPreparedCommand = new SqlCommand(command.CommandText, connection);
                             if (transaction != null)
                                 newPreparedCommand.Transaction = (SqlTransaction)transaction.Transaction;
                             preparedCommands[batchSize] = newPreparedCommand;
@@ -3917,7 +3922,7 @@ namespace Durable.SqlServer
             {
                 if (transaction == null)
                 {
-                    _ConnectionFactory.ReturnConnection(connection);
+                    _ConnectionFactory.ReturnConnection(dbConnection);
                 }
             }
         }
@@ -3931,7 +3936,8 @@ namespace Durable.SqlServer
         /// <returns>The created entities with any auto-generated values populated</returns>
         private async Task<IEnumerable<T>> CreateManyOptimizedAsync(IList<T> entities, ITransaction? transaction, CancellationToken token)
         {
-            DbConnection connection = (DbConnection)(transaction?.Connection ?? _ConnectionFactory.GetConnection());
+            DbConnection dbConnection = transaction?.Connection ?? _ConnectionFactory.GetConnection();
+            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
             bool shouldDisposeConnection = transaction == null;
             List<T> results = new List<T>();
 
@@ -3955,7 +3961,7 @@ namespace Durable.SqlServer
                     else
                     {
                         using SqlCommand command = new SqlCommand();
-                        command.Connection = (SqlConnection)connection;
+                        command.Connection = connection;
                         if (transaction != null)
                             command.Transaction = (SqlTransaction)transaction.Transaction;
 
@@ -3964,7 +3970,7 @@ namespace Durable.SqlServer
 
                         if (EnablePreparedStatementReuse && !preparedCommands.ContainsKey(batchSize))
                         {
-                            SqlCommand newPreparedCommand = new SqlCommand(command.CommandText, (SqlConnection)connection);
+                            SqlCommand newPreparedCommand = new SqlCommand(command.CommandText, connection);
                             if (transaction != null)
                                 newPreparedCommand.Transaction = (SqlTransaction)transaction.Transaction;
                             preparedCommands[batchSize] = newPreparedCommand;
@@ -3985,7 +3991,7 @@ namespace Durable.SqlServer
             {
                 if (transaction == null)
                 {
-                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    await _ConnectionFactory.ReturnConnectionAsync(dbConnection).ConfigureAwait(false);
                 }
             }
         }
@@ -4389,11 +4395,10 @@ namespace Durable.SqlServer
         /// Gets a connection from the connection factory.
         /// Note: The caller is responsible for disposing the connection.
         /// </summary>
-        /// <returns>A SQL Server connection</returns>
-        public SqlConnection GetConnection()
+        /// <returns>A database connection</returns>
+        public DbConnection GetConnection()
         {
-            DbConnection connection = _ConnectionFactory.GetConnection();
-            return (SqlConnection)PooledConnectionHandle.Unwrap(connection);
+            return _ConnectionFactory.GetConnection();
         }
 
         /// <summary>
@@ -4401,13 +4406,12 @@ namespace Durable.SqlServer
         /// Note: The caller is responsible for disposing the connection.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token for the async operation</param>
-        /// <returns>A SQL Server connection</returns>
+        /// <returns>A database connection</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<SqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
-            return (SqlConnection)PooledConnectionHandle.Unwrap(connection);
+            return await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         #endregion
@@ -4444,24 +4448,15 @@ namespace Durable.SqlServer
             if (transaction != null)
             {
                 EnsureConnectionOpen(transaction.Connection);
-                string databaseName = Settings?.Database ?? ((SqlConnection)transaction.Connection).Database;
+                string databaseName = Settings?.Database ?? transaction.Connection.Database;
                 tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection);
             }
             else
             {
-                DbConnection? connection = null;
-                try
-                {
-                    connection = _ConnectionFactory.GetConnection();
-                    EnsureConnectionOpen(connection);
-                    string databaseName = Settings?.Database ?? ((SqlConnection)connection).Database;
-                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
-                }
-                finally
-                {
-                    if (connection != null)
-                        _ConnectionFactory.ReturnConnection(connection);
-                }
+                using DbConnection connection = _ConnectionFactory.GetConnection();
+                EnsureConnectionOpen(connection);
+                string databaseName = Settings?.Database ?? connection.Database;
+                tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
             }
 
             if (!tableExists)
@@ -4528,24 +4523,15 @@ namespace Durable.SqlServer
             if (transaction != null)
             {
                 await EnsureConnectionOpenAsync(transaction.Connection, cancellationToken).ConfigureAwait(false);
-                string databaseName = Settings?.Database ?? ((SqlConnection)transaction.Connection).Database;
+                string databaseName = Settings?.Database ?? transaction.Connection.Database;
                 tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, transaction.Connection);
             }
             else
             {
-                DbConnection? connection = null;
-                try
-                {
-                    connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
-                    string databaseName = Settings?.Database ?? ((SqlConnection)connection).Database;
-                    tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
-                }
-                finally
-                {
-                    if (connection != null)
-                        _ConnectionFactory.ReturnConnection(connection);
-                }
+                using DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
+                string databaseName = Settings?.Database ?? connection.Database;
+                tableExists = SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection);
             }
 
             if (!tableExists)
@@ -4757,52 +4743,46 @@ namespace Durable.SqlServer
             string tableName = entityAttr.Name;
             try
             {
-                SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-                try
+                using DbConnection connection = _ConnectionFactory.GetConnection();
+                SqlConnection sqlConn = (SqlConnection)PooledConnectionHandle.Unwrap(connection);
+                string databaseName = Settings?.Database ?? connection.Database;
+                if (SqlServerSchemaBuilder.TableExists(tableName, databaseName, sqlConn))
                 {
-                    string databaseName = Settings?.Database ?? connection.Database;
-                    if (SqlServerSchemaBuilder.TableExists(tableName, databaseName, connection))
+                    List<ColumnInfo> existingColumns = SqlServerSchemaBuilder.GetTableColumns(tableName, databaseName, sqlConn);
+                    List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
+
+                    // Check if entity columns exist in database
+                    foreach (PropertyInfo prop in mappedProperties)
                     {
-                        List<ColumnInfo> existingColumns = SqlServerSchemaBuilder.GetTableColumns(tableName, databaseName, connection);
-                        List<string> existingColumnNames = existingColumns.Select(c => c.Name).ToList();
-
-                        // Check if entity columns exist in database
-                        foreach (PropertyInfo prop in mappedProperties)
+                        PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                        if (propAttr != null)
                         {
-                            PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
-                            if (propAttr != null)
+                            if (!existingColumnNames.Contains(propAttr.Name, StringComparer.OrdinalIgnoreCase))
                             {
-                                if (!existingColumnNames.Contains(propAttr.Name, StringComparer.OrdinalIgnoreCase))
-                                {
-                                    errors.Add($"Table '{tableName}' exists but column '{propAttr.Name}' (for property '{prop.Name}') does not exist in the database");
-                                }
-                            }
-                        }
-
-                        // Check for extra columns in database (warning only)
-                        foreach (ColumnInfo dbColumn in existingColumns)
-                        {
-                            bool foundInEntity = false;
-                            foreach (PropertyInfo prop in mappedProperties)
-                            {
-                                PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
-                                if (propAttr != null && propAttr.Name.Equals(dbColumn.Name, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    foundInEntity = true;
-                                    break;
-                                }
-                            }
-
-                            if (!foundInEntity)
-                            {
-                                warnings.Add($"Table '{tableName}' has column '{dbColumn.Name}' which is not mapped to any property in type '{entityType.Name}'");
+                                errors.Add($"Table '{tableName}' exists but column '{propAttr.Name}' (for property '{prop.Name}') does not exist in the database");
                             }
                         }
                     }
-                }
-                finally
-                {
-                    _ConnectionFactory.ReturnConnection(connection);
+
+                    // Check for extra columns in database (warning only)
+                    foreach (ColumnInfo dbColumn in existingColumns)
+                    {
+                        bool foundInEntity = false;
+                        foreach (PropertyInfo prop in mappedProperties)
+                        {
+                            PropertyAttribute? propAttr = prop.GetCustomAttribute<PropertyAttribute>();
+                            if (propAttr != null && propAttr.Name.Equals(dbColumn.Name, StringComparison.OrdinalIgnoreCase))
+                            {
+                                foundInEntity = true;
+                                break;
+                            }
+                        }
+
+                        if (!foundInEntity)
+                        {
+                            warnings.Add($"Table '{tableName}' has column '{dbColumn.Name}' which is not mapped to any property in type '{entityType.Name}'");
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -4950,7 +4930,7 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                SqlConnection conn = (SqlConnection)transaction.Connection;
+                SqlConnection conn = (SqlConnection)PooledConnectionHandle.Unwrap(transaction.Connection);
                 SqlTransaction sqlTxn = (SqlTransaction)transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
@@ -4971,22 +4951,18 @@ namespace Durable.SqlServer
             }
             else
             {
-                using (SqlConnection conn = (SqlConnection)_ConnectionFactory.GetConnection())
+                using DbConnection conn = _ConnectionFactory.GetConnection();
+                foreach (string sql in indexSqlStatements)
                 {
-                    foreach (string sql in indexSqlStatements)
+                    if (_CaptureSql)
                     {
-                        if (_CaptureSql)
-                        {
-                            _LastExecutedSql = sql;
-                            _LastExecutedSqlWithParameters = sql;
-                        }
-
-                        using (SqlCommand cmd = conn.CreateCommand())
-                        {
-                            cmd.CommandText = sql;
-                            cmd.ExecuteNonQuery();
-                        }
+                        _LastExecutedSql = sql;
+                        _LastExecutedSqlWithParameters = sql;
                     }
+
+                    using DbCommand cmd = conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    cmd.ExecuteNonQuery();
                 }
             }
         }
@@ -5007,7 +4983,7 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                SqlConnection conn = (SqlConnection)transaction.Connection;
+                SqlConnection conn = (SqlConnection)PooledConnectionHandle.Unwrap(transaction.Connection);
                 SqlTransaction sqlTxn = (SqlTransaction)transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
@@ -5030,24 +5006,20 @@ namespace Durable.SqlServer
             }
             else
             {
-                using (SqlConnection conn = (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
+                using DbConnection conn = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                foreach (string sql in indexSqlStatements)
                 {
-                    foreach (string sql in indexSqlStatements)
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (_CaptureSql)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        if (_CaptureSql)
-                        {
-                            _LastExecutedSql = sql;
-                            _LastExecutedSqlWithParameters = sql;
-                        }
-
-                        using (SqlCommand cmd = conn.CreateCommand())
-                        {
-                            cmd.CommandText = sql;
-                            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                        }
+                        _LastExecutedSql = sql;
+                        _LastExecutedSqlWithParameters = sql;
                     }
+
+                    using SqlCommand cmd = (SqlCommand)conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -5068,21 +5040,21 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                SqlConnection conn = (SqlConnection)transaction.Connection;
-                SqlTransaction sqlTxn = (SqlTransaction)transaction.Transaction;
+                DbConnection conn = transaction.Connection;
+                DbTransaction dbTxn = transaction.Transaction;
 
-                using (SqlCommand cmd = conn.CreateCommand())
+                using (DbCommand cmd = conn.CreateCommand())
                 {
-                    cmd.Transaction = sqlTxn;
+                    cmd.Transaction = dbTxn;
                     cmd.CommandText = sql;
                     cmd.ExecuteNonQuery();
                 }
             }
             else
             {
-                using (SqlConnection conn = (SqlConnection)_ConnectionFactory.GetConnection())
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
-                    using (SqlCommand cmd = conn.CreateCommand())
+                    using (DbCommand cmd = conn.CreateCommand())
                     {
                         cmd.CommandText = sql;
                         cmd.ExecuteNonQuery();
@@ -5109,21 +5081,21 @@ namespace Durable.SqlServer
 
             if (transaction != null)
             {
-                SqlConnection conn = (SqlConnection)transaction.Connection;
-                SqlTransaction sqlTxn = (SqlTransaction)transaction.Transaction;
+                DbConnection conn = transaction.Connection;
+                DbTransaction dbTxn = transaction.Transaction;
 
-                using (SqlCommand cmd = conn.CreateCommand())
+                using (DbCommand cmd = conn.CreateCommand())
                 {
-                    cmd.Transaction = sqlTxn;
+                    cmd.Transaction = dbTxn;
                     cmd.CommandText = sql;
                     await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else
             {
-                using (SqlConnection conn = (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
+                using (DbConnection conn = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    using (SqlCommand cmd = conn.CreateCommand())
+                    using (DbCommand cmd = conn.CreateCommand())
                     {
                         cmd.CommandText = sql;
                         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -5143,16 +5115,13 @@ namespace Durable.SqlServer
 
             string tableName = entityAttr.Name;
 
-            using (SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
-            {
-                string databaseName = Settings?.Database ?? connection.Database;
-                List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
-                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+            using DbConnection connection = _ConnectionFactory.GetConnection();
+            SqlConnection sqlConn = (SqlConnection)PooledConnectionHandle.Unwrap(connection);
+            string databaseName = Settings?.Database ?? connection.Database;
+            List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, sqlConn);
+            List<string> indexNames = indexes.Select(i => i.Name).ToList();
 
-                _ConnectionFactory.ReturnConnection(connection);
-
-                return indexNames;
-            }
+            return indexNames;
         }
 
         /// <inheritdoc/>
@@ -5167,16 +5136,13 @@ namespace Durable.SqlServer
 
             string tableName = entityAttr.Name;
 
-            using (SqlConnection connection = (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
-            {
-                string databaseName = Settings?.Database ?? connection.Database;
-                List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
-                List<string> indexNames = indexes.Select(i => i.Name).ToList();
+            using DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            SqlConnection sqlConn = (SqlConnection)PooledConnectionHandle.Unwrap(connection);
+            string databaseName = Settings?.Database ?? connection.Database;
+            List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, sqlConn);
+            List<string> indexNames = indexes.Select(i => i.Name).ToList();
 
-                _ConnectionFactory.ReturnConnection(connection);
-
-                return indexNames;
-            }
+            return indexNames;
         }
 
         #endregion

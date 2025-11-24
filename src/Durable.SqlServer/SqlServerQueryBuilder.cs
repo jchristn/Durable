@@ -1232,7 +1232,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1351,7 +1351,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connection);
+                    await connection.DisposeAsync();
                 }
             }
         }
@@ -1672,7 +1672,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1762,7 +1762,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1852,7 +1852,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1905,7 +1905,7 @@ namespace Durable.SqlServer
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }

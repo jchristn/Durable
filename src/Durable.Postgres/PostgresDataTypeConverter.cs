@@ -296,10 +296,6 @@ namespace Durable.Postgres
 
             // Check for PropertyAttribute
             PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
-            if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
-            {
-                return "TEXT";
-            }
 
             // PostgreSQL type mappings
             if (type == typeof(bool))
@@ -331,7 +327,14 @@ namespace Durable.Postgres
             if (type == typeof(Guid))
                 return "UUID";
             if (type == typeof(string))
+            {
+                // Use VARCHAR if MaxLength is specified, otherwise TEXT
+                if (attr != null && attr.MaxLength > 0)
+                {
+                    return $"VARCHAR({attr.MaxLength})";
+                }
                 return "TEXT";
+            }
             if (type.IsEnum)
             {
                 if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)

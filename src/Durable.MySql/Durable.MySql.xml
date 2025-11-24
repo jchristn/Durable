@@ -3363,17 +3363,19 @@
         <member name="M:Durable.MySql.MySqlRepository`1.GetConnection">
             <summary>
             Gets a connection from the connection factory.
-            Note: The caller is responsible for disposing the connection.
+            The returned connection is a PooledConnectionHandle that wraps the actual MySQL connection.
+            Note: The caller is responsible for disposing the connection, which will return it to the pool.
             </summary>
-            <returns>A MySQL connection</returns>
+            <returns>A database connection wrapping the MySQL connection</returns>
         </member>
         <member name="M:Durable.MySql.MySqlRepository`1.GetConnectionAsync(System.Threading.CancellationToken)">
             <summary>
             Asynchronously gets a connection from the connection factory.
-            Note: The caller is responsible for disposing the connection.
+            The returned connection is a PooledConnectionHandle that wraps the actual MySQL connection.
+            Note: The caller is responsible for disposing the connection, which will return it to the pool.
             </summary>
             <param name="cancellationToken">Cancellation token for the async operation</param>
-            <returns>A MySQL connection</returns>
+            <returns>A database connection wrapping the MySQL connection</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
         <member name="M:Durable.MySql.MySqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
@@ -3489,7 +3491,7 @@
             Gets the underlying database transaction.
             </summary>
         </member>
-        <member name="M:Durable.MySql.MySqlRepositoryTransaction.#ctor(MySqlConnector.MySqlConnection,MySqlConnector.MySqlTransaction,Durable.IConnectionFactory)">
+        <member name="M:Durable.MySql.MySqlRepositoryTransaction.#ctor(System.Data.Common.DbConnection,System.Data.Common.DbTransaction,Durable.IConnectionFactory)">
             <summary>
             Initializes a new instance of the MySqlRepositoryTransaction class.
             </summary>

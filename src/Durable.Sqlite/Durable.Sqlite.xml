@@ -2151,14 +2151,14 @@
             <summary>
             Gets a connection to the SQLite database from the connection factory.
             </summary>
-            <returns>A SQLite database connection.</returns>
+            <returns>A database connection.</returns>
         </member>
         <member name="M:Durable.Sqlite.SqliteRepository`1.GetConnectionAsync(System.Threading.CancellationToken)">
             <summary>
-            Asynchronously gets a connection to the SQLite database from the connection factory.
+            Asynchronously gets a connection to the database from the connection factory.
             </summary>
             <param name="cancellationToken">Cancellation token to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation containing a SQLite database connection.</returns>
+            <returns>A task that represents the asynchronous operation containing a database connection.</returns>
         </member>
         <member name="M:Durable.Sqlite.SqliteRepository`1.GetEntityName">
             <summary>

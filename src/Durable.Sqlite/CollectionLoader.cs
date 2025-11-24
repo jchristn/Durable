@@ -207,7 +207,7 @@ namespace Durable.Sqlite
             List<object> primaryKeys,
             Type collectionItemType)
         {
-            using SqliteCommand command = connection.CreateCommand();
+            using SqliteCommand command = (SqliteCommand)connection.CreateCommand();
             if (transaction != null && transaction is SqliteRepositoryTransaction sqliteTransaction)
             {
                 command.Transaction = sqliteTransaction.Transaction as SqliteTransaction;
@@ -269,7 +269,7 @@ namespace Durable.Sqlite
             Type collectionItemType,
             string thisEntityFkColumn)
         {
-            using SqliteCommand command = connection.CreateCommand();
+            using SqliteCommand command = (SqliteCommand)connection.CreateCommand();
             if (transaction != null && transaction is SqliteRepositoryTransaction sqliteTransaction)
             {
                 command.Transaction = sqliteTransaction.Transaction as SqliteTransaction;
@@ -358,7 +358,7 @@ namespace Durable.Sqlite
                 sql.Append($"ON r.{_Sanitizer.SanitizeIdentifier(relatedPkColumn)} = j.{_Sanitizer.SanitizeIdentifier(relatedEntityFkColumn)} ");
                 sql.Append($"WHERE j.{_Sanitizer.SanitizeIdentifier(thisEntityFkColumn)} = @pk");
 
-                using SqliteCommand command = connection.CreateCommand();
+                using SqliteCommand command = (SqliteCommand)connection.CreateCommand();
                 if (transaction != null && transaction is SqliteRepositoryTransaction sqliteTransaction)
                 {
                     command.Transaction = sqliteTransaction.Transaction as SqliteTransaction;
@@ -419,7 +419,7 @@ namespace Durable.Sqlite
             sql.Append(string.Join(", ", primaryKeys.Select((_, i) => $"@pk{i}")));
             sql.Append(")");
 
-            using SqliteCommand command = connection.CreateCommand();
+            using SqliteCommand command = (SqliteCommand)connection.CreateCommand();
             if (transaction != null && transaction is SqliteRepositoryTransaction sqliteTransaction)
             {
                 command.Transaction = sqliteTransaction.Transaction as SqliteTransaction;

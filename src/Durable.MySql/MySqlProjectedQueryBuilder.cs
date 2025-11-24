@@ -3,6 +3,7 @@ namespace Durable.MySql
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Data.Common;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -485,13 +486,13 @@ namespace Durable.MySql
             try
             {
                 string sql = BuildSqlInternal();
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -518,13 +519,13 @@ namespace Durable.MySql
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((MySqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -554,16 +555,16 @@ namespace Durable.MySql
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+            using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
 
             try
             {
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((MySqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using MySqlCommand command = connection.CreateCommand();
+                using MySqlCommand command = (MySqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);

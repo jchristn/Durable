@@ -2876,7 +2876,7 @@
             Gets a connection from the connection factory.
             Note: The caller is responsible for disposing the connection.
             </summary>
-            <returns>A PostgreSQL connection</returns>
+            <returns>A database connection</returns>
         </member>
         <member name="M:Durable.Postgres.PostgresRepository`1.GetConnectionAsync(System.Threading.CancellationToken)">
             <summary>
@@ -2884,7 +2884,7 @@
             Note: The caller is responsible for disposing the connection.
             </summary>
             <param name="cancellationToken">Cancellation token for the async operation</param>
-            <returns>A PostgreSQL connection</returns>
+            <returns>A database connection</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
         <member name="M:Durable.Postgres.PostgresRepository`1.GetPrimaryKeyValue(`0)">

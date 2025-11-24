@@ -73,9 +73,9 @@ namespace Test.Postgres
             Console.WriteLine("OPTIONS:");
             Console.WriteLine("  --host, -h            PostgreSQL server hostname (default: localhost)");
             Console.WriteLine("  --port, -p            PostgreSQL server port (default: 5432)");
-            Console.WriteLine("  --database, -d        Database name (default: durable_test)");
-            Console.WriteLine("  --username, -u        PostgreSQL username (default: test_user)");
-            Console.WriteLine("  --password, -pw       PostgreSQL password (default: test_password)");
+            Console.WriteLine("  --database, -d        Database name (default: postgres)");
+            Console.WriteLine("  --username, -u        PostgreSQL username (default: postgres)");
+            Console.WriteLine("  --password, -pw       PostgreSQL password (default: password)");
             Console.WriteLine("  --connection-string   Full PostgreSQL connection string");
             Console.WriteLine("  --help, -h, /?        Show this help message");
             Console.WriteLine();
@@ -97,9 +97,9 @@ namespace Test.Postgres
             Console.WriteLine("  If PostgreSQL is not installed, you can use Docker:");
             Console.WriteLine();
             Console.WriteLine("    docker run -d --name durable-postgres-test \\");
-            Console.WriteLine("      -e POSTGRES_DB=durable_test \\");
-            Console.WriteLine("      -e POSTGRES_USER=test_user \\");
-            Console.WriteLine("      -e POSTGRES_PASSWORD=test_password \\");
+            Console.WriteLine("      -e POSTGRES_DB=postgres \\");
+            Console.WriteLine("      -e POSTGRES_USER=postgres \\");
+            Console.WriteLine("      -e POSTGRES_PASSWORD=password \\");
             Console.WriteLine("      -p 5432:5432 \\");
             Console.WriteLine("      postgres:15");
             Console.WriteLine();
@@ -120,9 +120,9 @@ namespace Test.Postgres
 
             string host = PromptWithDefault("Host", "localhost");
             string port = PromptWithDefault("Port", "5432");
-            string database = PromptWithDefault("Database", "durable_test");
-            string username = PromptWithDefault("Username", "test_user");
-            string password = PromptWithOptional("Password", "test_password");
+            string database = PromptWithDefault("Database", "postgres");
+            string username = PromptWithDefault("Username", "postgres");
+            string password = PromptWithOptional("Password", "password");
 
             string connectionString;
             if (string.IsNullOrEmpty(password))
@@ -191,9 +191,9 @@ namespace Test.Postgres
             // Build connection string from individual parameters
             string host = "localhost";
             string port = "5432";
-            string database = "durable_test";
-            string username = "test_user";
-            string password = "test_password";
+            string database = "postgres";
+            string username = "postgres";
+            string password = "password";
 
             for (int i = 0; i < args.Length - 1; i++)
             {

@@ -11,9 +11,10 @@ namespace Durable.Postgres
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using Npgsql;
+    using Durable;
     using Durable.ConcurrencyConflictResolvers;
     using Durable.DefaultValueProviders;
+    using Npgsql;
 
     /// <summary>
     /// PostgreSQL Repository Implementation with Full Transaction Support and Connection Pooling.
@@ -2388,47 +2389,39 @@ namespace Durable.Postgres
             if (string.IsNullOrWhiteSpace(sql))
                 throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
 
-            List<T> results = new List<T>();
-
-            NpgsqlConnection connection;
-            NpgsqlTransaction? sqlTransaction = null;
-            bool shouldDisposeConnection = false;
-
             if (transaction != null)
             {
-                connection = (NpgsqlConnection)transaction.Connection;
-                sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                return FromSqlWithConnection(sql, transaction.Connection, transaction.Transaction, parameters);
             }
             else
             {
-                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-                shouldDisposeConnection = true;
-            }
-
-            try
-            {
-                if (connection.State != System.Data.ConnectionState.Open)
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
-                    connection.Open();
-                }
-
-                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
-                AddParametersToCommand(command, parameters);
-
-                using NpgsqlDataReader reader = command.ExecuteReader();
-                PostgresEntityMapper<T> mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
-
-                while (reader.Read())
-                {
-                    results.Add(mapper.MapEntity(reader));
+                    return FromSqlWithConnection(sql, conn, null, parameters);
                 }
             }
-            finally
+        }
+
+        private List<T> FromSqlWithConnection(string sql, DbConnection connection, DbTransaction? sqlTransaction, params object[] parameters)
+        {
+            List<T> results = new List<T>();
+
+            if (connection.State != System.Data.ConnectionState.Open)
             {
-                if (shouldDisposeConnection && connection != null)
-                {
-                    _ConnectionFactory.ReturnConnection(connection);
-                }
+                connection.Open();
+            }
+
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)sqlTransaction);
+            AddParametersToCommand(command, parameters);
+
+            using NpgsqlDataReader reader = command.ExecuteReader();
+            PostgresEntityMapper<T> mapper = new PostgresEntityMapper<T>(_DataTypeConverter, _ColumnMappings, _Sanitizer);
+
+            while (reader.Read())
+            {
+                results.Add(mapper.MapEntity(reader));
             }
 
             return results;
@@ -2449,53 +2442,45 @@ namespace Durable.Postgres
             if (string.IsNullOrWhiteSpace(sql))
                 throw new ArgumentException("SQL cannot be null or empty", nameof(sql));
 
-            List<TResult> results = new List<TResult>();
-
-            NpgsqlConnection connection;
-            NpgsqlTransaction? sqlTransaction = null;
-            bool shouldDisposeConnection = false;
-
             if (transaction != null)
             {
-                connection = (NpgsqlConnection)transaction.Connection;
-                sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                return FromSqlGenericWithConnection<TResult>(sql, transaction.Connection, transaction.Transaction, parameters);
             }
             else
             {
-                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-                shouldDisposeConnection = true;
-            }
-
-            try
-            {
-                if (connection.State != System.Data.ConnectionState.Open)
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
-                    connection.Open();
-                }
-
-                using NpgsqlCommand command = new NpgsqlCommand(sql, connection, sqlTransaction);
-                AddParametersToCommand(command, parameters);
-
-                // Capture SQL if enabled
-                if (_CaptureSql)
-                {
-                    _LastExecutedSql = command.CommandText;
-                    _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
-                }
-
-                using NpgsqlDataReader reader = command.ExecuteReader();
-
-                while (reader.Read())
-                {
-                    results.Add(MapReaderToType<TResult>(reader));
+                    return FromSqlGenericWithConnection<TResult>(sql, conn, null, parameters);
                 }
             }
-            finally
+        }
+
+        private List<TResult> FromSqlGenericWithConnection<TResult>(string sql, DbConnection connection, DbTransaction? sqlTransaction, params object[] parameters) where TResult : new()
+        {
+            List<TResult> results = new List<TResult>();
+
+            if (connection.State != System.Data.ConnectionState.Open)
             {
-                if (shouldDisposeConnection && connection != null)
-                {
-                    _ConnectionFactory.ReturnConnection(connection);
-                }
+                connection.Open();
+            }
+
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)sqlTransaction);
+            AddParametersToCommand(command, parameters);
+
+            // Capture SQL if enabled
+            if (_CaptureSql)
+            {
+                _LastExecutedSql = command.CommandText;
+                _LastExecutedSqlWithParameters = BuildSqlWithParameters(command);
+            }
+
+            using NpgsqlDataReader reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                results.Add(MapReaderToType<TResult>(reader));
             }
 
             return results;
@@ -2552,18 +2537,20 @@ namespace Durable.Postgres
 
             token.ThrowIfCancellationRequested();
 
+            DbConnection? dbConnection = null;
             NpgsqlConnection connection;
             NpgsqlTransaction? sqlTransaction = null;
             bool shouldDisposeConnection = false;
 
             if (transaction != null)
             {
-                connection = (NpgsqlConnection)transaction.Connection;
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(transaction.Connection);
                 sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
             }
             else
             {
-                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
+                dbConnection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
                 shouldDisposeConnection = true;
             }
 
@@ -2585,9 +2572,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection && connection != null)
+                if (shouldDisposeConnection && dbConnection != null)
                 {
-                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    await _ConnectionFactory.ReturnConnectionAsync(dbConnection).ConfigureAwait(false);
                 }
             }
         }
@@ -2610,18 +2597,20 @@ namespace Durable.Postgres
 
             token.ThrowIfCancellationRequested();
 
+            DbConnection? dbConnection = null;
             NpgsqlConnection connection;
             NpgsqlTransaction? sqlTransaction = null;
             bool shouldDisposeConnection = false;
 
             if (transaction != null)
             {
-                connection = (NpgsqlConnection)transaction.Connection;
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(transaction.Connection);
                 sqlTransaction = (NpgsqlTransaction)transaction.Transaction;
             }
             else
             {
-                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
+                dbConnection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
                 shouldDisposeConnection = true;
             }
 
@@ -2649,9 +2638,9 @@ namespace Durable.Postgres
             }
             finally
             {
-                if (shouldDisposeConnection && connection != null)
+                if (shouldDisposeConnection && dbConnection != null)
                 {
-                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                    await _ConnectionFactory.ReturnConnectionAsync(dbConnection).ConfigureAwait(false);
                 }
             }
         }
@@ -2711,7 +2700,7 @@ namespace Durable.Postgres
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            DbConnection connection = _ConnectionFactory.GetConnection();
+            NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
 
             // Ensure connection is open (GetConnection might return an already open connection)
             if (connection.State != ConnectionState.Open)
@@ -2719,8 +2708,8 @@ namespace Durable.Postgres
                 connection.Open();
             }
 
-            DbTransaction transaction = connection.BeginTransaction();
-            return new PostgresRepositoryTransaction((NpgsqlConnection)connection, (NpgsqlTransaction)transaction, _ConnectionFactory);
+            NpgsqlTransaction transaction = connection.BeginTransaction();
+            return new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
         /// <summary>
@@ -2732,7 +2721,7 @@ namespace Durable.Postgres
         {
             token.ThrowIfCancellationRequested();
 
-            DbConnection connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+            NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
 
             // Ensure connection is open (GetConnectionAsync might return an already open connection)
             if (connection.State != ConnectionState.Open)
@@ -2740,8 +2729,8 @@ namespace Durable.Postgres
                 await connection.OpenAsync(token).ConfigureAwait(false);
             }
 
-            DbTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
-            return new PostgresRepositoryTransaction((NpgsqlConnection)connection, (NpgsqlTransaction)transaction, _ConnectionFactory);
+            NpgsqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
+            return new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
         }
 
         /// <summary>
@@ -2774,11 +2763,10 @@ namespace Durable.Postgres
         /// Gets a connection from the connection factory.
         /// Note: The caller is responsible for disposing the connection.
         /// </summary>
-        /// <returns>A PostgreSQL connection</returns>
-        public NpgsqlConnection GetConnection()
+        /// <returns>A database connection</returns>
+        public DbConnection GetConnection()
         {
-            DbConnection connection = _ConnectionFactory.GetConnection();
-            return (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            return _ConnectionFactory.GetConnection();
         }
 
         /// <summary>
@@ -2786,13 +2774,12 @@ namespace Durable.Postgres
         /// Note: The caller is responsible for disposing the connection.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token for the async operation</param>
-        /// <returns>A PostgreSQL connection</returns>
+        /// <returns>A database connection</returns>
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
-        public async Task<NpgsqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
-            return (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            return await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -2894,10 +2881,11 @@ namespace Durable.Postgres
 
         private int ExecuteNonQueryWithConnection(DbConnection connection, string sql, DbTransaction? transaction, params (string name, object? value)[] parameters)
         {
-            if (connection.State != ConnectionState.Open)
-                connection.Open();
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            if (npgsqlConn.State != ConnectionState.Open)
+                npgsqlConn.Open();
 
-            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)transaction);
             foreach ((string name, object? value) param in parameters)
             {
                 command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
@@ -2915,9 +2903,10 @@ namespace Durable.Postgres
 
         private async Task<int> ExecuteNonQueryWithConnectionAsync(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
         {
-            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            await EnsureConnectionOpenAsync(npgsqlConn, token).ConfigureAwait(false);
 
-            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)transaction);
             foreach ((string name, object? value) param in parameters)
             {
                 command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
@@ -2935,10 +2924,11 @@ namespace Durable.Postgres
 
         private TResult? ExecuteScalarWithConnection<TResult>(DbConnection connection, string sql, DbTransaction? transaction, params (string name, object? value)[] parameters)
         {
-            if (connection.State != ConnectionState.Open)
-                connection.Open();
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            if (npgsqlConn.State != ConnectionState.Open)
+                npgsqlConn.Open();
 
-            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)transaction);
             foreach ((string name, object? value) param in parameters)
             {
                 command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
@@ -2960,9 +2950,10 @@ namespace Durable.Postgres
 
         private async Task<TResult?> ExecuteScalarWithConnectionAsync<TResult>(DbConnection connection, string sql, DbTransaction? transaction, CancellationToken token, params (string name, object? value)[] parameters)
         {
-            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
+            NpgsqlConnection npgsqlConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
+            await EnsureConnectionOpenAsync(npgsqlConn, token).ConfigureAwait(false);
 
-            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection, (NpgsqlTransaction?)transaction);
+            using NpgsqlCommand command = new NpgsqlCommand(sql, npgsqlConn, (NpgsqlTransaction?)transaction);
             foreach ((string name, object? value) param in parameters)
             {
                 command.Parameters.AddWithValue(param.name, param.value ?? DBNull.Value);
@@ -3073,7 +3064,8 @@ namespace Durable.Postgres
 
                     if (transaction != null)
                     {
-                        using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)transaction.Connection, (NpgsqlTransaction)transaction.Transaction);
+                        NpgsqlConnection txnConn = (NpgsqlConnection)PooledConnectionHandle.Unwrap(transaction.Connection);
+                        using NpgsqlCommand command = new NpgsqlCommand(sql, txnConn, (NpgsqlTransaction)transaction.Transaction);
                         foreach ((string name, object value) in parameters)
                         {
                             command.Parameters.AddWithValue(name, value ?? DBNull.Value);
@@ -3087,13 +3079,14 @@ namespace Durable.Postgres
                     }
                     else
                     {
-                        DbConnection? connection = null;
+                        DbConnection? dbConnection = null;
                         try
                         {
-                            connection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
-                            await EnsureConnectionOpenAsync((NpgsqlConnection)connection, token).ConfigureAwait(false);
+                            dbConnection = await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                            NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(dbConnection);
+                            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
 
-                            using NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
+                            using NpgsqlCommand command = new NpgsqlCommand(sql, connection);
 #pragma warning disable CS8600
                             foreach ((string name, object value) in parameters)
 #pragma warning restore CS8600
@@ -3109,8 +3102,8 @@ namespace Durable.Postgres
                         }
                         finally
                         {
-                            if (connection != null)
-                                await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                            if (dbConnection != null)
+                                await _ConnectionFactory.ReturnConnectionAsync(dbConnection).ConfigureAwait(false);
                         }
                     }
 
@@ -3386,7 +3379,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
+                using DbConnection connection = _ConnectionFactory.GetConnection();
                 EnsureConnectionOpen(connection);
                 tableExists = PostgresSchemaBuilder.TableExists(tableName, schemaName, connection);
             }
@@ -3403,7 +3396,7 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
+                    using DbConnection connection = _ConnectionFactory.GetConnection();
                     ExecuteNonQueryWithConnection(connection, createTableSql, null);
                 }
             }
@@ -3453,7 +3446,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
+                using DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
                 await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
                 tableExists = PostgresSchemaBuilder.TableExists(tableName, schemaName, connection);
             }
@@ -3470,7 +3463,7 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
+                    using DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
                     await ExecuteNonQueryWithConnectionAsync(connection, createTableSql, null, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -3659,9 +3652,10 @@ namespace Durable.Postgres
             string schemaName = Settings?.Database ?? "public";
             try
             {
-                NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-                try
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
+                    NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(conn);
+
                     if (PostgresSchemaBuilder.TableExists(tableName, schemaName, connection))
                     {
                         List<ColumnInfo> existingColumns = PostgresSchemaBuilder.GetTableColumns(tableName, schemaName, connection);
@@ -3700,10 +3694,6 @@ namespace Durable.Postgres
                             }
                         }
                     }
-                }
-                finally
-                {
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
             catch (Exception ex)
@@ -3759,14 +3749,14 @@ namespace Durable.Postgres
 
             if (transaction != null)
             {
-                NpgsqlConnection connection = (NpgsqlConnection)transaction.Connection;
-                NpgsqlTransaction npgsqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
                 {
-                    using (NpgsqlCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
-                        command.Transaction = npgsqlTransaction;
+                        command.Transaction = dbTransaction;
                         command.CommandText = sql;
                         command.ExecuteNonQuery();
                     }
@@ -3774,18 +3764,16 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection connection = _ConnectionFactory.GetConnection())
                 {
                     foreach (string sql in indexSqlStatements)
                     {
-                        using (NpgsqlCommand command = connection.CreateCommand())
+                        using (DbCommand command = connection.CreateCommand())
                         {
                             command.CommandText = sql;
                             command.ExecuteNonQuery();
                         }
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3806,16 +3794,16 @@ namespace Durable.Postgres
 
             if (transaction != null)
             {
-                NpgsqlConnection connection = (NpgsqlConnection)transaction.Connection;
-                NpgsqlTransaction npgsqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    using (NpgsqlCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
-                        command.Transaction = npgsqlTransaction;
+                        command.Transaction = dbTransaction;
                         command.CommandText = sql;
                         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -3823,20 +3811,18 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection connection = _ConnectionFactory.GetConnection())
                 {
                     foreach (string sql in indexSqlStatements)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        using (NpgsqlCommand command = connection.CreateCommand())
+                        using (DbCommand command = connection.CreateCommand())
                         {
                             command.CommandText = sql;
                             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                         }
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3851,27 +3837,25 @@ namespace Durable.Postgres
 
             if (transaction != null)
             {
-                NpgsqlConnection connection = (NpgsqlConnection)transaction.Connection;
-                NpgsqlTransaction npgsqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
-                using (NpgsqlCommand command = connection.CreateCommand())
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    command.Transaction = npgsqlTransaction;
+                    command.Transaction = dbTransaction;
                     command.CommandText = sql;
                     command.ExecuteNonQuery();
                 }
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection connection = _ConnectionFactory.GetConnection())
                 {
-                    using (NpgsqlCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
                         command.CommandText = sql;
                         command.ExecuteNonQuery();
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3888,27 +3872,25 @@ namespace Durable.Postgres
 
             if (transaction != null)
             {
-                NpgsqlConnection connection = (NpgsqlConnection)transaction.Connection;
-                NpgsqlTransaction npgsqlTransaction = (NpgsqlTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
-                using (NpgsqlCommand command = connection.CreateCommand())
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    command.Transaction = npgsqlTransaction;
+                    command.Transaction = dbTransaction;
                     command.CommandText = sql;
                     await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection connection = _ConnectionFactory.GetConnection())
                 {
-                    using (NpgsqlCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
                         command.CommandText = sql;
                         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3925,12 +3907,12 @@ namespace Durable.Postgres
             string tableName = entityAttr.Name;
             string schemaName = "public"; // PostgreSQL default schema
 
-            using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+            using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
+                NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(conn);
+
                 List<IndexInfo> indexes = PostgresSchemaBuilder.GetExistingIndexes(tableName, schemaName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
-
-                _ConnectionFactory.ReturnConnection(connection);
 
                 return indexNames;
             }
@@ -3949,8 +3931,10 @@ namespace Durable.Postgres
             string tableName = entityAttr.Name;
             string schemaName = "public"; // PostgreSQL default schema
 
-            using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+            using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
+                NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(conn);
+
                 await Task.Run(() =>
                 {
                     // Npgsql operations
@@ -3958,8 +3942,6 @@ namespace Durable.Postgres
 
                 List<IndexInfo> indexes = PostgresSchemaBuilder.GetExistingIndexes(tableName, schemaName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
-
-                _ConnectionFactory.ReturnConnection(connection);
 
                 return indexNames;
             }

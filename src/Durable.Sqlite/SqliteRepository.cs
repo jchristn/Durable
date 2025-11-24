@@ -1053,7 +1053,8 @@
         /// <exception cref="InvalidOperationException">Thrown when unable to create a database connection or transaction.</exception>
         public ITransaction BeginTransaction()
         {
-            SqliteConnection connection = GetConnection();
+            DbConnection dbConn = GetConnection();
+            SqliteConnection connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
             connection.Open();
             SqliteTransaction transaction = connection.BeginTransaction();
             return new SqliteRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -1069,7 +1070,8 @@
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            SqliteConnection connection = GetConnection();
+            DbConnection dbConn = GetConnection();
+            SqliteConnection connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
             await connection.OpenAsync(token);
             SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
             return new SqliteRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -1437,7 +1439,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    DbConnection dbConn = GetConnection();
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -1503,7 +1506,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = await GetConnectionAsync(token);
+                    DbConnection dbConn = await GetConnectionAsync(token);
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -1791,7 +1795,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    DbConnection dbConn = GetConnection();
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -1853,7 +1858,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    DbConnection dbConn = GetConnection();
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -2273,7 +2279,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    DbConnection dbConn = GetConnection();
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     connection.Open();
                     localTransaction = connection.BeginTransaction();
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -2327,7 +2334,8 @@
             {
                 if (ownTransaction)
                 {
-                    connection = GetConnection();
+                    DbConnection dbConn = GetConnection();
+                    connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                     await connection.OpenAsync(token);
                     localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(token);
                     transaction = new SqliteRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
@@ -2508,22 +2516,20 @@
         /// <summary>
         /// Gets a connection to the SQLite database from the connection factory.
         /// </summary>
-        /// <returns>A SQLite database connection.</returns>
-        public SqliteConnection GetConnection()
+        /// <returns>A database connection.</returns>
+        public DbConnection GetConnection()
         {
-            DbConnection connection = _ConnectionFactory.GetConnection();
-            return (SqliteConnection)PooledConnectionHandle.Unwrap(connection);
+            return _ConnectionFactory.GetConnection();
         }
 
         /// <summary>
-        /// Asynchronously gets a connection to the SQLite database from the connection factory.
+        /// Asynchronously gets a connection to the database from the connection factory.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation containing a SQLite database connection.</returns>
-        public async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        /// <returns>A task that represents the asynchronous operation containing a database connection.</returns>
+        public async Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
-            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken);
-            return (SqliteConnection)PooledConnectionHandle.Unwrap(connection);
+            return await _ConnectionFactory.GetConnectionAsync(cancellationToken);
         }
 
         private void CleanupConnection(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
@@ -2544,6 +2550,22 @@
             }
         }
 
+        internal void ReturnConnectionToPool(SqliteConnection connection)
+        {
+            if (connection != null)
+            {
+                _ConnectionFactory.ReturnConnection(connection);
+            }
+        }
+
+        internal async Task ReturnConnectionToPoolAsync(SqliteConnection connection)
+        {
+            if (connection != null)
+            {
+                await _ConnectionFactory.ReturnConnectionAsync(connection);
+            }
+        }
+
         internal ConnectionCommandResult<SqliteConnection, SqliteCommand> GetConnectionAndCommand(ITransaction transaction)
         {
             // Use provided transaction or check for ambient transaction
@@ -2558,7 +2580,8 @@
             }
             else
             {
-                SqliteConnection connection = GetConnection();
+                DbConnection dbConn = GetConnection();
+            SqliteConnection connection = dbConn is PooledConnectionHandle h ? h.GetInnerConnection<SqliteConnection>() : (SqliteConnection)dbConn;
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -2583,7 +2606,10 @@
             }
             else
             {
-                SqliteConnection connection = await GetConnectionAsync(token);
+                DbConnection dbConnection = await GetConnectionAsync(token);
+                SqliteConnection connection = dbConnection is PooledConnectionHandle handle
+                    ? handle.GetInnerConnection<SqliteConnection>()
+                    : (SqliteConnection)dbConnection;
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token);
@@ -3535,8 +3561,12 @@
             // If table exists, check schema compatibility
             try
             {
-                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
+                    SqliteConnection connection = conn is PooledConnectionHandle h
+                        ? h.GetInnerConnection<SqliteConnection>()
+                        : (SqliteConnection)conn;
+
                     if (SqliteSchemaBuilder.TableExists(tableName, connection))
                     {
                         List<ColumnInfo> existingColumns = SqliteSchemaBuilder.GetTableColumns(tableName, connection);
@@ -3574,8 +3604,6 @@
                     {
                         warnings.Add($"Table '{tableName}' does not exist and will be created during initialization");
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
             catch (Exception ex)
@@ -3629,14 +3657,14 @@
 
             if (transaction != null)
             {
-                SqliteConnection connection = (SqliteConnection)transaction.Connection;
-                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
                 {
-                    using (SqliteCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
-                        command.Transaction = sqliteTransaction;
+                        command.Transaction = dbTransaction;
                         command.CommandText = sql;
                         command.ExecuteNonQuery();
                     }
@@ -3644,18 +3672,16 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
                     foreach (string sql in indexSqlStatements)
                     {
-                        using (SqliteCommand command = connection.CreateCommand())
+                        using (DbCommand command = conn.CreateCommand())
                         {
                             command.CommandText = sql;
                             command.ExecuteNonQuery();
                         }
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3676,16 +3702,16 @@
 
             if (transaction != null)
             {
-                SqliteConnection connection = (SqliteConnection)transaction.Connection;
-                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
                 foreach (string sql in indexSqlStatements)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    using (SqliteCommand command = connection.CreateCommand())
+                    using (DbCommand command = connection.CreateCommand())
                     {
-                        command.Transaction = sqliteTransaction;
+                        command.Transaction = dbTransaction;
                         command.CommandText = sql;
                         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -3693,20 +3719,18 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
                     foreach (string sql in indexSqlStatements)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        using (SqliteCommand command = connection.CreateCommand())
+                        using (DbCommand command = conn.CreateCommand())
                         {
                             command.CommandText = sql;
                             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                         }
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3721,27 +3745,25 @@
 
             if (transaction != null)
             {
-                SqliteConnection connection = (SqliteConnection)transaction.Connection;
-                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
-                using (SqliteCommand command = connection.CreateCommand())
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    command.Transaction = sqliteTransaction;
+                    command.Transaction = dbTransaction;
                     command.CommandText = sql;
                     command.ExecuteNonQuery();
                 }
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
-                    using (SqliteCommand command = connection.CreateCommand())
+                    using (DbCommand command = conn.CreateCommand())
                     {
                         command.CommandText = sql;
                         command.ExecuteNonQuery();
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3758,27 +3780,25 @@
 
             if (transaction != null)
             {
-                SqliteConnection connection = (SqliteConnection)transaction.Connection;
-                SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction.Transaction;
+                DbConnection connection = transaction.Connection;
+                DbTransaction dbTransaction = transaction.Transaction;
 
-                using (SqliteCommand command = connection.CreateCommand())
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    command.Transaction = sqliteTransaction;
+                    command.Transaction = dbTransaction;
                     command.CommandText = sql;
                     await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+                using (DbConnection conn = _ConnectionFactory.GetConnection())
                 {
-                    using (SqliteCommand command = connection.CreateCommand())
+                    using (DbCommand command = conn.CreateCommand())
                     {
                         command.CommandText = sql;
                         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                     }
-
-                    _ConnectionFactory.ReturnConnection(connection);
                 }
             }
         }
@@ -3794,12 +3814,14 @@
 
             string tableName = entityAttr.Name;
 
-            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+            using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
+                SqliteConnection connection = conn is PooledConnectionHandle h
+                    ? h.GetInnerConnection<SqliteConnection>()
+                    : (SqliteConnection)conn;
+
                 List<IndexInfo> indexes = SqliteSchemaBuilder.GetExistingIndexes(tableName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
-
-                _ConnectionFactory.ReturnConnection(connection);
 
                 return indexNames;
             }
@@ -3817,8 +3839,12 @@
 
             string tableName = entityAttr.Name;
 
-            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
+            using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
+                SqliteConnection connection = conn is PooledConnectionHandle h
+                    ? h.GetInnerConnection<SqliteConnection>()
+                    : (SqliteConnection)conn;
+
                 await Task.Run(() =>
                 {
                     // SQLite operations are synchronous
@@ -3826,8 +3852,6 @@
 
                 List<IndexInfo> indexes = SqliteSchemaBuilder.GetExistingIndexes(tableName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
-
-                _ConnectionFactory.ReturnConnection(connection);
 
                 return indexNames;
             }
@@ -3842,7 +3866,6 @@
             // Just verify we can connect
             using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
-                SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(conn);
                 // Connection created successfully - wrapper will automatically return to pool on dispose
             }
         }
@@ -3854,10 +3877,9 @@
             // This is handled automatically by SqliteConnection when Mode is ReadWriteCreate (default)
 
             // Just verify we can connect
-            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken)))
+            using (DbConnection conn = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false))
             {
-                // Connection created successfully
-                await _ConnectionFactory.ReturnConnectionAsync(connection);
+                // Connection created successfully - wrapper will automatically return to pool on dispose
             }
         }
 

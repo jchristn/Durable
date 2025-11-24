@@ -1080,9 +1080,10 @@ namespace Durable.Postgres
                     connection.Open();
                 }
 
-                using (NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection))
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    using (NpgsqlDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (NpgsqlDataReader reader = (NpgsqlDataReader)command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
@@ -1096,7 +1097,7 @@ namespace Durable.Postgres
             {
                 if (shouldDisposeConnection && connection != null)
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
 
@@ -1122,9 +1123,10 @@ namespace Durable.Postgres
                     _Repository.SetLastExecutedSql(sql);
                 }
 
-                using (NpgsqlCommand command = new NpgsqlCommand(sql, (NpgsqlConnection)connection))
+                using (DbCommand command = connection.CreateCommand())
                 {
-                    using (NpgsqlDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false))
+                    command.CommandText = sql;
+                    using (NpgsqlDataReader reader = (NpgsqlDataReader)await command.ExecuteReaderAsync(token).ConfigureAwait(false))
                     {
                         // Check if we have includes that require advanced mapping
                         if (_IncludePaths.Count > 0)
@@ -1147,7 +1149,7 @@ namespace Durable.Postgres
             {
                 if (shouldDisposeConnection && connection != null)
                 {
-                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connection);
+                    await connection.DisposeAsync();
                 }
             }
         }
@@ -1491,7 +1493,7 @@ namespace Durable.Postgres
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1581,7 +1583,7 @@ namespace Durable.Postgres
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1671,7 +1673,7 @@ namespace Durable.Postgres
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }
@@ -1724,7 +1726,7 @@ namespace Durable.Postgres
                 }
                 finally
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
+                    connection.Dispose();
                 }
             }
         }

@@ -1359,17 +1359,9 @@ namespace Durable.MySql
             }
             else
             {
-                // Get connection from factory
-                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return ExecuteWithConnection(connection, sql);
-                }
-                finally
-                {
-                    // Return connection to pool
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                // Get connection from factory - it will automatically return to pool on disposal
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return ExecuteWithConnection(connection, sql);
             }
         }
 
@@ -1479,17 +1471,9 @@ namespace Durable.MySql
             }
             else
             {
-                // Get connection from factory
-                DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
-                }
-                finally
-                {
-                    // Return connection to pool
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                // Get connection from factory - it will automatically return to pool on disposal
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return await ExecuteWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
             }
         }
 

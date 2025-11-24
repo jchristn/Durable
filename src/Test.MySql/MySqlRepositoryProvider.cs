@@ -110,6 +110,54 @@ namespace Test.MySql
                     publisher_id INT
                 ) ENGINE=InnoDB
             ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS author_categories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    author_id INT NOT NULL,
+                    category_id INT NOT NULL
+                ) ENGINE=InnoDB
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS categories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    description VARCHAR(255)
+                ) ENGINE=InnoDB
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    industry VARCHAR(50)
+                ) ENGINE=InnoDB
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    first_name VARCHAR(100) NOT NULL,
+                    last_name VARCHAR(100) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    department VARCHAR(100) NOT NULL,
+                    hire_date DATETIME NOT NULL,
+                    salary DECIMAL(15,2) NOT NULL
+                ) ENGINE=InnoDB
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                CREATE TABLE IF NOT EXISTS products (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL,
+                    sku VARCHAR(50) NOT NULL,
+                    category VARCHAR(100) NOT NULL,
+                    price DECIMAL(15,2) NOT NULL,
+                    stock_quantity INT NOT NULL,
+                    description VARCHAR(1000)
+                ) ENGINE=InnoDB
+            ");
         }
 
         /// <summary>
@@ -122,11 +170,16 @@ namespace Test.MySql
             {
                 IRepository<Person> personRepo = CreateRepository<Person>();
 
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories");
                 await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books");
                 await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version");
                 await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS categories");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS companies");
                 await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
                 await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people");
+                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             }
             catch
             {

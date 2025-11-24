@@ -581,7 +581,7 @@
                 connectionResult.Command?.Dispose();
                 if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    _Repository._ConnectionFactory.ReturnConnection(connectionResult.Connection);
+                    _Repository.ReturnConnectionToPool(connectionResult.Connection);
                 }
             }
         }
@@ -653,7 +653,7 @@
                 if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
                 if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connectionResult.Connection);
+                    await _Repository.ReturnConnectionToPoolAsync(connectionResult.Connection);
                 }
             }
         }
@@ -686,7 +686,7 @@
                 if (connectionResult.Command != null) await connectionResult.Command.DisposeAsync();
                 if (connectionResult.ShouldDispose && connectionResult.Connection != null)
                 {
-                    await _Repository._ConnectionFactory.ReturnConnectionAsync(connectionResult.Connection);
+                    await _Repository.ReturnConnectionToPoolAsync(connectionResult.Connection);
                 }
             }
         }
@@ -1460,15 +1460,8 @@
             }
             else
             {
-                System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return ExecuteScalarWithConnection<TResult>(connection, sql);
-                }
-                finally
-                {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                using System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return ExecuteScalarWithConnection<TResult>(connection, sql);
             }
         }
 
@@ -1547,15 +1540,8 @@
             }
             else
             {
-                System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return await ExecuteScalarWithConnectionAsync<TResult>(connection, sql, token).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                using System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return await ExecuteScalarWithConnectionAsync<TResult>(connection, sql, token).ConfigureAwait(false);
             }
         }
 
@@ -1634,15 +1620,8 @@
             }
             else
             {
-                System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return ExecuteNonQueryWithConnection(connection, sql);
-                }
-                finally
-                {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                using System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return ExecuteNonQueryWithConnection(connection, sql);
             }
         }
 
@@ -1684,15 +1663,8 @@
             }
             else
             {
-                System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
-                try
-                {
-                    return await ExecuteNonQueryWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _Repository._ConnectionFactory.ReturnConnection(connection);
-                }
+                using System.Data.Common.DbConnection connection = _Repository._ConnectionFactory.GetConnection();
+                return await ExecuteNonQueryWithConnectionAsync(connection, sql, token).ConfigureAwait(false);
             }
         }
 

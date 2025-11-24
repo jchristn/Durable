@@ -3,6 +3,7 @@ namespace Durable.Postgres
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Data.Common;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -483,13 +484,13 @@ namespace Durable.Postgres
             try
             {
                 string sql = BuildSqlInternal();
-                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
                 }
 
-                using NpgsqlCommand command = connection.CreateCommand();
+                using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -516,13 +517,13 @@ namespace Durable.Postgres
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+                using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((NpgsqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using NpgsqlCommand command = connection.CreateCommand();
+                using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);
@@ -552,16 +553,16 @@ namespace Durable.Postgres
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
+            using DbConnection connection = _Repository._ConnectionFactory.GetConnection();
 
             try
             {
                 if (connection.State != ConnectionState.Open)
                 {
-                    await ((NpgsqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
+                    await connection.OpenAsync(token).ConfigureAwait(false);
                 }
 
-                using NpgsqlCommand command = connection.CreateCommand();
+                using NpgsqlCommand command = (NpgsqlCommand)connection.CreateCommand();
                 command.CommandText = sql;
 
                 _Repository.SetLastExecutedSql(sql);

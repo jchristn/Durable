@@ -3129,7 +3129,7 @@
             Gets a connection from the connection factory.
             Note: The caller is responsible for disposing the connection.
             </summary>
-            <returns>A SQL Server connection</returns>
+            <returns>A database connection</returns>
         </member>
         <member name="M:Durable.SqlServer.SqlServerRepository`1.GetConnectionAsync(System.Threading.CancellationToken)">
             <summary>
@@ -3137,7 +3137,7 @@
             Note: The caller is responsible for disposing the connection.
             </summary>
             <param name="cancellationToken">Cancellation token for the async operation</param>
-            <returns>A SQL Server connection</returns>
+            <returns>A database connection</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when the operation is cancelled</exception>
         </member>
         <member name="M:Durable.SqlServer.SqlServerRepository`1.InitializeTable(System.Type,Durable.ITransaction)">

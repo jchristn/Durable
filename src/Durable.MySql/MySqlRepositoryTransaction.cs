@@ -29,8 +29,8 @@ namespace Durable.MySql
 
         #region Private-Members
 
-        private readonly MySqlConnection _Connection;
-        private readonly MySqlTransaction _Transaction;
+        private readonly DbConnection _Connection;
+        private readonly DbTransaction _Transaction;
         private readonly IConnectionFactory _ConnectionFactory;
         private bool _Disposed;
         private int _SavepointCounter;
@@ -46,7 +46,7 @@ namespace Durable.MySql
         /// <param name="transaction">The MySQL transaction instance</param>
         /// <param name="connectionFactory">The connection factory for returning connections</param>
         /// <exception cref="ArgumentNullException">Thrown when any parameter is null</exception>
-        public MySqlRepositoryTransaction(MySqlConnection connection, MySqlTransaction transaction, IConnectionFactory connectionFactory)
+        public MySqlRepositoryTransaction(DbConnection connection, DbTransaction transaction, IConnectionFactory connectionFactory)
         {
             _Connection = connection ?? throw new ArgumentNullException(nameof(connection));
             _Transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
@@ -116,7 +116,7 @@ namespace Durable.MySql
             ValidateConnectionState();
 
             name = name ?? $"sp_{Interlocked.Increment(ref _SavepointCounter)}";
-            return new MySqlSavepoint(_Connection, _Transaction, name);
+            return new MySqlSavepoint((MySqlConnection)_Connection, (MySqlTransaction)_Transaction, name);
         }
 
         /// <summary>
@@ -136,10 +136,10 @@ namespace Durable.MySql
             name = name ?? $"sp_{Interlocked.Increment(ref _SavepointCounter)}";
 
             // Create savepoint asynchronously
-            using MySqlCommand command = new MySqlCommand($"SAVEPOINT `{name}`", _Connection, _Transaction);
+            using MySqlCommand command = new MySqlCommand($"SAVEPOINT `{name}`", (MySqlConnection)_Connection, (MySqlTransaction)_Transaction);
             await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-            return new MySqlSavepoint(_Connection, _Transaction, name, false);
+            return new MySqlSavepoint((MySqlConnection)_Connection, (MySqlTransaction)_Transaction, name, false);
         }
 
         /// <summary>

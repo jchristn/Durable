@@ -115,6 +115,59 @@ namespace Test.SqlServer
                     publisher_id INT
                 )
             ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'author_categories')
+                CREATE TABLE author_categories (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    author_id INT NOT NULL,
+                    category_id INT NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'categories')
+                CREATE TABLE categories (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    name NVARCHAR(100) NOT NULL,
+                    description NVARCHAR(255)
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'companies')
+                CREATE TABLE companies (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    name NVARCHAR(100) NOT NULL,
+                    industry NVARCHAR(50)
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'employees')
+                CREATE TABLE employees (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    first_name NVARCHAR(100) NOT NULL,
+                    last_name NVARCHAR(100) NOT NULL,
+                    email NVARCHAR(255) NOT NULL,
+                    department NVARCHAR(100) NOT NULL,
+                    hire_date DATETIME2 NOT NULL,
+                    salary DECIMAL(15,2) NOT NULL
+                )
+            ");
+
+            await personRepo.ExecuteSqlAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'products')
+                CREATE TABLE products (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    name NVARCHAR(200) NOT NULL,
+                    sku NVARCHAR(50) NOT NULL,
+                    category NVARCHAR(100) NOT NULL,
+                    price DECIMAL(15,2) NOT NULL,
+                    stock_quantity INT NOT NULL,
+                    description NVARCHAR(1000)
+                )
+            ");
         }
 
         /// <summary>
@@ -127,11 +180,16 @@ namespace Test.SqlServer
             {
                 IRepository<Person> personRepo = CreateRepository<Person>();
 
+                await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'author_categories') DROP TABLE author_categories");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'books') DROP TABLE books");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'authors_with_version') DROP TABLE authors_with_version");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'authors') DROP TABLE authors");
+                await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'categories') DROP TABLE categories");
+                await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'companies') DROP TABLE companies");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'complex_entities') DROP TABLE complex_entities");
+                await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'employees') DROP TABLE employees");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'people') DROP TABLE people");
+                await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'products') DROP TABLE products");
             }
             catch
             {

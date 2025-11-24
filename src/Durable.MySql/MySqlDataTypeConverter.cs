@@ -372,18 +372,6 @@ namespace Durable.MySql
 
             // Check for PropertyAttribute
             PropertyAttribute? attr = propertyInfo?.GetCustomAttribute<PropertyAttribute>();
-            if (attr != null && (attr.PropertyFlags & Flags.String) == Flags.String)
-            {
-                // Use VARCHAR if MaxLength is specified, otherwise TEXT
-                if (attr.MaxLength > 0)
-                {
-                    return $"VARCHAR({attr.MaxLength})";
-                }
-                else
-                {
-                    return "TEXT";
-                }
-            }
 
             // MySQL type mappings
             if (type == typeof(bool))
@@ -423,7 +411,14 @@ namespace Durable.MySql
             if (type == typeof(Guid))
                 return "CHAR(36)"; // Standard UUID string format
             if (type == typeof(string))
+            {
+                // Use VARCHAR if MaxLength is specified, otherwise TEXT
+                if (attr != null && attr.MaxLength > 0)
+                {
+                    return $"VARCHAR({attr.MaxLength})";
+                }
                 return "TEXT";
+            }
             if (type.IsEnum)
             {
                 if (attr != null && (attr.PropertyFlags & Flags.String) != Flags.String)
