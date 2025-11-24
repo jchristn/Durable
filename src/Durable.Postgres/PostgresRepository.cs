@@ -2777,7 +2777,8 @@ namespace Durable.Postgres
         /// <returns>A PostgreSQL connection</returns>
         public NpgsqlConnection GetConnection()
         {
-            return (NpgsqlConnection)_ConnectionFactory.GetConnection();
+            DbConnection connection = _ConnectionFactory.GetConnection();
+            return (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         /// <summary>
@@ -2790,7 +2791,8 @@ namespace Durable.Postgres
         public async Task<NpgsqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            return (NpgsqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         /// <summary>

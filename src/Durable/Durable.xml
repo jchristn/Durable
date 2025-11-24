@@ -3673,6 +3673,114 @@
             <param name="connection">The database connection to wrap.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when connection is null.</exception>
         </member>
+        <member name="T:Durable.PooledConnectionHandle">
+            <summary>
+            Wraps a pooled database connection and automatically returns it to the pool when disposed.
+            This class forwards all operations to the underlying connection while intercepting disposal
+            to ensure proper connection pool management.
+            </summary>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.#ctor(System.Data.Common.DbConnection,Durable.ConnectionPool)">
+            <summary>
+            Initializes a new instance of the PooledConnectionHandle class.
+            </summary>
+            <param name="innerConnection">The actual database connection to wrap.</param>
+            <param name="pool">The connection pool that owns this connection.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when innerConnection or pool is null.</exception>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.InnerConnection">
+            <summary>
+            Gets the underlying database connection that this handle wraps.
+            Used internally by the connection pool to unwrap connections.
+            </summary>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.ConnectionString">
+            <summary>
+            Gets or sets the connection string for the database connection.
+            </summary>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.Database">
+            <summary>
+            Gets the name of the current database.
+            </summary>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.DataSource">
+            <summary>
+            Gets the name of the database server.
+            </summary>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.ServerVersion">
+            <summary>
+            Gets the version of the database server.
+            </summary>
+        </member>
+        <member name="P:Durable.PooledConnectionHandle.State">
+            <summary>
+            Gets the current state of the connection.
+            </summary>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.Unwrap(System.Data.Common.DbConnection)">
+            <summary>
+            Unwraps a database connection if it's a PooledConnectionHandle, returning the inner connection.
+            If the connection is not wrapped, returns it as-is.
+            </summary>
+            <param name="connection">The connection to unwrap.</param>
+            <returns>The unwrapped database connection.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.ChangeDatabase(System.String)">
+            <summary>
+            Changes the current database for the connection.
+            </summary>
+            <param name="databaseName">The name of the database to use.</param>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.Open">
+            <summary>
+            Opens the database connection.
+            </summary>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.OpenAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously opens the database connection.
+            </summary>
+            <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+            <returns>A task representing the asynchronous operation.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.Close">
+            <summary>
+            Closes the database connection.
+            </summary>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.CloseAsync">
+            <summary>
+            Asynchronously closes the database connection.
+            </summary>
+            <returns>A task representing the asynchronous operation.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.BeginDbTransaction(System.Data.IsolationLevel)">
+            <summary>
+            Begins a database transaction.
+            </summary>
+            <param name="isolationLevel">The isolation level for the transaction.</param>
+            <returns>A database transaction object.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.CreateDbCommand">
+            <summary>
+            Creates a database command object.
+            </summary>
+            <returns>A database command object.</returns>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.Dispose(System.Boolean)">
+            <summary>
+            Disposes the connection handle and returns the underlying connection to the pool.
+            </summary>
+            <param name="disposing">True if disposing managed resources.</param>
+        </member>
+        <member name="M:Durable.PooledConnectionHandle.DisposeAsync">
+            <summary>
+            Asynchronously disposes the connection handle and returns the underlying connection to the pool.
+            </summary>
+            <returns>A task representing the asynchronous disposal operation.</returns>
+        </member>
         <member name="T:Durable.PrimaryKeyInfo">
             <summary>
             Represents information about a primary key column and its corresponding property.

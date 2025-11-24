@@ -87,7 +87,8 @@ namespace Durable
                             {
                                 await pooledConnection.Connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                             }
-                            return pooledConnection.Connection;
+                            // Wrap connection so Dispose() automatically returns it to pool
+                            return new PooledConnectionHandle(pooledConnection.Connection, this);
                         }
                         catch
                         {
@@ -102,7 +103,8 @@ namespace Durable
                 }
 
                 DbConnection newConnection = await CreateNewConnectionAsync(cancellationToken);
-                return newConnection;
+                // Wrap connection so Dispose() automatically returns it to pool
+                return new PooledConnectionHandle(newConnection, this);
             }
             catch
             {
@@ -141,7 +143,8 @@ namespace Durable
                             {
                                 pooledConnection.Connection.Open();
                             }
-                            return pooledConnection.Connection;
+                            // Wrap connection so Dispose() automatically returns it to pool
+                            return new PooledConnectionHandle(pooledConnection.Connection, this);
                         }
                         catch
                         {
@@ -156,7 +159,8 @@ namespace Durable
                 }
 
                 DbConnection newConnection = CreateNewConnection();
-                return newConnection;
+                // Wrap connection so Dispose() automatically returns it to pool
+                return new PooledConnectionHandle(newConnection, this);
             }
             catch
             {
@@ -174,7 +178,14 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            PooledConnection? pooledConnection = FindPooledConnection(connection);
+            // Unwrap if connection is a PooledConnectionHandle
+            DbConnection innerConnection = connection;
+            if (connection is PooledConnectionHandle handle)
+            {
+                innerConnection = handle.InnerConnection;
+            }
+
+            PooledConnection? pooledConnection = FindPooledConnection(innerConnection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -183,9 +194,9 @@ namespace Durable
                 // Close the connection to return it to ADO.NET's pool
                 try
                 {
-                    if (connection.State != System.Data.ConnectionState.Closed)
+                    if (innerConnection.State != System.Data.ConnectionState.Closed)
                     {
-                        await connection.CloseAsync().ConfigureAwait(false);
+                        await innerConnection.CloseAsync().ConfigureAwait(false);
                     }
                 }
                 catch
@@ -218,7 +229,14 @@ namespace Durable
             if (connection == null || _Disposed)
                 return;
 
-            PooledConnection? pooledConnection = FindPooledConnection(connection);
+            // Unwrap if connection is a PooledConnectionHandle
+            DbConnection innerConnection = connection;
+            if (connection is PooledConnectionHandle handle)
+            {
+                innerConnection = handle.InnerConnection;
+            }
+
+            PooledConnection? pooledConnection = FindPooledConnection(innerConnection);
             if (pooledConnection != null)
             {
                 pooledConnection.IsInUse = false;
@@ -227,9 +245,9 @@ namespace Durable
                 // Close the connection to return it to ADO.NET's pool
                 try
                 {
-                    if (connection.State != System.Data.ConnectionState.Closed)
+                    if (innerConnection.State != System.Data.ConnectionState.Closed)
                     {
-                        connection.Close();
+                        innerConnection.Close();
                     }
                 }
                 catch

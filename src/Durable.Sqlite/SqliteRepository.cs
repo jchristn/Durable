@@ -2511,7 +2511,8 @@
         /// <returns>A SQLite database connection.</returns>
         public SqliteConnection GetConnection()
         {
-            return (SqliteConnection)_ConnectionFactory.GetConnection();
+            DbConnection connection = _ConnectionFactory.GetConnection();
+            return (SqliteConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         /// <summary>
@@ -2521,7 +2522,8 @@
         /// <returns>A task that represents the asynchronous operation containing a SQLite database connection.</returns>
         public async Task<SqliteConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
-            return (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken);
+            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken);
+            return (SqliteConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         private void CleanupConnection(SqliteConnection connection, SqliteCommand command, bool shouldReturnToPool)
@@ -3838,10 +3840,10 @@
             // This is handled automatically by SqliteConnection when Mode is ReadWriteCreate (default)
 
             // Just verify we can connect
-            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            using (DbConnection conn = _ConnectionFactory.GetConnection())
             {
-                // Connection created successfully
-                _ConnectionFactory.ReturnConnection(connection);
+                SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(conn);
+                // Connection created successfully - wrapper will automatically return to pool on dispose
             }
         }
 

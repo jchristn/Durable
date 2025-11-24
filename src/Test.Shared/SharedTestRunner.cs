@@ -106,6 +106,15 @@ namespace Test.Shared
                 passedTests += schemaResults.PassedTests;
                 failedTests += schemaResults.FailedTests;
                 skippedTests += schemaResults.SkippedTests;
+
+                TestResults poolResults = await RunTestClass<ConnectionPoolStressTestSuite>(
+                    $"{provider.ProviderName} Connection Pool Stress Tests",
+                    provider
+                );
+                totalTests += poolResults.TotalTests;
+                passedTests += poolResults.PassedTests;
+                failedTests += poolResults.FailedTests;
+                skippedTests += poolResults.SkippedTests;
             }
             finally
             {

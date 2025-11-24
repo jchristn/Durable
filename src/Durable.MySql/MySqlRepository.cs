@@ -3927,7 +3927,8 @@ namespace Durable.MySql
         /// <returns>A MySQL connection</returns>
         public MySqlConnector.MySqlConnection GetConnection()
         {
-            return (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
+            DbConnection connection = _ConnectionFactory.GetConnection();
+            return (MySqlConnector.MySqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         /// <summary>
@@ -3940,7 +3941,8 @@ namespace Durable.MySql
         public async Task<MySqlConnector.MySqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return (MySqlConnector.MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            return (MySqlConnector.MySqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         #endregion

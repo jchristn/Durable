@@ -4392,7 +4392,8 @@ namespace Durable.SqlServer
         /// <returns>A SQL Server connection</returns>
         public SqlConnection GetConnection()
         {
-            return (SqlConnection)_ConnectionFactory.GetConnection();
+            DbConnection connection = _ConnectionFactory.GetConnection();
+            return (SqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         /// <summary>
@@ -4405,7 +4406,8 @@ namespace Durable.SqlServer
         public async Task<SqlConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return (SqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            DbConnection connection = await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+            return (SqlConnection)PooledConnectionHandle.Unwrap(connection);
         }
 
         #endregion
