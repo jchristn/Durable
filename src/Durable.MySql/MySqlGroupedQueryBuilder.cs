@@ -200,7 +200,7 @@ namespace Durable.MySql
         {
             try
             {
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -233,7 +233,7 @@ namespace Durable.MySql
             {
                 token.ThrowIfCancellationRequested();
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -269,7 +269,7 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -308,7 +308,7 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -344,7 +344,7 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -383,7 +383,7 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -420,7 +420,7 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -464,7 +464,7 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -505,7 +505,7 @@ namespace Durable.MySql
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -549,7 +549,7 @@ namespace Durable.MySql
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -700,7 +700,7 @@ namespace Durable.MySql
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
             if (connection.State != ConnectionState.Open)
             {
                 connection.Open();
@@ -737,7 +737,7 @@ namespace Durable.MySql
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
             if (connection.State != ConnectionState.Open)
             {
                 await connection.OpenAsync(token).ConfigureAwait(false);

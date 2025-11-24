@@ -377,7 +377,7 @@ namespace Durable.MySql
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+            MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
             EnsureConnectionOpen(connection);
             MySqlTransaction transaction = connection.BeginTransaction();
             return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -390,7 +390,7 @@ namespace Durable.MySql
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false);
+            MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
             MySqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
             return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -733,7 +733,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteNonQueryWithConnection(connection, sql, null);
             }
         }
@@ -1179,7 +1179,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteScalarWithConnection<int>(connection, sql, null, parameters.ToArray());
             }
         }
@@ -1216,7 +1216,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return await ExecuteScalarWithConnectionAsync<int>(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
             }
         }
@@ -1257,7 +1257,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
                 return SafeConvertDatabaseResult<TResult>(result);
             }
@@ -1299,7 +1299,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
                 return SafeConvertDatabaseResult<TResult>(result);
             }
@@ -1341,7 +1341,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
                 return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
@@ -1382,7 +1382,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = ExecuteScalarWithConnection<object>(connection, sql.ToString(), null, parameters.ToArray());
                 return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
@@ -1428,7 +1428,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
                 return SafeConvertDatabaseResult<TResult>(result);
             }
@@ -1474,7 +1474,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
                 return SafeConvertDatabaseResult<TResult>(result);
             }
@@ -1519,7 +1519,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
                 return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
@@ -1564,7 +1564,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 object? result = await ExecuteScalarWithConnectionAsync<object>(connection, sql.ToString(), null, token, parameters.ToArray()).ConfigureAwait(false);
                 return result == DBNull.Value || result == null ? 0m : (decimal)_DataTypeConverter.ConvertFromDatabase(result, typeof(decimal))!;
             }
@@ -1640,7 +1640,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     ExecuteNonQueryWithConnection(connection, insertSql, null, parameters.ToArray());
                     insertedId = ExecuteScalarWithConnection<object>(connection, "SELECT LAST_INSERT_ID()", null);
                 }
@@ -1661,7 +1661,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     ExecuteNonQueryWithConnection(connection, insertSql, null, parameters.ToArray());
                 }
             }
@@ -1779,7 +1779,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
                     insertedId = await ExecuteScalarWithConnectionAsync<object>(connection, "SELECT LAST_INSERT_ID()", null, token).ConfigureAwait(false);
                 }
@@ -1800,7 +1800,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     await ExecuteNonQueryWithConnectionAsync(connection, insertSql, null, token, parameters.ToArray()).ConfigureAwait(false);
                 }
             }
@@ -1914,7 +1914,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
             }
 
@@ -2055,7 +2055,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
             }
 
@@ -2133,7 +2133,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
             }
 
@@ -2283,7 +2283,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
             }
 
@@ -2352,7 +2352,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, parameters.ToArray());
             }
 
@@ -2430,7 +2430,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, parameters.ToArray()).ConfigureAwait(false);
             }
 
@@ -2465,7 +2465,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     rowsAffected = ExecuteNonQueryWithConnection(connection, sql, null, new SqlParameter("@id", id), new SqlParameter("@version", version));
                 }
 
@@ -2513,7 +2513,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteNonQueryWithConnection(connection, sql, null, new SqlParameter("@id", id)) > 0;
             }
         }
@@ -2560,7 +2560,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteNonQueryWithConnection(connection, sql, null);
             }
         }
@@ -2596,7 +2596,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, new SqlParameter("@id", id), new SqlParameter("@version", version)).ConfigureAwait(false);
                 }
 
@@ -2648,7 +2648,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token, new SqlParameter("@id", id)).ConfigureAwait(false);
             }
 
@@ -2711,7 +2711,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 rowsAffected = await ExecuteNonQueryWithConnectionAsync(connection, sql, null, token).ConfigureAwait(false);
             }
 
@@ -2738,7 +2738,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return UpsertWithConnection(connection, entity, null);
             }
         }
@@ -2909,7 +2909,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return await UpsertAsyncWithConnection(connection, entity, null, token).ConfigureAwait(false);
             }
         }
@@ -3083,7 +3083,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteFromSqlWithConnection(connection, sql, null, parameters);
             }
         }
@@ -3148,7 +3148,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteFromSqlWithConnection<TResult>(connection, sql, null, parameters);
             }
         }
@@ -3212,7 +3212,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return ExecuteSqlWithConnection(connection, sql, null, parameters);
             }
         }
@@ -3274,7 +3274,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 await foreach (T item in ExecuteFromSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false))
                 {
                     yield return item;
@@ -3340,7 +3340,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 await foreach (TResult item in ExecuteFromSqlAsyncWithConnection<TResult>(connection, sql, null, token, parameters).ConfigureAwait(false))
                 {
                     yield return item;
@@ -3402,7 +3402,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 return await ExecuteSqlAsyncWithConnection(connection, sql, null, token, parameters).ConfigureAwait(false);
             }
         }
@@ -3454,7 +3454,7 @@ namespace Durable.MySql
         /// <returns>The created entities with any auto-generated values populated</returns>
         private IEnumerable<T> CreateManyOptimized(IList<T> entities, ITransaction? transaction)
         {
-            using MySqlConnection connection = (MySqlConnection)(transaction?.Connection ?? _ConnectionFactory.GetConnection());
+            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(transaction?.Connection ?? _ConnectionFactory.GetConnection());
             List<T> results = new List<T>();
 
             try
@@ -3984,7 +3984,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 EnsureConnectionOpen(connection);
                 string databaseName = Settings?.Database ?? connection.Database;
                 tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, connection);
@@ -4002,7 +4002,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     ExecuteNonQueryWithConnection(connection, createTableSql, null);
                 }
             }
@@ -4050,7 +4050,7 @@ namespace Durable.MySql
             }
             else
             {
-                using MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
                 await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
                 string databaseName = Settings?.Database ?? connection.Database;
                 tableExists = MySqlSchemaBuilder.TableExists(tableName, databaseName, connection);
@@ -4068,7 +4068,7 @@ namespace Durable.MySql
                 }
                 else
                 {
-                    using MySqlConnection connection = (MySqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                    using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
                     await ExecuteNonQueryWithConnectionAsync(connection, createTableSql, null, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -4256,7 +4256,7 @@ namespace Durable.MySql
             string tableName = entityAttr.Name;
             try
             {
-                MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection();
+                MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 try
                 {
                     if (MySqlSchemaBuilder.TableExists(tableName, Settings.Database, connection))
@@ -4371,7 +4371,7 @@ namespace Durable.MySql
             }
             else
             {
-                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -4420,7 +4420,7 @@ namespace Durable.MySql
             }
             else
             {
-                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -4465,7 +4465,7 @@ namespace Durable.MySql
             }
             else
             {
-                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (MySqlCommand command = connection.CreateCommand())
                     {
@@ -4507,7 +4507,7 @@ namespace Durable.MySql
             }
             else
             {
-                using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+                using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (MySqlCommand command = connection.CreateCommand())
                     {
@@ -4531,7 +4531,7 @@ namespace Durable.MySql
 
             string tableName = entityAttr.Name;
 
-            using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+            using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = MySqlSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
@@ -4555,7 +4555,7 @@ namespace Durable.MySql
 
             string tableName = entityAttr.Name;
 
-            using (MySqlConnection connection = (MySqlConnection)_ConnectionFactory.GetConnection())
+            using (MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 await Task.Run(() =>
                 {

@@ -483,7 +483,7 @@ namespace Durable.Postgres
             try
             {
                 string sql = BuildSqlInternal();
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -516,7 +516,7 @@ namespace Durable.Postgres
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await ((NpgsqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
@@ -552,7 +552,7 @@ namespace Durable.Postgres
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
 
             try
             {

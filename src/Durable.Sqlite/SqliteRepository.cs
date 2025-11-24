@@ -3535,7 +3535,7 @@
             // If table exists, check schema compatibility
             try
             {
-                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     if (SqliteSchemaBuilder.TableExists(tableName, connection))
                     {
@@ -3644,7 +3644,7 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -3693,7 +3693,7 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -3733,7 +3733,7 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (SqliteCommand command = connection.CreateCommand())
                     {
@@ -3770,7 +3770,7 @@
             }
             else
             {
-                using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+                using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (SqliteCommand command = connection.CreateCommand())
                     {
@@ -3794,7 +3794,7 @@
 
             string tableName = entityAttr.Name;
 
-            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 List<IndexInfo> indexes = SqliteSchemaBuilder.GetExistingIndexes(tableName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
@@ -3817,7 +3817,7 @@
 
             string tableName = entityAttr.Name;
 
-            using (SqliteConnection connection = (SqliteConnection)_ConnectionFactory.GetConnection())
+            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 await Task.Run(() =>
                 {
@@ -3854,7 +3854,7 @@
             // This is handled automatically by SqliteConnection when Mode is ReadWriteCreate (default)
 
             // Just verify we can connect
-            using (SqliteConnection connection = (SqliteConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken))
+            using (SqliteConnection connection = (SqliteConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken)))
             {
                 // Connection created successfully
                 await _ConnectionFactory.ReturnConnectionAsync(connection);

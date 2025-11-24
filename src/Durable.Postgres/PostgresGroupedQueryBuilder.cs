@@ -200,7 +200,7 @@ namespace Durable.Postgres
         {
             try
             {
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -233,7 +233,7 @@ namespace Durable.Postgres
             {
                 token.ThrowIfCancellationRequested();
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -269,7 +269,7 @@ namespace Durable.Postgres
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -308,7 +308,7 @@ namespace Durable.Postgres
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -344,7 +344,7 @@ namespace Durable.Postgres
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -383,7 +383,7 @@ namespace Durable.Postgres
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -420,7 +420,7 @@ namespace Durable.Postgres
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -464,7 +464,7 @@ namespace Durable.Postgres
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -505,7 +505,7 @@ namespace Durable.Postgres
             {
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -549,7 +549,7 @@ namespace Durable.Postgres
 
                 string column = GetColumnFromExpression(selector.Body);
 
-                using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await connection.OpenAsync(token).ConfigureAwait(false);
@@ -700,7 +700,7 @@ namespace Durable.Postgres
 
         private HashSet<TKey> GetQualifyingGroupKeys()
         {
-            using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
             if (connection.State != ConnectionState.Open)
             {
                 connection.Open();
@@ -737,7 +737,7 @@ namespace Durable.Postgres
 
         private async Task<HashSet<TKey>> GetQualifyingGroupKeysAsync(CancellationToken token)
         {
-            using NpgsqlConnection connection = (NpgsqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
             if (connection.State != ConnectionState.Open)
             {
                 await connection.OpenAsync(token).ConfigureAwait(false);

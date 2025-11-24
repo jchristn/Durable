@@ -2401,7 +2401,7 @@ namespace Durable.Postgres
             }
             else
             {
-                connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 shouldDisposeConnection = true;
             }
 
@@ -2462,7 +2462,7 @@ namespace Durable.Postgres
             }
             else
             {
-                connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 shouldDisposeConnection = true;
             }
 
@@ -2563,7 +2563,7 @@ namespace Durable.Postgres
             }
             else
             {
-                connection = (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
                 shouldDisposeConnection = true;
             }
 
@@ -2621,7 +2621,7 @@ namespace Durable.Postgres
             }
             else
             {
-                connection = (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false);
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
                 shouldDisposeConnection = true;
             }
 
@@ -3386,7 +3386,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 EnsureConnectionOpen(connection);
                 tableExists = PostgresSchemaBuilder.TableExists(tableName, schemaName, connection);
             }
@@ -3403,7 +3403,7 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                    using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                     ExecuteNonQueryWithConnection(connection, createTableSql, null);
                 }
             }
@@ -3453,7 +3453,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using NpgsqlConnection connection = (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
                 await EnsureConnectionOpenAsync(connection, cancellationToken).ConfigureAwait(false);
                 tableExists = PostgresSchemaBuilder.TableExists(tableName, schemaName, connection);
             }
@@ -3470,7 +3470,7 @@ namespace Durable.Postgres
                 }
                 else
                 {
-                    using NpgsqlConnection connection = (NpgsqlConnection)await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+                    using NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(cancellationToken).ConfigureAwait(false));
                     await ExecuteNonQueryWithConnectionAsync(connection, createTableSql, null, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -3659,7 +3659,7 @@ namespace Durable.Postgres
             string schemaName = Settings?.Database ?? "public";
             try
             {
-                NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection();
+                NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 try
                 {
                     if (PostgresSchemaBuilder.TableExists(tableName, schemaName, connection))
@@ -3774,7 +3774,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -3823,7 +3823,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     foreach (string sql in indexSqlStatements)
                     {
@@ -3863,7 +3863,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (NpgsqlCommand command = connection.CreateCommand())
                     {
@@ -3900,7 +3900,7 @@ namespace Durable.Postgres
             }
             else
             {
-                using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+                using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
                 {
                     using (NpgsqlCommand command = connection.CreateCommand())
                     {
@@ -3925,7 +3925,7 @@ namespace Durable.Postgres
             string tableName = entityAttr.Name;
             string schemaName = "public"; // PostgreSQL default schema
 
-            using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+            using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 List<IndexInfo> indexes = PostgresSchemaBuilder.GetExistingIndexes(tableName, schemaName, connection);
                 List<string> indexNames = indexes.Select(i => i.Name).ToList();
@@ -3949,7 +3949,7 @@ namespace Durable.Postgres
             string tableName = entityAttr.Name;
             string schemaName = "public"; // PostgreSQL default schema
 
-            using (NpgsqlConnection connection = (NpgsqlConnection)_ConnectionFactory.GetConnection())
+            using (NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 await Task.Run(() =>
                 {

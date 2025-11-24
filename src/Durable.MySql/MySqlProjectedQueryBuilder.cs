@@ -485,7 +485,7 @@ namespace Durable.MySql
             try
             {
                 string sql = BuildSqlInternal();
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -518,7 +518,7 @@ namespace Durable.MySql
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await ((MySqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
@@ -554,7 +554,7 @@ namespace Durable.MySql
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using MySqlConnection connection = (MySqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
 
             try
             {

@@ -482,7 +482,7 @@ namespace Durable.SqlServer
             try
             {
                 string sql = BuildSqlInternal();
-                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     connection.Open();
@@ -515,7 +515,7 @@ namespace Durable.SqlServer
                 token.ThrowIfCancellationRequested();
 
                 string sql = BuildSqlInternal();
-                using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
+                using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
                 if (connection.State != ConnectionState.Open)
                 {
                     await ((SqlConnection)connection).OpenAsync(token).ConfigureAwait(false);
@@ -551,7 +551,7 @@ namespace Durable.SqlServer
         public async IAsyncEnumerable<TResult> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             string sql = BuildSqlInternal();
-            using SqlConnection connection = (SqlConnection)_Repository._ConnectionFactory.GetConnection();
+            using SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_Repository._ConnectionFactory.GetConnection());
 
             try
             {

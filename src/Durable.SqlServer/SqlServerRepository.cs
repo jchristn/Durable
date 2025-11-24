@@ -340,7 +340,7 @@ namespace Durable.SqlServer
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            SqlConnection connection = (SqlConnection)_ConnectionFactory.GetConnection();
+            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
             EnsureConnectionOpen(connection);
             SqlTransaction transaction = connection.BeginTransaction();
             return new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -353,7 +353,7 @@ namespace Durable.SqlServer
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            SqlConnection connection = (SqlConnection)await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false);
+            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
             await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
             SqlTransaction transaction = (SqlTransaction)await connection.BeginTransactionAsync(token).ConfigureAwait(false);
             return new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
@@ -4757,7 +4757,7 @@ namespace Durable.SqlServer
             string tableName = entityAttr.Name;
             try
             {
-                SqlConnection connection = (SqlConnection)_ConnectionFactory.GetConnection();
+                SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
                 try
                 {
                     string databaseName = Settings?.Database ?? connection.Database;
@@ -5143,7 +5143,7 @@ namespace Durable.SqlServer
 
             string tableName = entityAttr.Name;
 
-            using (SqlConnection connection = (SqlConnection)_ConnectionFactory.GetConnection())
+            using (SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection()))
             {
                 string databaseName = Settings?.Database ?? connection.Database;
                 List<IndexInfo> indexes = SqlServerSchemaBuilder.GetExistingIndexes(tableName, databaseName, connection);
