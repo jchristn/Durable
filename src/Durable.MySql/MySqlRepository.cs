@@ -377,10 +377,23 @@ namespace Durable.MySql
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-            EnsureConnectionOpen(connection);
-            MySqlTransaction transaction = connection.BeginTransaction();
-            return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
+            MySqlConnection? connection = null;
+            try
+            {
+                connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
+                EnsureConnectionOpen(connection);
+                MySqlTransaction transaction = connection.BeginTransaction();
+                MySqlRepositoryTransaction result = new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
         }
 
         /// <summary>
@@ -390,10 +403,23 @@ namespace Durable.MySql
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            MySqlConnection connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
-            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
-            MySqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
-            return new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
+            MySqlConnection? connection = null;
+            try
+            {
+                connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
+                await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
+                MySqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
+                MySqlRepositoryTransaction result = new MySqlRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
+            }
         }
 
         #endregion

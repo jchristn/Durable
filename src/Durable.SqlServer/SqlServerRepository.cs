@@ -340,10 +340,23 @@ namespace Durable.SqlServer
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-            EnsureConnectionOpen(connection);
-            SqlTransaction transaction = connection.BeginTransaction();
-            return new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
+            SqlConnection? connection = null;
+            try
+            {
+                connection = (SqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
+                EnsureConnectionOpen(connection);
+                SqlTransaction transaction = connection.BeginTransaction();
+                SqlServerRepositoryTransaction result = new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
         }
 
         /// <summary>
@@ -353,10 +366,23 @@ namespace Durable.SqlServer
         /// <returns>A task representing the asynchronous operation with a new transaction instance.</returns>
         public async Task<ITransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            SqlConnection connection = (SqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
-            await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
-            SqlTransaction transaction = (SqlTransaction)await connection.BeginTransactionAsync(token).ConfigureAwait(false);
-            return new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
+            SqlConnection? connection = null;
+            try
+            {
+                connection = (SqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
+                await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
+                SqlTransaction transaction = (SqlTransaction)await connection.BeginTransactionAsync(token).ConfigureAwait(false);
+                SqlServerRepositoryTransaction result = new SqlServerRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
+            }
         }
 
         #endregion

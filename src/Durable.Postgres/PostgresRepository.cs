@@ -2700,16 +2700,29 @@ namespace Durable.Postgres
         /// <returns>A new transaction instance.</returns>
         public ITransaction BeginTransaction()
         {
-            NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
-
-            // Ensure connection is open (GetConnection might return an already open connection)
-            if (connection.State != ConnectionState.Open)
+            NpgsqlConnection? connection = null;
+            try
             {
-                connection.Open();
-            }
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
 
-            NpgsqlTransaction transaction = connection.BeginTransaction();
-            return new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                // Ensure connection is open (GetConnection might return an already open connection)
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+
+                NpgsqlTransaction transaction = connection.BeginTransaction();
+                PostgresRepositoryTransaction result = new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    _ConnectionFactory.ReturnConnection(connection);
+                }
+            }
         }
 
         /// <summary>
@@ -2721,16 +2734,29 @@ namespace Durable.Postgres
         {
             token.ThrowIfCancellationRequested();
 
-            NpgsqlConnection connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
-
-            // Ensure connection is open (GetConnectionAsync might return an already open connection)
-            if (connection.State != ConnectionState.Open)
+            NpgsqlConnection? connection = null;
+            try
             {
-                await connection.OpenAsync(token).ConfigureAwait(false);
-            }
+                connection = (NpgsqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync().ConfigureAwait(false));
 
-            NpgsqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
-            return new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                // Ensure connection is open (GetConnectionAsync might return an already open connection)
+                if (connection.State != ConnectionState.Open)
+                {
+                    await connection.OpenAsync(token).ConfigureAwait(false);
+                }
+
+                NpgsqlTransaction transaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
+                PostgresRepositoryTransaction result = new PostgresRepositoryTransaction(connection, transaction, _ConnectionFactory);
+                connection = null; // Transaction now owns the connection
+                return result;
+            }
+            finally
+            {
+                if (connection != null)
+                {
+                    await _ConnectionFactory.ReturnConnectionAsync(connection).ConfigureAwait(false);
+                }
+            }
         }
 
         /// <summary>
