@@ -25,6 +25,7 @@
 		<Compile Include="ConcurrencyIntegrationTest.cs" />
 		<Compile Include="SqliteIntegrationTests.cs" />
 		<Compile Include="InitializationTests.cs" />
+		<Compile Include="BooleanConversionTests.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

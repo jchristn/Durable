@@ -234,6 +234,26 @@ namespace Durable
                 }
             }
 
+            // Boolean handling - SQLite stores booleans as INTEGER (0/1)
+            if (targetType == typeof(bool))
+            {
+                if (value is bool boolVal)
+                    return boolVal;
+                if (value is long l)
+                    return l != 0;
+                if (value is int i)
+                    return i != 0;
+                if (value is short s)
+                    return s != 0;
+                if (value is byte b)
+                    return b != 0;
+                if (value is sbyte sb)
+                    return sb != 0;
+                if (value is string boolStr)
+                    return boolStr != "0" && !string.Equals(boolStr, "false", StringComparison.OrdinalIgnoreCase);
+                return Convert.ToBoolean(value);
+            }
+
             // Array and Collection handling - deserialize from JSON
             if (targetType.IsArray || (targetType.IsGenericType && 
                 (typeof(IEnumerable).IsAssignableFrom(targetType) && targetType != typeof(string))))

@@ -238,12 +238,18 @@ namespace Durable.SqlServer
             {
                 if (value is bool boolVal)
                     return boolVal;
+                if (value is long l)
+                    return l != 0;
                 if (value is int intVal)
                     return intVal != 0;
+                if (value is short s)
+                    return s != 0;
                 if (value is byte byteVal)
                     return byteVal != 0;
+                if (value is sbyte sb)
+                    return sb != 0;
                 if (value is string strVal)
-                    return bool.Parse(strVal);
+                    return strVal != "0" && !string.Equals(strVal, "false", StringComparison.OrdinalIgnoreCase);
                 return Convert.ToBoolean(value);
             }
 
