@@ -5,10 +5,10 @@ namespace Durable.SqlServer
     using Microsoft.Data.SqlClient;
 
     /// <summary>
-    /// Represents a SQL Server database connection with its associated factory for proper resource management.
+    /// Internal helper class that represents a SQL Server database connection with its associated factory for proper resource management.
     /// Ensures connections are returned to the pool when disposed.
     /// </summary>
-    public class SqlServerConnectionResult : IDisposable
+    internal class SqlServerConnectionResult : IDisposable
     {
 
         #region Public-Members

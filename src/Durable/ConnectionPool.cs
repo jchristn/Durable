@@ -186,35 +186,39 @@ namespace Durable
             }
 
             PooledConnection? pooledConnection = FindPooledConnection(innerConnection);
-            if (pooledConnection != null)
+            if (pooledConnection == null)
             {
-                pooledConnection.IsInUse = false;
-                pooledConnection.LastUsed = DateTime.UtcNow;
+                // Connection not found in pool - do not release semaphore
+                // This prevents over-release if a connection is returned that wasn't from this pool
+                return;
+            }
 
-                // Close the connection to return it to ADO.NET's pool
-                try
-                {
-                    if (innerConnection.State != System.Data.ConnectionState.Closed)
-                    {
-                        await innerConnection.CloseAsync().ConfigureAwait(false);
-                    }
-                }
-                catch
-                {
-                    // If close fails, dispose the connection entirely
-                    await DisposePooledConnectionAsync(pooledConnection);
-                    _Semaphore.Release();
-                    return;
-                }
+            pooledConnection.IsInUse = false;
+            pooledConnection.LastUsed = DateTime.UtcNow;
 
-                if (IsConnectionValid(pooledConnection))
+            // Close the connection to return it to ADO.NET's pool
+            try
+            {
+                if (innerConnection.State != System.Data.ConnectionState.Closed)
                 {
-                    _AvailableConnections.Enqueue(pooledConnection);
+                    await innerConnection.CloseAsync().ConfigureAwait(false);
                 }
-                else
-                {
-                    await DisposePooledConnectionAsync(pooledConnection);
-                }
+            }
+            catch
+            {
+                // If close fails, dispose the connection entirely
+                await DisposePooledConnectionAsync(pooledConnection);
+                _Semaphore.Release();
+                return;
+            }
+
+            if (IsConnectionValid(pooledConnection))
+            {
+                _AvailableConnections.Enqueue(pooledConnection);
+            }
+            else
+            {
+                await DisposePooledConnectionAsync(pooledConnection);
             }
 
             _Semaphore.Release();
@@ -237,35 +241,39 @@ namespace Durable
             }
 
             PooledConnection? pooledConnection = FindPooledConnection(innerConnection);
-            if (pooledConnection != null)
+            if (pooledConnection == null)
             {
-                pooledConnection.IsInUse = false;
-                pooledConnection.LastUsed = DateTime.UtcNow;
+                // Connection not found in pool - do not release semaphore
+                // This prevents over-release if a connection is returned that wasn't from this pool
+                return;
+            }
 
-                // Close the connection to return it to ADO.NET's pool
-                try
-                {
-                    if (innerConnection.State != System.Data.ConnectionState.Closed)
-                    {
-                        innerConnection.Close();
-                    }
-                }
-                catch
-                {
-                    // If close fails, dispose the connection entirely
-                    DisposePooledConnection(pooledConnection);
-                    _Semaphore.Release();
-                    return;
-                }
+            pooledConnection.IsInUse = false;
+            pooledConnection.LastUsed = DateTime.UtcNow;
 
-                if (IsConnectionValid(pooledConnection))
+            // Close the connection to return it to ADO.NET's pool
+            try
+            {
+                if (innerConnection.State != System.Data.ConnectionState.Closed)
                 {
-                    _AvailableConnections.Enqueue(pooledConnection);
+                    innerConnection.Close();
                 }
-                else
-                {
-                    DisposePooledConnection(pooledConnection);
-                }
+            }
+            catch
+            {
+                // If close fails, dispose the connection entirely
+                DisposePooledConnection(pooledConnection);
+                _Semaphore.Release();
+                return;
+            }
+
+            if (IsConnectionValid(pooledConnection))
+            {
+                _AvailableConnections.Enqueue(pooledConnection);
+            }
+            else
+            {
+                DisposePooledConnection(pooledConnection);
             }
 
             _Semaphore.Release();

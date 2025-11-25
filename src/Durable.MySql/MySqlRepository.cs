@@ -2838,15 +2838,15 @@ namespace Durable.MySql
                 return Enumerable.Empty<T>();
 
             bool ownTransaction = transaction == null;
-            MySqlConnector.MySqlConnection? connection = null;
-            MySqlConnector.MySqlTransaction? localTransaction = null;
+            MySqlConnection? connection = null;
+            MySqlTransaction? localTransaction = null;
 
             try
             {
                 if (ownTransaction)
                 {
-                    connection = (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
-                    connection.Open();
+                    connection = (MySqlConnection)PooledConnectionHandle.Unwrap(_ConnectionFactory.GetConnection());
+                    EnsureConnectionOpen(connection);
                     localTransaction = connection.BeginTransaction();
                     transaction = new MySqlRepositoryTransaction(connection, localTransaction, _ConnectionFactory);
                 }
@@ -3015,14 +3015,14 @@ namespace Durable.MySql
                 return Enumerable.Empty<T>();
 
             bool ownTransaction = transaction == null;
-            MySqlConnector.MySqlConnection? connection = null;
-            MySqlConnector.MySqlTransaction? localTransaction = null;
+            MySqlConnection? connection = null;
+            MySqlTransaction? localTransaction = null;
 
             try
             {
                 if (ownTransaction)
                 {
-                    connection = (MySqlConnector.MySqlConnection)_ConnectionFactory.GetConnection();
+                    connection = (MySqlConnection)PooledConnectionHandle.Unwrap(await _ConnectionFactory.GetConnectionAsync(token).ConfigureAwait(false));
                     await EnsureConnectionOpenAsync(connection, token).ConfigureAwait(false);
                     localTransaction = await connection.BeginTransactionAsync(token).ConfigureAwait(false);
                     transaction = new MySqlRepositoryTransaction(connection, localTransaction, _ConnectionFactory);

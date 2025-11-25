@@ -471,6 +471,441 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// Tests extreme concurrent load that exceeds typical pool capacity.
+        /// This test launches many more concurrent operations than the default pool size
+        /// to verify the pool handles backpressure correctly.
+        /// </summary>
+        [Fact]
+        public async Task ExtremeConcurrentLoad_ShouldHandleBackpressure()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            // Create test data
+            for (int i = 0; i < 50; i++)
+            {
+                await repository.CreateAsync(new Person
+                {
+                    FirstName = $"Extreme{i}",
+                    LastName = "Test",
+                    Age = 25 + (i % 40),
+                    Email = $"extreme{i}@test.com",
+                    Salary = 50000m,
+                    Department = "ExtremeTest"
+                });
+            }
+
+            // Launch 200 concurrent operations - far more than typical pool size
+            int concurrentOps = 200;
+            int successCount = 0;
+            int errorCount = 0;
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            Task[] tasks = new Task[concurrentOps];
+            for (int i = 0; i < concurrentOps; i++)
+            {
+                tasks[i] = Task.Run(async () =>
+                {
+                    try
+                    {
+                        Person[] results = (await repository.Query()
+                            .Where(p => p.Department == "ExtremeTest")
+                            .Take(10)
+                            .ExecuteAsync())
+                            .ToArray();
+                        Interlocked.Increment(ref successCount);
+                    }
+                    catch
+                    {
+                        Interlocked.Increment(ref errorCount);
+                    }
+                });
+            }
+
+            await Task.WhenAll(tasks);
+            stopwatch.Stop();
+
+            Console.WriteLine($"  {concurrentOps} concurrent operations: {successCount} success, {errorCount} errors");
+            Console.WriteLine($"  Completed in {stopwatch.ElapsedMilliseconds}ms");
+
+            // Most operations should succeed even under extreme load
+            Assert.True(successCount > concurrentOps * 0.9,
+                $"Expected >90% success rate under extreme load, got {successCount}/{concurrentOps}");
+        }
+
+        /// <summary>
+        /// Tests that transactions don't starve regular queries under load.
+        /// Long-running transactions hold connections, but regular queries should still complete.
+        /// </summary>
+        [Fact]
+        public async Task TransactionsUnderLoad_ShouldNotStarveQueries()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            // Create test data
+            for (int i = 0; i < 20; i++)
+            {
+                await repository.CreateAsync(new Person
+                {
+                    FirstName = $"TransLoad{i}",
+                    LastName = "Test",
+                    Age = 30,
+                    Email = $"transload{i}@test.com",
+                    Salary = 50000m,
+                    Department = "TransLoadTest"
+                });
+            }
+
+            int transactionCount = 10;
+            int queryCount = 50;
+            int transactionHoldTimeMs = 500;
+
+            int transactionSuccess = 0;
+            int querySuccess = 0;
+
+            // Start long-running transactions
+            Task[] transactionTasks = new Task[transactionCount];
+            for (int t = 0; t < transactionCount; t++)
+            {
+                transactionTasks[t] = Task.Run(async () =>
+                {
+                    ITransaction? transaction = null;
+                    try
+                    {
+                        transaction = await repository.BeginTransactionAsync();
+                        int count = await repository.CountAsync(p => p.Department == "TransLoadTest", transaction);
+                        await Task.Delay(transactionHoldTimeMs);
+                        await transaction.CommitAsync();
+                        Interlocked.Increment(ref transactionSuccess);
+                    }
+                    catch
+                    {
+                        if (transaction != null)
+                        {
+                            try { await transaction.RollbackAsync(); } catch { }
+                        }
+                    }
+                    finally
+                    {
+                        transaction?.Dispose();
+                    }
+                });
+            }
+
+            // Give transactions time to start
+            await Task.Delay(50);
+
+            // Run concurrent queries while transactions are active
+            Task[] queryTasks = new Task[queryCount];
+            for (int q = 0; q < queryCount; q++)
+            {
+                queryTasks[q] = Task.Run(async () =>
+                {
+                    try
+                    {
+                        int count = await repository.CountAsync();
+                        Interlocked.Increment(ref querySuccess);
+                    }
+                    catch
+                    {
+                        // Query failed
+                    }
+                });
+            }
+
+            await Task.WhenAll(queryTasks);
+            await Task.WhenAll(transactionTasks);
+
+            Console.WriteLine($"  Transactions: {transactionSuccess}/{transactionCount} succeeded");
+            Console.WriteLine($"  Concurrent queries: {querySuccess}/{queryCount} succeeded");
+
+            // Queries should not be completely starved
+            Assert.True(querySuccess > queryCount * 0.5,
+                $"Expected >50% query success while transactions active, got {querySuccess}/{queryCount}");
+        }
+
+        /// <summary>
+        /// Tests recovery after many exceptions - connections should be properly returned.
+        /// </summary>
+        [Fact]
+        public async Task ManyExceptions_ShouldNotLeakConnections()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            // Cause 100 exceptions with invalid SQL
+            int exceptionCount = 100;
+            for (int i = 0; i < exceptionCount; i++)
+            {
+                try
+                {
+                    await repository.ExecuteSqlAsync("SELECT * FROM nonexistent_table_xyz_999");
+                }
+                catch
+                {
+                    // Expected
+                }
+            }
+
+            // Pool should still be functional
+            int successCount = 0;
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    await repository.CreateAsync(new Person
+                    {
+                        FirstName = $"AfterException{i}",
+                        LastName = "Test",
+                        Age = 30,
+                        Email = $"afterexception{i}@test.com",
+                        Salary = 50000m,
+                        Department = "ExceptionRecovery"
+                    });
+                    successCount++;
+                }
+                catch
+                {
+                    // Failed
+                }
+            }
+
+            Console.WriteLine($"  After {exceptionCount} exceptions: {successCount}/20 operations succeeded");
+
+            Assert.Equal(20, successCount);
+
+            int count = await repository.CountAsync(p => p.Department == "ExceptionRecovery");
+            Assert.Equal(20, count);
+        }
+
+        /// <summary>
+        /// Tests concurrent transaction rollbacks to ensure connections are properly returned.
+        /// </summary>
+        [Fact]
+        public async Task ConcurrentRollbacks_ShouldReturnConnections()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            int rollbackCount = 30;
+            int successfulRollbacks = 0;
+
+            Task[] tasks = new Task[rollbackCount];
+            for (int t = 0; t < rollbackCount; t++)
+            {
+                int transId = t;
+                tasks[t] = Task.Run(async () =>
+                {
+                    ITransaction? transaction = null;
+                    try
+                    {
+                        transaction = await repository.BeginTransactionAsync();
+                        await repository.CreateAsync(new Person
+                        {
+                            FirstName = $"Rollback{transId}",
+                            LastName = "Test",
+                            Age = 30,
+                            Email = $"rollback{transId}@test.com",
+                            Salary = 50000m,
+                            Department = "RollbackTest"
+                        }, transaction);
+
+                        // Intentionally rollback
+                        await transaction.RollbackAsync();
+                        Interlocked.Increment(ref successfulRollbacks);
+                    }
+                    catch
+                    {
+                        if (transaction != null)
+                        {
+                            try { await transaction.RollbackAsync(); } catch { }
+                        }
+                    }
+                    finally
+                    {
+                        transaction?.Dispose();
+                    }
+                });
+            }
+
+            await Task.WhenAll(tasks);
+
+            Console.WriteLine($"  {successfulRollbacks}/{rollbackCount} rollbacks completed");
+
+            // Verify data was actually rolled back
+            int count = await repository.CountAsync(p => p.Department == "RollbackTest");
+            Assert.Equal(0, count);
+
+            // Pool should still work after all rollbacks
+            await repository.CreateAsync(new Person
+            {
+                FirstName = "AfterRollbacks",
+                LastName = "Test",
+                Age = 30,
+                Email = "afterrollbacks@test.com",
+                Salary = 50000m,
+                Department = "AfterRollback"
+            });
+
+            count = await repository.CountAsync(p => p.Department == "AfterRollback");
+            Assert.Equal(1, count);
+        }
+
+        /// <summary>
+        /// Tests mixed create, read, update operations under high concurrency.
+        /// </summary>
+        [Fact]
+        public async Task HighConcurrencyMixedOperations_ShouldComplete()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            int threadCount = 20;
+            int opsPerThread = 30;
+            int createCount = 0;
+            int readCount = 0;
+            int updateCount = 0;
+
+            Task[] tasks = new Task[threadCount];
+            for (int t = 0; t < threadCount; t++)
+            {
+                int threadId = t;
+                tasks[t] = Task.Run(async () =>
+                {
+                    for (int i = 0; i < opsPerThread; i++)
+                    {
+                        int op = (threadId + i) % 3;
+                        try
+                        {
+                            switch (op)
+                            {
+                                case 0: // Create
+                                    await repository.CreateAsync(new Person
+                                    {
+                                        FirstName = $"Mixed{threadId}_{i}",
+                                        LastName = "Test",
+                                        Age = 30,
+                                        Email = $"mixed{threadId}_{i}@test.com",
+                                        Salary = 50000m,
+                                        Department = "MixedOps"
+                                    });
+                                    Interlocked.Increment(ref createCount);
+                                    break;
+
+                                case 1: // Read
+                                    Person[] people = (await repository.Query()
+                                        .Where(p => p.Department == "MixedOps")
+                                        .Take(5)
+                                        .ExecuteAsync())
+                                        .ToArray();
+                                    Interlocked.Increment(ref readCount);
+                                    break;
+
+                                case 2: // Update (find and update)
+                                    Person? person = await repository.ReadFirstAsync(p => p.Department == "MixedOps");
+                                    if (person != null)
+                                    {
+                                        person.Age = person.Age + 1;
+                                        await repository.UpdateAsync(person);
+                                        Interlocked.Increment(ref updateCount);
+                                    }
+                                    break;
+                            }
+                        }
+                        catch
+                        {
+                            // Operation failed - continue
+                        }
+                    }
+                });
+            }
+
+            await Task.WhenAll(tasks);
+
+            Console.WriteLine($"  Creates: {createCount}, Reads: {readCount}, Updates: {updateCount}");
+            Console.WriteLine($"  Total operations: {createCount + readCount + updateCount}");
+
+            int totalOps = createCount + readCount + updateCount;
+            int expectedMinOps = threadCount * opsPerThread / 2; // At least 50% should succeed
+
+            Assert.True(totalOps >= expectedMinOps,
+                $"Expected at least {expectedMinOps} operations, got {totalOps}");
+        }
+
+        /// <summary>
+        /// Tests that large result sets don't cause connection issues.
+        /// </summary>
+        [Fact]
+        public async Task LargeResultSets_ShouldNotExhaustPool()
+        {
+            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await repository.ExecuteSqlAsync("DELETE FROM people");
+
+            // Create many records
+            int recordCount = 1000;
+            int batchSize = 50;
+
+            for (int batch = 0; batch < recordCount / batchSize; batch++)
+            {
+                Person[] people = new Person[batchSize];
+                for (int i = 0; i < batchSize; i++)
+                {
+                    int idx = batch * batchSize + i;
+                    people[i] = new Person
+                    {
+                        FirstName = $"Large{idx}",
+                        LastName = $"Result{idx}",
+                        Age = 25 + (idx % 50),
+                        Email = $"large{idx}@test.com",
+                        Salary = 50000m,
+                        Department = "LargeResultTest"
+                    };
+                }
+                await repository.CreateManyAsync(people);
+            }
+
+            // Read all records multiple times concurrently
+            int concurrentReads = 10;
+            int successCount = 0;
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            Task[] tasks = new Task[concurrentReads];
+            for (int i = 0; i < concurrentReads; i++)
+            {
+                tasks[i] = Task.Run(async () =>
+                {
+                    try
+                    {
+                        Person[] results = (await repository.Query()
+                            .Where(p => p.Department == "LargeResultTest")
+                            .ExecuteAsync())
+                            .ToArray();
+
+                        if (results.Length == recordCount)
+                        {
+                            Interlocked.Increment(ref successCount);
+                        }
+                    }
+                    catch
+                    {
+                        // Failed
+                    }
+                });
+            }
+
+            await Task.WhenAll(tasks);
+            stopwatch.Stop();
+
+            Console.WriteLine($"  {concurrentReads} concurrent reads of {recordCount} records each");
+            Console.WriteLine($"  Success: {successCount}, Time: {stopwatch.ElapsedMilliseconds}ms");
+
+            Assert.Equal(concurrentReads, successCount);
+        }
+
+        /// <summary>
         /// Disposes resources used by the test suite.
         /// </summary>
         public void Dispose()
