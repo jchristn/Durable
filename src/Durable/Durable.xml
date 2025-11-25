@@ -734,12 +734,17 @@
         </member>
         <member name="P:Durable.ConnectionPoolOptions.IdleTimeout">
             <summary>
-            Gets or sets the maximum time a connection can remain idle before being removed. Default is 10 minutes.
+            Gets or sets the maximum time a connection can remain idle before being removed. Default is 30 seconds.
             </summary>
         </member>
         <member name="P:Durable.ConnectionPoolOptions.ValidateConnections">
             <summary>
             Gets or sets whether connections should be validated before use. Default is true.
+            </summary>
+        </member>
+        <member name="M:Durable.ConnectionPoolOptions.#ctor">
+            <summary>
+            Configuration options for database connection pools.
             </summary>
         </member>
         <member name="T:Durable.CteDefinition">
