@@ -878,7 +878,13 @@ namespace Durable.Sql
             sql = null;
             Expression? collection;
             Expression? item;
-            if (call.Object == null && call.Arguments.Count == 2)
+            if (call.Object == null && call.Method.DeclaringType == typeof(MemoryExtensions)
+                && (call.Arguments.Count == 2 || (call.Arguments.Count == 3 && IsNullConstant(call.Arguments[2]))))
+            {
+                collection = UnwrapSpanConversion(call.Arguments[0]);
+                item = call.Arguments[1];
+            }
+            else if (call.Object == null && call.Arguments.Count == 2)
             {
                 collection = call.Arguments[0];
                 item = call.Arguments[1];
@@ -903,6 +909,27 @@ namespace Durable.Sql
 
             sql = TranslateIn(item, collection, false);
             return true;
+        }
+
+        private static Expression UnwrapSpanConversion(Expression expression)
+        {
+            if (expression is MethodCallExpression call && call.Method.Name == "op_Implicit" && call.Arguments.Count == 1 && IsSpanType(call.Type))
+                return call.Arguments[0];
+            if (expression is UnaryExpression unary && unary.NodeType == ExpressionType.Convert && IsSpanType(unary.Type))
+                return unary.Operand;
+            return expression;
+        }
+
+        private static bool IsSpanType(Type type)
+        {
+            if (!type.IsGenericType) return false;
+            Type definition = type.GetGenericTypeDefinition();
+            return definition == typeof(ReadOnlySpan<>) || definition == typeof(Span<>);
+        }
+
+        private static bool IsNullConstant(Expression expression)
+        {
+            return expression is ConstantExpression constant && constant.Value == null;
         }
 
         private string TranslateIn(Expression item, Expression collection, bool negate)
