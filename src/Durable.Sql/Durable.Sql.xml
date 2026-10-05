@@ -1933,10 +1933,12 @@
         </member>
         <member name="T:Durable.Sql.RowMaterializer">
             <summary>
-            Maps result rows to objects by ordinal. The column-to-property plan is computed once per (type, result shape) and
-            cached; per-row work is a compiled setter call per column plus a type check, with conversion only when the driver's
-            value type differs from the property type.
-            Thread safety: instances are immutable and thread-safe; the cache is concurrent.
+            Maps result rows to objects. For each (type, result shape) a typed row reader is compiled once and cached: columns
+            whose driver type matches (or numerically converts to) the property type are read with <c>GetFieldValue&lt;T&gt;</c>
+            and assigned without boxing; enums, JSON, converter-backed and mismatched columns go through the
+            <see cref="T:Durable.Sql.IDataTypeConverter"/>. If a provider returns an unexpected value type at runtime, the materializer
+            switches to the converter path for every column.
+            Thread safety: instances are thread-safe; the cache is concurrent.
             </summary>
         </member>
         <member name="P:Durable.Sql.RowMaterializer.Metadata">
@@ -1963,7 +1965,7 @@
             Materializes the current row.
             </summary>
             <param name="reader">Reader positioned on a row. Must not be null.</param>
-            <param name="converter">Converter for values whose type differs from the property type. Must not be null.</param>
+            <param name="converter">Converter for values that need conversion. Must not be null.</param>
             <returns>The new object.</returns>
         </member>
         <member name="M:Durable.Sql.RowMaterializer.ReadColumn(System.Data.Common.DbDataReader,Durable.ColumnMetadata,Durable.Sql.IDataTypeConverter)">

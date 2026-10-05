@@ -18,11 +18,18 @@ Durable is a lightweight .NET ORM library with LINQ capabilities designed as an 
 
 ```
 src/
-├── Durable/                    # Core abstractions and interfaces
-│   ├── IRepository.cs         # Main repository interface
-│   ├── IQueryBuilder.cs       # LINQ query builder interface
-│   ├── IConnectionFactory.cs  # Connection management abstraction
-│   └── ...                    # Supporting types, attributes, exceptions
+├── Durable/                    # Backend-neutral core (no SQL concepts)
+│   ├── IRepository.cs         # Neutral repository interface
+│   ├── IQueryBuilder.cs       # Neutral LINQ query builder interface
+│   ├── EntityMetadata.cs      # Cached per-type mapping (columns, keys, navigations, compiled accessors)
+│   └── ...                    # Attributes, transactions, resolvers, diagnostics, options
+├── Durable.Sql/               # Shared SQL engine used by every SQL provider
+│   ├── ISqlDialect.cs         # Everything that differs between databases
+│   ├── SqlRepository.cs       # ISqlRepository<T> implementation (CRUD, upsert, bulk, schema, raw SQL)
+│   ├── SqlQueryBuilder.cs     # ISqlQueryBuilder<T> implementation
+│   ├── SqlExpressionTranslator.cs # The single LINQ-to-SQL translator (always parameterized)
+│   ├── IncludeLoader.cs       # Split-query Include/ThenInclude loading
+│   └── SqlCommandExecutor.cs  # Connection leasing, interceptors, logging, tracing, SQL capture
 ├── Durable.Sqlite/            # SQLite implementation
 ├── Durable.MySql/             # MySQL implementation
 ├── Durable.Postgres/          # PostgreSQL implementation
@@ -36,6 +43,12 @@ src/
 
 ## Architecture
 
+### Layering
+
+- **Durable** (core) is backend-neutral so non-SQL repositories (document stores, search engines, graph databases) can implement `IRepository<T>`/`IQueryBuilder<T>`. Do not add SQL concepts here.
+- **Durable.Sql** holds the SQL engine. All SQL generation goes through `ISqlDialect`; never special-case a provider inside the engine. `RepositoryType` checks in the engine are a smell.
+- **Providers** contain only a dialect (`XDialect : SqlDialect`), a converter (`XDataTypeConverter : DataTypeConverter`), a connection factory (`XConnectionFactory : ConnectionFactory`), settings, and a thin `XRepository<T> : SqlRepository<T>` (constructors, bulk insert, database creation). A new database = those five files.
+
 ### Core Abstractions (Durable project)
 
 1. **IRepository<T>**: Primary interface for all CRUD operations
@@ -43,18 +56,19 @@ src/
    - Write operations: `Create`, `Update`, `Delete`, `Upsert`
    - Batch operations: `CreateMany`, `UpdateMany`, `BatchUpdate`, `BatchDelete`
    - Query building: `Query()` returns `IQueryBuilder<T>`
-   - Raw SQL: `FromSql`, `ExecuteSql`
+   - Query filters: `AddQueryFilter`, soft delete via `[SoftDelete]`
+   - SQL-only members (`FromSql`, `ExecuteSql`, procedures, `QueryMultiple`, `BulkInsert`, schema management, SQL capture) are on `ISqlRepository<T>` in Durable.Sql
 
 2. **IQueryBuilder<T>**: Fluent LINQ-style query builder
-   - Filtering: `Where`, `WhereRaw`, `WhereIn`, `WhereExists`
+   - Filtering: `Where`, `IgnoreQueryFilters` (raw/subquery filtering is on `ISqlQueryBuilder<T>`)
    - Ordering: `OrderBy`, `OrderByDescending`, `ThenBy`
    - Pagination: `Skip`, `Take`
    - Aggregation: `Count`, `Sum`, `Average`, `Min`, `Max`
    - Projection: `Select` for custom result shapes
    - Joins: `Include`, `ThenInclude` for related data
-   - Advanced: Window functions, CTEs, set operations
+   - SQL-only (`ISqlQueryBuilder<T>`): `WhereRaw`, `WhereIn`, `WhereExists`, set operations, CTEs, window functions, `SelectCase`, `BuildSql`
 
-3. **IConnectionFactory**: Connection pooling and management abstraction
+3. **IConnectionFactory** (Durable.Sql): returns open connections; drivers do the pooling
 
 4. **Attributes**: Entity configuration system
    - `[Entity("table_name")]`: Maps class to table
@@ -64,19 +78,21 @@ src/
    - `[InverseNavigationProperty("ForeignKeyProperty")]`: Reverse navigation for collections
    - `[ManyToManyNavigationProperty(typeof(JoinEntity), "ThisKey", "OtherKey")]`: Many-to-many
    - `[VersionColumn(VersionColumnType)]`: Optimistic concurrency control
+   - `[ValueConverter(typeof(...))]`: Per-property conversion
+   - `[SoftDelete]`: Soft-delete marker column
+   - `[NotMapped]`: Exclude a property from convention mapping
+   - Classes without `[Property]` attributes are mapped by convention (`DurableMapping`)
 
 ### Database-Specific Implementations
 
-Each database provider (Sqlite, MySql, Postgres, SqlServer) contains:
-- `{Provider}Repository<T>`: Concrete implementation of `IRepository<T>`
-- `{Provider}QueryBuilder<T>`: Database-specific query builder
-- `ExpressionParser`: Converts LINQ expressions to SQL WHERE clauses
-- `EntityMapper`: Maps database readers to entity objects
-- `{Provider}ConnectionFactory`: Connection management with pooling
-- `{Provider}Sanitizer`: SQL identifier sanitization (table/column names)
-- Supporting classes: `JoinBuilder`, `IncludeProcessor`, `CollectionLoader`, etc.
+Each database provider (Sqlite, MySql, Postgres, SqlServer) contains only:
+- `{Provider}Dialect`: identifier quoting, paging, functions, upsert, DDL types, schema introspection, savepoints
+- `{Provider}DataTypeConverter`: CLR <-> database value rules the driver does not handle natively
+- `{Provider}ConnectionFactory`: opens connections (driver pooling; optional concurrency cap)
+- `{Provider}RepositorySettings`: strongly-typed connection settings
+- `{Provider}Repository<T>`: constructors, bulk insert, CreateDatabaseIfNotExists
 
-**Important**: Each provider has its own SQL generation logic to handle database-specific syntax (e.g., parameter prefixes, identifier quoting, pagination, data types).
+**Important**: Fix SQL generation bugs once in Durable.Sql (or in a dialect hook), never by copying logic into a provider.
 
 ## Build and Test Commands
 
@@ -120,7 +136,7 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 **Notes**:
 - The xUnit/NUnit adapters and the CLI all consume the same Touchstone suites in `Test.Shared`, so coverage stays in sync.
 - Provider selection for the adapters can also be set via environment variables (`DURABLE_TEST_DB`, `DURABLE_TEST_HOST`, etc.).
-- Set operations (UNION/INTERSECT/EXCEPT) run on SQLite and PostgreSQL only; many-to-many `Include` runs on SQLite only — the other providers have known SQL-generation gaps.
+- Every behavioral suite runs on all four providers; run all four before committing engine changes (Docker runs can execute in parallel).
 
 ### Creating NuGet Packages
 
@@ -133,6 +149,8 @@ dotnet pack src/Durable.Sqlite/Durable.Sqlite.csproj -c Release
 ```
 
 Published packages:
+- `Durable` (core)
+- `Durable.Sql` (shared SQL engine)
 - `Durable.Sqlite`
 - `Durable.MySql`
 - `Durable.Postgres`
@@ -485,20 +503,20 @@ public List<RelatedEntity> RelatedEntities { get; set; }
 ### Loading Related Data
 
 The ORM supports eager loading via `Include()` and `ThenInclude()`:
-- `Include()` loads a single level of navigation properties
+- `Include()` loads a single level of navigation properties (`x => x.A.B` is shorthand for Include + ThenInclude)
 - `ThenInclude()` loads nested relationships
 - Multiple `Include()` calls load sibling relationships
 
-Implementation uses SQL JOINs and entity materialization in `EntityMapper` classes.
+Implementation (`IncludeLoader`) uses split queries: the root query runs (with its paging), then one query per navigation loads related rows by key (`IN` lists chunked to the dialect's parameter limit; many-to-many joins the junction table).
 
 ## SQL Generation and Expression Parsing
 
-Each provider has its own `ExpressionParser` that converts LINQ expressions to SQL:
-- Handles property access, constants, method calls, binary operations
-- Supports complex expressions: `p => p.Age > 30 && p.Name.StartsWith("John")`
-- Database-specific handling for string methods, null checks, etc.
+`SqlExpressionTranslator` (Durable.Sql) converts LINQ expressions to SQL for every provider:
+- Client-side values are always bound as parameters (converted with the target column's rules); never inline values into SQL text
+- Dialect-specific pieces (functions, LIKE escaping, boolean literals, concatenation) come from `ISqlDialect`
+- Supports complex expressions: `p => p.Age > 30 && p.Name.StartsWith("John")`, navigation subqueries, collection Contains
 
-**Manual SQL Construction**: The codebase intentionally uses manual string building for SQL queries rather than parameterized query builders. This is by design for performance and control.
+**Manual SQL Construction**: SQL text is built by hand (no external query builder) for performance and control, but values are always parameters.
 
 ## Testing Strategy
 
@@ -519,16 +537,8 @@ Test entities and the four `IRepositoryProvider` implementations live in `Test.S
 
 ## Common Patterns
 
-### Connection Pooling
-All implementations support connection pooling via `ConnectionPool` class:
-```csharp
-ConnectionPoolOptions options = new ConnectionPoolOptions
-{
-    MinPoolSize = 5,
-    MaxPoolSize = 100,
-    ConnectionTimeout = TimeSpan.FromSeconds(30)
-};
-```
+### Connections
+Drivers pool connections; Durable does not. Share one `{Provider}ConnectionFactory` across repositories; repositories never dispose a factory they were given. Optional `maxConcurrentConnections` caps open connections. See CONNECTION_MGMT.md.
 
 ### Optimistic Concurrency
 Version columns track concurrent updates:
@@ -540,7 +550,7 @@ Version columns track concurrent updates:
 Conflict resolvers: `ClientWinsResolver`, `DatabaseWinsResolver`, `MergeChangesResolver`, `ImprovedMergeChangesResolver`
 
 ### SQL Capture
-Repositories implement `ISqlCapture` for debugging:
+SQL repositories implement `ISqlCapture` for debugging (plus `ILogger`, `ISqlCommandInterceptor` and the "Durable" OpenTelemetry ActivitySource via `SqlRepositoryOptions`):
 ```csharp
 repository.CaptureSql = true;
 // Execute operations
@@ -552,15 +562,15 @@ string sqlWithParams = repository.LastExecutedSqlWithParameters;
 
 1. **No assumptions about opaque classes**: If you don't see a class implementation, ask before assuming what members/methods exist.
 
-2. **Primary keys are required**: All entities must have a property marked with `Flags.PrimaryKey`.
+2. **Primary keys are required**: All entities must have a property marked with `Flags.PrimaryKey` (several for composite keys, ordered by `KeyOrder`) or a convention key (`Id` / `{Type}Id`).
 
-3. **Enums storage**: By default stored as strings. Use `Flags.Integer` (or any non-String flag) to store as integers.
+3. **Enums storage**: By default stored as strings. Use `Flags.Integer` to store as integers.
 
 4. **Nullable properties**: Use `int?`, `DateTime?`, `string?` for nullable columns.
 
 5. **Transaction scope**: Supports both explicit transactions (`ITransaction`) and ambient transactions (`TransactionScope`).
 
-6. **Batch operations**: Optimized multi-row inserts with configurable batch sizes via `IBatchInsertConfiguration`.
+6. **Batch operations**: `CreateMany` returns generated keys (one statement per row batched into a single command); `BulkInsert` uses the database's bulk path without key write-back. Batch sizes via `SqlRepositoryOptions.BatchConfiguration`.
 
 7. **Repository settings**: Each provider has a `{Provider}RepositorySettings` class for strongly-typed configuration instead of connection strings.
 
@@ -569,6 +579,9 @@ string sqlWithParams = repository.LastExecutedSqlWithParameters;
 When adding new features, these are the primary extension points:
 - `IRepository<T>`: Add new repository operations
 - `IQueryBuilder<T>`: Add new query capabilities
+- `ISqlDialect`: Add a new SQL database
 - `IConnectionFactory`: Add new connection management strategies
 - `IConcurrencyConflictResolver<T>`: Custom conflict resolution
-- `IDataTypeConverter`: Custom type conversion between .NET and database types
+- `IValueConverter`: Per-property conversion
+- `IDataTypeConverter`: Database-wide type conversion between .NET and database types
+- `ISqlCommandInterceptor`: Observe or modify commands

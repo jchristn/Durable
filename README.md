@@ -102,25 +102,34 @@ public class Program
 
 ## Why Durable?
 
-**Durable** was built to address the limitations and overhead that come with heavyweight ORMs. While frameworks like Entity Framework and nHibernate are powerful, they often introduce unnecessary complexity, performance overhead, and lock you into their opinionated ways of doing things.
+**Durable** sits between Dapper and Entity Framework: typed LINQ queries, CRUD, relationships, optimistic concurrency and schema creation, without a DbContext, change tracking or a migrations system, and with SQL you can always see.
 
 ### Key Benefits
 
-- **No configuration overhead**: No DbContext, no migrations system, no complex model builder configurations
-- **Attributes instead of fluent API**: Simple, declarative entity definitions with `[Entity]` and `[Property]` attributes
-- **No change tracking overhead**: Durable doesn't track every property change on every entity by default
-- **True LINQ support**: Full expression tree parsing for type-safe queries
-- **Multi-database support**: SQLite, MySQL, PostgreSQL, SQL Server - same API
-- **Async from the ground up**: Every operation has async support
+- **No configuration overhead**: no DbContext, no model builder; attributes when you want control, conventions when you don't
+- **Parameterized, predictable SQL**: every value is a parameter; `BuildSql()`, `CaptureSql` and tracing show exactly what runs
+- **No change tracking**: entities are plain objects; opt-in optimistic concurrency with version columns
+- **One engine, four databases**: SQLite, MySQL, PostgreSQL and SQL Server share a single SQL engine (`Durable.Sql`) behind a small dialect interface, so behavior and fixes are identical across providers
+- **Fast materialization**: per-type metadata and compiled accessors are cached; rows map by ordinal
+- **Async from the ground up**: true streaming with `IAsyncEnumerable`, cancellation everywhere
+- **Backend-neutral core**: `IRepository<T>` and `IQueryBuilder<T>` in the `Durable` package contain no SQL concepts, leaving room for non-SQL backends
+
+### Packages
+
+| Package | Contents |
+|---|---|
+| `Durable` | Backend-neutral contracts: `IRepository<T>`, `IQueryBuilder<T>`, attributes, `EntityMetadata`, transactions, conflict resolvers, diagnostics |
+| `Durable.Sql` | Shared SQL engine: `ISqlRepository<T>`, `ISqlQueryBuilder<T>`, `ISqlDialect`, LINQ-to-SQL translation, includes, executor, interceptors |
+| `Durable.Sqlite` / `Durable.MySql` / `Durable.Postgres` / `Durable.SqlServer` | Dialect, connection factory and repository for each database |
 
 ## Requirements
 
 - **.NET 8.0** or later
 - **Database versions:**
-  - SQLite 3.8+ (via Microsoft.Data.Sqlite 9.0+)
-  - MySQL 5.7+ / MariaDB 10.2+ (via MySqlConnector 2.3+)
-  - PostgreSQL 12+ (via Npgsql 8.0+)
-  - SQL Server 2016+ (via Microsoft.Data.SqlClient 5.2+)
+  - SQLite 3.35+ (bundled with Microsoft.Data.Sqlite)
+  - MySQL 8.0.31+ (via MySqlConnector 2.x)
+  - PostgreSQL 12+ (via Npgsql 8+)
+  - SQL Server 2017+ (via Microsoft.Data.SqlClient 5+)
 
 ## Installation
 
@@ -241,7 +250,7 @@ SqlServerRepository<Person> repo = new SqlServerRepository<Person>(settings);
 
 ## Defining Entities
 
-Entities require two attributes: `[Entity]` for the table name and `[Property]` for column mappings.
+Map a class with `[Entity]` and `[Property]`:
 
 ```csharp
 using Durable;
@@ -255,238 +264,261 @@ public class Person
     [Property("first_name", Flags.String, 64)]
     public string FirstName { get; set; }
 
-    [Property("last_name", Flags.String, 64)]
-    public string LastName { get; set; }
-
     [Property("email", Flags.String, 128)]
-    public string Email { get; set; }
-
-    [Property("age")]
-    public int Age { get; set; }
+    public string? Email { get; set; }
 
     [Property("salary")]
     public decimal Salary { get; set; }
 
-    // Nullable value types
     [Property("birth_date")]
     public DateTime? BirthDate { get; set; }
 
-    // Enum stored as string by default
+    // Enums are stored by name by default...
     [Property("status")]
     public Status Status { get; set; }
 
-    // Enum stored as integer
+    // ...or as integers with Flags.Integer
     [Property("priority", Flags.Integer)]
     public Priority Priority { get; set; }
+
+    // Collections and complex objects are stored as JSON (jsonb on PostgreSQL)
+    [Property("tags", Flags.Json)]
+    public List<string> Tags { get; set; } = new List<string>();
+}
+```
+
+### Conventions
+
+A class with no `[Property]` attributes maps every scalar read/write property by name. `Id` (or `{TypeName}Id`) is the key and is auto-increment when it is an integer. Use `[NotMapped]` to skip a property. `DurableMapping.NamingConvention = NamingConvention.SnakeCase` maps `FirstName` to `first_name`.
+
+```csharp
+public class Note            // table "Note", columns Id, Title, CreatedUtc
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public DateTime CreatedUtc { get; set; }
+    [NotMapped] public string Preview => Title.Length > 20 ? Title[..20] : Title;
+}
+```
+
+### Composite keys
+
+Mark several properties as `Flags.PrimaryKey` and order them with `KeyOrder`. Key arguments take an `object[]`:
+
+```csharp
+[Entity("enrollments")]
+public class Enrollment
+{
+    [Property("student_id", Flags.PrimaryKey, KeyOrder = 0)] public int StudentId { get; set; }
+    [Property("course_id", Flags.PrimaryKey, KeyOrder = 1)] public int CourseId { get; set; }
+    [Property("grade")] public string? Grade { get; set; }
 }
 
-public enum Status { Active, Inactive, Pending }
-public enum Priority { Low, Medium, High }
+Enrollment? e = await repo.ReadByIdAsync(new object[] { 42, 7 });
 ```
+
+### Value converters
+
+```csharp
+public class CsvListConverter : ValueConverter<List<string>, string>
+{
+    public override string ConvertToProvider(List<string> value) => string.Join(",", value);
+    public override List<string> ConvertFromProvider(string value) => value.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+}
+
+[Property("labels")]
+[ValueConverter(typeof(CsvListConverter))]
+public List<string> Labels { get; set; } = new();
+```
+
+Converters also apply to values compared against the column in `Where` predicates.
 
 ## Basic CRUD Operations
 
 ```csharp
-// Create
-Person person = new Person
-{
-    FirstName = "John",
-    LastName = "Doe",
-    Email = "john.doe@example.com",
-    Age = 30,
-    Salary = 75000m
-};
-Person created = await repo.CreateAsync(person);
-Console.WriteLine($"Created with ID: {created.Id}");
+Person created = await repo.CreateAsync(new Person { FirstName = "John", Salary = 75000m });
+Person? found = await repo.ReadByIdAsync(created.Id);
+List<Person> adults = repo.ReadMany(p => p.Salary > 50000).ToList();   // streamed
 
-// Read
-Person found = await repo.ReadByIdAsync(created.Id);
-IEnumerable<Person> adults = repo.ReadMany(p => p.Age >= 18).ToList();
-IEnumerable<Person> all = repo.ReadAll().ToList();
-
-// Update
-found.Salary = 80000m;
+found!.Salary = 80000m;
 await repo.UpdateAsync(found);
 
-// Delete
 await repo.DeleteByIdAsync(found.Id);
-// Or delete by predicate
-int deleted = repo.DeleteMany(p => p.Age < 18);
+int deleted = await repo.DeleteManyAsync(p => p.Salary < 1000);
+
+// Set-based updates in one statement
+await repo.BatchUpdateAsync(p => p.Status == Status.Pending, p => new Person { Salary = p.Salary * 1.05m });
+await repo.UpdateFieldAsync(p => p.Email == null, p => p.Status, Status.Inactive);
+
+// Inserts with generated keys written back, in input order
+IEnumerable<Person> inserted = await repo.CreateManyAsync(people);
+
+// Fastest path, no key write-back: SqlBulkCopy / PostgreSQL COPY / MySqlBulkCopy / prepared SQLite inserts
+long rows = await repo.BulkInsertAsync(manyPeople);
+
+// Native upsert (ON CONFLICT / ON DUPLICATE KEY / MERGE)
+await repo.UpsertAsync(person);
 ```
 
 ## Query Builder
 
 ```csharp
-// Complex filtering with LINQ
-IEnumerable<Person> results = repo
-    .Query()
-    .Where(p => p.Salary > 100000)
-    .Where(p => p.Age >= 25)
+List<Person> page = (await repo.Query()
+    .Where(p => p.Salary > 100000 && p.Email != null)
+    .Where(p => p.FirstName.StartsWith("Jo"))
     .OrderByDescending(p => p.Salary)
-    .Take(10)
-    .Execute();
+    .Skip(20).Take(10)
+    .ExecuteAsync()).ToList();
 
-// Async execution
-IEnumerable<Person> results = await repo
-    .Query()
-    .Where(p => p.Status == Status.Active)
-    .OrderBy(p => p.LastName)
-    .ExecuteAsync();
+// Streaming
+await foreach (Person p in repo.Query().Where(p => p.Status == Status.Active).ExecuteAsyncEnumerable()) { }
 
-// Get executed SQL for debugging
-IDurableResult<Person> result = await repo
-    .Query()
-    .Where(p => p.Age > 30)
-    .ExecuteWithQueryAsync();
+// Projection computed in SQL; Where/OrderBy apply to projected members
+List<PersonSummary> summaries = (await repo.Query()
+    .Select(p => new PersonSummary { Name = p.FirstName + " " + p.LastName, Monthly = p.Salary / 12 })
+    .Where(s => s.Monthly > 5000)
+    .OrderBy(s => s.Name)
+    .ExecuteAsync()).ToList();
 
-Console.WriteLine($"SQL: {result.Query}");
-foreach (Person p in result.Result)
-{
-    Console.WriteLine(p.FirstName);
-}
+// Grouping with HAVING, computed by the database
+List<DepartmentStats> stats = (await repo.Query()
+    .GroupBy(p => p.Department)
+    .Having(g => g.Count() > 2)
+    .Select(g => new DepartmentStats { Department = g.Key, Headcount = g.Count(), Payroll = g.Sum(p => p.Salary) })
+    .ExecuteAsync()).ToList();
+
+// Navigation predicates become subqueries
+List<Author> prolific = (await authors.Query().Where(a => a.Books.Count() > 3).ExecuteAsync()).ToList();
+List<Book> byAcme = (await books.Query().Where(b => b.Author.Company.Name == "Acme").ExecuteAsync()).ToList();
 ```
 
-## Relationships
+Supported in predicates: comparisons (with C# null semantics), `&&`/`||`/`!`, arithmetic, string concatenation, `??`, ternaries, enums, `HasValue`/`.Value`, `Contains`/`StartsWith`/`EndsWith` (wildcards escaped), case-insensitive `Equals`/`Contains` via `StringComparison`, `ToUpper`/`ToLower`/`Trim`/`Substring`/`Replace`/`IndexOf`/`Length`, `string.IsNullOrEmpty`, collection `Contains` (IN), date parts and `Add*` methods, `Math` functions, `Between`/`In`/`NotIn` helpers, and `Any`/`All`/`Count` over collection navigations.
 
-### One-to-Many
+`ISqlQueryBuilder<T>` adds `Union`/`UnionAll`/`Intersect`/`Except`, `WhereIn`/`WhereExists` subqueries, `WhereRaw("col = {0}", value)` (placeholders are parameters), CTEs, window functions and `SelectCase()`.
+
+## Relationships
 
 ```csharp
 [Entity("books")]
 public class Book
 {
-    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
-    public int Id { get; set; }
-
-    [Property("title", Flags.String, 200)]
-    public string Title { get; set; }
-
-    [Property("author_id")]
-    [ForeignKey(typeof(Author), "Id")]
-    public int AuthorId { get; set; }
-
-    [NavigationProperty("AuthorId")]
-    public Author Author { get; set; }
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)] public int Id { get; set; }
+    [Property("author_id")] [ForeignKey(typeof(Author), "Id")] public int AuthorId { get; set; }
+    [NavigationProperty("AuthorId")] public Author? Author { get; set; }
 }
 
 [Entity("authors")]
 public class Author
 {
-    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
-    public int Id { get; set; }
-
-    [Property("name", Flags.String, 100)]
-    public string Name { get; set; }
-
-    [InverseNavigationProperty("AuthorId")]
-    public List<Book> Books { get; set; } = new List<Book>();
+    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)] public int Id { get; set; }
+    [InverseNavigationProperty("AuthorId")] public List<Book> Books { get; set; } = new();
+    [ManyToManyNavigationProperty(typeof(AuthorCategory), "AuthorId", "CategoryId")] public List<Category> Categories { get; set; } = new();
 }
 
-// Loading related data
-IEnumerable<Book> books = repo.Query()
-    .Include(b => b.Author)
-    .Execute();
+List<Author> withBooks = (await authors.Query()
+    .Include(a => a.Books).ThenInclude<Book, Company?>(b => b.Publisher)
+    .Include(a => a.Categories)
+    .OrderBy(a => a.Name).Take(20)          // 20 authors, each with all of their books
+    .ExecuteAsync()).ToList();
+```
+
+Includes load with one query per navigation, keyed by the parent rows. There is no cartesian explosion, and `Skip`/`Take` count parent rows only.
+
+## Query Filters and Soft Delete
+
+```csharp
+repo.AddQueryFilter(o => o.TenantId == tenantContext.TenantId);  // evaluated per query
+
+[Property("deleted_utc")] [SoftDelete] public DateTime? DeletedUtc { get; set; }
+await repo.DeleteAsync(order);                                   // sets deleted_utc instead of deleting
+List<Order> everything = (await repo.Query().IgnoreQueryFilters().ExecuteAsync()).ToList();
 ```
 
 ## Transactions
 
 ```csharp
-// Explicit transactions
-ITransaction transaction = await repo.BeginTransactionAsync();
-try
+using ISqlTransaction tx = await repo.BeginTransactionAsync();
+await repo.CreateAsync(order, tx);
+await lines.CreateManyAsync(orderLines, tx);
+ISavepoint sp = await tx.CreateSavepointAsync();
+await tx.CommitAsync();                       // dispose without commit rolls back
+
+// Ambient scope across awaits
+using (TransactionScope scope = await TransactionScope.CreateAsync(repo))
 {
-    await repo.CreateAsync(person1, transaction);
-    await repo.CreateAsync(person2, transaction);
-    await transaction.CommitAsync();
+    await repo.CreateAsync(a);                // joins the scope automatically
+    await scope.CompleteAsync();
 }
-catch
-{
-    await transaction.RollbackAsync();
-    throw;
-}
+
+// Join a transaction opened by Dapper/EF/ADO.NET
+await repo.CreateAsync(entity, SqlTransactionContext.Wrap(connection, transaction, PostgresDialect.Default));
 ```
 
-## Connection Pooling
+## Connections
+
+Durable uses each driver's own connection pooling. Share one factory across repositories and dispose it at shutdown. Repositories never dispose a factory they were given. See [CONNECTION_MGMT.md](CONNECTION_MGMT.md).
 
 ```csharp
-using Durable.Sqlite;
-
-// Create factory with custom pool options
-SqliteConnectionFactory factory = "Data Source=myapp.db".CreateFactory(options =>
-{
-    options.MinPoolSize = 5;
-    options.MaxPoolSize = 100;
-    options.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.IdleTimeout = TimeSpan.FromMinutes(10);
-    options.ValidateConnections = true;
-});
-
-SqliteRepository<Person> repo = new SqliteRepository<Person>(factory);
+PostgresConnectionFactory factory = new PostgresConnectionFactory(connectionString, maxConcurrentConnections: 50);
+PostgresRepository<Person> people = new PostgresRepository<Person>(factory);
 ```
 
 ## Optimistic Concurrency
 
 ```csharp
-[Entity("authors")]
-public class Author
-{
-    [Property("id", Flags.PrimaryKey | Flags.AutoIncrement)]
-    public int Id { get; set; }
+[Property("version")]
+[VersionColumn(VersionColumnType.Integer)]
+public int Version { get; set; } = 1;
 
-    [Property("name", Flags.String, 100)]
-    public string Name { get; set; }
+try { await repo.UpdateAsync(author); }
+catch (OptimisticConcurrencyException) { /* reload and retry */ }
 
-    [Property("version")]
-    [VersionColumn(VersionColumnType.Integer)]
-    public int Version { get; set; } = 1;
-}
-
-// Conflict handling
-try
-{
-    await repo.UpdateAsync(author);
-}
-catch (OptimisticConcurrencyException ex)
-{
-    Console.WriteLine($"Expected: {ex.ExpectedVersion}, Actual: {ex.ActualVersion}");
-}
+repo.ConflictResolver = new ClientWinsResolver<Author>();   // or DatabaseWinsResolver, MergeChangesResolver
 ```
 
-## SQL Capture for Debugging
+## Diagnostics
 
 ```csharp
-SqliteRepository<Person> repo = new SqliteRepository<Person>(connectionString);
+SqlRepositoryOptions options = new SqlRepositoryOptions
+{
+    Logger = loggerFactory.CreateLogger("Durable"),   // Debug per command, Warning when slow, Error on failure
+    SlowCommandThreshold = TimeSpan.FromMilliseconds(200),
+    CommandTimeoutSeconds = 30
+};
+options.Interceptors.Add(new MyCommandInterceptor());   // ISqlCommandInterceptor
+SqliteRepository<Person> repo = new SqliteRepository<Person>(connectionString, options);
+
+// OpenTelemetry
+builder.Services.AddOpenTelemetry().WithTracing(t => t.AddSource(DurableDiagnostics.ActivitySourceName));
+
+// SQL capture
 repo.CaptureSql = true;
-
-IEnumerable<Person> results = repo.ReadMany(p => p.Age > 25).ToList();
-
-Console.WriteLine($"SQL: {repo.LastExecutedSql}");
-Console.WriteLine($"SQL with params: {repo.LastExecutedSqlWithParameters}");
+List<Person> rows = repo.ReadMany(p => p.Salary > 25).ToList();
+Console.WriteLine(repo.LastExecutedSql);                 // parameterized SQL
+Console.WriteLine(repo.LastExecutedSqlWithParameters);   // with values, for debugging only
+string sql = repo.Query().Where(p => p.Salary > 25).BuildSql();
 ```
 
-## Raw SQL
+## Raw SQL, Procedures and Multiple Result Sets
 
 ```csharp
-// Execute raw queries
-IEnumerable<Person> results = repo
-    .FromSql("SELECT * FROM people WHERE salary BETWEEN @p0 AND @p1", null, 50000, 100000)
-    .ToList();
+List<Person> rows = repo.FromSql("SELECT * FROM people WHERE salary BETWEEN @p0 AND @p1", null, 50000, 100000).ToList();
+List<TopEarner> dtos = repo.FromSql<TopEarner>("SELECT first_name, salary FROM people ORDER BY salary DESC").ToList(); // snake_case -> PascalCase
+long total = repo.ExecuteScalar<long>("SELECT COUNT(*) FROM people");
+int affected = await repo.ExecuteSqlAsync("UPDATE people SET salary = salary * 1.05 WHERE department = @p0", null, default, "Engineering");
 
-// Execute non-query SQL
-int affected = await repo.ExecuteSqlAsync(
-    "UPDATE people SET salary = salary * 1.05 WHERE department = @p0",
-    null, default, "Engineering");
+using SqlMultipleResultReader multi = repo.QueryMultiple("SELECT * FROM people; SELECT COUNT(*) FROM people");
+List<Person> people = multi.Read<Person>();
+long count = multi.Read<long>()[0];
+
+List<Person> fromProc = repo.FromProcedure<Person>("get_people_by_department", null, new SqlParameterValue("@department", "Sales"));
 ```
 
 ## Table Initialization
 
 ```csharp
-// Create table if not exists
-repo.InitializeTable(typeof(Person));
-
-// Initialize multiple tables
+repo.InitializeTable(typeof(Person));                    // CREATE TABLE if missing, indexes, column validation
 repo.InitializeTables(new[] { typeof(Person), typeof(Author), typeof(Book) });
-
-// Validate entity definition without creating table
 bool isValid = repo.ValidateTable(typeof(Person), out List<string> errors, out List<string> warnings);
 ```
 
