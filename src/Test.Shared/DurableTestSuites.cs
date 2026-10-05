@@ -78,6 +78,7 @@ namespace Test.Shared
                 // Query translation correctness (predicates, functions, navigation, subqueries, windows, CTEs, projections, paging).
                 suites.Add(SharedSuite<QueryTranslationTestSuite>("QueryTranslation", "Query Translation (Predicates / Functions) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<StringMatchingTestSuite>("StringMatching", "String Matching Mode (Ordinal / IgnoreCase / Database) Tests", providerTag, BeforeEach));
 
                 // Provider-specific unit suites.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite)
