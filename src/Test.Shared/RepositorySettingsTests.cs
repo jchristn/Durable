@@ -50,7 +50,7 @@ namespace Test.Shared
         public void Parse_NullConnectionString_ShouldThrowArgumentNullException()
         {
             // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => SqliteRepositorySettings.Parse(null));
+            Assert.Throws<ArgumentNullException>(() => SqliteRepositorySettings.Parse(null!));
         }
 
         [Fact]

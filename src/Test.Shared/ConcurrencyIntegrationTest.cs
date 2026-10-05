@@ -91,8 +91,10 @@
                 
                 Author created = repo.Create(author);
                 
-                Author copy1 = repo.ReadById(created.Id);
-                Author copy2 = repo.ReadById(created.Id);
+                Author? copy1 = repo.ReadById(created.Id);
+                Author? copy2 = repo.ReadById(created.Id);
+                Assert.NotNull(copy1);
+                Assert.NotNull(copy2);
                 
                 copy1.Name = "Update 1";
                 repo.Update(copy1);
@@ -142,8 +144,10 @@
                     
                     Author created = repo.Create(author);
                     
-                    Author copy1 = repo.ReadById(created.Id);
-                    Author copy2 = repo.ReadById(created.Id);
+                    Author? copy1 = repo.ReadById(created.Id);
+                    Author? copy2 = repo.ReadById(created.Id);
+                    Assert.NotNull(copy1);
+                    Assert.NotNull(copy2);
                     
                     copy1.Name = "Update 1";
                     Author updated1 = repo.Update(copy1);
@@ -190,8 +194,10 @@
                     
                     Author created = repo.Create(author);
                     
-                    Author copy1 = repo.ReadById(created.Id);
-                    Author copy2 = repo.ReadById(created.Id);
+                    Author? copy1 = repo.ReadById(created.Id);
+                    Author? copy2 = repo.ReadById(created.Id);
+                    Assert.NotNull(copy1);
+                    Assert.NotNull(copy2);
                     
                     copy1.Name = "Update 1";
                     Author updated1 = repo.Update(copy1);
@@ -240,8 +246,10 @@
                     
                     Author created = repo.Create(author);
                     
-                    Author copy1 = repo.ReadById(created.Id);
-                    Author copy2 = repo.ReadById(created.Id);
+                    Author? copy1 = repo.ReadById(created.Id);
+                    Author? copy2 = repo.ReadById(created.Id);
+                    Assert.NotNull(copy1);
+                    Assert.NotNull(copy2);
                     
                     // First update changes the name
                     copy1.Name = "Updated Name";
@@ -293,8 +301,10 @@
 
                 Company created = repo.Create(company);
 
-                Company copy1 = repo.ReadById(created.Id);
-                Company copy2 = repo.ReadById(created.Id);
+                Company? copy1 = repo.ReadById(created.Id);
+                Company? copy2 = repo.ReadById(created.Id);
+                Assert.NotNull(copy1);
+                Assert.NotNull(copy2);
 
                 copy1.Name = "Update 1";
                 repo.Update(copy1);

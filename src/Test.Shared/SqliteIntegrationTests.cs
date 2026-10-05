@@ -108,7 +108,7 @@
 
             await transaction.CommitAsync();
 
-            Person retrieved = _Repository.ReadFirst(p => p.FirstName == "Jane");
+            Person? retrieved = _Repository.ReadFirst(p => p.FirstName == "Jane");
             Assert.NotNull(retrieved);
             Assert.Equal("Smith", retrieved.LastName);
         }
@@ -138,10 +138,12 @@
             IEnumerable<Person> updated = await _Repository.UpsertManyAsync(insertedList);
             Assert.Equal(3, updated.Count());
 
-            Person alice = _Repository.ReadFirst(p => p.FirstName == "Alice");
+            Person? alice = _Repository.ReadFirst(p => p.FirstName == "Alice");
+            Assert.NotNull(alice);
             Assert.Equal(26, alice.Age);
 
-            Person bob = _Repository.ReadFirst(p => p.FirstName == "Bob");
+            Person? bob = _Repository.ReadFirst(p => p.FirstName == "Bob");
+            Assert.NotNull(bob);
             Assert.Equal(70000, bob.Salary);
         }
 

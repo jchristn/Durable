@@ -29,9 +29,9 @@
         [Fact]
         public void ConvertFromDatabase_IntegerOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase(1, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(1, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -40,9 +40,9 @@
         [Fact]
         public void ConvertFromDatabase_IntegerZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase(0, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(0, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -51,9 +51,9 @@
         [Fact]
         public void ConvertFromDatabase_LongOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase(1L, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(1L, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -62,9 +62,9 @@
         [Fact]
         public void ConvertFromDatabase_LongZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase(0L, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(0L, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -78,9 +78,9 @@
         [InlineData(int.MinValue)]
         public void ConvertFromDatabase_NonZeroInteger_ReturnsTrue(int value)
         {
-            object result = _Converter.ConvertFromDatabase(value, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(value, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -89,9 +89,9 @@
         [Fact]
         public void ConvertFromDatabase_ByteOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase((byte)1, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((byte)1, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -100,9 +100,9 @@
         [Fact]
         public void ConvertFromDatabase_ByteZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase((byte)0, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((byte)0, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -111,9 +111,9 @@
         [Fact]
         public void ConvertFromDatabase_SbyteOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase((sbyte)1, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((sbyte)1, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -122,9 +122,9 @@
         [Fact]
         public void ConvertFromDatabase_SbyteZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase((sbyte)0, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((sbyte)0, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -133,9 +133,9 @@
         [Fact]
         public void ConvertFromDatabase_ShortOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase((short)1, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((short)1, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -144,9 +144,9 @@
         [Fact]
         public void ConvertFromDatabase_ShortZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase((short)0, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase((short)0, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         // ==================== STRING TO BOOLEAN TESTS ====================
@@ -161,9 +161,9 @@
         [InlineData("tRuE")]
         public void ConvertFromDatabase_StringTrue_ReturnsTrue(string value)
         {
-            object result = _Converter.ConvertFromDatabase(value, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(value, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -176,9 +176,9 @@
         [InlineData("fAlSe")]
         public void ConvertFromDatabase_StringFalse_ReturnsFalse(string value)
         {
-            object result = _Converter.ConvertFromDatabase(value, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(value, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -187,9 +187,9 @@
         [Fact]
         public void ConvertFromDatabase_StringOne_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase("1", typeof(bool));
+            object? result = _Converter.ConvertFromDatabase("1", typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -198,9 +198,9 @@
         [Fact]
         public void ConvertFromDatabase_StringZero_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase("0", typeof(bool));
+            object? result = _Converter.ConvertFromDatabase("0", typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         /// <summary>
@@ -213,9 +213,9 @@
         [InlineData("enabled")]
         public void ConvertFromDatabase_OtherStrings_ReturnsTrue(string value)
         {
-            object result = _Converter.ConvertFromDatabase(value, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(value, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         // ==================== NATIVE BOOLEAN TESTS ====================
@@ -226,9 +226,9 @@
         [Fact]
         public void ConvertFromDatabase_NativeBoolTrue_ReturnsTrue()
         {
-            object result = _Converter.ConvertFromDatabase(true, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(true, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -237,9 +237,9 @@
         [Fact]
         public void ConvertFromDatabase_NativeBoolFalse_ReturnsFalse()
         {
-            object result = _Converter.ConvertFromDatabase(false, typeof(bool));
+            object? result = _Converter.ConvertFromDatabase(false, typeof(bool));
             Assert.IsType<bool>(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
 
         // ==================== NULLABLE BOOLEAN TESTS ====================
@@ -272,7 +272,7 @@
         {
             object? result = _Converter.ConvertFromDatabase(1, typeof(bool?));
             Assert.NotNull(result);
-            Assert.True((bool)result!);
+            Assert.True((bool)result);
         }
 
         /// <summary>
@@ -283,7 +283,7 @@
         {
             object? result = _Converter.ConvertFromDatabase("false", typeof(bool?));
             Assert.NotNull(result);
-            Assert.False((bool)result!);
+            Assert.False((bool)result);
         }
     }
 }

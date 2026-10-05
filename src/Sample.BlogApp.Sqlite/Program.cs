@@ -234,9 +234,15 @@ namespace Sample.BlogApp.Sqlite
                 return;
             }
 
-            Author alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
-            Author bob = await authorRepo.ReadFirstAsync(a => a.Username == "bob_data");
-            Author carol = await authorRepo.ReadFirstAsync(a => a.Username == "carol_dev");
+            Author? alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
+            Author? bob = await authorRepo.ReadFirstAsync(a => a.Username == "bob_data");
+            Author? carol = await authorRepo.ReadFirstAsync(a => a.Username == "carol_dev");
+            if (alice == null || bob == null || carol == null)
+            {
+                Console.WriteLine("   Seed authors 'alice_tech', 'bob_data' and 'carol_dev' were not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
 
             List<BlogPost> posts = new List<BlogPost>
             {
@@ -337,8 +343,14 @@ namespace Sample.BlogApp.Sqlite
                 return;
             }
 
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
-            BlogPost mlPost = await postRepo.ReadFirstAsync(p => p.Slug == "ml-basics-developers");
+            BlogPost? microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            BlogPost? mlPost = await postRepo.ReadFirstAsync(p => p.Slug == "ml-basics-developers");
+            if (microservicesPost == null || mlPost == null)
+            {
+                Console.WriteLine("   Seed posts 'intro-to-microservices' and 'ml-basics-developers' were not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
 
             List<Comment> comments = new List<Comment>
             {
@@ -415,7 +427,14 @@ namespace Sample.BlogApp.Sqlite
             }
 
             Console.WriteLine("\n2. Find posts by a specific author:");
-            Author alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
+            Author? alice = await authorRepo.ReadFirstAsync(a => a.Username == "alice_tech");
+            if (alice == null)
+            {
+                Console.WriteLine("   Author 'alice_tech' was not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
+
             IEnumerable<BlogPost> alicePosts = await postRepo.Query()
                 .Where(p => p.AuthorId == alice.Id)
                 .ExecuteAsync();
@@ -427,7 +446,14 @@ namespace Sample.BlogApp.Sqlite
             }
 
             Console.WriteLine("\n3. Find approved comments for a specific post:");
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            BlogPost? microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            if (microservicesPost == null)
+            {
+                Console.WriteLine("   Post 'intro-to-microservices' was not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
+
             IEnumerable<Comment> approvedComments = await commentRepo.Query()
                 .Where(c => c.PostId == microservicesPost.Id && c.IsApproved == true)
                 .OrderBy(c => c.CreatedDate)
@@ -464,17 +490,31 @@ namespace Sample.BlogApp.Sqlite
             Console.WriteLine("=== Scenario 5: Update Operations ===");
 
             Console.WriteLine("\n1. Increment view count for a post:");
-            BlogPost microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            BlogPost? microservicesPost = await postRepo.ReadFirstAsync(p => p.Slug == "intro-to-microservices");
+            if (microservicesPost == null)
+            {
+                Console.WriteLine("   Post 'intro-to-microservices' was not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
+
             int originalViews = microservicesPost.ViewCount;
             microservicesPost.ViewCount += 10;
             microservicesPost.UpdatedDate = DateTime.UtcNow;
             await postRepo.UpdateAsync(microservicesPost);
 
-            BlogPost updatedPost = await postRepo.ReadByIdAsync(microservicesPost.Id);
+            BlogPost? updatedPost = await postRepo.ReadByIdAsync(microservicesPost.Id);
+            if (updatedPost == null)
+            {
+                Console.WriteLine("   Updated post could not be re-read; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
+
             Console.WriteLine($"   Views: {originalViews} → {updatedPost.ViewCount}");
 
             Console.WriteLine("\n2. Publish a draft post:");
-            BlogPost draftPost = await postRepo.ReadFirstOrDefaultAsync(p => p.IsPublished == false);
+            BlogPost? draftPost = await postRepo.ReadFirstOrDefaultAsync(p => p.IsPublished == false);
             if (draftPost != null)
             {
                 draftPost.IsPublished = true;
@@ -523,7 +563,13 @@ namespace Sample.BlogApp.Sqlite
             Console.WriteLine($"   Comments: {totalComments} ({approvedComments} approved)");
 
             int maxViews = await postRepo.MaxAsync(p => p.ViewCount);
-            BlogPost mostViewed = await postRepo.ReadFirstAsync(p => p.ViewCount == maxViews);
+            BlogPost? mostViewed = await postRepo.ReadFirstAsync(p => p.ViewCount == maxViews);
+            if (mostViewed == null)
+            {
+                Console.WriteLine("   Most viewed post was not found; skipping the rest of this scenario.");
+                Console.WriteLine();
+                return;
+            }
 
             Console.WriteLine($"\n🔥 Most viewed post: '{mostViewed.Title}' with {mostViewed.ViewCount} views");
 
@@ -763,20 +809,28 @@ namespace Sample.BlogApp.Sqlite
                 WHERE is_published = 1";
 
             int postCount = 0;
-            await using (System.Data.Common.DbConnection connection = new Microsoft.Data.Sqlite.SqliteConnection(authorRepo.Settings.BuildConnectionString()))
+            RepositorySettings? settings = authorRepo.Settings;
+            if (settings == null)
             {
-                await connection.OpenAsync();
-                await using (System.Data.Common.DbCommand command = connection.CreateCommand())
+                Console.WriteLine("   Repository settings are unavailable; skipping raw SQL aggregation.");
+            }
+            else
+            {
+                await using (System.Data.Common.DbConnection connection = new Microsoft.Data.Sqlite.SqliteConnection(settings.BuildConnectionString()))
                 {
-                    command.CommandText = aggregateSql;
-                    await using (System.Data.Common.DbDataReader reader = await command.ExecuteReaderAsync())
+                    await connection.OpenAsync();
+                    await using (System.Data.Common.DbCommand command = connection.CreateCommand())
                     {
-                        if (await reader.ReadAsync())
+                        command.CommandText = aggregateSql;
+                        await using (System.Data.Common.DbDataReader reader = await command.ExecuteReaderAsync())
                         {
-                            postCount = reader.GetInt32(0);
-                            double avgViews = reader.IsDBNull(1) ? 0 : reader.GetDouble(1);
-                            int maxViews = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
-                            Console.WriteLine($"   Published Posts: {postCount}, Avg Views: {avgViews:F1}, Max Views: {maxViews}");
+                            if (await reader.ReadAsync())
+                            {
+                                postCount = reader.GetInt32(0);
+                                double avgViews = reader.IsDBNull(1) ? 0 : reader.GetDouble(1);
+                                int maxViews = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+                                Console.WriteLine($"   Published Posts: {postCount}, Avg Views: {avgViews:F1}, Max Views: {maxViews}");
+                            }
                         }
                     }
                 }
@@ -865,11 +919,11 @@ namespace Sample.BlogApp.Sqlite
             Console.WriteLine("=== Scenario 12: Edge Cases and Error Handling ===");
 
             Console.WriteLine("\n1. Handling non-existent records:");
-            BlogPost nonExistent = await postRepo.ReadByIdAsync(99999);
+            BlogPost? nonExistent = await postRepo.ReadByIdAsync(99999);
             Console.WriteLine($"   ReadById(99999) returned: {(nonExistent == null ? "null" : "a post")}");
 
             Console.WriteLine("\n2. ReadFirstOrDefault with no matches:");
-            BlogPost noMatch = await postRepo.ReadFirstOrDefaultAsync(p => p.ViewCount > 1000000);
+            BlogPost? noMatch = await postRepo.ReadFirstOrDefaultAsync(p => p.ViewCount > 1000000);
             Console.WriteLine($"   ReadFirstOrDefault (no matches) returned: {(noMatch == null ? "null" : "a post")}");
 
             Console.WriteLine("\n3. Empty collection operations:");
