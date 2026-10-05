@@ -805,6 +805,14 @@
             <param name="expression">String SQL expression.</param>
             <returns>The condition.</returns>
         </member>
+        <member name="M:Durable.Sql.ISqlDialect.OrderDirection(System.Boolean)">
+            <summary>
+            Returns the ORDER BY direction suffix for a sort key, with LINQ's null ordering: NULLs first when ascending and
+            last when descending (the default for SQLite, MySQL and SQL Server; PostgreSQL needs NULLS FIRST / NULLS LAST).
+            </summary>
+            <param name="descending">Whether the key sorts descending.</param>
+            <returns>The suffix, including a leading space (for example " ASC").</returns>
+        </member>
         <member name="P:Durable.Sql.ISqlDialect.StringCastType">
             <summary>
             Gets the type name used to convert a non-string value to text in concatenations (<c>CAST(x AS ...)</c>).
@@ -3928,6 +3936,9 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.IsEmptyString(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.OrderDirection(System.Boolean)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.OrdinalCollation(System.String)">

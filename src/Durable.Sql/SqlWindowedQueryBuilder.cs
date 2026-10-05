@@ -267,7 +267,7 @@ namespace Durable.Sql
             foreach (KeyValuePair<LambdaExpression, bool> ordering in _Orderings)
             {
                 translator.Bind(ordering.Key.Parameters[0], source);
-                orderings.Add(translator.Value(ordering.Key.Body) + (ordering.Value ? " DESC" : " ASC"));
+                orderings.Add(translator.Value(ordering.Key.Body) + translator.Dialect.OrderDirection(ordering.Value));
             }
 
             if (orderings.Count > 0) parts.Add("ORDER BY " + string.Join(", ", orderings));

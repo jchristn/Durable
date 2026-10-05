@@ -94,7 +94,7 @@ namespace Test.Shared
                     new List<string> { providerTag, "conformance" },
                     BeforeEach))
                 {
-                    suites.Add(MarkKnownConformanceFailures(conformance, configuration.DatabaseType));
+                    suites.Add(conformance);
                 }
 
                 // Provider-specific unit suites.
@@ -137,35 +137,6 @@ namespace Test.Shared
                 () => (T)System.Activator.CreateInstance(typeof(T), DurableTestRuntime.RequireProvider())!,
                 tags,
                 beforeEach);
-        }
-
-        // Known SQL-engine conformance failures. Each entry is a genuine engine bug that must be fixed in Durable.Sql (or a
-        // dialect hook), not by weakening the conformance assertion; remove the entry once the engine is fixed.
-        // - PostgreSQL / Conformance.OrderingPaging / NullsOrderLikeLinq: OrderBy over a nullable column returns NULLs
-        //   last (PostgreSQL's default) instead of first like LINQ and the other three providers; OrderByDescending
-        //   returns them first instead of last. Fix: the PostgreSQL dialect should emit NULLS FIRST for ascending and
-        //   NULLS LAST for descending sort keys.
-        private static TestSuiteDescriptor MarkKnownConformanceFailures(TestSuiteDescriptor suite, TestDatabaseType databaseType)
-        {
-            Dictionary<string, string> known = new Dictionary<string, string>(System.StringComparer.Ordinal);
-            if (databaseType == TestDatabaseType.Postgres)
-            {
-                known["Conformance.OrderingPaging/NullsOrderLikeLinq"] =
-                    "KNOWN ENGINE BUG (PostgreSQL): NULLs sort last on ascending order; the dialect must emit NULLS FIRST / NULLS LAST to match LINQ and the other providers.";
-            }
-
-            if (known.Count == 0) return suite;
-
-            List<TestCaseDescriptor> cases = new List<TestCaseDescriptor>();
-            foreach (TestCaseDescriptor testCase in suite.Cases)
-            {
-                if (known.TryGetValue(suite.SuiteId + "/" + testCase.CaseId, out string? reason))
-                    cases.Add(new TestCaseDescriptor(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, testCase.ExecuteAsync, testCase.Tags, true, reason));
-                else
-                    cases.Add(testCase);
-            }
-
-            return new TestSuiteDescriptor(suite.SuiteId, suite.DisplayName, cases, suite.BeforeSuiteAsync, suite.AfterSuiteAsync);
         }
 
         private static string ProviderName(TestDatabaseType databaseType)

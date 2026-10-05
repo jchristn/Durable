@@ -101,6 +101,10 @@
             <param name="ordinalCollation">Binary collation for ordinal string matching. Default: C (byte order of UTF-8, which is code-point order).</param>
             <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
         </member>
+        <member name="M:Durable.Postgres.PostgresDialect.OrderDirection(System.Boolean)">
+            <inheritdoc />
+            <remarks>PostgreSQL sorts NULLs as larger than any value; NULLS FIRST / NULLS LAST restore LINQ ordering.</remarks>
+        </member>
         <member name="M:Durable.Postgres.PostgresDialect.OrdinalCollation(System.String)">
             <inheritdoc />
         </member>

@@ -106,6 +106,14 @@ namespace Durable.Sql
         string IsEmptyString(string expression);
 
         /// <summary>
+        /// Returns the ORDER BY direction suffix for a sort key, with LINQ's null ordering: NULLs first when ascending and
+        /// last when descending (the default for SQLite, MySQL and SQL Server; PostgreSQL needs NULLS FIRST / NULLS LAST).
+        /// </summary>
+        /// <param name="descending">Whether the key sorts descending.</param>
+        /// <returns>The suffix, including a leading space (for example " ASC").</returns>
+        string OrderDirection(bool descending);
+
+        /// <summary>
         /// Gets the type name used to convert a non-string value to text in concatenations (<c>CAST(x AS ...)</c>).
         /// </summary>
         string StringCastType { get; }

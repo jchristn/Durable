@@ -162,13 +162,13 @@ namespace Durable
         IAsyncDurableResult<T> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default);
 
         /// <summary>
-        /// Counts matching rows (ignores paging).
+        /// Counts the rows the query returns, applying Skip/Take like LINQ (<c>Take(2).Count()</c> is at most 2).
         /// </summary>
         /// <returns>The count.</returns>
         long Count();
 
         /// <summary>
-        /// Counts matching rows (ignores paging).
+        /// Counts the rows the query returns, applying Skip/Take like LINQ (<c>Take(2).Count()</c> is at most 2).
         /// </summary>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The count.</returns>

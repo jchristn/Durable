@@ -459,7 +459,7 @@ namespace Durable.Sql
                 {
                     model.OrderBy.Clear();
                     foreach (KeyValuePair<LambdaExpression, bool> ordering in _Orderings)
-                        model.OrderBy.Add(translator.Value(Rewrite(ordering.Key)) + (ordering.Value ? " DESC" : " ASC"));
+                        model.OrderBy.Add(translator.Value(Rewrite(ordering.Key)) + Context.Dialect.OrderDirection(ordering.Value));
                 }
 
                 if (_Skip.HasValue) model.Skip = _Skip;

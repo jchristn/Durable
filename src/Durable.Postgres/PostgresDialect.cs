@@ -67,6 +67,13 @@ namespace Durable.Postgres
         #region Public-Methods
 
         /// <inheritdoc />
+        /// <remarks>PostgreSQL sorts NULLs as larger than any value; NULLS FIRST / NULLS LAST restore LINQ ordering.</remarks>
+        public override string OrderDirection(bool descending)
+        {
+            return descending ? " DESC NULLS LAST" : " ASC NULLS FIRST";
+        }
+
+        /// <inheritdoc />
         public override string OrdinalCollation(string expression)
         {
             return expression + " COLLATE \"" + OrdinalCollationName + "\"";

@@ -594,7 +594,7 @@ namespace Durable.Sql
                 {
                     SqlExpressionTranslator orderTranslator = Context.CreateTranslator(builder);
                     orderTranslator.Bind(order.KeySelector.Parameters[0], source);
-                    model.OrderBy.Add(orderTranslator.Value(order.KeySelector.Body) + (order.Descending ? " DESC" : " ASC"));
+                    model.OrderBy.Add(orderTranslator.Value(order.KeySelector.Body) + Context.Dialect.OrderDirection(order.Descending));
                 }
 
                 model.Skip = _Skip;

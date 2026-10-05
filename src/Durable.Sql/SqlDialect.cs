@@ -170,6 +170,12 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        public virtual string OrderDirection(bool descending)
+        {
+            return descending ? " DESC" : " ASC";
+        }
+
+        /// <inheritdoc />
         public virtual string OrdinalCollation(string expression)
         {
             return expression;
