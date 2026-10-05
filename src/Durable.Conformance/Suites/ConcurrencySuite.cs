@@ -77,7 +77,7 @@ namespace Durable.Conformance
         public async Task ClientWinsResolver()
         {
             IRepository<CfVersionedItem> repository = await PrepareAsync();
-            Target.SetConflictResolver(repository, new ClientWinsResolver<CfVersionedItem>());
+            repository.ConflictResolver = new ClientWinsResolver<CfVersionedItem>();
             CfVersionedItem item = await repository.CreateAsync(new CfVersionedItem { Name = "orig", Salary = 1m }, null, Token);
             CfVersionedItem first = Read(repository, item.Id);
             CfVersionedItem second = Read(repository, item.Id);
@@ -105,7 +105,7 @@ namespace Durable.Conformance
         public async Task DatabaseWinsResolver()
         {
             IRepository<CfVersionedItem> repository = await PrepareAsync();
-            Target.SetConflictResolver(repository, new DatabaseWinsResolver<CfVersionedItem>());
+            repository.ConflictResolver = new DatabaseWinsResolver<CfVersionedItem>();
             CfVersionedItem item = await repository.CreateAsync(new CfVersionedItem { Name = "orig", Salary = 1m }, null, Token);
             CfVersionedItem first = Read(repository, item.Id);
             CfVersionedItem second = Read(repository, item.Id);
@@ -128,7 +128,7 @@ namespace Durable.Conformance
         public async Task MergeChangesResolver()
         {
             IRepository<CfVersionedItem> repository = await PrepareAsync();
-            Target.SetConflictResolver(repository, new MergeChangesResolver<CfVersionedItem>());
+            repository.ConflictResolver = new MergeChangesResolver<CfVersionedItem>();
             await AssertMergeResolvesAsync(repository);
         }
 
@@ -136,7 +136,7 @@ namespace Durable.Conformance
         public async Task ImprovedMergeChangesResolver()
         {
             IRepository<CfVersionedItem> repository = await PrepareAsync();
-            Target.SetConflictResolver(repository, new ImprovedMergeChangesResolver<CfVersionedItem>());
+            repository.ConflictResolver = new ImprovedMergeChangesResolver<CfVersionedItem>();
             await AssertMergeResolvesAsync(repository);
         }
 

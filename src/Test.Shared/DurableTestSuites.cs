@@ -3,6 +3,7 @@ namespace Test.Shared
     using System.Collections.Generic;
     using System.Threading;
     using System.Threading.Tasks;
+    using Durable;
     using Durable.Conformance;
     using Touchstone.Core;
 
@@ -96,6 +97,25 @@ namespace Test.Shared
                 {
                     suites.Add(conformance);
                 }
+
+                // The same kit against the in-memory backend (no database), once in the default SQLite configuration, and
+                // against a deliberately limited in-memory backend to prove unsupported calls fail at the call site.
+                if (configuration.DatabaseType == TestDatabaseType.Sqlite)
+                {
+                    foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new InMemoryConformanceTarget(), "Conformance.InMemory", new List<string> { providerTag, "conformance", "inmemory" }))
+                        suites.Add(conformance);
+                    foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new InMemoryConformanceTarget(RepositoryCapabilities.None), "Conformance.InMemoryMinimal", new List<string> { providerTag, "conformance", "inmemory" }))
+                        suites.Add(conformance);
+                }
+
+                // Backend-neutral RepositoryBase over the in-memory backend (no database; runs in every provider configuration).
+                List<string> inMemoryTags = new List<string> { providerTag, "inmemory" };
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryBackendTestSuite>("InMemory.Backend", "In-Memory Backend (CRUD / Writes / Converters / Concurrency) Tests", () => new InMemoryBackendTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryQueryTestSuite>("InMemory.Query", "In-Memory Query Semantics Tests", () => new InMemoryQueryTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryIncludeTestSuite>("InMemory.Include", "In-Memory Include Tests", () => new InMemoryIncludeTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryTransactionTestSuite>("InMemory.Transaction", "In-Memory Transaction / Isolation Tests", () => new InMemoryTransactionTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryCapabilityTestSuite>("InMemory.Capability", "In-Memory Capability Masking Tests", () => new InMemoryCapabilityTestSuite(), inMemoryTags));
+                suites.Add(SharedSuite<InMemorySqlParityTestSuite>("InMemory.SqlParity", "In-Memory vs SQL Parity Tests", providerTag, BeforeEach));
 
                 // Provider-specific unit suites.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite)

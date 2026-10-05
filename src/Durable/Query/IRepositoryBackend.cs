@@ -8,7 +8,7 @@ namespace Durable.Query
 
     /// <summary>
     /// The small storage contract a non-SQL backend (document store, search engine, graph store, in-memory) implements to
-    /// get the whole <see cref="IRepository{T}"/> surface from <c>RepositoryBase&lt;T&gt;</c>: query, count, aggregate,
+    /// get the whole <see cref="IRepository{T}"/> surface from <see cref="RepositoryBase{T}"/>: query, count, aggregate,
     /// insert, conditional update, set-based update, delete and transactions, all expressed with backend-neutral
     /// <see cref="QueryModel"/>s and <see cref="QueryNode"/>s. One backend instance serves every entity type, which is how
     /// Include loads related entities. Value conversion is the backend's job: <see cref="ValueNode.Column"/> names the
@@ -46,11 +46,19 @@ namespace Durable.Query
         /// <param name="function">Aggregate: <see cref="AggregateFunction.Sum"/>, <see cref="AggregateFunction.Average"/>, <see cref="AggregateFunction.Min"/> or <see cref="AggregateFunction.Max"/>.</param>
         /// <param name="operand">Aggregated value over the model's source. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <returns>The aggregate, or null when no entity matches (Sum of no rows is reported as null; callers map it to zero).</returns>
+        /// <returns>
+        /// The aggregate, or null when no entity matches (Sum of no rows is reported as null; callers map it to zero).
+        /// Null operand values are ignored, as in SQL. Min and Max return the operand's CLR value (converted back through the
+        /// column's converter when the operand is a column); <see cref="RepositoryBase{T}"/> converts numeric results to the
+        /// caller's type.
+        /// </returns>
         Task<object?> AggregateAsync(QueryModel model, AggregateFunction function, QueryNode operand, CancellationToken token);
 
         /// <summary>
-        /// Inserts an entity and writes generated values (auto-increment keys) back to it.
+        /// Inserts an entity and writes generated values (auto-increment keys) back to it. An auto-increment column holding
+        /// its unset value (null or zero) is generated; a set value is stored as given (used by upsert of an explicit key).
+        /// <see cref="RepositoryBase{T}"/> clears auto-increment values before Create, matching SQL repositories, which
+        /// always generate them.
         /// </summary>
         /// <param name="metadata">Entity metadata. Must not be null.</param>
         /// <param name="entity">Entity. Must not be null.</param>

@@ -1350,13 +1350,6 @@
             Gets the settings the repository was created from, or null when created from a connection factory.
             </summary>
         </member>
-        <member name="P:Durable.Sql.ISqlRepository`1.ConflictResolver">
-            <summary>
-            Gets or sets the conflict resolver used when an update hits a version conflict.
-            Default: a resolver that throws <see cref="T:Durable.OptimisticConcurrencyException"/>. Never null.
-            </summary>
-            <exception cref="T:System.ArgumentNullException">Thrown when set to null.</exception>
-        </member>
         <member name="M:Durable.Sql.ISqlRepository`1.Query(Durable.ITransaction)">
             <summary>
             Starts a SQL query.

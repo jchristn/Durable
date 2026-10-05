@@ -38,13 +38,6 @@ namespace Durable.Sql
         /// </summary>
         RepositorySettings? Settings { get; }
 
-        /// <summary>
-        /// Gets or sets the conflict resolver used when an update hits a version conflict.
-        /// Default: a resolver that throws <see cref="OptimisticConcurrencyException"/>. Never null.
-        /// </summary>
-        /// <exception cref="ArgumentNullException">Thrown when set to null.</exception>
-        IConcurrencyConflictResolver<T> ConflictResolver { get; set; }
-
         #endregion
 
         #region Query-and-Transactions

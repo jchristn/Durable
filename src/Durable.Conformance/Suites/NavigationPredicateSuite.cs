@@ -54,6 +54,32 @@ namespace Durable.Conformance
             await AssertOwnersAsync(f.Owners.Query().Where(o => o.Items.All(i => i.Price < 50) && o.Items.Any()), "Where(Items.All(Price < 50) && Items.Any())", "Acme", "Initech");
         }
 
+        [ConformanceTest(Requires = RepositoryCapabilities.NavigationPredicates, Description = "All(predicate) treats a comparison with NULL as false, so a NULL child violates it")]
+        public async Task CollectionAllWithNullableChildren()
+        {
+            ItemFixture f = await SeedItemsAsync();
+            await AssertOwnersAsync(f.Owners.Query().Where(o => o.Items.All(i => i.Discount > 0)), "Where(Items.All(Discount > 0))", "Initech", "Umbrella");
+            await AssertOwnersAsync(f.Owners.Query().Where(o => !o.Items.All(i => i.Discount > 0)), "Where(!Items.All(Discount > 0))", "Acme", "Globex");
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.NavigationPredicates, Description = "A reference navigation to a soft-deleted row reads as missing")]
+        public async Task ReferenceToSoftDeletedRowIsMissing()
+        {
+            await ResetAsync(typeof(CfFolder), typeof(CfDocument));
+            IRepository<CfFolder> folders = Repository<CfFolder>();
+            IRepository<CfDocument> documents = Repository<CfDocument>();
+            CfFolder live = await folders.CreateAsync(new CfFolder { Name = "live" }, null, Token);
+            CfFolder gone = await folders.CreateAsync(new CfFolder { Name = "gone" }, null, Token);
+            await documents.CreateAsync(new CfDocument { Title = "a", FolderId = live.Id }, null, Token);
+            await documents.CreateAsync(new CfDocument { Title = "b", FolderId = gone.Id }, null, Token);
+            Assert.True(await folders.DeleteAsync(gone, null, Token));
+
+            List<string> named = (await ExecuteAsync(documents.Query().Where(d => d.Folder!.Name == "gone"), "Where(Folder.Name == gone)")).Select(d => d.Title).ToList();
+            Assert.True(named.Count == 0, "Where(Folder.Name == gone) must not see the soft-deleted folder, but returned [" + string.Join(", ", named) + "].");
+            List<string> missing = (await ExecuteAsync(documents.Query().Where(d => d.Folder!.Name == null), "Where(Folder.Name == null)")).Select(d => d.Title).ToList();
+            Assert.True(missing.SequenceEqual(new[] { "b" }), "Where(Folder.Name == null) must return [b], but returned [" + string.Join(", ", missing) + "].");
+        }
+
         [ConformanceTest(Requires = RepositoryCapabilities.NavigationPredicates, Description = "Reference navigations on the book/author graph, including a chained reference")]
         public async Task LibraryReferenceNavigations()
         {

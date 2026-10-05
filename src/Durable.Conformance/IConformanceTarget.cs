@@ -2,7 +2,6 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
-    using System.Reflection;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
@@ -62,28 +61,5 @@ namespace Durable.Conformance
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task that completes when the storage is ready.</returns>
         Task ResetAsync(IReadOnlyList<Type> entityTypes, CancellationToken token = default);
-
-        /// <summary>
-        /// Sets the optimistic-concurrency conflict resolver used by <see cref="IRepository{T}.Update"/> on a repository
-        /// created by this target. Used only when <see cref="Capabilities"/> includes
-        /// <see cref="RepositoryCapabilities.OptimisticConcurrency"/>. The default implementation assigns a public writable
-        /// <c>ConflictResolver</c> property of type <see cref="IConcurrencyConflictResolver{T}"/> on the repository (the
-        /// convention used by the SQL repositories); override it when the backend configures resolvers differently.
-        /// </summary>
-        /// <typeparam name="T">Entity type.</typeparam>
-        /// <param name="repository">Repository created by this target. Must not be null.</param>
-        /// <param name="resolver">Resolver to use. Must not be null.</param>
-        /// <exception cref="ArgumentNullException">Thrown when repository or resolver is null.</exception>
-        /// <exception cref="NotSupportedException">Thrown when the repository has no way to set a resolver.</exception>
-        void SetConflictResolver<T>(IRepository<T> repository, IConcurrencyConflictResolver<T> resolver) where T : class, new()
-        {
-            ArgumentNullException.ThrowIfNull(repository);
-            ArgumentNullException.ThrowIfNull(resolver);
-            PropertyInfo? property = repository.GetType().GetProperty("ConflictResolver", BindingFlags.Public | BindingFlags.Instance);
-            if (property == null || !property.CanWrite || !property.PropertyType.IsAssignableFrom(resolver.GetType()))
-                throw new NotSupportedException(
-                    "Repository " + repository.GetType().Name + " has no public writable ConflictResolver property; override IConformanceTarget.SetConflictResolver for this backend.");
-            property.SetValue(repository, resolver);
-        }
     }
 }

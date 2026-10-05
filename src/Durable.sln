@@ -39,6 +39,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Sql", "Durable.Sql\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Benchmark", "Test.Benchmark\Test.Benchmark.csproj", "{D5C01DDD-BF55-4FD9-91E0-C0FC55EF6078}"
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Conformance", "Durable.Conformance\Durable.Conformance.csproj", "{04D1F113-7DE2-4965-ADA9-8308882A739D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.InMemory", "Durable.InMemory\Durable.InMemory.csproj", "{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -242,6 +243,18 @@ Global
 		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x64.Build.0 = Release|Any CPU
 		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x86.ActiveCfg = Release|Any CPU
 		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x86.Build.0 = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|x64.Build.0 = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Debug|x86.Build.0 = Debug|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|x64.ActiveCfg = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|x64.Build.0 = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|x86.ActiveCfg = Release|Any CPU
+		{667A80C3-7E79-4E2E-91F7-6D3991C32F0D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

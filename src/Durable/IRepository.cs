@@ -34,6 +34,13 @@ namespace Durable
         RepositoryCapabilities Capabilities { get; }
 
         /// <summary>
+        /// Gets or sets the conflict resolver used when an update hits a version conflict (entities with a version column).
+        /// Default: a resolver that throws <see cref="OptimisticConcurrencyException"/>. Never null.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">Thrown when set to null.</exception>
+        IConcurrencyConflictResolver<T> ConflictResolver { get; set; }
+
+        /// <summary>
         /// Gets the registered global query filters. Never null.
         /// </summary>
         IReadOnlyList<Expression<Func<T, bool>>> QueryFilters { get; }

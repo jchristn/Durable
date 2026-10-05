@@ -29,7 +29,9 @@ namespace Durable.Conformance
             typeof(CfTenantNote),
             typeof(CfTextItem),
             typeof(CfConvertedItem),
-            typeof(CfConventionWidget)
+            typeof(CfConventionWidget),
+            typeof(CfFolder),
+            typeof(CfDocument)
         };
 
         /// <summary>

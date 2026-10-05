@@ -5,7 +5,7 @@ namespace Durable.Query
     using Durable;
 
     /// <summary>
-    /// A member of a related entity reached through a reference navigation (<c>book.Author.Name</c>): the value of <see cref="Column"/> on the related row whose key equals <see cref="OwnerKey"/>, or null when there is none.
+    /// A member of a related entity reached through a reference navigation (<c>book.Author.Name</c>): the value of <see cref="Column"/> on the related row whose key equals <see cref="OwnerKey"/>, or null when there is none or it is soft-deleted.
     /// Thread safety: immutable.
     /// </summary>
     public sealed class NavigationMemberNode : QueryNode

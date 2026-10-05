@@ -1,0 +1,656 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.InMemory</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.InMemory.InMemoryBackend">
+            <summary>
+            An in-memory <see cref="T:Durable.Query.IRepositoryBackend"/>: the reference implementation of the backend contract and a fast,
+            dependency-free store for tests and prototypes. Use it through <see cref="T:Durable.InMemory.InMemoryRepository`1"/> (or any
+            <see cref="T:Durable.Query.RepositoryBase`1"/>); one backend holds the tables of every entity type, so includes and navigation
+            predicates work across repositories that share it.
+            <para>
+            Storage: rows are copies of mapped column values, never caller instances and never navigation properties, so
+            changing an entity after Create or after a read does not change stored data. Values are stored as a database driver
+            would store them: <see cref="T:Durable.IValueConverter"/> columns store the provider value, JSON columns store serialized text
+            (<see cref="P:Durable.InMemory.InMemoryBackend.JsonOptions"/>), enums store their name (or number with <see cref="F:Durable.Flags.Integer"/>), byte arrays are
+            copied. Decimals keep full precision (no column scale is applied), and <see cref="T:System.DateTime"/> values keep their
+            <see cref="T:System.DateTimeKind"/> (SQL providers may return Unspecified). Auto-increment keys come from a per-table sequence
+            that is never reused (rolled-back inserts leave gaps); inserting a duplicate primary key throws
+            <see cref="T:System.InvalidOperationException"/>. Primary keys compare ordinally (string keys are case-sensitive). Rows are
+            read in insertion order unless the query orders them.
+            </para>
+            <para>
+            Queries: <see cref="T:Durable.Query.QueryNode"/> filters are evaluated with C# semantics: null equals only null, a comparison or
+            string match involving null is false and its negation true, and arithmetic and functions on null yield null.
+            <see cref="F:Durable.StringMatchMode.Database"/> behaves as <see cref="F:Durable.StringMatchMode.Ordinal"/> (case- and accent-sensitive),
+            <see cref="F:Durable.StringMatchMode.IgnoreCase"/> as <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>. Values are compared in
+            their stored form (enum names, converter provider values, JSON text), as a database compares columns with converted
+            parameters. Functions follow SQL where C# would throw: Substring clamps out-of-range arguments, Replace with an empty
+            search string returns its input, and Math.Round rounds midpoints away from zero. Navigation members read the related
+            row by key; collection Any/All/Count read related rows (through the junction for many-to-many) excluding
+            soft-deleted ones. Ordering is ordinal for strings with nulls first, and stable (ties keep insertion order).
+            </para>
+            <para>
+            Transactions use snapshot isolation (see <see cref="T:Durable.InMemory.InMemoryTransaction"/>): a transaction reads the data committed
+            when it began plus its own writes; operations outside it read committed data only and are never blocked by it; its
+            writes are published atomically on commit; a commit fails with <see cref="T:System.InvalidOperationException"/> when another
+            writer changed one of the rows it wrote after it began (first committer wins), and the transaction is rolled back.
+            Each operation outside a transaction is atomic and immediately committed.
+            </para>
+            <para>
+            Capabilities: the constructor accepts a <see cref="T:Durable.RepositoryCapabilities"/> mask (default
+            <see cref="F:Durable.RepositoryCapabilities.All"/>) so tests can simulate a limited backend; repositories then reject the
+            masked features with <see cref="T:System.NotSupportedException"/>.
+            </para>
+            Thread safety: safe for concurrent use by any number of repositories and threads. Reads never take locks; writes
+            outside transactions are serialized by a short internal lock.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryBackend.Capabilities">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.InMemory.InMemoryBackend.JsonOptions">
+            <summary>
+            Gets the JSON options used to store JSON columns. Never null.
+            Default: camelCase property names, not indented (the same as the SQL providers).
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.#ctor(Durable.RepositoryCapabilities,System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates an empty in-memory backend.
+            </summary>
+            <param name="capabilities">Capabilities to advertise. Default: <see cref="F:Durable.RepositoryCapabilities.All"/>.</param>
+            <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.CreateRepository``1(Durable.RepositoryOptions)">
+            <summary>
+            Creates a repository over this backend.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>A new repository.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity needs a capability this backend does not advertise.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.Owns(Durable.ITransaction)">
+            <summary>
+            Determines whether a transaction was created by this backend.
+            </summary>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>True when the transaction belongs to this backend.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.Clear">
+            <summary>
+            Removes every row of every table and resets the auto-increment sequences. Open transactions keep their snapshots.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.GetStoredRows(System.Type)">
+            <summary>
+            Returns the committed rows of an entity as stored (column name to stored value), for diagnostics and tests that
+            check the stored representation (converter provider values, JSON text, enum names). Soft-deleted rows are included.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The rows in insertion order. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.QueryAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="function"/> is Count or Any.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when an assignment changes a primary key to one that already exists.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when <see cref="P:Durable.InMemory.InMemoryBackend.Capabilities"/> lacks <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryBackend.BeginTransaction">
+            <summary>
+            Begins a snapshot-isolation transaction.
+            </summary>
+            <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when <see cref="P:Durable.InMemory.InMemoryBackend.Capabilities"/> lacks <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.</exception>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryDatabaseState">
+            <summary>
+            An immutable snapshot of every table in an <see cref="T:Durable.InMemory.InMemoryBackend"/>. The committed database and each
+            transaction's working copy are states; taking a snapshot is a reference copy.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryDatabaseState.Empty">
+            <summary>
+            Gets the empty state. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryDatabaseState.Tables">
+            <summary>
+            Gets the tables that have been written, by entity type. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryDatabaseState.Table(Durable.EntityMetadata)">
+            <summary>
+            Returns the table of an entity, or an empty table when it has never been written.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The table. Never null.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryDatabaseState.Find(System.Type,Durable.InMemory.InMemoryRowKey)">
+            <summary>
+            Finds a row by entity type and key.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="key">Key. Must not be null.</param>
+            <returns>The row, or null.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryDatabaseState.With(Durable.InMemory.InMemoryTable)">
+            <summary>
+            Returns a state with a table replaced.
+            </summary>
+            <param name="table">Table. Must not be null.</param>
+            <returns>The new state.</returns>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryIdentitySequence">
+            <summary>
+            Generates auto-increment values for one table, like a database identity: values are never reused, rolled-back
+            transactions leave gaps, and an explicitly stored value moves the sequence past it.
+            Thread safety: lock-free and safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryIdentitySequence.Next">
+            <summary>
+            Returns the next value.
+            </summary>
+            <returns>The value; the first is 1.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryIdentitySequence.Observe(System.Int64)">
+            <summary>
+            Records an explicitly stored value so later generated values are greater.
+            </summary>
+            <param name="value">Stored value.</param>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryQueryEvaluator">
+            <summary>
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees against stored rows of an <see cref="T:Durable.InMemory.InMemoryDatabaseState"/> with C#
+            semantics: <c>null == null</c> is true, a comparison or string match involving null is false (so its negation is
+            true), arithmetic and functions on null yield null, <c>!list.Contains(x)</c> is true for a null item when the list
+            has no null. String comparisons follow the node's <see cref="T:Durable.StringMatchMode"/>: <see cref="F:Durable.StringMatchMode.Database"/>
+            and <see cref="F:Durable.StringMatchMode.Ordinal"/> are ordinal, <see cref="F:Durable.StringMatchMode.IgnoreCase"/> is
+            <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>. Values are compared in their stored form (enum names, converter
+            provider values, JSON text), exactly as a database compares column values with converted parameters.
+            Navigation members look up the related row by key; collection Any/All/Count look up related rows (through the
+            junction table for many-to-many) and exclude soft-deleted related rows, as the SQL engine does. Functions follow SQL
+            where C# would throw: Substring clamps out-of-range arguments, Replace with an empty search string returns the input,
+            and Math.Round rounds midpoints away from zero (SQL ROUND).
+            Thread safety: not thread-safe; create one per operation. The state it reads is immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryQueryEvaluator.GroupRows">
+            <summary>
+            Gets or sets the rows of the current group, for <see cref="T:Durable.Query.AggregateNode"/>s; null outside grouping.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryQueryEvaluator.GroupSource">
+            <summary>
+            Gets or sets the source the group rows are bound to; null outside grouping.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.#ctor(Durable.InMemory.InMemoryDatabaseState,Durable.InMemory.InMemoryValueConverter)">
+            <summary>
+            Instantiates an evaluator.
+            </summary>
+            <param name="state">State related rows are read from. Must not be null.</param>
+            <param name="values">Value converter. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.Bind(Durable.Query.QuerySource,Durable.InMemory.InMemoryRow)">
+            <summary>
+            Binds a source to a row.
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <param name="row">Row. Must not be null.</param>
+            <returns>This evaluator.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.Test(Durable.Query.QueryNode)">
+            <summary>
+            Evaluates a node as a condition; anything other than true (including null) is false.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The truth value.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.IsSoftDeleted(Durable.EntityMetadata,Durable.InMemory.InMemoryRow)">
+            <summary>
+            Returns whether a stored row is soft-deleted.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="row">Row. Must not be null.</param>
+            <returns>True when the soft-delete marker is set.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitColumn(Durable.Query.ColumnNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitValue(Durable.Query.ValueNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitComparison(Durable.Query.ComparisonNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitLogical(Durable.Query.LogicalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNot(Durable.Query.NotNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitIn(Durable.Query.InNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitStringTest(Durable.Query.StringTestNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNegate(Durable.Query.NegateNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitConcat(Durable.Query.ConcatNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitConditional(Durable.Query.ConditionalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitFunction(Durable.Query.FunctionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitCollection(Durable.Query.CollectionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitAggregate(Durable.Query.AggregateNode)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.InMemory.InMemoryRepository`1">
+            <summary>
+            A repository stored in an <see cref="T:Durable.InMemory.InMemoryBackend"/>: the complete <see cref="T:Durable.IRepository`1"/> surface from
+            <see cref="T:Durable.Query.RepositoryBase`1"/> over in-memory tables. Repositories created over the same backend share data, so
+            includes, navigation predicates and transactions work across entity types. An ambient
+            <see cref="T:Durable.TransactionScope"/> is used only when its transaction was created by the same backend.
+            Thread safety: safe for concurrent use once configured (see <see cref="T:Durable.Query.RepositoryBase`1"/>).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryRepository`1.Store">
+            <summary>
+            Gets the in-memory backend. Never null. The repository does not own or dispose it.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRepository`1.#ctor(Durable.InMemory.InMemoryBackend,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository.
+            </summary>
+            <param name="backend">Backend. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity needs a capability the backend does not advertise.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRepository`1.AcceptsAmbientTransaction(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.InMemory.InMemoryResultEnumerator">
+            <summary>
+            Enumerator of an <see cref="T:Durable.InMemory.InMemoryResultStream"/>; every step completes synchronously.
+            Thread safety: not thread-safe.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryResultEnumerator.Current">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryResultEnumerator.#ctor(System.Collections.Generic.IReadOnlyList{Durable.InMemory.InMemoryRow},System.Func{Durable.InMemory.InMemoryRow,System.Object},System.Threading.CancellationToken,System.Threading.CancellationToken)">
+            <summary>
+            Instantiates an enumerator.
+            </summary>
+            <param name="rows">Rows. Must not be null.</param>
+            <param name="materialize">Materializer. Must not be null.</param>
+            <param name="queryToken">Token supplied with the query.</param>
+            <param name="enumerationToken">Token supplied to the enumeration.</param>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryResultEnumerator.MoveNextAsync">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryResultEnumerator.DisposeAsync">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.InMemory.InMemoryResultStream">
+            <summary>
+            An asynchronous stream over rows selected from a snapshot. Every step completes synchronously, so synchronous
+            callers never block or hop threads. Entities are materialized lazily as the stream is read.
+            Thread safety: each enumeration is independent; an enumerator is not thread-safe.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryResultStream.#ctor(System.Collections.Generic.IReadOnlyList{Durable.InMemory.InMemoryRow},System.Func{Durable.InMemory.InMemoryRow,System.Object},System.Threading.CancellationToken)">
+            <summary>
+            Instantiates a stream.
+            </summary>
+            <param name="rows">Rows in result order. Must not be null.</param>
+            <param name="materialize">Creates an entity from a row. Must not be null.</param>
+            <param name="token">Cancellation token supplied when the query was issued.</param>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryResultStream.GetAsyncEnumerator(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.InMemory.InMemoryRow">
+            <summary>
+            One stored row: its key, its insertion sequence (the default read order) and its stored column values in
+            <see cref="P:Durable.EntityMetadata.Columns"/> order. Rows are never mutated; an update stores a new row with the same
+            sequence, so a row reference identifies one version of a row (used for transaction conflict detection).
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryRow.Key">
+            <summary>
+            Gets the row key. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryRow.Sequence">
+            <summary>
+            Gets the insertion sequence.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryRow.Values">
+            <summary>
+            Gets the stored values in column order. Never null; must not be modified.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRow.#ctor(Durable.InMemory.InMemoryRowKey,System.Int64,System.Object[])">
+            <summary>
+            Instantiates a row.
+            </summary>
+            <param name="key">Key. Must not be null.</param>
+            <param name="sequence">Insertion sequence.</param>
+            <param name="values">Stored values in column order. Must not be null; ownership passes to the row.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when key or values is null.</exception>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryRowKey">
+            <summary>
+            The primary key of a stored row: one normalized value per key column (integers of any width compare equal through
+            <see cref="T:Durable.Query.KeyNormalizer"/>; strings compare ordinally, so keys are case-sensitive).
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryRowKey.Parts">
+            <summary>
+            Gets the normalized key parts in key order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRowKey.#ctor(System.Object[])">
+            <summary>
+            Instantiates a key from stored key values.
+            </summary>
+            <param name="values">Stored key values in key order. Must not be null.</param>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRowKey.Equals(Durable.InMemory.InMemoryRowKey)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRowKey.Equals(System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRowKey.GetHashCode">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.InMemory.InMemoryRowKey.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.InMemory.InMemoryTable">
+            <summary>
+            An immutable table: rows indexed by key and ordered by insertion sequence. Every change returns a new table that
+            shares structure with the old one, so snapshots are O(1).
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTable.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTable.Rows">
+            <summary>
+            Gets the rows in insertion order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTable.Count">
+            <summary>
+            Gets the number of rows.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTable.Empty(Durable.EntityMetadata)">
+            <summary>
+            Creates an empty table.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The table.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTable.Find(Durable.InMemory.InMemoryRowKey)">
+            <summary>
+            Finds a row by key.
+            </summary>
+            <param name="key">Key. Must not be null.</param>
+            <returns>The row, or null.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTable.With(Durable.InMemory.InMemoryRow)">
+            <summary>
+            Returns a table with a row added, or replacing the row with the same key.
+            </summary>
+            <param name="row">Row. Must not be null.</param>
+            <returns>The new table.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTable.Without(Durable.InMemory.InMemoryRowKey)">
+            <summary>
+            Returns a table without the row with a key.
+            </summary>
+            <param name="key">Key. Must not be null.</param>
+            <returns>The new table (this table when the key is absent).</returns>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryTableSchema">
+            <summary>
+            Cached column ordinals of an entity's stored rows (the position of each column in <see cref="P:Durable.InMemory.InMemoryRow.Values"/>)
+            and of its key columns.
+            Thread safety: immutable once built; <see cref="M:Durable.InMemory.InMemoryTableSchema.For(Durable.EntityMetadata)"/> is thread-safe.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTableSchema.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTableSchema.KeyOrdinals">
+            <summary>
+            Gets the ordinals of the key columns, in key order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTableSchema.For(Durable.EntityMetadata)">
+            <summary>
+            Returns the cached schema of an entity.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The schema.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTableSchema.Ordinal(Durable.ColumnMetadata)">
+            <summary>
+            Returns the ordinal of a column.
+            </summary>
+            <param name="column">Column of this entity. Must not be null.</param>
+            <returns>The ordinal.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the column does not belong to the entity.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTableSchema.KeyOf(System.Object[])">
+            <summary>
+            Builds the key of stored values.
+            </summary>
+            <param name="values">Stored values in column order. Must not be null.</param>
+            <returns>The key.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a key value is null.</exception>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryTransaction">
+            <summary>
+            A snapshot-isolation transaction of an <see cref="T:Durable.InMemory.InMemoryBackend"/>. It starts from a snapshot of the committed
+            data; reads inside it see that snapshot plus its own writes, and reads outside it see committed data only.
+            <see cref="M:Durable.InMemory.InMemoryTransaction.Commit"/> publishes its writes atomically unless another writer changed one of the rows it wrote after
+            the snapshot was taken (first committer wins), in which case the commit fails with
+            <see cref="T:System.InvalidOperationException"/> and the transaction is rolled back. <see cref="M:Durable.InMemory.InMemoryTransaction.Rollback"/> and disposing an
+            uncommitted transaction discard its writes. A transaction never blocks other readers or writers.
+            Thread safety: like every <see cref="T:Durable.ITransaction"/>, do not use one transaction from several threads at once;
+            individual operations are nevertheless serialized internally.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTransaction.IsCompleted">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.InMemory.InMemoryTransaction.Backend">
+            <summary>
+            Gets the backend that created the transaction. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.Commit">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has completed, or when another writer changed a row this transaction wrote.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.Rollback">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has already completed.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.CommitAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has completed, or when another writer changed a row this transaction wrote.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.RollbackAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has already completed.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.Dispose">
+            <summary>
+            Disposes the transaction, rolling it back when it was not completed.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryTransaction.DisposeAsync">
+            <summary>
+            Disposes the transaction, rolling it back when it was not completed.
+            </summary>
+            <returns>A completed task.</returns>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryValueConverter">
+            <summary>
+            Converts between entity property values and the values an <see cref="T:Durable.InMemory.InMemoryBackend"/> stores, the way a database
+            driver would: per-property <see cref="T:Durable.IValueConverter"/>s store their provider value; JSON columns store serialized
+            text; enums store their name (or their numeric value with <see cref="F:Durable.Flags.Integer"/>); byte arrays are copied;
+            numbers are stored in the column's CLR type. Decimals keep full precision (no column scale is applied) and
+            <see cref="T:System.DateTime"/> values keep their <see cref="T:System.DateTimeKind"/>.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryValueConverter.JsonOptions">
+            <summary>
+            Gets the JSON options used for JSON columns. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryValueConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates a converter.
+            </summary>
+            <param name="jsonOptions">JSON options. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when jsonOptions is null.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryValueConverter.ToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a property (model) value to its stored value. Integral values for enum columns are converted to the
+            enum first, as SQL parameters are.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Model value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryValueConverter.ComputedToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a value computed by a query expression (already in the stored domain, or a plain CLR value) to the
+            stored representation of a column, applying a converter only to values of the converter's model type.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Computed value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryValueConverter.FromStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a stored value back to a property value.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="stored">Stored value; may be null.</param>
+            <returns>The property value, or null.</returns>
+        </member>
+        <member name="T:Durable.InMemory.InMemoryWriteContext">
+            <summary>
+            The working state of one write operation: the state being changed, the rows it touched (for transaction conflict
+            detection) and the number of rows affected. A failed operation's context is discarded, so writes are atomic.
+            Thread safety: not thread-safe; used by one operation under the backend's or transaction's lock.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryWriteContext.State">
+            <summary>
+            Gets or sets the state being changed. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryWriteContext.Touched">
+            <summary>
+            Gets the touched rows, by entity and key. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.InMemory.InMemoryWriteContext.Count">
+            <summary>
+            Gets or sets the number of rows affected.
+            </summary>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryWriteContext.#ctor(Durable.InMemory.InMemoryDatabaseState)">
+            <summary>
+            Instantiates a context.
+            </summary>
+            <param name="state">Initial state. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when state is null.</exception>
+        </member>
+        <member name="M:Durable.InMemory.InMemoryWriteContext.Touch(Durable.EntityMetadata,Durable.InMemory.InMemoryRowKey)">
+            <summary>
+            Records a touched row.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="key">Row key. Must not be null.</param>
+        </member>
+    </members>
+</doc>

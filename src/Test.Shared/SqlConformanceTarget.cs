@@ -99,22 +99,6 @@ namespace Test.Shared
             }
         }
 
-        /// <summary>
-        /// Sets the conflict resolver through <see cref="ISqlRepository{T}.ConflictResolver"/>.
-        /// </summary>
-        /// <typeparam name="T">Entity type.</typeparam>
-        /// <param name="repository">A repository created by this target. Must not be null.</param>
-        /// <param name="resolver">Resolver. Must not be null.</param>
-        /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
-        /// <exception cref="NotSupportedException">Thrown when the repository is not a SQL repository.</exception>
-        public void SetConflictResolver<T>(IRepository<T> repository, IConcurrencyConflictResolver<T> resolver) where T : class, new()
-        {
-            ArgumentNullException.ThrowIfNull(repository);
-            ArgumentNullException.ThrowIfNull(resolver);
-            if (repository is not ISqlRepository<T> sql) throw new NotSupportedException("Repository " + repository.GetType().Name + " is not a SQL repository.");
-            sql.ConflictResolver = resolver;
-        }
-
         #endregion
 
         #region Private-Methods

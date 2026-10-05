@@ -20,6 +20,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Durable\Durable.csproj" />
 		<ProjectReference Include="..\..\src\Durable.Conformance\Durable.Conformance.csproj" />
+		<ProjectReference Include="..\..\src\Durable.InMemory\Durable.InMemory.csproj" />
 		<ProjectReference Include="..\..\src\Durable.Sqlite\Durable.Sqlite.csproj" />
 		<ProjectReference Include="..\..\src\Durable.MySql\Durable.MySql.csproj" />
 		<ProjectReference Include="..\..\src\Durable.Postgres\Durable.Postgres.csproj" />

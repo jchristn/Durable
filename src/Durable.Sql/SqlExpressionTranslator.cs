@@ -538,8 +538,9 @@ namespace Durable.Sql
         {
             string localSql = Value(node.OwnerKey);
             TableSource related = Register(node.RelatedSource);
+            string? softDelete = SoftDeleteFilter(related);
             return "(SELECT " + ColumnSql(related, node.Column) + " FROM " + Dialect.QuoteIdentifier(related.Metadata.TableName) + " " + related.Qualifier
-                + " WHERE " + ColumnSql(related, node.Navigation.RemoteColumn) + " = " + localSql + ")";
+                + " WHERE " + ColumnSql(related, node.Navigation.RemoteColumn) + " = " + localSql + (softDelete == null ? string.Empty : " AND " + softDelete) + ")";
         }
 
         /// <inheritdoc />
@@ -624,7 +625,20 @@ namespace Durable.Sql
             if (node.Predicate != null)
             {
                 string condition = Predicate(node.Predicate);
-                sql.Append(" AND ").Append(negatePredicate ? "(NOT " + condition + ")" : condition);
+                if (!negatePredicate)
+                {
+                    sql.Append(" AND ").Append(condition);
+                }
+                else if (MayBeUnknown(node.Predicate))
+                {
+                    // All(): a related row whose condition is UNKNOWN (a NULL compared) is false in C#, so it violates All.
+                    sql.Append(" AND (CASE WHEN ").Append(condition).Append(" THEN ").Append(Dialect.BooleanLiteral(false))
+                        .Append(" ELSE ").Append(Dialect.BooleanLiteral(true)).Append(" END = ").Append(Dialect.BooleanLiteral(true)).Append(')');
+                }
+                else
+                {
+                    sql.Append(" AND (NOT ").Append(condition).Append(')');
+                }
             }
 
             return sql.ToString();
