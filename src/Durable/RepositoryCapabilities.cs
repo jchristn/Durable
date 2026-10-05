@@ -3,7 +3,7 @@ namespace Durable
     using System;
 
     /// <summary>
-    /// Features a repository backend supports. Query builders and <c>Durable.Query.RepositoryBase&lt;T&gt;</c> check
+    /// Features a repository backend supports. Query builders and <see cref="Durable.Query.RepositoryBase{T}"/> check
     /// them when a call is made, so an unsupported operation fails immediately with a <see cref="NotSupportedException"/>
     /// naming the capability instead of failing part-way through execution. Basic CRUD, filtering with comparisons and
     /// boolean logic, ordering, paging, counting, query filters and soft delete are always required and have no flag.

@@ -3098,6 +3098,57 @@
         <member name="F:Durable.Query.ArithmeticOperator.Modulo">
             <summary>Remainder.</summary>
         </member>
+        <member name="T:Durable.Query.BackendIncludeLoader">
+            <summary>
+            Loads Include/ThenInclude navigations through an <see cref="T:Durable.Query.IRepositoryBackend"/> with split queries, the
+            backend-neutral counterpart of the SQL engine's include loader. For each navigation the distinct owner keys are
+            collected (normalized with <see cref="T:Durable.Query.KeyNormalizer"/>), related rows are queried with an <see cref="T:Durable.Query.InNode"/>
+            filter in chunks of <see cref="P:Durable.Query.BackendIncludeLoader.ChunkSize"/> keys (excluding soft-deleted related rows, ordered by the related key),
+            assigned to the owners, and nested includes are loaded for the related rows. Many-to-many navigations query the
+            junction entity by owner key and then the related entity by the junction's remote keys, so no joins are needed.
+            Reference navigations with no match are set to null; collection navigations always receive a list (empty when
+            nothing matches).
+            Thread safety: safe for concurrent use once configured; do not change <see cref="P:Durable.Query.BackendIncludeLoader.ChunkSize"/> while loading.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.BackendIncludeLoader.Backend">
+            <summary>
+            Gets the backend related rows are read from. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.BackendIncludeLoader.ChunkSize">
+            <summary>
+            Gets or sets the maximum number of keys in one related-row query. Default: 500. Minimum: 1.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is less than 1.</exception>
+        </member>
+        <member name="M:Durable.Query.BackendIncludeLoader.#ctor(Durable.Query.IRepositoryBackend)">
+            <summary>
+            Instantiates a loader.
+            </summary>
+            <param name="backend">Backend. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+        </member>
+        <member name="M:Durable.Query.BackendIncludeLoader.Load(System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Query.IncludeNode},Durable.ITransaction)">
+            <summary>
+            Loads navigations for owner entities.
+            </summary>
+            <param name="parents">Owner entities. Must not be null.</param>
+            <param name="nodes">Include nodes rooted at the owners' type. Must not be null.</param>
+            <param name="transaction">Transaction; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when parents or nodes is null.</exception>
+        </member>
+        <member name="M:Durable.Query.BackendIncludeLoader.LoadAsync(System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Query.IncludeNode},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Loads navigations for owner entities.
+            </summary>
+            <param name="parents">Owner entities. Must not be null.</param>
+            <param name="nodes">Include nodes rooted at the owners' type. Must not be null.</param>
+            <param name="transaction">Transaction; null for none.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when parents or nodes is null.</exception>
+        </member>
         <member name="T:Durable.Query.CoalesceNode">
             <summary>
             The left value, or the right value when the left is null (<c>??</c>).
@@ -3328,6 +3379,223 @@
             <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
         </member>
         <member name="M:Durable.Query.ConditionalNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.EnumerableGroupedQueryBuilder`2">
+            <summary>
+            A grouped query evaluated on the client with LINQ-to-objects over rows supplied by a delegate, with the same
+            observable results as the SQL grouped builder: <see cref="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Execute"/> groups the source query's rows (its ordering
+            and paging apply); <see cref="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Count"/> counts groups after Having; Sum, Average, Min and Max aggregate every row
+            of the selected groups (zero or default when there are none); <see cref="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Select``1(System.Linq.Expressions.Expression{System.Func{System.Linq.IGrouping{`1,`0},``0}})"/> projects each group
+            (source ordering and paging do not apply, as with SQL GROUP BY). Lambdas are compiled null-safe.
+            Thread safety: not thread-safe; build and execute on one flow.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <typeparam name="TKey">Group key type.</typeparam>
+        </member>
+        <member name="P:Durable.Query.EnumerableGroupedQueryBuilder`2.Capabilities">
+            <summary>
+            Gets the capabilities checked by the aggregates.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.#ctor(System.Func{System.Boolean,System.Collections.Generic.IReadOnlyList{System.Linq.Expressions.LambdaExpression},System.Threading.CancellationToken,System.Threading.Tasks.Task{System.Collections.Generic.IReadOnlyList{`0}}},System.Linq.Expressions.Expression{System.Func{`0,`1}},Durable.RepositoryCapabilities,System.Func{System.String},System.Action{System.Linq.Expressions.LambdaExpression})">
+            <summary>
+            Instantiates a grouped builder.
+            </summary>
+            <param name="rows">
+            Supplies the rows to group. Its arguments are whether the source query's ordering and paging apply, and the
+            lambdas that will run over the rows (so the supplier can load the navigations they read). Must not be null.
+            </param>
+            <param name="keySelector">Group key selector. Must not be null.</param>
+            <param name="capabilities">Capabilities checked by the aggregates.</param>
+            <param name="describe">Produces the description of the source for query text; may be null.</param>
+            <param name="inspect">Called with each lambda added to the query (key selector, Having, Select) so the caller can validate it; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when rows or keySelector is null.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Having(System.Linq.Expressions.Expression{System.Func{System.Linq.IGrouping{`1,`0},System.Boolean}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Select``1(System.Linq.Expressions.Expression{System.Func{System.Linq.IGrouping{`1,`0},``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Execute">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.ExecuteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Count">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.CountAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableGroupedQueryBuilder`2.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.EnumerableQueryBuilder`1">
+            <summary>
+            A query builder evaluated on the client with LINQ-to-objects over an asynchronous source, used for projections
+            (<see cref="M:Durable.IQueryBuilder`1.Select``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})"/>) and grouped projections on backends that do not push them down.
+            Where (combined with AND), ordering, Distinct (by mapped member values), Skip and Take are applied in that order to
+            the source rows each time the query executes; lambdas are compiled null-safe, so reading a member of a null value
+            yields the default instead of throwing (as a database yields NULL). Strings order ordinally and nulls sort first.
+            Count, Any and the aggregates apply paging, like the SQL builders. Include, ThenInclude, GroupBy, Select and Delete
+            throw <see cref="T:System.NotSupportedException"/>; IgnoreQueryFilters is forwarded to the source query when supported.
+            Thread safety: not thread-safe; build and execute on one flow.
+            </summary>
+            <typeparam name="T">Result type.</typeparam>
+        </member>
+        <member name="P:Durable.Query.EnumerableQueryBuilder`1.Query">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Query.EnumerableQueryBuilder`1.Capabilities">
+            <summary>
+            Gets the capabilities checked by <see cref="M:Durable.Query.EnumerableQueryBuilder`1.Distinct"/> and the aggregates.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.#ctor(System.Func{System.Threading.CancellationToken,System.Collections.Generic.IAsyncEnumerable{`0}},Durable.RepositoryCapabilities,System.Func{System.String},System.Action)">
+            <summary>
+            Instantiates a builder.
+            </summary>
+            <param name="source">Source rows, produced each time the query executes. Must not be null.</param>
+            <param name="capabilities">Capabilities checked by <see cref="M:Durable.Query.EnumerableQueryBuilder`1.Distinct"/> and the aggregates.</param>
+            <param name="describe">Produces the description of the source for <see cref="P:Durable.Query.EnumerableQueryBuilder`1.Query"/>; may be null.</param>
+            <param name="ignoreQueryFilters">Called by <see cref="M:Durable.Query.EnumerableQueryBuilder`1.IgnoreQueryFilters"/>; null makes it throw <see cref="T:System.NotSupportedException"/>.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when source is null.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Where(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ThenBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ThenByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Skip(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Take(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Distinct">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Distinct"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.IgnoreQueryFilters">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the source query cannot ignore filters.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Select``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Include``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ThenInclude``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.GroupBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Execute">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ExecuteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ExecuteAsyncEnumerable(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ExecuteWithQuery">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ExecuteWithQueryAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ExecuteAsyncEnumerableWithQuery(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Count">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.CountAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Any">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.AnyAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.Delete">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.DeleteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.Query.EnumerableQueryBuilder`1.ToString">
             <inheritdoc />
         </member>
         <member name="T:Durable.Query.ExpressionEvaluator">
@@ -3589,7 +3857,7 @@
         <member name="T:Durable.Query.IRepositoryBackend">
             <summary>
             The small storage contract a non-SQL backend (document store, search engine, graph store, in-memory) implements to
-            get the whole <see cref="T:Durable.IRepository`1"/> surface from <c>RepositoryBase&lt;T&gt;</c>: query, count, aggregate,
+            get the whole <see cref="T:Durable.IRepository`1"/> surface from <see cref="T:Durable.Query.RepositoryBase`1"/>: query, count, aggregate,
             insert, conditional update, set-based update, delete and transactions, all expressed with backend-neutral
             <see cref="T:Durable.Query.QueryModel"/>s and <see cref="T:Durable.Query.QueryNode"/>s. One backend instance serves every entity type, which is how
             Include loads related entities. Value conversion is the backend's job: <see cref="P:Durable.Query.ValueNode.Column"/> names the
@@ -3627,11 +3895,19 @@
             <param name="function">Aggregate: <see cref="F:Durable.Query.AggregateFunction.Sum"/>, <see cref="F:Durable.Query.AggregateFunction.Average"/>, <see cref="F:Durable.Query.AggregateFunction.Min"/> or <see cref="F:Durable.Query.AggregateFunction.Max"/>.</param>
             <param name="operand">Aggregated value over the model's source. Must not be null.</param>
             <param name="token">Cancellation token.</param>
-            <returns>The aggregate, or null when no entity matches (Sum of no rows is reported as null; callers map it to zero).</returns>
+            <returns>
+            The aggregate, or null when no entity matches (Sum of no rows is reported as null; callers map it to zero).
+            Null operand values are ignored, as in SQL. Min and Max return the operand's CLR value (converted back through the
+            column's converter when the operand is a column); <see cref="T:Durable.Query.RepositoryBase`1"/> converts numeric results to the
+            caller's type.
+            </returns>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Inserts an entity and writes generated values (auto-increment keys) back to it.
+            Inserts an entity and writes generated values (auto-increment keys) back to it. An auto-increment column holding
+            its unset value (null or zero) is generated; a set value is stored as given (used by upsert of an explicit key).
+            <see cref="T:Durable.Query.RepositoryBase`1"/> clears auto-increment values before Create, matching SQL repositories, which
+            always generate them.
             </summary>
             <param name="metadata">Entity metadata. Must not be null.</param>
             <param name="entity">Entity. Must not be null.</param>
@@ -3737,6 +4013,26 @@
         <member name="F:Durable.Query.LogicalOperator.Or">
             <summary>Either operand is true.</summary>
         </member>
+        <member name="T:Durable.Query.MappedValueEqualityComparer`1">
+            <summary>
+            Compares objects by the values of their mapped columns (the shape a database row has), so client-side
+            <c>Distinct</c> over projected results removes rows with equal values rather than equal references.
+            Types without mapped columns fall back to <see cref="M:System.Object.Equals(System.Object)"/>.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+            <typeparam name="T">Compared type.</typeparam>
+        </member>
+        <member name="M:Durable.Query.MappedValueEqualityComparer`1.#ctor">
+            <summary>
+            Instantiates a comparer for <typeparamref name="T"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.MappedValueEqualityComparer`1.Equals(`0,`0)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.MappedValueEqualityComparer`1.GetHashCode(`0)">
+            <inheritdoc />
+        </member>
         <member name="T:Durable.Query.NavigationMemberNode">
             <summary>
             A member of a related entity reached through a reference navigation (<c>book.Author.Name</c>): the value of <see cref="P:Durable.Query.NavigationMemberNode.Column"/> on the related row whose key equals <see cref="P:Durable.Query.NavigationMemberNode.OwnerKey"/>, or null when there is none.
@@ -3775,6 +4071,37 @@
             <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
         </member>
         <member name="M:Durable.Query.NavigationMemberNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.NavigationPathCollector">
+            <summary>
+            Finds the navigation paths a client-evaluated lambda reads from an entity parameter (for example
+            <c>x.Owner.Name</c> reads <c>Owner</c>, <c>x.Author.Company.Name</c> reads <c>Author.Company</c>, and
+            <c>x.Books.Count</c> reads <c>Books</c>), so they can be loaded with includes before the lambda runs.
+            Thread safety: not thread-safe; create one per analysis.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NavigationPathCollector.Paths">
+            <summary>
+            Gets the collected paths as navigation-access lambdas over the entity parameter. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NavigationPathCollector.#ctor(System.Type)">
+            <summary>
+            Instantiates a collector.
+            </summary>
+            <param name="entityType">Entity type whose parameters are analyzed. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NavigationPathCollector.Collect(System.Type,System.Collections.Generic.IEnumerable{System.Linq.Expressions.LambdaExpression})">
+            <summary>
+            Collects the navigation paths of several lambdas.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="lambdas">Lambdas. Must not be null.</param>
+            <returns>The paths. Never null.</returns>
+        </member>
+        <member name="M:Durable.Query.NavigationPathCollector.VisitMember(System.Linq.Expressions.MemberExpression)">
             <inheritdoc />
         </member>
         <member name="T:Durable.Query.NegateNode">
@@ -3846,6 +4173,285 @@
         <member name="M:Durable.Query.NullCheckNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
         </member>
+        <member name="T:Durable.Query.NullSafeExpressionRewriter">
+            <summary>
+            Rewrites a lambda evaluated on the client so that member access, instance method calls, <c>Nullable.Value</c> and
+            <see cref="T:System.Linq.Enumerable"/> calls on a null value produce the result type's default instead of throwing, the way a
+            database propagates NULL (for example <c>x.Owner.Name</c> with no owner, or <c>x.Name.ToUpper()</c> with a null name).
+            Sub-expressions that do not depend on a lambda parameter (captured variables) are left unchanged.
+            Thread safety: not thread-safe; create one per rewrite.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NullSafeExpressionRewriter.Compile``1(System.Linq.Expressions.Expression{``0})">
+            <summary>
+            Rewrites and compiles a lambda.
+            </summary>
+            <typeparam name="TDelegate">Delegate type.</typeparam>
+            <param name="lambda">Lambda. Must not be null.</param>
+            <returns>The compiled, null-safe delegate.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lambda is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NullSafeExpressionRewriter.CompileBoxed``1(System.Linq.Expressions.LambdaExpression)">
+            <summary>
+            Rewrites and compiles a single-parameter lambda whose result is boxed to <see cref="T:System.Object"/>.
+            </summary>
+            <typeparam name="T">Parameter type.</typeparam>
+            <param name="lambda">Lambda with one parameter of type <typeparamref name="T"/>. Must not be null.</param>
+            <returns>The compiled, null-safe delegate.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lambda is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NullSafeExpressionRewriter.VisitMember(System.Linq.Expressions.MemberExpression)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.NullSafeExpressionRewriter.VisitMethodCall(System.Linq.Expressions.MethodCallExpression)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.QueryAggregates">
+            <summary>
+            Computes Sum, Average, Min and Max over values with SQL aggregate semantics, for backends and query builders that
+            aggregate on the client: null values are ignored, and an aggregate over no non-null values is null.
+            Sums of integral and decimal values are exact (decimal); sums involving double or float are computed in double.
+            Averages are computed in decimal, like Durable's SQL engine (<c>AVG(CAST(x AS DECIMAL(38, 10)))</c>).
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryAggregates.Sum(System.Collections.Generic.IEnumerable{System.Object})">
+            <summary>
+            Sums values, ignoring nulls.
+            </summary>
+            <param name="values">Values. Must not be null.</param>
+            <returns>The sum as decimal or double, or null when there are no non-null values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryAggregates.Average(System.Collections.Generic.IEnumerable{System.Object})">
+            <summary>
+            Averages values in decimal, ignoring nulls.
+            </summary>
+            <param name="values">Values. Must not be null.</param>
+            <returns>The average, or null when there are no non-null values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryAggregates.Min(System.Collections.Generic.IEnumerable{System.Object},System.Collections.Generic.IComparer{System.Object})">
+            <summary>
+            Returns the smallest value, ignoring nulls.
+            </summary>
+            <param name="values">Values. Must not be null.</param>
+            <param name="comparer">Comparer; null uses <see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>.</param>
+            <returns>The minimum, or null when there are no non-null values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryAggregates.Max(System.Collections.Generic.IEnumerable{System.Object},System.Collections.Generic.IComparer{System.Object})">
+            <summary>
+            Returns the largest value, ignoring nulls.
+            </summary>
+            <param name="values">Values. Must not be null.</param>
+            <param name="comparer">Comparer; null uses <see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>.</param>
+            <returns>The maximum, or null when there are no non-null values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryAggregates.Compute(Durable.Query.AggregateFunction,System.Collections.Generic.IEnumerable{System.Object},System.Collections.Generic.IComparer{System.Object})">
+            <summary>
+            Computes an aggregate by function.
+            </summary>
+            <param name="function"><see cref="F:Durable.Query.AggregateFunction.Sum"/>, <see cref="F:Durable.Query.AggregateFunction.Average"/>, <see cref="F:Durable.Query.AggregateFunction.Min"/> or <see cref="F:Durable.Query.AggregateFunction.Max"/>.</param>
+            <param name="values">Values. Must not be null.</param>
+            <param name="comparer">Comparer for Min and Max; null uses <see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>.</param>
+            <returns>The aggregate, or null when there are no non-null values.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown for Count and Any.</exception>
+        </member>
+        <member name="T:Durable.Query.QueryBuilder`1">
+            <summary>
+            The backend-neutral <see cref="T:Durable.IQueryBuilder`1"/> used by <see cref="T:Durable.Query.RepositoryBase`1"/>. Builder calls are
+            recorded and normalized into a <see cref="T:Durable.Query.QueryModel"/> only when the query executes, so captured variables are read
+            at execution time (as with SQL). The model combines the soft-delete condition, the repository's query filters
+            (unless <see cref="M:Durable.Query.QueryBuilder`1.IgnoreQueryFilters"/> is called) and the Where predicates with AND, and is executed through the
+            repository's <see cref="T:Durable.Query.IRepositoryBackend"/>. Includes are loaded afterwards with split queries by a
+            <see cref="T:Durable.Query.BackendIncludeLoader"/>. Select and GroupBy are evaluated on the client over the filtered, ordered rows
+            (navigations the lambdas read are loaded automatically); override them to push projections or grouping down.
+            Count, Any and the aggregates apply Skip/Take when set, like the SQL builder.
+            Capability checks happen when a builder method is called: Include needs <see cref="F:Durable.RepositoryCapabilities.Include"/>
+            (and <see cref="F:Durable.RepositoryCapabilities.ManyToMany"/> for many-to-many navigations), Distinct needs
+            <see cref="F:Durable.RepositoryCapabilities.Distinct"/>, Select needs <see cref="F:Durable.RepositoryCapabilities.Projection"/>, GroupBy
+            needs <see cref="F:Durable.RepositoryCapabilities.Grouping"/> and Sum/Average/Min/Max need
+            <see cref="F:Durable.RepositoryCapabilities.Aggregates"/>. Predicates and orderings are validated when the query executes.
+            Thread safety: not thread-safe; build and execute on one flow.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.Query.QueryBuilder`1.Repository">
+            <summary>
+            Gets the repository the query runs against. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryBuilder`1.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryBuilder`1.Transaction">
+            <summary>
+            Gets the explicit transaction; null to use the ambient transaction, if any.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryBuilder`1.Includes">
+            <summary>
+            Gets the include tree recorded by Include/ThenInclude. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryBuilder`1.Query">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.#ctor(Durable.Query.RepositoryBase{`0},Durable.ITransaction)">
+            <summary>
+            Instantiates a query builder.
+            </summary>
+            <param name="repository">Repository. Must not be null.</param>
+            <param name="transaction">Explicit transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Where(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ThenBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ThenByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Skip(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Take(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Distinct">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Distinct"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.IgnoreQueryFilters">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Select``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Projection"/> or the selector is not an object initializer.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Include``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Include"/>, or <see cref="F:Durable.RepositoryCapabilities.ManyToMany"/> for a many-to-many navigation.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ThenInclude``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Include"/>, or <see cref="F:Durable.RepositoryCapabilities.ManyToMany"/> for a many-to-many navigation.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.GroupBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Grouping"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Execute">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ExecuteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ExecuteAsyncEnumerable(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ExecuteWithQuery">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ExecuteWithQueryAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ExecuteAsyncEnumerableWithQuery(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Count">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.CountAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Any">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.AnyAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.Delete">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when combined with Skip, Take or Distinct.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.DeleteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when combined with Skip, Take or Distinct.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.BuildModel(System.Boolean)">
+            <summary>
+            Normalizes the recorded state into a backend query model. Captured variables are read now.
+            </summary>
+            <param name="includeOrderingAndPaging">Whether ordering, Skip and Take are included.</param>
+            <returns>The model, with the resolved transaction. Never null.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when a predicate or ordering cannot be translated or uses an unsupported capability.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.ToString">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.WhereKey(System.Object[])">
+            <summary>
+            Adds a primary-key condition.
+            </summary>
+            <param name="keyValues">One value per key column, in key order. Never null.</param>
+            <returns>This builder.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.StreamAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <summary>
+            Streams the entities of a model from the backend (includes are not loaded).
+            </summary>
+            <param name="model">Model. Never null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The entities.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryBuilder`1.LoadRowsAsync(System.Boolean,System.Collections.Generic.IReadOnlyList{System.Linq.Expressions.LambdaExpression},System.Threading.CancellationToken)">
+            <summary>
+            Reads the rows of this query (with or without its ordering and paging), loads its includes plus the extra
+            navigation paths, and returns them.
+            </summary>
+            <param name="includeOrderingAndPaging">Whether ordering, Skip and Take apply.</param>
+            <param name="navigationPaths">Additional navigation-access lambdas to load. Never null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The rows. Never null.</returns>
+        </member>
         <member name="T:Durable.Query.QueryCapabilityValidator">
             <summary>
             Checks a query tree against a backend's <see cref="T:Durable.RepositoryCapabilities"/> and throws a
@@ -3869,6 +4475,61 @@
             <param name="node">Tree to check; null is accepted.</param>
             <param name="available">Capabilities the backend supports.</param>
             <exception cref="T:System.NotSupportedException">Thrown for the first unsupported feature found.</exception>
+        </member>
+        <member name="T:Durable.Query.QueryConditions">
+            <summary>
+            Builds the condition nodes Durable adds to backend queries: primary-key matches, the soft-delete filter, AND
+            combinations and plain column orderings.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.Key(Durable.Query.QuerySource,System.Object[])">
+            <summary>
+            Builds a condition matching one primary key (null key parts match null).
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <param name="keyValues">One value per key column, in key order. Must not be null.</param>
+            <returns>The condition.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.Equal(Durable.Query.QuerySource,Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Builds <c>column = value</c>, or an IS NULL check for a null value.
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Value; may be null.</param>
+            <returns>The condition.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.NotSoftDeleted(Durable.Query.QuerySource)">
+            <summary>
+            Builds the condition selecting rows that are not soft-deleted, or null when the entity has no soft-delete column.
+            Boolean markers match false or null; date markers match null.
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <returns>The condition or null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.SoftDeleteValue(Durable.ColumnMetadata)">
+            <summary>
+            Returns the value written to a soft-delete column when a row is deleted.
+            </summary>
+            <param name="column">Soft-delete column. Must not be null.</param>
+            <returns>True for bool columns, otherwise the current UTC time.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.And(System.Collections.Generic.IEnumerable{Durable.Query.QueryNode})">
+            <summary>
+            Combines conditions with AND.
+            </summary>
+            <param name="conditions">Conditions; nulls are skipped. Must not be null.</param>
+            <returns>The combined condition, or null when there is none.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryConditions.OrderBy(Durable.Query.QuerySource,Durable.ColumnMetadata,System.Boolean)">
+            <summary>
+            Builds an ascending or descending ordering on a column.
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <param name="column">Column. Must not be null.</param>
+            <param name="descending">Whether the order is descending.</param>
+            <returns>The ordering.</returns>
         </member>
         <member name="T:Durable.Query.QueryFunction">
             <summary>
@@ -3970,7 +4631,7 @@
             Backend-neutral description of a read, count, aggregate, update or delete over one entity type, handed to an
             <see cref="T:Durable.Query.IRepositoryBackend"/>. <see cref="P:Durable.Query.QueryModel.Filter"/> already combines the caller's predicates with the
             repository's query filters and the soft-delete condition, so backends only evaluate it. Includes, projections and
-            grouping are handled above the backend by <c>QueryBuilder&lt;T&gt;</c>.
+            grouping are handled above the backend by <see cref="T:Durable.Query.QueryBuilder`1"/>.
             Thread safety: not thread-safe while being built; treat as immutable once passed to a backend.
             </summary>
         </member>
@@ -4022,6 +4683,85 @@
             </summary>
             <param name="source">Source (entity). Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when source is null.</exception>
+        </member>
+        <member name="T:Durable.Query.QueryModelFormatter">
+            <summary>
+            Renders a <see cref="T:Durable.Query.QueryModel"/> or <see cref="T:Durable.Query.QueryNode"/> as readable, SQL-like text for diagnostics, logs and
+            <see cref="P:Durable.IQueryBuilder`1.Query"/> on backends without a native query language, for example
+            <c>FROM qt_items WHERE ((qt_items.price &gt; 10) AND (qt_items.name LIKE 'A%')) ORDER BY qt_items.name ASC TAKE 5</c>.
+            Values are written inline (strings quoted) because the text is never executed.
+            Thread safety: instances are stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.Describe(Durable.Query.QueryModel)">
+            <summary>
+            Describes a query model.
+            </summary>
+            <param name="model">Model. Must not be null.</param>
+            <returns>The description. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.Describe(Durable.Query.QueryNode)">
+            <summary>
+            Describes a node.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The description. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when node is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitColumn(Durable.Query.ColumnNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitValue(Durable.Query.ValueNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitComparison(Durable.Query.ComparisonNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitLogical(Durable.Query.LogicalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitNot(Durable.Query.NotNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitIn(Durable.Query.InNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitStringTest(Durable.Query.StringTestNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitNegate(Durable.Query.NegateNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitConcat(Durable.Query.ConcatNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitConditional(Durable.Query.ConditionalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitFunction(Durable.Query.FunctionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitCollection(Durable.Query.CollectionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryModelFormatter.VisitAggregate(Durable.Query.AggregateNode)">
+            <inheritdoc />
         </member>
         <member name="T:Durable.Query.QueryNode">
             <summary>
@@ -4392,6 +5132,433 @@
         <member name="M:Durable.Query.QuerySource.ToString">
             <inheritdoc />
         </member>
+        <member name="T:Durable.Query.QueryValueComparer">
+            <summary>
+            Compares query values the way a database compares column values, for backends that evaluate queries on the client.
+            Numbers of different CLR types compare by value (int 1 equals long 1 and decimal 1.0); enums compare with numbers by
+            their underlying value and with strings by name; chars compare with strings as one-character strings; byte arrays
+            compare by content; <see cref="T:System.DateTime"/> and <see cref="T:System.DateTimeOffset"/> compare by UTC instant. Strings compare
+            by <see cref="P:Durable.Query.QueryValueComparer.Mode"/>: <see cref="F:Durable.StringMatchMode.Ordinal"/> and <see cref="F:Durable.StringMatchMode.Database"/> are ordinal,
+            <see cref="F:Durable.StringMatchMode.IgnoreCase"/> is <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>.
+            Null sorts before every value and equals only null.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryValueComparer.Ordinal">
+            <summary>
+            Gets the comparer using ordinal string comparison. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryValueComparer.IgnoreCase">
+            <summary>
+            Gets the comparer using ordinal ignore-case string comparison. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryValueComparer.Mode">
+            <summary>
+            Gets the string comparison mode.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.#ctor(Durable.StringMatchMode)">
+            <summary>
+            Instantiates a comparer.
+            </summary>
+            <param name="mode">String comparison mode; <see cref="F:Durable.StringMatchMode.Database"/> is treated as ordinal.</param>
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.For(Durable.StringMatchMode)">
+            <summary>
+            Returns the shared comparer for a mode.
+            </summary>
+            <param name="mode">String comparison mode.</param>
+            <returns>The comparer. Never null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.StringComparisonFor(Durable.StringMatchMode)">
+            <summary>
+            Gets the <see cref="T:System.StringComparison"/> used for strings under a mode.
+            </summary>
+            <param name="mode">Mode.</param>
+            <returns><see cref="F:System.StringComparison.OrdinalIgnoreCase"/> for <see cref="F:Durable.StringMatchMode.IgnoreCase"/>, otherwise <see cref="F:System.StringComparison.Ordinal"/>.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.Compare(System.Object,System.Object)">
+            <inheritdoc />
+            <exception cref="T:System.ArgumentException">Thrown when the values cannot be compared.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.Equals(System.Object,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryValueComparer.GetHashCode(System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.RepositoryBase`1">
+            <summary>
+            The complete <see cref="T:Durable.IRepository`1"/> implemented over an <see cref="T:Durable.Query.IRepositoryBackend"/>, so a non-SQL
+            backend (document store, search engine, graph store, in-memory) only implements the small backend contract.
+            Observable behavior matches the SQL repositories: return values, exception types and messages, key handling
+            (a scalar id, or an <see cref="T:System.Object"/> array for composite keys), generated-key write-back, optimistic
+            concurrency with <see cref="P:Durable.Query.RepositoryBase`1.ConflictResolver"/>, version bumps on set-based updates, soft delete, query filters,
+            upsert and transactions (explicit, or the ambient <see cref="P:Durable.TransactionScope.Current"/>).
+            <para>
+            Capabilities: entities with composite keys require <see cref="F:Durable.RepositoryCapabilities.CompositeKeys"/> and entities
+            with a version column require <see cref="F:Durable.RepositoryCapabilities.OptimisticConcurrency"/> (checked by the
+            constructor); <see cref="M:Durable.Query.RepositoryBase`1.UpdateField``1(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,``0}},``0,Durable.ITransaction)"/> and <see cref="M:Durable.Query.RepositoryBase`1.BatchUpdate(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,`0}},Durable.ITransaction)"/> require
+            <see cref="F:Durable.RepositoryCapabilities.BatchUpdate"/>; <see cref="M:Durable.Query.RepositoryBase`1.Upsert(`0,Durable.ITransaction)"/> requires <see cref="F:Durable.RepositoryCapabilities.Upsert"/>;
+            Sum, Average, Min and Max require <see cref="F:Durable.RepositoryCapabilities.Aggregates"/>; <see cref="M:Durable.Query.RepositoryBase`1.BeginTransaction"/>
+            requires <see cref="F:Durable.RepositoryCapabilities.Transactions"/>. Every normalized filter, ordering, aggregate operand and
+            assignment is validated with <see cref="T:Durable.Query.QueryCapabilityValidator"/> before it reaches the backend. Operations that
+            run "in a single transaction when none is supplied" (CreateMany, UpdateMany, Upsert, UpsertMany) start one only
+            when the backend supports transactions; otherwise they run without atomicity.
+            </para>
+            <para>
+            Synchronous members run the asynchronous backend calls through a bridge that never deadlocks under a
+            synchronization context: the call is started inline with no synchronization context installed, so a backend that
+            completes synchronously returns directly without blocking or hopping threads; otherwise its continuations run on
+            the thread pool while the caller blocks.
+            </para>
+            Thread safety: safe for concurrent use once configured. Configuration members (<see cref="M:Durable.Query.RepositoryBase`1.AddQueryFilter(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})"/>,
+            <see cref="M:Durable.Query.RepositoryBase`1.ClearQueryFilters"/>, <see cref="P:Durable.Query.RepositoryBase`1.ConflictResolver"/>, <see cref="P:Durable.Query.RepositoryBase`1.IncludeStreamingBatchSize"/>,
+            <see cref="P:Durable.Query.RepositoryBase`1.IncludeChunkSize"/>) should be set before concurrent use.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.Metadata">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.Capabilities">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.Backend">
+            <summary>
+            Gets the backend. Never null. The repository does not own or dispose it.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.Options">
+            <summary>
+            Gets the options. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.QueryFilters">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.ConflictResolver">
+            <summary>
+            Gets or sets the resolver consulted when an update fails its version check.
+            Default: a <see cref="T:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1"/> with <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.
+            </summary>
+            <exception cref="T:System.ArgumentNullException">Thrown when set to null.</exception>
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.IncludeStreamingBatchSize">
+            <summary>
+            Gets or sets how many root entities are buffered before loading includes while streaming with
+            <see cref="M:Durable.IQueryBuilder`1.ExecuteAsyncEnumerable(System.Threading.CancellationToken)"/>. Default: 256. Minimum: 1.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when set below 1.</exception>
+        </member>
+        <member name="P:Durable.Query.RepositoryBase`1.IncludeChunkSize">
+            <summary>
+            Gets or sets the maximum number of keys in one related-row query issued by includes. Default: 500. Minimum: 1.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when set below 1.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.#ctor(Durable.Query.IRepositoryBackend,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository over a backend.
+            </summary>
+            <param name="backend">Backend. Must not be null. Not disposed by the repository.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity has a composite key or a version column the backend does not support.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.AddQueryFilter(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ClearQueryFilters">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadSingleOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadAll(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadById(System.Object,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadSingleOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ReadByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Exists(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ExistsById(System.Object,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ExistsAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ExistsByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Count(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CountAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Create(`0,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateMany(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Update(`0,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpdateMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Action{`0},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpdateField``1(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,``0}},``0,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpdateAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpdateManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Func{`0,System.Threading.Tasks.Task},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpdateFieldAsync``1(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,``0}},``0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.ArgumentException">Thrown when the field selector does not reference a mapped column.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.BatchUpdate"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BatchUpdate(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,`0}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BatchUpdateAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{`0,`0}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the expression is not a member-init expression, assigns an unmapped or key column, or the backend lacks <see cref="F:Durable.RepositoryCapabilities.BatchUpdate"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Delete(`0,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteById(System.Object,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteAll(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteByIdAsync(System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Upsert(`0,Durable.ITransaction)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Upsert"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpsertMany(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Upsert"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpsertAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Upsert"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.UpsertManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Upsert"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Query(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BeginTransaction">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Dispose">
+            <summary>
+            Disposes the repository. The backend is not disposed.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateQueryBuilder(Durable.ITransaction)">
+            <summary>
+            Creates the query builder used by <see cref="M:Durable.Query.RepositoryBase`1.Query(Durable.ITransaction)"/> and every predicate-based operation. Override to return a
+            builder that pushes Select or GroupBy down to the backend.
+            </summary>
+            <param name="transaction">Explicit transaction; may be null.</param>
+            <returns>A new query builder. Never null.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ResolveTransaction(Durable.ITransaction)">
+            <summary>
+            Resolves the transaction an operation runs in: the explicit transaction, otherwise the ambient
+            <see cref="P:Durable.TransactionScope.Current"/> transaction when it is not completed and <see cref="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)"/>
+            accepts it, otherwise null.
+            </summary>
+            <param name="transaction">Explicit transaction; may be null.</param>
+            <returns>The transaction or null.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)">
+            <summary>
+            Determines whether an ambient transaction belongs to this repository's backend. The default accepts every
+            transaction; backends override it so a scope started by another backend is ignored, as SQL repositories ignore
+            scopes of other providers.
+            </summary>
+            <param name="transaction">Ambient transaction. Never null.</param>
+            <returns>True to use the transaction.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DescribeQuery(Durable.Query.QueryModel)">
+            <summary>
+            Returns the query text reported by <see cref="P:Durable.IQueryBuilder`1.Query"/> and <see cref="P:Durable.IDurableResult`1.Query"/>.
+            The default is a readable description from <see cref="T:Durable.Query.QueryModelFormatter"/>; backends with a native query
+            language can return it instead.
+            </summary>
+            <param name="model">Query model. Never null.</param>
+            <returns>The query text. Never null.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateNormalizer">
+            <summary>
+            Creates a normalizer configured with <see cref="P:Durable.RepositoryOptions.StringMatching"/>.
+            </summary>
+            <returns>A new normalizer.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.CreateIncludeLoader">
+            <summary>
+            Creates the loader used for Include/ThenInclude.
+            </summary>
+            <returns>A new loader.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.DeleteModelAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <summary>
+            Deletes the rows a model selects, or sets their soft-delete marker when the entity has one.
+            </summary>
+            <param name="model">Rows to delete. Never null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of rows affected.</returns>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.Dispose(System.Boolean)">
+            <summary>
+            Releases resources.
+            </summary>
+            <param name="disposing">True when called from <see cref="M:Durable.Query.RepositoryBase`1.Dispose"/>.</param>
+        </member>
+        <member name="M:Durable.Query.RepositoryBase`1.ThrowIfDisposed">
+            <summary>
+            Throws when the repository is disposed.
+            </summary>
+            <exception cref="T:System.ObjectDisposedException">Thrown when disposed.</exception>
+        </member>
+        <member name="T:Durable.Query.ScalarConversion">
+            <summary>
+            Converts aggregate and scalar results returned by a backend (or computed on the client) to the CLR type a caller
+            asked for: numeric widening and narrowing, enum names and numbers, and nullable wrappers.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ScalarConversion.To``1(System.Object)">
+            <summary>
+            Converts a value to <typeparamref name="TResult"/>.
+            </summary>
+            <typeparam name="TResult">Target type.</typeparam>
+            <param name="value">Value; null returns the default of <typeparamref name="TResult"/>.</param>
+            <returns>The converted value.</returns>
+            <exception cref="T:System.InvalidCastException">Thrown when the value cannot be converted.</exception>
+        </member>
+        <member name="M:Durable.Query.ScalarConversion.To(System.Object,System.Type)">
+            <summary>
+            Converts a value to a target type.
+            </summary>
+            <param name="value">Value; null returns null.</param>
+            <param name="targetType">Target type. Must not be null.</param>
+            <returns>The converted value, or null.</returns>
+            <exception cref="T:System.InvalidCastException">Thrown when the value cannot be converted.</exception>
+        </member>
+        <member name="M:Durable.Query.ScalarConversion.IsNumeric(System.Type)">
+            <summary>
+            Determines whether a type is a built-in numeric type.
+            </summary>
+            <param name="type">Type. Must not be null.</param>
+            <returns>True for integral and floating-point types and decimal.</returns>
+        </member>
         <member name="T:Durable.Query.StringMatchKind">
             <summary>
             Substring tests in a <see cref="T:Durable.Query.StringMatchNode"/>.
@@ -4483,6 +5650,40 @@
         <member name="M:Durable.Query.StringTestNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
         </member>
+        <member name="T:Durable.Query.SyncBridge">
+            <summary>
+            Runs asynchronous backend operations for the synchronous members of <see cref="T:Durable.Query.RepositoryBase`1"/> and
+            <see cref="T:Durable.Query.QueryBuilder`1"/> without deadlocking under a synchronization context.
+            The operation is started inline with no synchronization context installed, so a backend that completes
+            synchronously (such as an in-memory store) returns its result directly, without blocking or hopping threads.
+            When the operation does not complete synchronously its continuations cannot capture the caller's context and run
+            on the thread pool, and the caller blocks until it finishes. When the caller runs under a non-default
+            <see cref="T:System.Threading.Tasks.TaskScheduler"/>, the whole operation is started on the thread pool instead.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.SyncBridge.Run``1(System.Func{System.Threading.Tasks.Task{``0}})">
+            <summary>
+            Runs an operation and returns its result.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="operation">Operation. Must not be null.</param>
+            <returns>The result.</returns>
+        </member>
+        <member name="M:Durable.Query.SyncBridge.Run(System.Func{System.Threading.Tasks.Task})">
+            <summary>
+            Runs an operation to completion.
+            </summary>
+            <param name="operation">Operation. Must not be null.</param>
+        </member>
+        <member name="M:Durable.Query.SyncBridge.Enumerate``1(System.Collections.Generic.IAsyncEnumerable{``0})">
+            <summary>
+            Enumerates an asynchronous stream synchronously and lazily.
+            </summary>
+            <typeparam name="T">Element type.</typeparam>
+            <param name="source">Stream. Must not be null.</param>
+            <returns>The elements.</returns>
+        </member>
         <member name="T:Durable.Query.ValueNode">
             <summary>
             A client-side value (constant or captured variable), already evaluated. When the value is compared with a column, <see cref="P:Durable.Query.ValueNode.Column"/> names that column so the backend can convert the value with the column's rules (enums, converters, JSON).
@@ -4513,7 +5714,7 @@
         </member>
         <member name="T:Durable.RepositoryCapabilities">
             <summary>
-            Features a repository backend supports. Query builders and <c>Durable.Query.RepositoryBase&lt;T&gt;</c> check
+            Features a repository backend supports. Query builders and <see cref="T:Durable.Query.RepositoryBase`1"/> check
             them when a call is made, so an unsupported operation fails immediately with a <see cref="T:System.NotSupportedException"/>
             naming the capability instead of failing part-way through execution. Basic CRUD, filtering with comparisons and
             boolean logic, ordering, paging, counting, query filters and soft delete are always required and have no flag.

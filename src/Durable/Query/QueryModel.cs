@@ -8,7 +8,7 @@ namespace Durable.Query
     /// Backend-neutral description of a read, count, aggregate, update or delete over one entity type, handed to an
     /// <see cref="IRepositoryBackend"/>. <see cref="Filter"/> already combines the caller's predicates with the
     /// repository's query filters and the soft-delete condition, so backends only evaluate it. Includes, projections and
-    /// grouping are handled above the backend by <c>QueryBuilder&lt;T&gt;</c>.
+    /// grouping are handled above the backend by <see cref="QueryBuilder{T}"/>.
     /// Thread safety: not thread-safe while being built; treat as immutable once passed to a backend.
     /// </summary>
     public sealed class QueryModel
