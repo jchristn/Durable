@@ -19,25 +19,37 @@ Durable is a lightweight .NET ORM library with LINQ capabilities designed as an 
 ```
 src/
 ├── Durable/                    # Backend-neutral core (no SQL concepts)
-│   ├── IRepository.cs         # Neutral repository interface
+│   ├── IRepository.cs         # Neutral repository interface (incl. Capabilities, ConflictResolver)
 │   ├── IQueryBuilder.cs       # Neutral LINQ query builder interface
 │   ├── EntityMetadata.cs      # Cached per-type mapping (columns, keys, navigations, compiled accessors)
+│   ├── RepositoryCapabilities.cs # Optional features a backend supports
+│   ├── Query/                 # Neutral query model (namespace Durable.Query)
+│   │   ├── QueryNormalizer.cs # LINQ -> QueryNode tree with C# semantics (the one place LINQ is interpreted)
+│   │   ├── *Node.cs           # Immutable query nodes; QueryNodeVisitor<TResult> translates them
+│   │   ├── IRepositoryBackend.cs # Storage contract for non-SQL backends
+│   │   ├── RepositoryBase.cs  # Full IRepository<T> over an IRepositoryBackend
+│   │   └── QueryBuilder.cs    # Neutral IQueryBuilder<T> (QueryModel, includes, client-side Select/GroupBy)
 │   └── ...                    # Attributes, transactions, resolvers, diagnostics, options
 ├── Durable.Sql/               # Shared SQL engine used by every SQL provider
 │   ├── ISqlDialect.cs         # Everything that differs between databases
 │   ├── SqlRepository.cs       # ISqlRepository<T> implementation (CRUD, upsert, bulk, schema, raw SQL)
 │   ├── SqlQueryBuilder.cs     # ISqlQueryBuilder<T> implementation
-│   ├── SqlExpressionTranslator.cs # The single LINQ-to-SQL translator (always parameterized)
+│   ├── SqlExpressionTranslator.cs # Renders QueryNode trees as SQL (always parameterized)
 │   ├── IncludeLoader.cs       # Split-query Include/ThenInclude loading
-│   └── SqlCommandExecutor.cs  # Connection leasing, interceptors, logging, tracing, SQL capture
+│   ├── SqlCommandExecutor.cs  # Connection leasing, interceptors, logging, tracing, SQL capture
+│   ├── RowMaterializer.cs     # Compiled typed row readers (RowReaderCompiler, TypedRowMapper)
+│   └── Migrations/            # SqlMigrator, schema reader/differ/sync, migration history and locking
 ├── Durable.Sqlite/            # SQLite implementation
 ├── Durable.MySql/             # MySQL implementation
 ├── Durable.Postgres/          # PostgreSQL implementation
 ├── Durable.SqlServer/         # SQL Server implementation
+├── Durable.InMemory/          # In-memory IRepositoryBackend (reference non-SQL backend)
+├── Durable.Conformance/       # Conformance kit: capability-gated suites for any IRepository<T> backend
 ├── Test.Shared/               # Touchstone source of truth: entities, provider glue, and all test suites
 ├── Test.Automated/            # Touchstone CLI runner (console); supports --docker for ephemeral DBs
 ├── Test.Xunit/                # Touchstone xUnit adapter (dotnet test)
 ├── Test.Nunit/                # Touchstone NUnit adapter (dotnet test)
+├── Test.Benchmark/            # BenchmarkDotNet: Durable vs Dapper vs ADO.NET reads
 └── Sample.BlogApp.*/          # Sample applications per database
 ```
 
@@ -46,6 +58,8 @@ src/
 ### Layering
 
 - **Durable** (core) is backend-neutral so non-SQL repositories (document stores, search engines, graph databases) can implement `IRepository<T>`/`IQueryBuilder<T>`. Do not add SQL concepts here.
+- **LINQ is interpreted once**, by `QueryNormalizer` (Durable.Query), into `QueryNode` trees with C# semantics (null handling, enum conversion, string match modes, navigations, grouping). Backends translate nodes with `QueryNodeVisitor<TResult>`; never parse expression trees in a backend. New LINQ support = a normalizer change (+ node type if needed) plus a visitor method per backend.
+- **Non-SQL backends** implement `IRepositoryBackend` and use `RepositoryBase<T>`; they declare `RepositoryCapabilities`, and unsupported calls must throw `NotSupportedException` at the call site (`QueryCapabilityValidator`).
 - **Durable.Sql** holds the SQL engine. All SQL generation goes through `ISqlDialect`; never special-case a provider inside the engine. `RepositoryType` checks in the engine are a smell.
 - **Providers** contain only a dialect (`XDialect : SqlDialect`), a converter (`XDataTypeConverter : DataTypeConverter`), a connection factory (`XConnectionFactory : ConnectionFactory`), settings, and a thin `XRepository<T> : SqlRepository<T>` (constructors, bulk insert, database creation). A new database = those five files.
 
@@ -137,6 +151,7 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 - The xUnit/NUnit adapters and the CLI all consume the same Touchstone suites in `Test.Shared`, so coverage stays in sync.
 - Provider selection for the adapters can also be set via environment variables (`DURABLE_TEST_DB`, `DURABLE_TEST_HOST`, etc.).
 - Every behavioral suite runs on all four providers; run all four before committing engine changes (Docker runs can execute in parallel).
+- The Durable.Conformance kit runs against each SQL provider and, in the SQLite configuration, against the in-memory backend (full and with no capabilities). Fix behavior differences in the engine or backend, never by weakening a conformance assertion.
 - The test projects target net8.0 and net10.0; run both (C# 14 changes some expression trees, e.g. `array.Contains` binds to `MemoryExtensions.Contains`).
 
 ### Creating NuGet Packages
@@ -156,6 +171,8 @@ Published packages:
 - `Durable.MySql`
 - `Durable.Postgres`
 - `Durable.SqlServer`
+- `Durable.InMemory`
+- `Durable.Conformance`
 
 ## Code Style and Conventions
 
@@ -530,6 +547,9 @@ Tests use the **Touchstone** framework: each case is authored once in `Test.Shar
 - Schema management and indexes
 - Connection-pool stress
 - Group-by / having, projections, complex expression translation
+- String matching modes (Ordinal / IgnoreCase identical on all databases)
+- Migrations (introspection, diff/sync, versioned migrations, locking, scripts)
+- Neutral query model (QueryNormalizer unit suite), in-memory backend, SQL/in-memory parity, conformance kit
 - Transactions (commit/rollback, sync + async)
 - Negative / edge cases (not-found, empty sets, single-result violations)
 - SQLite-specific unit suites (data-type converter, repository settings, initialization)
@@ -580,6 +600,8 @@ string sqlWithParams = repository.LastExecutedSqlWithParameters;
 When adding new features, these are the primary extension points:
 - `IRepository<T>`: Add new repository operations
 - `IQueryBuilder<T>`: Add new query capabilities
+- `IRepositoryBackend` / `RepositoryBase<T>`: Add a non-SQL backend (prove it with `Durable.Conformance`)
+- `QueryNodeVisitor<TResult>`: Translate the neutral query tree for a backend
 - `ISqlDialect`: Add a new SQL database
 - `IConnectionFactory`: Add new connection management strategies
 - `IConcurrencyConflictResolver<T>`: Custom conflict resolution

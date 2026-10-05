@@ -102,7 +102,7 @@ public class Program
 
 ## Why Durable?
 
-**Durable** sits between Dapper and Entity Framework: typed LINQ queries, CRUD, relationships, optimistic concurrency and schema creation, without a DbContext, change tracking or a migrations system, and with SQL you can always see.
+**Durable** sits between Dapper and Entity Framework: typed LINQ queries, CRUD, relationships, optimistic concurrency, schema creation and lightweight migrations, without a DbContext or change tracking, and with SQL you can always see.
 
 ### Key Benefits
 
@@ -112,7 +112,8 @@ public class Program
 - **One engine, four databases**: SQLite, MySQL, PostgreSQL and SQL Server share a single SQL engine (`Durable.Sql`) behind a small dialect interface, so behavior and fixes are identical across providers
 - **Fast materialization**: per-type metadata and compiled accessors are cached; rows map by ordinal
 - **Async from the ground up**: true streaming with `IAsyncEnumerable`, cancellation everywhere
-- **Backend-neutral core**: `IRepository<T>` and `IQueryBuilder<T>` in the `Durable` package contain no SQL concepts, leaving room for non-SQL backends
+- **Backend-neutral core**: `IRepository<T>` and `IQueryBuilder<T>` contain no SQL concepts. LINQ is normalized once into a neutral query tree that every backend translates, so document stores, search engines or graph stores implement a small storage contract and get the full repository API
+- **Proven by a conformance kit**: the same capability-gated suites run against SQLite, PostgreSQL, MySQL, SQL Server and the in-memory backend
 
 ### Packages
 
@@ -121,6 +122,8 @@ public class Program
 | `Durable` | Backend-neutral contracts: `IRepository<T>`, `IQueryBuilder<T>`, attributes, `EntityMetadata`, transactions, conflict resolvers, diagnostics |
 | `Durable.Sql` | Shared SQL engine: `ISqlRepository<T>`, `ISqlQueryBuilder<T>`, `ISqlDialect`, LINQ-to-SQL translation, includes, executor, interceptors |
 | `Durable.Sqlite` / `Durable.MySql` / `Durable.Postgres` / `Durable.SqlServer` | Dialect, connection factory and repository for each database |
+| `Durable.InMemory` | In-memory backend: full LINQ, includes, transactions with snapshot isolation; for tests and as the reference non-SQL backend |
+| `Durable.Conformance` | Conformance kit: capability-gated suites any `IRepository<T>` backend runs to prove itself |
 
 ## Requirements
 
@@ -545,6 +548,75 @@ repo.InitializeTable(typeof(Person));                    // CREATE TABLE if miss
 repo.InitializeTables(new[] { typeof(Person), typeof(Author), typeof(Book) });
 bool isValid = repo.ValidateTable(typeof(Person), out List<string> errors, out List<string> warnings);
 ```
+
+## Migrations
+
+Durable has lightweight migrations without model snapshots: schema sync brings tables up to date with your entities, and versioned migrations run once per database and are recorded in a history table.
+
+```csharp
+SqliteConnectionFactory factory = new SqliteConnectionFactory("Data Source=app.db");
+SqlMigrator migrator = new SqlMigrator(factory, SqliteDialect.Default)
+    .AddMigrationsFromAssembly(typeof(Program).Assembly);
+
+// Additive sync: create tables, add columns, create indexes. Drops only with AllowDestructive.
+SchemaSyncResult sync = await migrator.SyncSchemaAsync(new[] { typeof(User), typeof(Order) });
+foreach (SchemaDifference difference in sync.Differences) Console.WriteLine("Manual step: " + difference.Message);
+string review = migrator.GenerateSyncScript(new[] { typeof(User) });   // e.g. for CI
+
+public class AddUserEmail : Migration
+{
+    public override string Id => "20261005_0001_AddUserEmail";
+    public override void Up(MigrationContext context)
+    {
+        context.EnsureSchema(typeof(User));
+        context.ExecuteSql("UPDATE users SET email = @p0 WHERE email IS NULL", "unknown@example.com");
+    }
+    public override void Down(MigrationContext context) => context.ExecuteSql("ALTER TABLE users DROP COLUMN email");
+}
+
+MigrationRunResult result = await migrator.MigrateAsync();   // safe to run from several processes at once
+string script = migrator.GenerateScript();                    // pending migrations as a reviewable script
+```
+
+- Migrations run in ordinal `Id` order under a database lock (PostgreSQL advisory lock, SQL Server `sp_getapplock`, MySQL `GET_LOCK`, SQLite `BEGIN IMMEDIATE`).
+- On PostgreSQL, SQL Server and SQLite each migration commits together with its history row, so a failure is rolled back and not recorded. MySQL commits DDL implicitly: a failed migration is not recorded but earlier statements stay applied (`MigrationException.MayBePartiallyApplied`), so keep MySQL migrations small and idempotent.
+- A new NOT NULL column needs a constant `[DefaultValue]` or a numeric/bool/enum type (defaulting to its CLR value); otherwise sync reports it as a manual step. Type, length, nullability and key changes are reported, never applied.
+
+## Performance
+
+`src/Test.Benchmark` compares Durable with Dapper and hand-written ADO.NET using BenchmarkDotNet:
+
+```bash
+dotnet run -c Release --project src/Test.Benchmark -- --filter '*'
+```
+
+On SQLite, Durable reads 10,000 rows in about 10.9 ms (Dapper 12.1 ms, ADO.NET 10.5 ms), and matches or beats Dapper for filtered reads, DTO mapping and Include. A single-row read by key is within about 5% of Dapper.
+
+## Other Backends: In-Memory, Custom Backends and the Conformance Kit
+
+`Durable.InMemory` keeps entities in memory with full LINQ support, includes, value converters, soft delete, query filters and transactions with snapshot isolation. It is useful in unit tests, and it is the reference implementation for non-SQL backends:
+
+```csharp
+InMemoryBackend backend = new InMemoryBackend();
+IRepository<Person> people = backend.CreateRepository<Person>();
+```
+
+To support another store (a document database, search engine or graph store), implement `IRepositoryBackend` and wrap it in `RepositoryBase<T>`. The backend receives `QueryModel`s (filter, ordering, paging) whose filters are `QueryNode` trees with C# semantics; translate them with a `QueryNodeVisitor<TResult>`:
+
+```csharp
+public sealed class MyBackend : IRepositoryBackend
+{
+    public RepositoryCapabilities Capabilities => RepositoryCapabilities.Include | RepositoryCapabilities.Aggregates;
+    public IAsyncEnumerable<object> QueryAsync(QueryModel model, CancellationToken token) { /* translate model.Filter, apply Orderings/Skip/Take */ }
+    // CountAsync, AggregateAsync, InsertAsync, ReplaceAsync, UpdateAsync, DeleteAsync, BeginTransactionAsync
+}
+
+IRepository<Person> people = new RepositoryBase<Person>(new MyBackend());
+```
+
+`RepositoryBase<T>` supplies the rest of `IRepository<T>`: includes (split queries through your backend), soft delete, query filters, optimistic concurrency with conflict resolvers, upsert and batch operations. Capabilities you don't declare fail at the call site with a `NotSupportedException` naming the capability.
+
+Prove the backend with the conformance kit: reference `Durable.Conformance`, implement `IConformanceTarget` (name, capabilities, `CreateRepository<T>`, and `ResetAsync`, which empties storage for given entity types), and run `ConformanceSuites.Build(target)` with any Touchstone runner. Cases needing a capability you don't declare are skipped with a reason, and the capabilities suite verifies that each unsupported operation throws at the call site.
 
 ## License
 

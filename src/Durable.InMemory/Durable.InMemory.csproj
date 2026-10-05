@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.InMemory.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.InMemory</Title>
-		<Version>0.3.0</Version>
+		<Version>0.4.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>In-memory backend for Durable ORM: the reference IRepositoryBackend implementation with snapshot-isolation transactions, value converters, JSON columns, includes and full LINQ query evaluation. Ideal for tests and prototyping.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>

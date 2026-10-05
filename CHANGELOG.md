@@ -2,6 +2,42 @@
 
 ## Current Version
 
+v0.4.0 (breaking)
+
+Neutral query model and backends
+- `Durable.Query` (core): `QueryNormalizer` turns LINQ into an immutable, backend-neutral `QueryNode` tree with C# semantics (evaluated client values, enum handling, null checks, navigation and grouping nodes). The SQL engine now renders that tree; a non-SQL backend translates the same tree with a `QueryNodeVisitor<TResult>`.
+- `IRepositoryBackend` + `RepositoryBase<T>` + `QueryBuilder<T>`: implement a small storage contract (query, count, aggregate, insert, replace, set-based update, delete, transactions) and get the whole `IRepository<T>` surface, including split-query Include, soft delete, query filters, optimistic concurrency and conflict resolvers.
+- `RepositoryCapabilities` and `IRepository<T>.Capabilities`: backends declare what they support; unsupported operations throw `NotSupportedException` at the call site (`Include`, `GroupBy`, navigation predicates in `Where`, ...).
+- New `Durable.InMemory` package: the reference non-SQL backend, with snapshot-isolation transactions and a capability mask for simulating limited backends.
+- New `Durable.Conformance` package: 20 capability-gated Touchstone suites (228 cases) any `IRepository<T>` backend runs through `IConformanceTarget`/`ConformanceSuites.Build`. They run against SQLite, PostgreSQL, MySQL, SQL Server and the in-memory backend.
+
+String matching
+- `StringMatchMode` (`Database`, `Ordinal`, `IgnoreCase`) via `RepositoryOptions.StringMatching` or an explicit `StringComparison` argument. `Ordinal` and `IgnoreCase` return the same rows on all four databases for `==`, `!=`, ordering comparisons, `IN`, `Contains`/`StartsWith`/`EndsWith`, `Replace` and `IndexOf`. `Database` (default) keeps each collation's behavior.
+
+Migrations
+- `SqlMigrator`: versioned migrations (`Migration`, `MigrationContext`) recorded in a history table (default `__durable_migrations`), applied under a cross-process database lock, each in a transaction where the database supports transactional DDL; `RollbackTo` via `Down`; discovery from an assembly; reviewable scripts.
+- Schema diff and sync: `DatabaseSchemaReader`, `SchemaDiffer`, `SyncSchema`/`GenerateSyncScript`. Additive changes apply automatically, destructive ones only with `AllowDestructive`; type, length, nullability and key differences are reported, never applied.
+
+Performance
+- Compiled, typed row readers with typed driver getters and inlined built-in conversions; direct parsing of SQLite's date format. On SQLite, 10k-row reads went from 15.7 ms to 10.9 ms (Dapper: 12.1 ms); includes are about 25% faster. New `src/Test.Benchmark` (BenchmarkDotNet; Durable vs Dapper vs ADO.NET).
+
+Fixes
+- PostgreSQL orders NULLs like LINQ and the other providers (`NULLS FIRST` ascending, `NULLS LAST` descending).
+- `All(predicate)` treats a condition that compares NULL as false, so such a child violates `All` (C# semantics).
+- Reference navigation members (`x.Author.Name`) ignore soft-deleted related rows, as Include and collection predicates do.
+- Explicit `StringComparison.Ordinal`/`OrdinalIgnoreCase` arguments are now honored exactly instead of following the collation.
+
+Breaking changes
+- `ConflictResolver` moves from `ISqlRepository<T>` to `IRepository<T>`; `IRepository<T>` also gains `Capabilities`.
+- `SqlFunction` is now `Durable.Query.QueryFunction`; `ExpressionEvaluator`, `GroupingSpecification`, `IncludeNode` and `KeyNormalizer` move to `Durable.Query`; `SqlExpressionTranslator.CustomTranslator` is replaced by `UseGrouping`/`GroupKeySql`.
+- `ISqlDialect` gains string-matching (`OrdinalCollation`, `SupportsOrdinalLike`, `OrdinalStringMatch`, `StringCastType`), ordering (`OrderDirection`) and migration members; custom dialects deriving from `SqlDialect` get defaults.
+- `IQueryBuilder.Count` is documented as applying Skip/Take, as it always did.
+
+Tests
+- Every build warning fixed without suppressions; tests and samples have correct nullable annotations.
+
+## Previous Versions
+
 v0.3.0 (breaking)
 
 Architecture
@@ -39,8 +75,6 @@ Breaking changes
 - `IGroupedQueryBuilder.Select` returns an executable `IQueryBuilder<TResult>`; `Count()` counts groups.
 - `WhereIn`/`WhereNotIn` take `(keySelector, subquery, subqueryKey)`; `WhereExists` accepts an optional correlation.
 - Merge conflict resolution uses the incoming entity as the original snapshot (no change tracking).
-
-## Previous Versions
 
 v0.2.0 and earlier
 
