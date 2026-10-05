@@ -26,6 +26,7 @@ Fixes
 - `All(predicate)` treats a condition that compares NULL as false, so such a child violates `All` (C# semantics).
 - Reference navigation members (`x.Author.Name`) ignore soft-deleted related rows, as Include and collection predicates do.
 - Explicit `StringComparison.Ordinal`/`OrdinalIgnoreCase` arguments are now honored exactly instead of following the collation.
+- SQLite: `SqliteConnectionFactory` sets `PRAGMA busy_timeout` (`BusyTimeoutMilliseconds`, default 30 s) so concurrent writers wait instead of failing with "database is locked", and `:memory:` now uses the memdb VFS instead of shared-cache mode, whose lock conflicts Microsoft.Data.Sqlite reports as `ArgumentOutOfRangeException`. For a named shared in-memory database, prefer `Data Source=file:/name?vfs=memdb` over `Mode=Memory;Cache=Shared`.
 
 Breaking changes
 - `ConflictResolver` moves from `ISqlRepository<T>` to `IRepository<T>`; `IRepository<T>` also gains `Capabilities`.
