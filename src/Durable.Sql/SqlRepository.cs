@@ -718,7 +718,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters) where TResult : new()
+        public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
         {
             ArgumentNullException.ThrowIfNull(sql);
             return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
@@ -747,7 +747,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters) where TResult : new()
+        public IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
         {
             ArgumentNullException.ThrowIfNull(sql);
             return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
@@ -774,17 +774,12 @@ namespace Durable.Sql
             ArgumentNullException.ThrowIfNull(sql);
             SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
             ConnectionLease lease = Executor.Lease(transaction);
-            DbCommand? command = null;
             try
             {
-                command = Executor.CreateCommand(lease, statement);
-                OnExecuted(statement);
-                DbDataReader reader = command.ExecuteReader();
-                return new SqlMultipleResultReader(lease, command, reader, Converter);
+                return Executor.ExecuteMultiple(lease, statement, Converter);
             }
             catch
             {
-                command?.Dispose();
                 lease.Dispose();
                 throw;
             }
@@ -796,17 +791,12 @@ namespace Durable.Sql
             ArgumentNullException.ThrowIfNull(sql);
             SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
             ConnectionLease lease = await Executor.LeaseAsync(transaction, token).ConfigureAwait(false);
-            DbCommand? command = null;
             try
             {
-                command = Executor.CreateCommand(lease, statement);
-                OnExecuted(statement);
-                DbDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
-                return new SqlMultipleResultReader(lease, command, reader, Converter);
+                return await Executor.ExecuteMultipleAsync(lease, statement, Converter, token).ConfigureAwait(false);
             }
             catch
             {
-                if (command != null) await command.DisposeAsync().ConfigureAwait(false);
                 await lease.DisposeAsync().ConfigureAwait(false);
                 throw;
             }
@@ -819,7 +809,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters) where TResult : new()
+        public List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -838,7 +828,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters) where TResult : new()
+        public Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);

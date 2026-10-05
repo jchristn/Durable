@@ -29,14 +29,16 @@ namespace Durable.Sql
         private readonly DbCommand _Command;
         private readonly DbDataReader _Reader;
         private readonly IDataTypeConverter _Converter;
+        private readonly Action? _OnDisposed;
         private bool _Disposed;
 
         #endregion
 
         #region Constructors-and-Factories
 
-        internal SqlMultipleResultReader(ConnectionLease lease, DbCommand command, DbDataReader reader, IDataTypeConverter converter)
+        internal SqlMultipleResultReader(ConnectionLease lease, DbCommand command, DbDataReader reader, IDataTypeConverter converter, Action? onDisposed = null)
         {
+            _OnDisposed = onDisposed;
             _Lease = lease;
             _Command = command;
             _Reader = reader;
@@ -91,6 +93,7 @@ namespace Durable.Sql
             _Reader.Dispose();
             _Command.Dispose();
             _Lease.Dispose();
+            _OnDisposed?.Invoke();
         }
 
         /// <summary>
@@ -104,6 +107,7 @@ namespace Durable.Sql
             await _Reader.DisposeAsync().ConfigureAwait(false);
             await _Command.DisposeAsync().ConfigureAwait(false);
             await _Lease.DisposeAsync().ConfigureAwait(false);
+            _OnDisposed?.Invoke();
         }
 
         #endregion

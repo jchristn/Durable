@@ -438,6 +438,7 @@ namespace Durable.Sql
                             TResult item;
                             try
                             {
+                                token.ThrowIfCancellationRequested();
                                 if (!await reader.ReadAsync(token).ConfigureAwait(false)) break;
                                 item = map(reader);
                                 rows++;
@@ -565,6 +566,60 @@ namespace Durable.Sql
                     scope.Fail(e);
                     throw;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Executes a command returning several result sets and returns a reader over them. Diagnostics complete when the
+        /// returned reader is disposed.
+        /// </summary>
+        /// <param name="lease">Lease, owned by the returned reader. Must not be null.</param>
+        /// <param name="statement">Statement. Must not be null.</param>
+        /// <param name="converter">Converter for mapping rows. Must not be null.</param>
+        /// <returns>The reader.</returns>
+        public SqlMultipleResultReader ExecuteMultiple(ConnectionLease lease, SqlStatement statement, IDataTypeConverter converter)
+        {
+            ArgumentNullException.ThrowIfNull(lease);
+            ArgumentNullException.ThrowIfNull(converter);
+            DbCommand command = CreateCommand(lease, statement);
+            CommandScope scope = Begin(command, statement, "RAW");
+            try
+            {
+                DbDataReader reader = command.ExecuteReader();
+                return new SqlMultipleResultReader(lease, command, reader, converter, () => scope.Complete(null));
+            }
+            catch (Exception e)
+            {
+                scope.Fail(e);
+                command.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Executes a command returning several result sets and returns a reader over them.
+        /// </summary>
+        /// <param name="lease">Lease, owned by the returned reader. Must not be null.</param>
+        /// <param name="statement">Statement. Must not be null.</param>
+        /// <param name="converter">Converter for mapping rows. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The reader.</returns>
+        public async Task<SqlMultipleResultReader> ExecuteMultipleAsync(ConnectionLease lease, SqlStatement statement, IDataTypeConverter converter, CancellationToken token)
+        {
+            ArgumentNullException.ThrowIfNull(lease);
+            ArgumentNullException.ThrowIfNull(converter);
+            DbCommand command = CreateCommand(lease, statement);
+            CommandScope scope = Begin(command, statement, "RAW");
+            try
+            {
+                DbDataReader reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                return new SqlMultipleResultReader(lease, command, reader, converter, () => scope.Complete(null));
+            }
+            catch (Exception e)
+            {
+                scope.Fail(e);
+                await command.DisposeAsync().ConfigureAwait(false);
+                throw;
             }
         }
 

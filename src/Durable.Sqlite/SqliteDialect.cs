@@ -27,6 +27,9 @@ namespace Durable.Sqlite
         /// <inheritdoc />
         public override int MaxParameters => 32000;
 
+        /// <inheritdoc />
+        public override bool SupportsStoredProcedures => false;
+
         #endregion
 
         #region Constructors-and-Factories

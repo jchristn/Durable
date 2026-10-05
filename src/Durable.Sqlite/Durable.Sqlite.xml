@@ -73,6 +73,9 @@
         <member name="P:Durable.Sqlite.SqliteDialect.MaxParameters">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sqlite.SqliteDialect.SupportsStoredProcedures">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sqlite.SqliteDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.

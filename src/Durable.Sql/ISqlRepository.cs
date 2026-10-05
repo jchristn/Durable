@@ -85,14 +85,15 @@ namespace Durable.Sql
 
         /// <summary>
         /// Executes raw SQL and maps rows to <typeparamref name="TResult"/>: by column name for classes (matching
-        /// column names, property names, or names ignoring case and underscores), or the first column for scalar types.
+        /// column names, property names, or names ignoring case and underscores), or the first column for scalar types
+        /// (including <see cref="string"/>). Class result types need a parameterless constructor.
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="sql">SQL. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Results, streamed.</returns>
-        IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters) where TResult : new();
+        IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
 
         /// <summary>
         /// Executes raw SQL that returns no rows.
@@ -132,7 +133,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Results.</returns>
-        IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters) where TResult : new();
+        IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         /// <summary>
         /// Executes raw SQL that returns no rows.
@@ -197,7 +198,7 @@ namespace Durable.Sql
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
         /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
-        List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters) where TResult : new();
+        List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
 
         /// <summary>
         /// Executes a stored procedure that returns no rows.
@@ -218,7 +219,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
-        Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters) where TResult : new();
+        Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
 
         #endregion
 

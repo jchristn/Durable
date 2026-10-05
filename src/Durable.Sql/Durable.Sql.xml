@@ -1311,7 +1311,8 @@
         <member name="M:Durable.Sql.ISqlRepository`1.FromSql``1(System.String,Durable.ITransaction,System.Object[])">
             <summary>
             Executes raw SQL and maps rows to <typeparamref name="TResult"/>: by column name for classes (matching
-            column names, property names, or names ignoring case and underscores), or the first column for scalar types.
+            column names, property names, or names ignoring case and underscores), or the first column for scalar types
+            (including <see cref="T:System.String"/>). Class result types need a parameterless constructor.
             </summary>
             <typeparam name="TResult">Result type.</typeparam>
             <param name="sql">SQL. Must not be null.</param>
@@ -2404,6 +2405,26 @@
             <param name="token">Cancellation token.</param>
             <param name="commandType">Command type. Default: text.</param>
             <returns>The callback result.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlCommandExecutor.ExecuteMultiple(Durable.Sql.ConnectionLease,Durable.Sql.SqlStatement,Durable.Sql.IDataTypeConverter)">
+            <summary>
+            Executes a command returning several result sets and returns a reader over them. Diagnostics complete when the
+            returned reader is disposed.
+            </summary>
+            <param name="lease">Lease, owned by the returned reader. Must not be null.</param>
+            <param name="statement">Statement. Must not be null.</param>
+            <param name="converter">Converter for mapping rows. Must not be null.</param>
+            <returns>The reader.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlCommandExecutor.ExecuteMultipleAsync(Durable.Sql.ConnectionLease,Durable.Sql.SqlStatement,Durable.Sql.IDataTypeConverter,System.Threading.CancellationToken)">
+            <summary>
+            Executes a command returning several result sets and returns a reader over them.
+            </summary>
+            <param name="lease">Lease, owned by the returned reader. Must not be null.</param>
+            <param name="statement">Statement. Must not be null.</param>
+            <param name="converter">Converter for mapping rows. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The reader.</returns>
         </member>
         <member name="T:Durable.Sql.SqlDialect">
             <summary>
