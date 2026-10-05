@@ -585,7 +585,7 @@
             <param name="converter">Converter. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
         </member>
-        <member name="M:Durable.Sql.IncludeLoader.Load(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Sql.IncludeNode})">
+        <member name="M:Durable.Sql.IncludeLoader.Load(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Query.IncludeNode})">
             <summary>
             Loads the include tree for the given parents.
             </summary>
@@ -593,7 +593,7 @@
             <param name="parents">Parent entities. Must not be null.</param>
             <param name="nodes">Include nodes. Must not be null.</param>
         </member>
-        <member name="M:Durable.Sql.IncludeLoader.LoadAsync(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Sql.IncludeNode},System.Threading.CancellationToken)">
+        <member name="M:Durable.Sql.IncludeLoader.LoadAsync(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{System.Object},System.Collections.Generic.IReadOnlyList{Durable.Query.IncludeNode},System.Threading.CancellationToken)">
             <summary>
             Loads the include tree for the given parents.
             </summary>
@@ -602,36 +602,6 @@
             <param name="nodes">Include nodes. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
-        </member>
-        <member name="T:Durable.Sql.IncludeNode">
-            <summary>
-            One navigation in an include tree.
-            Thread safety: not thread-safe; owned by a query builder.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.IncludeNode.Navigation">
-            <summary>
-            Gets the navigation to load. Never null.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.IncludeNode.Children">
-            <summary>
-            Gets nested includes loaded on the related entities. Never null.
-            </summary>
-        </member>
-        <member name="M:Durable.Sql.IncludeNode.#ctor(Durable.NavigationMetadata)">
-            <summary>
-            Instantiates a node.
-            </summary>
-            <param name="navigation">Navigation. Must not be null.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when navigation is null.</exception>
-        </member>
-        <member name="M:Durable.Sql.IncludeNode.GetOrAddChild(Durable.NavigationMetadata)">
-            <summary>
-            Returns the existing child for a navigation or adds a new one.
-            </summary>
-            <param name="navigation">Navigation. Must not be null.</param>
-            <returns>The child node.</returns>
         </member>
         <member name="T:Durable.Sql.InsertKeyStrategy">
             <summary>
@@ -1826,21 +1796,6 @@
             </summary>
             <param name="token">A cancellation token that can be used to cancel the operation.</param>
             <returns>An async enumerable collection of query results.</returns>
-        </member>
-        <member name="T:Durable.Sql.KeyNormalizer">
-            <summary>
-            Normalizes key values so keys read from different columns or drivers compare equal
-            (for example, an <see cref="T:System.Int32"/> foreign key and a <see cref="T:System.Int64"/> primary key).
-            Thread safety: stateless.
-            </summary>
-        </member>
-        <member name="M:Durable.Sql.KeyNormalizer.Normalize(System.Object)">
-            <summary>
-            Normalizes a key value: integral numbers become <see cref="T:System.Int64"/>, strings are compared ordinally,
-            other values are returned unchanged.
-            </summary>
-            <param name="value">Key value; may be null.</param>
-            <returns>The normalized value, or null.</returns>
         </member>
         <member name="T:Durable.Sql.MemberReplacer">
             <summary>
@@ -3405,6 +3360,9 @@
             <typeparam name="T">Entity type.</typeparam>
         </member>
         <member name="P:Durable.Sql.SqlRepository`1.Metadata">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlRepository`1.Capabilities">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlRepository`1.Dialect">

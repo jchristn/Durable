@@ -28,6 +28,12 @@ namespace Durable
         EntityMetadata Metadata { get; }
 
         /// <summary>
+        /// Gets the optional features this repository's backend supports. Operations that need a missing capability throw
+        /// <see cref="NotSupportedException"/> when called. SQL repositories support <see cref="RepositoryCapabilities.All"/>.
+        /// </summary>
+        RepositoryCapabilities Capabilities { get; }
+
+        /// <summary>
         /// Gets the registered global query filters. Never null.
         /// </summary>
         IReadOnlyList<Expression<Func<T, bool>>> QueryFilters { get; }

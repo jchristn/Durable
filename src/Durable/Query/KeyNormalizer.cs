@@ -1,4 +1,4 @@
-namespace Durable.Sql
+namespace Durable.Query
 {
     using System;
     using System.Globalization;

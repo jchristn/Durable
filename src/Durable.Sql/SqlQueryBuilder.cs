@@ -10,6 +10,7 @@ namespace Durable.Sql
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// The SQL query builder shared by all SQL providers. State is translated into SQL only when the query is built or executed,
@@ -44,12 +45,11 @@ namespace Durable.Sql
         private readonly IReadOnlyList<Expression<Func<T, bool>>> _QueryFilters;
         private readonly List<Func<SqlExpressionTranslator, TableSource, string>> _Conditions = new List<Func<SqlExpressionTranslator, TableSource, string>>();
         private readonly List<OrderClause> _Orderings = new List<OrderClause>();
-        private readonly List<IncludeNode> _Includes = new List<IncludeNode>();
+        private readonly IncludeTree _Includes;
         private readonly List<Func<SqlExpressionTranslator, TableSource, string>> _ExtraSelect = new List<Func<SqlExpressionTranslator, TableSource, string>>();
         private readonly List<string> _Joins = new List<string>();
         private readonly List<string> _Ctes = new List<string>();
         private readonly List<KeyValuePair<SetOperationType, SqlQueryBuilder<T>>> _SetOperations = new List<KeyValuePair<SetOperationType, SqlQueryBuilder<T>>>();
-        private IncludeNode? _LastInclude;
         private int? _Skip;
         private int? _Take;
         private bool _Distinct;
@@ -73,6 +73,7 @@ namespace Durable.Sql
         {
             Context = context ?? throw new ArgumentNullException(nameof(context));
             Metadata = EntityMetadata.For(typeof(T));
+            _Includes = new IncludeTree(Metadata);
             _Transaction = transaction;
             _QueryFilters = queryFilters ?? Array.Empty<Expression<Func<T, bool>>>();
         }
@@ -157,18 +158,7 @@ namespace Durable.Sql
         public ISqlQueryBuilder<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty)
         {
             ArgumentNullException.ThrowIfNull(navigationProperty);
-            List<string> path = NavigationPath(navigationProperty.Body);
-            EntityMetadata owner = Metadata;
-            IncludeNode? node = null;
-            foreach (string name in path)
-            {
-                NavigationMetadata navigation = owner.FindNavigation(name)
-                    ?? throw new ArgumentException("'" + name + "' is not a navigation property of " + owner.EntityType.Name + ".", nameof(navigationProperty));
-                node = node == null ? GetOrAddRoot(navigation) : node.GetOrAddChild(navigation);
-                owner = EntityMetadata.For(navigation.RelatedType);
-            }
-
-            _LastInclude = node;
+            _Includes.Include(navigationProperty);
             return this;
         }
 
@@ -176,21 +166,7 @@ namespace Durable.Sql
         public ISqlQueryBuilder<T> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty)
         {
             ArgumentNullException.ThrowIfNull(navigationProperty);
-            if (_LastInclude == null) throw new InvalidOperationException("ThenInclude must follow Include.");
-            if (_LastInclude.Navigation.RelatedType != typeof(TPreviousProperty))
-                throw new InvalidOperationException("ThenInclude expects the previous include's entity type " + _LastInclude.Navigation.RelatedType.Name + " but received " + typeof(TPreviousProperty).Name + ".");
-
-            EntityMetadata owner = EntityMetadata.For(typeof(TPreviousProperty));
-            IncludeNode node = _LastInclude;
-            foreach (string name in NavigationPath(navigationProperty.Body))
-            {
-                NavigationMetadata navigation = owner.FindNavigation(name)
-                    ?? throw new ArgumentException("'" + name + "' is not a navigation property of " + owner.EntityType.Name + ".", nameof(navigationProperty));
-                node = node.GetOrAddChild(navigation);
-                owner = EntityMetadata.For(navigation.RelatedType);
-            }
-
-            _LastInclude = node;
+            _Includes.ThenInclude(typeof(TPreviousProperty), navigationProperty);
             return this;
         }
 
@@ -337,7 +313,7 @@ namespace Durable.Sql
             SqlStatement statement = BuildStatement();
             using ConnectionLease lease = Context.Executor.Lease(_Transaction);
             List<T> results = Context.Executor.Query(lease, statement, "SELECT", CreateMapper()).ToList();
-            if (_Includes.Count > 0) new IncludeLoader(Context.Executor, Context.Converter).Load(lease, results, _Includes);
+            if (!_Includes.IsEmpty) new IncludeLoader(Context.Executor, Context.Converter).Load(lease, results, _Includes.Nodes);
             return results;
         }
 
@@ -351,8 +327,8 @@ namespace Durable.Sql
                 List<T> results = new List<T>();
                 await foreach (T item in Context.Executor.QueryAsync(lease, statement, "SELECT", CreateMapper(), token).ConfigureAwait(false))
                     results.Add(item);
-                if (_Includes.Count > 0)
-                    await new IncludeLoader(Context.Executor, Context.Converter).LoadAsync(lease, results, _Includes, token).ConfigureAwait(false);
+                if (!_Includes.IsEmpty)
+                    await new IncludeLoader(Context.Executor, Context.Converter).LoadAsync(lease, results, _Includes.Nodes, token).ConfigureAwait(false);
                 return results;
             }
         }
@@ -361,7 +337,7 @@ namespace Durable.Sql
         public async IAsyncEnumerable<T> ExecuteAsyncEnumerable([EnumeratorCancellation] CancellationToken token = default)
         {
             SqlStatement statement = BuildStatement();
-            if (_Includes.Count == 0)
+            if (_Includes.IsEmpty)
             {
                 await foreach (T item in Context.Executor.QueryAsync(statement, _Transaction, "SELECT", CreateMapper(), token).ConfigureAwait(false))
                     yield return item;
@@ -385,7 +361,7 @@ namespace Durable.Sql
                     batch.Add(item);
                     if (batch.Count < batchSize) continue;
                     includeLease ??= await Context.Executor.LeaseAsync(null, token).ConfigureAwait(false);
-                    await loader.LoadAsync(includeLease, batch, _Includes, token).ConfigureAwait(false);
+                    await loader.LoadAsync(includeLease, batch, _Includes.Nodes, token).ConfigureAwait(false);
                     foreach (T loaded in batch) yield return loaded;
                     batch.Clear();
                 }
@@ -393,7 +369,7 @@ namespace Durable.Sql
                 if (batch.Count > 0)
                 {
                     includeLease ??= await Context.Executor.LeaseAsync(null, token).ConfigureAwait(false);
-                    await loader.LoadAsync(includeLease, batch, _Includes, token).ConfigureAwait(false);
+                    await loader.LoadAsync(includeLease, batch, _Includes.Nodes, token).ConfigureAwait(false);
                     foreach (T loaded in batch) yield return loaded;
                 }
             }
@@ -699,34 +675,6 @@ namespace Durable.Sql
             if (!model.Skip.HasValue && !model.Take.HasValue) model.OrderBy.Clear();
             builder.Append("SELECT ").Append(selectList).Append(" FROM (").Append(model.Render(Context.Dialect)).Append(") dq");
             return builder.Build();
-        }
-
-        private IncludeNode GetOrAddRoot(NavigationMetadata navigation)
-        {
-            foreach (IncludeNode node in _Includes)
-            {
-                if (ReferenceEquals(node.Navigation, navigation)) return node;
-            }
-
-            IncludeNode added = new IncludeNode(navigation);
-            _Includes.Add(added);
-            return added;
-        }
-
-        private static List<string> NavigationPath(Expression body)
-        {
-            List<string> path = new List<string>();
-            Expression current = body;
-            while (current is UnaryExpression unary && (unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.TypeAs)) current = unary.Operand;
-            while (current is MemberExpression member)
-            {
-                path.Insert(0, member.Member.Name);
-                current = member.Expression!;
-            }
-
-            if (current is not ParameterExpression || path.Count == 0)
-                throw new ArgumentException("Include expects a navigation member access such as x => x.Author or x => x.Author.Company.");
-            return path;
         }
 
         private ISqlQueryBuilder<T> AddSetOperation(SetOperationType type, IQueryBuilder<T> other)

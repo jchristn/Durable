@@ -31,6 +31,9 @@ namespace Durable.Sql
         public EntityMetadata Metadata { get; }
 
         /// <inheritdoc />
+        public RepositoryCapabilities Capabilities => RepositoryCapabilities.All;
+
+        /// <inheritdoc />
         public ISqlDialect Dialect { get; }
 
         /// <inheritdoc />

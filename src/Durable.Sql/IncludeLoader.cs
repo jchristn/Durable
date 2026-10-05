@@ -8,6 +8,7 @@ namespace Durable.Sql
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// Loads navigation properties for already-materialized entities with one query per navigation (split per

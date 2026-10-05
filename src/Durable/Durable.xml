@@ -2000,6 +2000,12 @@
             Gets the cached mapping metadata for <typeparamref name="T"/>. Never null.
             </summary>
         </member>
+        <member name="P:Durable.IRepository`1.Capabilities">
+            <summary>
+            Gets the optional features this repository's backend supports. Operations that need a missing capability throw
+            <see cref="T:System.NotSupportedException"/> when called. SQL repositories support <see cref="F:Durable.RepositoryCapabilities.All"/>.
+            </summary>
+        </member>
         <member name="P:Durable.IRepository`1.QueryFilters">
             <summary>
             Gets the registered global query filters. Never null.
@@ -3347,6 +3353,31 @@
             <returns>The value; may be null.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
         </member>
+        <member name="T:Durable.Query.FieldAssignment">
+            <summary>
+            One column assignment of a set-based update (<c>UpdateField</c>, <c>BatchUpdate</c>, version bumps).
+            The value is a node over the model's source, so it may refer to the row's current values (<c>x.Count + 1</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.FieldAssignment.Column">
+            <summary>
+            Gets the assigned column. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.FieldAssignment.Value">
+            <summary>
+            Gets the new value. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.FieldAssignment.#ctor(Durable.ColumnMetadata,Durable.Query.QueryNode)">
+            <summary>
+            Instantiates an assignment.
+            </summary>
+            <param name="column">Assigned column. Must not be null.</param>
+            <param name="value">New value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
         <member name="T:Durable.Query.FreeParameterFinder">
             <summary>
             Detects parameters that are not declared by a lambda inside the visited expression.
@@ -3431,6 +3462,91 @@
             <param name="expression">Expression; may be null.</param>
             <returns>True when the expression is a parameter of <see cref="P:Durable.Query.GroupingSpecification.GroupingType"/>.</returns>
         </member>
+        <member name="T:Durable.Query.IncludeNode">
+            <summary>
+            One navigation in an include tree.
+            Thread safety: not thread-safe; owned by a query builder.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IncludeNode.Navigation">
+            <summary>
+            Gets the navigation to load. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IncludeNode.Children">
+            <summary>
+            Gets nested includes loaded on the related entities. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.IncludeNode.#ctor(Durable.NavigationMetadata)">
+            <summary>
+            Instantiates a node.
+            </summary>
+            <param name="navigation">Navigation. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigation is null.</exception>
+        </member>
+        <member name="M:Durable.Query.IncludeNode.GetOrAddChild(Durable.NavigationMetadata)">
+            <summary>
+            Returns the existing child for a navigation or adds a new one.
+            </summary>
+            <param name="navigation">Navigation. Must not be null.</param>
+            <returns>The child node.</returns>
+        </member>
+        <member name="T:Durable.Query.IncludeTree">
+            <summary>
+            Builds the include tree for a query from <c>Include</c> and <c>ThenInclude</c> lambdas
+            (<c>x =&gt; x.Author</c>, <c>x =&gt; x.Author.Company</c>). Repeated paths share nodes.
+            Thread safety: not thread-safe; owned by a query builder.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IncludeTree.Root">
+            <summary>
+            Gets the root entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IncludeTree.Nodes">
+            <summary>
+            Gets the top-level includes. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IncludeTree.IsEmpty">
+            <summary>
+            Gets whether any include was added.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.IncludeTree.#ctor(Durable.EntityMetadata)">
+            <summary>
+            Instantiates an empty include tree.
+            </summary>
+            <param name="root">Root entity metadata. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when root is null.</exception>
+        </member>
+        <member name="M:Durable.Query.IncludeTree.Include(System.Linq.Expressions.LambdaExpression)">
+            <summary>
+            Adds a navigation path from the root.
+            </summary>
+            <param name="navigationProperty">Navigation member access over the root entity. Must not be null.</param>
+            <returns>The deepest node of the path.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigationProperty is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the lambda is not a navigation member chain.</exception>
+        </member>
+        <member name="M:Durable.Query.IncludeTree.ThenInclude(System.Type,System.Linq.Expressions.LambdaExpression)">
+            <summary>
+            Adds a navigation path below the most recently included navigation.
+            </summary>
+            <param name="previousType">Entity type of the previous include (the lambda's parameter type). Must not be null.</param>
+            <param name="navigationProperty">Navigation member access over the previous include's entity. Must not be null.</param>
+            <returns>The deepest node of the path.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when no include precedes it or the types do not match.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the lambda is not a navigation member chain.</exception>
+        </member>
+        <member name="M:Durable.Query.IncludeTree.All">
+            <summary>
+            Enumerates every node in the tree, depth first.
+            </summary>
+            <returns>The nodes.</returns>
+        </member>
         <member name="T:Durable.Query.InNode">
             <summary>
             Membership of a value in a client-side list (<c>list.Contains(x.Prop)</c>, <c>x.Prop.In(...)</c>). <see cref="P:Durable.Query.InNode.Values"/> may contain null and duplicates; C# semantics apply (null matches a null element).
@@ -3469,6 +3585,113 @@
         </member>
         <member name="M:Durable.Query.InNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.IRepositoryBackend">
+            <summary>
+            The small storage contract a non-SQL backend (document store, search engine, graph store, in-memory) implements to
+            get the whole <see cref="T:Durable.IRepository`1"/> surface from <c>RepositoryBase&lt;T&gt;</c>: query, count, aggregate,
+            insert, conditional update, set-based update, delete and transactions, all expressed with backend-neutral
+            <see cref="T:Durable.Query.QueryModel"/>s and <see cref="T:Durable.Query.QueryNode"/>s. One backend instance serves every entity type, which is how
+            Include loads related entities. Value conversion is the backend's job: <see cref="P:Durable.Query.ValueNode.Column"/> names the
+            column a value is compared with, and <see cref="P:Durable.ColumnMetadata.Converter"/> describes per-property converters.
+            Thread safety: implementations must be safe for concurrent use by multiple repositories.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.IRepositoryBackend.Capabilities">
+            <summary>
+            Gets the optional features the backend supports. Operations needing a missing capability fail before reaching the backend.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.QueryAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <summary>
+            Streams the entities matching a model (filter, ordering, paging, distinct), materialized as instances of
+            <see cref="P:Durable.Query.QueryModel.Metadata"/>'s entity type.
+            </summary>
+            <param name="model">Query. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The entities.</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <summary>
+            Counts the entities matching a model's filter (ordering and paging are applied when present).
+            </summary>
+            <param name="model">Query. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The count.</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
+            <summary>
+            Computes Sum, Average, Min or Max of a value over the entities matching a model's filter.
+            </summary>
+            <param name="model">Query. Must not be null.</param>
+            <param name="function">Aggregate: <see cref="F:Durable.Query.AggregateFunction.Sum"/>, <see cref="F:Durable.Query.AggregateFunction.Average"/>, <see cref="F:Durable.Query.AggregateFunction.Min"/> or <see cref="F:Durable.Query.AggregateFunction.Max"/>.</param>
+            <param name="operand">Aggregated value over the model's source. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The aggregate, or null when no entity matches (Sum of no rows is reported as null; callers map it to zero).</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Inserts an entity and writes generated values (auto-increment keys) back to it.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="entity">Entity. Must not be null.</param>
+            <param name="transaction">Transaction; null for none.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the key already exists.</exception>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Replaces the stored values of the entities matching a condition (the key, plus the expected version when
+            optimistic concurrency applies) with the values of <paramref name="entity"/>.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="entity">Entity holding the new values. Must not be null.</param>
+            <param name="condition">Condition over <paramref name="source"/>. Must not be null.</param>
+            <param name="source">Source the condition refers to. Must not be null.</param>
+            <param name="transaction">Transaction; null for none.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of entities updated (0 when the condition matched nothing).</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
+            <summary>
+            Applies column assignments to every entity matching a model's filter.
+            </summary>
+            <param name="model">Rows to update. Must not be null.</param>
+            <param name="assignments">Assignments, evaluated against each row's current values. Must not be null or empty.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of entities updated.</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <summary>
+            Deletes every entity matching a model's filter.
+            </summary>
+            <param name="model">Rows to delete. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of entities deleted.</returns>
+        </member>
+        <member name="M:Durable.Query.IRepositoryBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Begins a transaction.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>The transaction.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend lacks <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.</exception>
+        </member>
+        <member name="T:Durable.Query.KeyNormalizer">
+            <summary>
+            Normalizes key values so keys read from different columns or drivers compare equal
+            (for example, an <see cref="T:System.Int32"/> foreign key and a <see cref="T:System.Int64"/> primary key).
+            Thread safety: stateless.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.KeyNormalizer.Normalize(System.Object)">
+            <summary>
+            Normalizes a key value: integral numbers become <see cref="T:System.Int64"/>, strings are compared ordinally,
+            other values are returned unchanged.
+            </summary>
+            <param name="value">Key value; may be null.</param>
+            <returns>The normalized value, or null.</returns>
         </member>
         <member name="T:Durable.Query.LogicalNode">
             <summary>
@@ -3623,6 +3846,30 @@
         <member name="M:Durable.Query.NullCheckNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
         </member>
+        <member name="T:Durable.Query.QueryCapabilityValidator">
+            <summary>
+            Checks a query tree against a backend's <see cref="T:Durable.RepositoryCapabilities"/> and throws a
+            <see cref="T:System.NotSupportedException"/> naming the missing capability before the backend sees the query.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryCapabilityValidator.Require(Durable.RepositoryCapabilities,Durable.RepositoryCapabilities,System.String)">
+            <summary>
+            Throws when a capability is missing.
+            </summary>
+            <param name="available">Capabilities the backend supports.</param>
+            <param name="required">Capability the operation needs.</param>
+            <param name="operation">Operation name for the message. Must not be null.</param>
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="available"/> lacks <paramref name="required"/>.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryCapabilityValidator.Validate(Durable.Query.QueryNode,Durable.RepositoryCapabilities)">
+            <summary>
+            Throws when a node tree uses a feature the backend does not support.
+            </summary>
+            <param name="node">Tree to check; null is accepted.</param>
+            <param name="available">Capabilities the backend supports.</param>
+            <exception cref="T:System.NotSupportedException">Thrown for the first unsupported feature found.</exception>
+        </member>
         <member name="T:Durable.Query.QueryFunction">
             <summary>
             Scalar functions recognized by <see cref="T:Durable.Query.QueryNormalizer"/> in LINQ expressions; each backend translates them (SQL dialects via <c>ISqlDialect.TranslateFunction</c>).
@@ -3717,6 +3964,64 @@
         </member>
         <member name="F:Durable.Query.QueryFunction.AddSeconds">
             <summary>Add seconds. Arguments: date, amount.</summary>
+        </member>
+        <member name="T:Durable.Query.QueryModel">
+            <summary>
+            Backend-neutral description of a read, count, aggregate, update or delete over one entity type, handed to an
+            <see cref="T:Durable.Query.IRepositoryBackend"/>. <see cref="P:Durable.Query.QueryModel.Filter"/> already combines the caller's predicates with the
+            repository's query filters and the soft-delete condition, so backends only evaluate it. Includes, projections and
+            grouping are handled above the backend by <c>QueryBuilder&lt;T&gt;</c>.
+            Thread safety: not thread-safe while being built; treat as immutable once passed to a backend.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Source">
+            <summary>
+            Gets the source the filter and ordering keys refer to. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Filter">
+            <summary>
+            Gets or sets the row condition; null selects every row.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Orderings">
+            <summary>
+            Gets the ordering keys, most significant first. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Skip">
+            <summary>
+            Gets or sets the number of rows to skip; null for none. Minimum: 0.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Take">
+            <summary>
+            Gets or sets the maximum number of rows; null for unlimited. Minimum: 0.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Distinct">
+            <summary>
+            Gets or sets whether duplicate rows are removed.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryModel.Transaction">
+            <summary>
+            Gets or sets the transaction to run in; null for none.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryModel.#ctor(Durable.Query.QuerySource)">
+            <summary>
+            Instantiates a model selecting every row of an entity.
+            </summary>
+            <param name="source">Source (entity). Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when source is null.</exception>
         </member>
         <member name="T:Durable.Query.QueryNode">
             <summary>
@@ -4028,6 +4333,36 @@
             <param name="comparison">Comparison.</param>
             <returns>The mode.</returns>
         </member>
+        <member name="T:Durable.Query.QueryOrdering">
+            <summary>
+            One ordering key of a <see cref="T:Durable.Query.QueryModel"/>.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryOrdering.Key">
+            <summary>
+            Gets the key, normalized against the model's source. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryOrdering.KeySelector">
+            <summary>
+            Gets the original key selector, for backends that evaluate on the client. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryOrdering.Descending">
+            <summary>
+            Gets whether the order is descending.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryOrdering.#ctor(Durable.Query.QueryNode,System.Linq.Expressions.LambdaExpression,System.Boolean)">
+            <summary>
+            Instantiates an ordering.
+            </summary>
+            <param name="key">Normalized key. Must not be null.</param>
+            <param name="keySelector">Original key selector. Must not be null.</param>
+            <param name="descending">Whether the order is descending.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
         <member name="T:Durable.Query.QuerySource">
             <summary>
             Identifies one entity instance in a query: the root entity, or the related row of a navigation subquery.
@@ -4175,6 +4510,62 @@
         </member>
         <member name="M:Durable.Query.ValueNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
+        </member>
+        <member name="T:Durable.RepositoryCapabilities">
+            <summary>
+            Features a repository backend supports. Query builders and <c>Durable.Query.RepositoryBase&lt;T&gt;</c> check
+            them when a call is made, so an unsupported operation fails immediately with a <see cref="T:System.NotSupportedException"/>
+            naming the capability instead of failing part-way through execution. Basic CRUD, filtering with comparisons and
+            boolean logic, ordering, paging, counting, query filters and soft delete are always required and have no flag.
+            </summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.None">
+            <summary>No optional features.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Transactions">
+            <summary>Explicit transactions (<see cref="M:Durable.IRepository`1.BeginTransaction"/>) with commit and rollback.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Include">
+            <summary>Include/ThenInclude of reference and collection navigations.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.ManyToMany">
+            <summary>Many-to-many navigations (in Include and in navigation predicates).</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.NavigationPredicates">
+            <summary>Navigation members (<c>x.Author.Name</c>) and collection Any/All/Count in predicates.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Grouping">
+            <summary>GroupBy with Having, group aggregates and grouped projections.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Projection">
+            <summary>Select projections into another type.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Distinct">
+            <summary>Distinct results.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Aggregates">
+            <summary>Sum, Average, Min and Max over a selector.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Functions">
+            <summary>String, date and math functions in queries (ToUpper, Trim, Substring, Length, Year, Math.Round, ...).</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.StringMatchModes">
+            <summary>Exact <see cref="F:Durable.StringMatchMode.Ordinal"/> and <see cref="F:Durable.StringMatchMode.IgnoreCase"/> string matching.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.CompositeKeys">
+            <summary>Entities with composite primary keys.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.OptimisticConcurrency">
+            <summary>Version columns with optimistic concurrency checks and conflict resolvers.</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.BatchUpdate">
+            <summary>Set-based updates by predicate (<c>UpdateField</c>, <c>BatchUpdate</c>).</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.Upsert">
+            <summary>Upsert (insert or update by key).</summary>
+        </member>
+        <member name="F:Durable.RepositoryCapabilities.All">
+            <summary>Every capability.</summary>
         </member>
         <member name="T:Durable.RepositoryExtensions">
             <summary>
