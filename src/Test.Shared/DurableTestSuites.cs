@@ -52,6 +52,14 @@ namespace Test.Shared
                 suites.Add(SharedSuite<RepositoryOperationsTestSuite>("RepositoryOperations", "Repository Operations (Raw SQL / Batch / Upsert) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<TransactionTestSuite>("Transaction", "Transaction Tests", providerTag, BeforeEach));
 
+                // Transactions and infrastructure: ambient scopes, savepoints, external transactions, connection
+                // factories, diagnostics (interceptors / tracing / logging / capture), raw SQL and procedures.
+                suites.Add(SharedSuite<TransactionScopeTestSuite>("TransactionScope", "Transaction Scope Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<SavepointAndInteropTestSuite>("SavepointInterop", "Savepoint / External Transaction Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<ConnectionFactoryTestSuite>("ConnectionFactory", "Connection Factory Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<DiagnosticsTestSuite>("Diagnostics", "Diagnostics (Interceptor / Tracing / Logging / Capture) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<RawSqlAndProcedureTestSuite>("RawSqlProcedure", "Raw SQL / Procedure / Timeout / Cancellation Tests", providerTag, BeforeEach));
+
                 // Set operations (UNION / INTERSECT / EXCEPT) are only supported by the SQLite and PostgreSQL
                 // providers; the MySQL and SQL Server implementations do not currently generate correct SQL.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite || configuration.DatabaseType == TestDatabaseType.Postgres)

@@ -1,6 +1,7 @@
 namespace Test.Shared
 {
     using System;
+    using System.Data.Common;
     using System.Threading.Tasks;
     using Durable;
     using Durable.Sql;
@@ -19,9 +20,54 @@ namespace Test.Shared
         /// </summary>
         string ProviderName { get; }
 
+        /// <summary>
+        /// Gets the database type served by this provider.
+        /// </summary>
+        TestDatabaseType DatabaseType { get; }
+
+        /// <summary>
+        /// Gets the connection string used by this provider. Never null.
+        /// </summary>
+        string ConnectionString { get; }
+
+        /// <summary>
+        /// Gets the SQL dialect of this provider (for example <c>SqliteDialect.Default</c>). Never null.
+        /// </summary>
+        ISqlDialect Dialect { get; }
+
         #endregion
 
         #region Public-Methods
+
+        /// <summary>
+        /// Creates a new provider-specific connection factory for the test database. The caller owns and disposes it.
+        /// </summary>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null means no cap.</param>
+        /// <returns>A new connection factory.</returns>
+        IConnectionFactory CreateConnectionFactory(int? maxConcurrentConnections = null);
+
+        /// <summary>
+        /// Creates a repository over an existing connection factory. The repository does not own the factory.
+        /// </summary>
+        /// <typeparam name="T">The entity type.</typeparam>
+        /// <param name="connectionFactory">The shared connection factory.</param>
+        /// <param name="options">Optional repository options; null uses defaults.</param>
+        /// <returns>A configured repository instance.</returns>
+        ISqlRepository<T> CreateRepository<T>(IConnectionFactory connectionFactory, SqlRepositoryOptions? options = null) where T : class, new();
+
+        /// <summary>
+        /// Creates a repository from the provider's connection string with the supplied options. The repository owns its factory.
+        /// </summary>
+        /// <typeparam name="T">The entity type.</typeparam>
+        /// <param name="options">The repository options.</param>
+        /// <returns>A configured repository instance.</returns>
+        ISqlRepository<T> CreateRepositoryWithOptions<T>(SqlRepositoryOptions options) where T : class, new();
+
+        /// <summary>
+        /// Creates a new, unopened raw ADO.NET connection of the provider's native type for the test database.
+        /// </summary>
+        /// <returns>An unopened connection the caller owns.</returns>
+        DbConnection CreateRawConnection();
 
         /// <summary>
         /// Creates and configures a repository for the specified entity type.

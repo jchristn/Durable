@@ -1,6 +1,7 @@
 namespace Test.Shared
 {
     using System;
+    using System.Data.Common;
     using System.Threading.Tasks;
     using Durable;
     using Durable.Sql;
@@ -25,6 +26,21 @@ namespace Test.Shared
         /// Gets the name of the database provider.
         /// </summary>
         public string ProviderName => "SQL Server";
+
+        /// <summary>
+        /// Gets the database type served by this provider.
+        /// </summary>
+        public TestDatabaseType DatabaseType => TestDatabaseType.SqlServer;
+
+        /// <summary>
+        /// Gets the connection string used by this provider.
+        /// </summary>
+        public string ConnectionString => _ConnectionString;
+
+        /// <summary>
+        /// Gets the SQL dialect of this provider.
+        /// </summary>
+        public ISqlDialect Dialect => SqlServerDialect.Default;
 
         #endregion
 
@@ -51,6 +67,48 @@ namespace Test.Shared
         public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
             return new SqlServerRepository<T>(_ConnectionString);
+        }
+
+        /// <summary>
+        /// Creates a new connection factory for the test database. The caller owns and disposes it.
+        /// </summary>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null means no cap.</param>
+        /// <returns>A new connection factory.</returns>
+        public IConnectionFactory CreateConnectionFactory(int? maxConcurrentConnections = null)
+        {
+            return new SqlServerConnectionFactory(_ConnectionString, maxConcurrentConnections);
+        }
+
+        /// <summary>
+        /// Creates a repository over an existing connection factory. The repository does not own the factory.
+        /// </summary>
+        /// <typeparam name="T">The entity type.</typeparam>
+        /// <param name="connectionFactory">The shared connection factory.</param>
+        /// <param name="options">Optional repository options; null uses defaults.</param>
+        /// <returns>A configured repository instance.</returns>
+        public ISqlRepository<T> CreateRepository<T>(IConnectionFactory connectionFactory, SqlRepositoryOptions? options = null) where T : class, new()
+        {
+            return new SqlServerRepository<T>(connectionFactory, options);
+        }
+
+        /// <summary>
+        /// Creates a repository from the provider's connection string with the supplied options. The repository owns its factory.
+        /// </summary>
+        /// <typeparam name="T">The entity type.</typeparam>
+        /// <param name="options">The repository options.</param>
+        /// <returns>A configured repository instance.</returns>
+        public ISqlRepository<T> CreateRepositoryWithOptions<T>(SqlRepositoryOptions options) where T : class, new()
+        {
+            return new SqlServerRepository<T>(_ConnectionString, options);
+        }
+
+        /// <summary>
+        /// Creates a new, unopened <see cref="SqlConnection"/> for the test database.
+        /// </summary>
+        /// <returns>An unopened connection the caller owns.</returns>
+        public DbConnection CreateRawConnection()
+        {
+            return new SqlConnection(_ConnectionString);
         }
 
         /// <summary>
