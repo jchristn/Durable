@@ -75,7 +75,7 @@ namespace Test.Shared
                 return "Data Source=" + configuration.Filename;
             }
 
-            return "Data Source=InMemorySharedTest;Mode=Memory;Cache=Shared";
+            return "Data Source=file:/InMemorySharedTest?vfs=memdb";
         }
 
         private static string BuildMySqlConnectionString(TestRuntimeConfiguration configuration)

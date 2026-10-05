@@ -53,7 +53,7 @@ namespace Test.Shared
         /// <param name="connectionString">The SQLite connection string to use for tests. If null, uses a shared in-memory database.</param>
         public SqliteRepositoryProvider(string? connectionString = null)
         {
-            _ConnectionString = connectionString ?? "Data Source=InMemorySharedTest;Mode=Memory;Cache=Shared";
+            _ConnectionString = connectionString ?? "Data Source=file:/InMemorySharedTest?vfs=memdb";
         }
 
         #endregion

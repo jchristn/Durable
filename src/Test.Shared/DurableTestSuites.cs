@@ -132,6 +132,8 @@ namespace Test.Shared
                         "Sqlite.BooleanConversion", "SQLite Boolean Conversion Tests", () => new BooleanConversionTests(), sqliteTags));
                     suites.Add(TouchstoneBridge.BuildSuite<ConcurrencyIntegrationTest>(
                         "Sqlite.ConcurrencyIntegration", "SQLite Concurrency Integration Tests", () => new ConcurrencyIntegrationTest(), sqliteTags));
+                    suites.Add(TouchstoneBridge.BuildSuite<SqliteInMemoryConcurrencyTests>(
+                        "Sqlite.InMemoryConcurrency", "SQLite In-Memory Concurrency Tests", () => new SqliteInMemoryConcurrencyTests(), sqliteTags));
                     suites.Add(TouchstoneBridge.BuildSuite<RepositorySettingsTests>(
                         "Sqlite.RepositorySettings", "SQLite Repository Settings Tests", () => new RepositorySettingsTests(), sqliteTags));
                 }

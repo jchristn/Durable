@@ -7,9 +7,14 @@
         <member name="T:Durable.Sqlite.SqliteConnectionFactory">
             <summary>
             Opens SQLite connections, relying on Microsoft.Data.Sqlite's built-in pooling.
-            In-memory databases stay alive for the factory's lifetime: a private ":memory:" data source is converted to a
-            uniquely named shared-cache database so every connection from this factory sees the same data, and one connection
-            is kept open until the factory is disposed.
+            In-memory databases stay alive for the factory's lifetime: a private ":memory:" data source becomes a uniquely
+            named in-memory database so every connection from this factory sees the same data, and one connection is kept open
+            until the factory is disposed. It uses SQLite's "memdb" VFS (<c>file:/name?vfs=memdb</c>) rather than
+            shared-cache mode: memdb uses normal database locking, so concurrent connections wait for each other (see
+            <see cref="P:Durable.Sqlite.SqliteConnectionFactory.BusyTimeoutMilliseconds"/>) instead of hitting shared-cache table locks, which Microsoft.Data.Sqlite
+            surfaces as an <see cref="T:System.ArgumentOutOfRangeException"/>. Other connection strings are used as given, so raw
+            connections opened with the same string see the same database; to share a named in-memory database safely under
+            concurrency, use <c>Data Source=file:/name?vfs=memdb</c> rather than <c>Mode=Memory;Cache=Shared</c>.
             Thread safety: safe for concurrent use.
             </summary>
         </member>
@@ -23,6 +28,15 @@
             Gets whether the database is in memory.
             </summary>
         </member>
+        <member name="P:Durable.Sqlite.SqliteConnectionFactory.BusyTimeoutMilliseconds">
+            <summary>
+            Gets or sets how long SQLite waits for another connection's lock before failing with "database is locked",
+            applied with <c>PRAGMA busy_timeout</c> to every connection the factory opens. Without it, concurrent writers
+            fail when a commit cannot get the write lock immediately. 0 leaves SQLite's default (no waiting).
+            Default: 30000 (30 seconds). Minimum: 0.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
+        </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
             <summary>
             Instantiates the factory.
@@ -32,6 +46,12 @@
             <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
         </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.CreateConnection">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.OnConnectionOpened(System.Data.Common.DbConnection)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.OnConnectionOpenedAsync(System.Data.Common.DbConnection,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.Dispose(System.Boolean)">

@@ -21,7 +21,7 @@
 
         #region Private-Members
 
-        private const string TestConnectionString = "Data Source=InMemoryIntegrationTest;Mode=Memory;Cache=Shared";
+        private const string TestConnectionString = "Data Source=file:/InMemoryIntegrationTest?vfs=memdb";
         private readonly SqliteConnection _KeepAliveConnection;
         private readonly SqliteRepository<Person> _Repository;
 
