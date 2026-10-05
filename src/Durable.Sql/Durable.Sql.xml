@@ -259,80 +259,6 @@
             Thread safety: not thread-safe.
             </summary>
         </member>
-        <member name="T:Durable.Sql.ExpressionEvaluator">
-            <summary>
-            Evaluates client-side expression subtrees (constants, captured variables, static members, method calls on them)
-            so their values can be bound as parameters.
-            Thread safety: stateless; safe for concurrent use.
-            </summary>
-        </member>
-        <member name="M:Durable.Sql.ExpressionEvaluator.IsEvaluable(System.Linq.Expressions.Expression)">
-            <summary>
-            Determines whether an expression can be evaluated on the client: it references no lambda parameter other than
-            those declared by lambdas nested inside it.
-            </summary>
-            <param name="expression">Expression. Must not be null.</param>
-            <returns>True when the expression has no free parameters.</returns>
-        </member>
-        <member name="M:Durable.Sql.ExpressionEvaluator.Evaluate(System.Linq.Expressions.Expression)">
-            <summary>
-            Evaluates an expression without free parameters.
-            </summary>
-            <param name="expression">Expression. Must not be null.</param>
-            <returns>The value; may be null.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
-        </member>
-        <member name="T:Durable.Sql.FreeParameterFinder">
-            <summary>
-            Detects parameters that are not declared by a lambda inside the visited expression.
-            </summary>
-        </member>
-        <member name="T:Durable.Sql.GroupingSpecification">
-            <summary>
-            Describes a GROUP BY: the key selector split into key parts, and HAVING predicates over the grouping.
-            Translates grouping expressions (<c>g.Key</c>, <c>g.Key.Part</c>, <c>g.Count()</c>, <c>g.Sum(x =&gt; ...)</c>,
-            <c>g.Average</c>, <c>g.Min</c>, <c>g.Max</c>) into SQL for a translator.
-            Thread safety: not thread-safe.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.GroupingSpecification.KeySelector">
-            <summary>
-            Gets the key selector. Never null.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.GroupingSpecification.GroupingType">
-            <summary>
-            Gets the grouping type (<c>IGrouping&lt;TKey, T&gt;</c>). Never null.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.GroupingSpecification.Having">
-            <summary>
-            Gets the HAVING predicates. Never null.
-            </summary>
-        </member>
-        <member name="M:Durable.Sql.GroupingSpecification.#ctor(System.Linq.Expressions.LambdaExpression,System.Type)">
-            <summary>
-            Instantiates a grouping specification.
-            </summary>
-            <param name="keySelector">Key selector over the entity. Must not be null.</param>
-            <param name="groupingType">Grouping type. Must not be null.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
-        </member>
-        <member name="M:Durable.Sql.GroupingSpecification.KeySql(Durable.Sql.SqlExpressionTranslator,Durable.Sql.TableSource)">
-            <summary>
-            Translates the key parts for GROUP BY.
-            </summary>
-            <param name="translator">Translator. Must not be null.</param>
-            <param name="source">Root source. Must not be null.</param>
-            <returns>SQL for each key part.</returns>
-        </member>
-        <member name="M:Durable.Sql.GroupingSpecification.Install(Durable.Sql.SqlExpressionTranslator,Durable.Sql.TableSource)">
-            <summary>
-            Installs grouping translation on a translator.
-            </summary>
-            <param name="translator">Translator. Must not be null.</param>
-            <param name="source">Root source. Must not be null.</param>
-        </member>
         <member name="T:Durable.Sql.Helpers.DateTimeOffsetParser">
             <summary>
             A comprehensive DateTimeOffset parser that handles various database and standard datetime formats
@@ -909,7 +835,37 @@
             <param name="expression">String SQL expression.</param>
             <returns>The condition.</returns>
         </member>
-        <member name="M:Durable.Sql.ISqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+        <member name="P:Durable.Sql.ISqlDialect.StringCastType">
+            <summary>
+            Gets the type name used to convert a non-string value to text in concatenations (<c>CAST(x AS ...)</c>).
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.OrdinalCollation(System.String)">
+            <summary>
+            Applies ordinal (binary, case- and accent-sensitive) comparison to a string expression, for
+            <see cref="F:Durable.StringMatchMode.Ordinal"/> and <see cref="F:Durable.StringMatchMode.IgnoreCase"/>; typically
+            <c>expression COLLATE &lt;binary collation&gt;</c>. Applied to one operand of =, &lt;&gt;, &lt;, &gt;, IN and LIKE.
+            </summary>
+            <param name="expression">String SQL expression.</param>
+            <returns>The expression with ordinal comparison semantics.</returns>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsOrdinalLike">
+            <summary>
+            Gets whether LIKE honours <see cref="M:Durable.Sql.ISqlDialect.OrdinalCollation(System.String)"/>. When false (SQLite, whose LIKE folds ASCII case
+            regardless of collation), ordinal Contains/StartsWith/EndsWith use <see cref="M:Durable.Sql.ISqlDialect.OrdinalStringMatch(Durable.Query.StringMatchKind,System.String,System.String)"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.OrdinalStringMatch(Durable.Query.StringMatchKind,System.String,System.String)">
+            <summary>
+            Returns an exact, case-sensitive substring test without LIKE. Used only when <see cref="P:Durable.Sql.ISqlDialect.SupportsOrdinalLike"/> is false.
+            </summary>
+            <param name="kind">Kind of test.</param>
+            <param name="target">Searched string SQL expression.</param>
+            <param name="value">Literal text SQL expression (a parameter or expression; not a LIKE pattern).</param>
+            <returns>The condition.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect supports ordinal LIKE instead.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <summary>
             Translates a scalar function.
             </summary>
@@ -2482,6 +2438,12 @@
         <member name="P:Durable.Sql.SqlDialect.SupportsStoredProcedures">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.StringCastType">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsOrdinalLike">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sql.SqlDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.
@@ -2513,7 +2475,13 @@
         <member name="M:Durable.Sql.SqlDialect.IsEmptyString(System.String)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+        <member name="M:Durable.Sql.SqlDialect.OrdinalCollation(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.OrdinalStringMatch(Durable.Query.StringMatchKind,System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.AppendPaging(Durable.Sql.SqlStatementBuilder,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Boolean)">
@@ -2614,15 +2582,13 @@
         </member>
         <member name="T:Durable.Sql.SqlExpressionTranslator">
             <summary>
-            Translates LINQ expressions into SQL fragments for any <see cref="T:Durable.Sql.ISqlDialect"/>. Every client-side value is bound
-            as a parameter (converted with the target column's rules when compared to a column), so the generated SQL is
-            injection-safe, culture-invariant and plan-cache friendly.
-            Supported: comparisons (with C# null semantics for nullable columns), boolean logic, arithmetic, string concatenation,
-            coalesce, conditionals, enums (string or integer storage), Nullable HasValue/Value, string methods (Contains,
-            StartsWith, EndsWith, Equals with case-insensitive comparison, ToUpper/ToLower, Trim, Substring, Replace, IndexOf,
-            Length, IsNullOrEmpty, IsNullOrWhiteSpace), collection Contains (IN), DateTime parts and Add* methods, Math functions,
-            <see cref="T:Durable.ExpressionExtensions"/> helpers, reference navigation members (correlated subqueries) and collection
-            navigation Any/All/Count (EXISTS / COUNT subqueries).
+            Renders LINQ expressions as SQL for any <see cref="T:Durable.Sql.ISqlDialect"/>. Expressions are first converted to the
+            backend-neutral <see cref="T:Durable.Query.QueryNode"/> tree by a <see cref="T:Durable.Query.QueryNormalizer"/> (closure evaluation, enum and null
+            handling, navigation and grouping analysis), then rendered here. Every client-side value is bound as a parameter
+            (converted with the target column's rules when compared with a column), so the generated SQL is injection-safe,
+            culture-invariant and plan-cache friendly. C# null semantics are preserved: <c>a != b</c> is true when exactly one
+            side is null, and negating a comparison with null yields true. String comparisons honour the node's
+            <see cref="T:Durable.StringMatchMode"/> through <see cref="M:Durable.Sql.ISqlDialect.OrdinalCollation(System.String)"/>.
             Thread safety: not thread-safe; create one per statement.
             </summary>
         </member>
@@ -2641,17 +2607,26 @@
             Gets the converter used for parameter values. Never null.
             </summary>
         </member>
-        <member name="P:Durable.Sql.SqlExpressionTranslator.CustomTranslator">
+        <member name="P:Durable.Sql.SqlExpressionTranslator.Normalizer">
             <summary>
-            Gets or sets a hook tried before built-in translation; return null to fall through. Used for grouping translation.
+            Gets the normalizer that converts expressions to query nodes. Never null.
             </summary>
         </member>
-        <member name="M:Durable.Sql.SqlExpressionTranslator.#ctor(Durable.Sql.SqlStatementBuilder,Durable.Sql.IDataTypeConverter)">
+        <member name="P:Durable.Sql.SqlExpressionTranslator.InlineIntegerListThreshold">
+            <summary>
+            Gets or sets the number of distinct integer values above which an <c>IN</c> list is written as literals instead of
+            parameters (to stay below driver parameter limits). Integers are culture-invariant and injection-safe.
+            Default: 500. Minimum: 1.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is less than 1.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.#ctor(Durable.Sql.SqlStatementBuilder,Durable.Sql.IDataTypeConverter,Durable.StringMatchMode)">
             <summary>
             Instantiates a translator.
             </summary>
             <param name="builder">Statement builder. Must not be null.</param>
             <param name="converter">Converter; null uses the dialect's.</param>
+            <param name="stringMatching">Mode for string comparisons without an explicit <see cref="T:System.StringComparison"/>.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when builder is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.Bind(System.Linq.Expressions.ParameterExpression,Durable.Sql.TableSource)">
@@ -2661,6 +2636,33 @@
             <param name="parameter">Lambda parameter. Must not be null.</param>
             <param name="source">Table source. Must not be null.</param>
             <returns>This translator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.QueryFor(Durable.Sql.TableSource)">
+            <summary>
+            Returns the query source representing a table, creating it on first use.
+            </summary>
+            <param name="table">Table source. Must not be null.</param>
+            <returns>The query source.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when table is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.UseGrouping(Durable.Query.GroupingSpecification,Durable.Sql.TableSource)">
+            <summary>
+            Activates grouping translation (<c>g.Key</c>, <c>g.Count()</c>, <c>g.Sum(...)</c>, ...) over rows of a table.
+            </summary>
+            <param name="grouping">Grouping. Must not be null.</param>
+            <param name="source">Table the grouped rows come from. Must not be null.</param>
+            <returns>This translator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.GroupKeySql(Durable.Query.GroupingSpecification,Durable.Sql.TableSource)">
+            <summary>
+            Renders the key parts of a grouping (the GROUP BY list).
+            </summary>
+            <param name="grouping">Grouping. Must not be null.</param>
+            <param name="source">Table the grouped rows come from. Must not be null.</param>
+            <returns>One SQL expression per key part.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.TranslatePredicate(System.Linq.Expressions.LambdaExpression,Durable.Sql.TableSource)">
             <summary>
@@ -2669,6 +2671,8 @@
             <param name="lambda">Predicate lambda. Must not be null.</param>
             <param name="source">Source for the lambda parameter. Must not be null.</param>
             <returns>SQL condition.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown for untranslatable constructs.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.Predicate(System.Linq.Expressions.Expression)">
             <summary>
@@ -2676,6 +2680,7 @@
             </summary>
             <param name="expression">Expression. Must not be null.</param>
             <returns>SQL condition.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
             <exception cref="T:System.NotSupportedException">Thrown for untranslatable constructs.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.Value(System.Linq.Expressions.Expression)">
@@ -2685,7 +2690,25 @@
             </summary>
             <param name="expression">Expression. Must not be null.</param>
             <returns>SQL value expression.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
             <exception cref="T:System.NotSupportedException">Thrown for untranslatable constructs.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.Predicate(Durable.Query.QueryNode)">
+            <summary>
+            Renders a node as a boolean condition. Values are compared with the dialect's true literal; constant booleans
+            become <c>(1 = 1)</c> or <c>(1 = 0)</c>.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>SQL condition.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when node is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.Value(Durable.Query.QueryNode)">
+            <summary>
+            Renders a node as a value. Conditions in value position become CASE expressions.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>SQL value expression.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when node is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.ResolveColumn(System.Linq.Expressions.Expression)">
             <summary>
@@ -2694,6 +2717,7 @@
             </summary>
             <param name="expression">Expression. Must not be null.</param>
             <returns>The column and its source, or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.ColumnSql(Durable.Sql.TableSource,Durable.ColumnMetadata)">
             <summary>
@@ -2702,6 +2726,7 @@
             <param name="source">Source. Must not be null.</param>
             <param name="column">Column. Must not be null.</param>
             <returns>Qualified, quoted column reference.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlExpressionTranslator.Parameter(System.Object,Durable.ColumnMetadata)">
             <summary>
@@ -2718,101 +2743,61 @@
             </summary>
             <param name="source">Source. Must not be null.</param>
             <returns>SQL condition or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when source is null.</exception>
         </member>
-        <member name="T:Durable.Sql.SqlFunction">
-            <summary>
-            Scalar functions translated from LINQ to dialect-specific SQL by <see cref="M:Durable.Sql.ISqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})"/>.
-            </summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitColumn(Durable.Query.ColumnNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Length">
-            <summary>String length in characters. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitValue(Durable.Query.ValueNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Upper">
-            <summary>Upper-case. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitLogical(Durable.Query.LogicalNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Lower">
-            <summary>Lower-case. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitNot(Durable.Query.NotNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Trim">
-            <summary>Trim both ends. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.TrimStart">
-            <summary>Trim start. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitComparison(Durable.Query.ComparisonNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.TrimEnd">
-            <summary>Trim end. Arguments: string.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitIn(Durable.Query.InNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Substring">
-            <summary>Substring with a zero-based start. Arguments: string, start, [length].</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Replace">
-            <summary>Replace. Arguments: string, old, new.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitStringTest(Durable.Query.StringTestNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.IndexOf">
-            <summary>Zero-based index of a substring, or -1. Arguments: string, value.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Abs">
-            <summary>Absolute value. Arguments: number.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitNegate(Durable.Query.NegateNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Round">
-            <summary>Round. Arguments: number, [digits].</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitConcat(Durable.Query.ConcatNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Ceiling">
-            <summary>Ceiling. Arguments: number.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Floor">
-            <summary>Floor. Arguments: number.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitConditional(Durable.Query.ConditionalNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Power">
-            <summary>Power. Arguments: base, exponent.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitFunction(Durable.Query.FunctionNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Sqrt">
-            <summary>Square root. Arguments: number.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Year">
-            <summary>Year part. Arguments: date.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitCollection(Durable.Query.CollectionNode)">
+            <inheritdoc />
         </member>
-        <member name="F:Durable.Sql.SqlFunction.Month">
-            <summary>Month part. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.Day">
-            <summary>Day-of-month part. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.Hour">
-            <summary>Hour part. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.Minute">
-            <summary>Minute part. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.Second">
-            <summary>Second part. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.DayOfYear">
-            <summary>Day of year (1-366). Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.DayOfWeek">
-            <summary>Day of week (0 = Sunday, matching <see cref="T:System.DayOfWeek"/>). Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.Date">
-            <summary>Date part with time removed. Arguments: date.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddYears">
-            <summary>Add years. Arguments: date, amount.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddMonths">
-            <summary>Add months. Arguments: date, amount.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddDays">
-            <summary>Add days. Arguments: date, amount.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddHours">
-            <summary>Add hours. Arguments: date, amount.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddMinutes">
-            <summary>Add minutes. Arguments: date, amount.</summary>
-        </member>
-        <member name="F:Durable.Sql.SqlFunction.AddSeconds">
-            <summary>Add seconds. Arguments: date, amount.</summary>
+        <member name="M:Durable.Sql.SqlExpressionTranslator.VisitAggregate(Durable.Query.AggregateNode)">
+            <inheritdoc />
         </member>
         <member name="T:Durable.Sql.SqlGroupedQueryBuilder`2">
             <summary>
@@ -3400,6 +3385,14 @@
             <param name="executor">Executor. Must not be null.</param>
             <param name="converter">Converter. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlQueryContext.CreateTranslator(Durable.Sql.SqlStatementBuilder)">
+            <summary>
+            Creates an expression translator for a statement, using this context's converter and string matching option.
+            </summary>
+            <param name="builder">Statement builder. Must not be null.</param>
+            <returns>The translator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when builder is null.</exception>
         </member>
         <member name="T:Durable.Sql.SqlRepository`1">
             <summary>

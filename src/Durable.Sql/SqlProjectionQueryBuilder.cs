@@ -11,6 +11,7 @@ namespace Durable.Sql
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// A query producing a projected type computed in SQL, from <c>Select</c> on an entity query or on a grouped query.
@@ -427,11 +428,11 @@ namespace Durable.Sql
         {
             SelectModel model = _Source.BuildModel(builder, includeOrderingAndPaging && _Grouping == null);
             TableSource source = new TableSource(SqlQueryBuilder<TSource>.RootAlias, _Source.Metadata);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
             if (_Grouping != null)
             {
-                model.GroupBy.AddRange(_Grouping.KeySql(new SqlExpressionTranslator(builder, Context.Converter), source));
-                _Grouping.Install(translator, source);
+                model.GroupBy.AddRange(Context.CreateTranslator(builder).GroupKeySql(_Grouping, source));
+                translator.UseGrouping(_Grouping, source);
                 foreach (LambdaExpression having in _Grouping.Having) model.Having.Add(translator.Predicate(having.Body));
             }
             else

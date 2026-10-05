@@ -70,11 +70,25 @@
         <member name="P:Durable.SqlServer.SqlServerDialect.InsertKeyStrategy">
             <inheritdoc />
         </member>
-        <member name="M:Durable.SqlServer.SqlServerDialect.#ctor(Durable.Sql.IDataTypeConverter)">
+        <member name="P:Durable.SqlServer.SqlServerDialect.OrdinalCollationName">
+            <summary>
+            Gets the binary collation applied by <see cref="M:Durable.SqlServer.SqlServerDialect.OrdinalCollation(System.String)"/> for ordinal and ignore-case string matching.
+            Default: Latin1_General_100_BIN2. BIN2 collations compare Unicode code points, so the Latin1 name does not restrict the languages compared.
+            </summary>
+        </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.StringCastType">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
             <summary>
             Instantiates the dialect.
             </summary>
             <param name="converter">Converter; null uses <see cref="T:Durable.SqlServer.SqlServerDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Binary collation for ordinal string matching. Default: Latin1_General_100_BIN2 (code-point order).</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.OrdinalCollation(System.String)">
+            <inheritdoc />
         </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.ConfigureParameter(System.Data.Common.DbParameter,Durable.Sql.SqlParameterValue)">
             <inheritdoc />
@@ -88,7 +102,7 @@
         <member name="M:Durable.SqlServer.SqlServerDialect.IsEmptyString(System.String)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.SqlServer.SqlServerDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+        <member name="M:Durable.SqlServer.SqlServerDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.AppendPaging(Durable.Sql.SqlStatementBuilder,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Boolean)">

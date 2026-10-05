@@ -88,11 +88,26 @@
         <member name="P:Durable.MySql.MySqlDialect.InsertDefaultValuesClause">
             <inheritdoc />
         </member>
-        <member name="M:Durable.MySql.MySqlDialect.#ctor(Durable.Sql.IDataTypeConverter)">
+        <member name="P:Durable.MySql.MySqlDialect.OrdinalCollationName">
+            <summary>
+            Gets the binary collation applied by <see cref="M:Durable.MySql.MySqlDialect.OrdinalCollation(System.String)"/> for ordinal and ignore-case string matching.
+            Default: utf8mb4_bin. Columns using another character set need a matching binary collation (for example latin1_bin).
+            </summary>
+        </member>
+        <member name="P:Durable.MySql.MySqlDialect.StringCastType">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
             <summary>
             Instantiates the dialect.
             </summary>
             <param name="converter">Converter; null uses <see cref="T:Durable.MySql.MySqlDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Binary collation for ordinal string matching; must be valid for the character set of
+            the compared columns. Default: utf8mb4_bin.</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.OrdinalCollation(System.String)">
+            <inheritdoc />
         </member>
         <member name="M:Durable.MySql.MySqlDialect.BooleanLiteral(System.Boolean)">
             <inheritdoc />
@@ -103,7 +118,7 @@
         <member name="M:Durable.MySql.MySqlDialect.Divide(System.String,System.String,System.Boolean)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.MySql.MySqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+        <member name="M:Durable.MySql.MySqlDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
         <member name="M:Durable.MySql.MySqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">

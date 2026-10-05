@@ -12,6 +12,7 @@ namespace Durable.Sql
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Query;
     using Durable.ConcurrencyConflictResolvers;
 
     /// <summary>
@@ -1345,7 +1346,7 @@ namespace Durable.Sql
         private SqlStatement BuildUpdate(T entity, object?[] key, object? originalVersion, out object? newVersion)
         {
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter);
+            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter, Options.StringMatching);
             TableSource source = TableQualifiedSource();
             ColumnMetadata? version = Metadata.VersionColumn;
             newVersion = version != null ? Metadata.VersionInfo!.IncrementVersion(originalVersion!) : null;
@@ -1452,7 +1453,7 @@ namespace Durable.Sql
             ArgumentNullException.ThrowIfNull(predicate);
             ArgumentNullException.ThrowIfNull(field);
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter);
+            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter, Options.StringMatching);
             TableSource source = TableQualifiedSource();
             translator.Bind(field.Parameters[0], source);
             ColumnReference reference = translator.ResolveColumn(field.Body)
@@ -1474,7 +1475,7 @@ namespace Durable.Sql
                 throw new NotSupportedException("BatchUpdate requires a member-init expression, for example x => new T { Name = \"value\" }.");
 
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter);
+            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter, Options.StringMatching);
             TableSource source = TableQualifiedSource();
             translator.Bind(updateExpression.Parameters[0], source);
 
@@ -1531,7 +1532,7 @@ namespace Durable.Sql
         private SqlStatement BuildDeleteByKey(object?[] key)
         {
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter);
+            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Converter, Options.StringMatching);
             List<string> conditions = new List<string> { SqlQueryBuilder<T>.KeyCondition(translator, TableQualifiedSource(), Metadata, key) };
             SqlWriteBuilder.AppendDelete(builder, Metadata, Converter, conditions);
             return builder.Build();

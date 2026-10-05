@@ -76,6 +76,10 @@
         <member name="P:Durable.Sqlite.SqliteDialect.SupportsStoredProcedures">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sqlite.SqliteDialect.SupportsOrdinalLike">
+            <inheritdoc />
+            <remarks>SQLite's LIKE folds ASCII case regardless of collation, so ordinal substring tests use INSTR/SUBSTR.</remarks>
+        </member>
         <member name="M:Durable.Sqlite.SqliteDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.
@@ -85,7 +89,13 @@
         <member name="M:Durable.Sqlite.SqliteDialect.BooleanLiteral(System.Boolean)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sqlite.SqliteDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+        <member name="M:Durable.Sqlite.SqliteDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.OrdinalCollation(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.OrdinalStringMatch(Durable.Query.StringMatchKind,System.String,System.String)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sqlite.SqliteDialect.GetColumnType(Durable.ColumnMetadata)">

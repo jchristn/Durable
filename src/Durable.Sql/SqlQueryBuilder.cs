@@ -600,7 +600,7 @@ namespace Durable.Sql
 
         internal SelectModel BuildModel(SqlStatementBuilder builder, bool includeOrderingAndPaging)
         {
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
             TableSource source = new TableSource(RootAlias, Metadata);
             SelectModel model = new SelectModel();
             ApplyCore(model, translator, source);
@@ -608,7 +608,7 @@ namespace Durable.Sql
             foreach (KeyValuePair<SetOperationType, SqlQueryBuilder<T>> operation in _SetOperations)
             {
                 SelectModel other = new SelectModel();
-                operation.Value.ApplyCore(other, new SqlExpressionTranslator(builder, Context.Converter), new TableSource(RootAlias, Metadata));
+                operation.Value.ApplyCore(other, Context.CreateTranslator(builder), new TableSource(RootAlias, Metadata));
                 model.SetOperations.Add(new KeyValuePair<string, string>(SetOperationKeyword(operation.Key), other.RenderCore()));
             }
 
@@ -616,7 +616,7 @@ namespace Durable.Sql
             {
                 foreach (OrderClause order in _Orderings)
                 {
-                    SqlExpressionTranslator orderTranslator = new SqlExpressionTranslator(builder, Context.Converter);
+                    SqlExpressionTranslator orderTranslator = Context.CreateTranslator(builder);
                     orderTranslator.Bind(order.KeySelector.Parameters[0], source);
                     model.OrderBy.Add(orderTranslator.Value(order.KeySelector.Body) + (order.Descending ? " DESC" : " ASC"));
                 }
@@ -667,7 +667,7 @@ namespace Durable.Sql
             if (HasPagingOrShaping || _FromRaw != null || _Joins.Count > 0)
                 throw new NotSupportedException("Delete cannot be combined with Skip, Take, Distinct, set operations, or raw FROM/JOIN/SELECT fragments.");
             SqlStatementBuilder builder = new SqlStatementBuilder(Context.Dialect);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
             TableSource source = new TableSource(Context.Dialect.QuoteIdentifier(Metadata.TableName), Metadata);
             List<string> conditions = RenderConditions(translator, source);
             SqlWriteBuilder.AppendDelete(builder, Metadata, Context.Converter, conditions);
@@ -692,7 +692,7 @@ namespace Durable.Sql
             SelectModel model = BuildModel(builder, HasPagingOrShaping);
             if (innerSelect != null && _SelectRaw == null && _SetOperations.Count == 0)
             {
-                SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+                SqlExpressionTranslator translator = Context.CreateTranslator(builder);
                 model.SelectList = innerSelect(translator, new TableSource(RootAlias, Metadata));
             }
 
@@ -765,7 +765,7 @@ namespace Durable.Sql
                 string keySql = translator.Value(keySelector.Body);
                 string innerAlias = translator.Builder.NextAlias("q");
                 SelectModel model = new SelectModel();
-                SqlExpressionTranslator innerTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter);
+                SqlExpressionTranslator innerTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter, translator.Normalizer.DefaultStringMatching);
                 TableSource innerSource = new TableSource(innerAlias, inner.Metadata);
                 inner.ApplyCore(model, innerTranslator, innerSource);
                 model.From = translator.Dialect.QuoteIdentifier(inner.Metadata.TableName) + " " + innerAlias;
@@ -800,14 +800,14 @@ namespace Durable.Sql
             {
                 string innerAlias = translator.Builder.NextAlias("q");
                 SelectModel model = new SelectModel();
-                SqlExpressionTranslator innerTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter);
+                SqlExpressionTranslator innerTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter, translator.Normalizer.DefaultStringMatching);
                 TableSource innerSource = new TableSource(innerAlias, inner.Metadata);
                 inner.ApplyCore(model, innerTranslator, innerSource);
                 model.From = translator.Dialect.QuoteIdentifier(inner.Metadata.TableName) + " " + innerAlias;
                 model.SelectList = "1";
                 if (correlation != null)
                 {
-                    SqlExpressionTranslator correlationTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter);
+                    SqlExpressionTranslator correlationTranslator = new SqlExpressionTranslator(translator.Builder, translator.Converter, translator.Normalizer.DefaultStringMatching);
                     correlationTranslator.Bind(correlation.Parameters[0], source);
                     correlationTranslator.Bind(correlation.Parameters[1], innerSource);
                     model.Conditions.Add(correlationTranslator.Predicate(correlation.Body));
@@ -854,7 +854,7 @@ namespace Durable.Sql
 
             SqlStatementBuilder builder = new SqlStatementBuilder(Context.Dialect);
             SelectModel model = BuildModel(builder, false);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
             translator.Bind(selector.Parameters[0], new TableSource(RootAlias, Metadata));
             model.SelectList = Wrap(translator.Value(selector.Body));
             builder.Append(model.Render(Context.Dialect));

@@ -8,6 +8,7 @@ namespace Durable.Sql
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// Grouped query over a SQL entity query. <see cref="Select{TResult}"/>, <see cref="Count"/> and the aggregates run
@@ -156,9 +157,9 @@ namespace Durable.Sql
             SqlStatementBuilder builder = new SqlStatementBuilder(Context.Dialect);
             SelectModel model = _Source.BuildModel(builder, false);
             TableSource source = new TableSource(SqlQueryBuilder<T>.RootAlias, _Source.Metadata);
-            model.GroupBy.AddRange(_Grouping.KeySql(new SqlExpressionTranslator(builder, Context.Converter), source));
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
-            _Grouping.Install(translator, source);
+            model.GroupBy.AddRange(Context.CreateTranslator(builder).GroupKeySql(_Grouping, source));
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
+            translator.UseGrouping(_Grouping, source);
             foreach (LambdaExpression having in _Grouping.Having) model.Having.Add(translator.Predicate(having.Body));
             model.SelectList = innerSelect;
             builder.Append("SELECT ").Append(outerSelect).Append(" FROM (").Append(model.Render(Context.Dialect)).Append(") dq");
@@ -173,12 +174,12 @@ namespace Durable.Sql
             SqlStatementBuilder builder = new SqlStatementBuilder(Context.Dialect);
             SelectModel model = _Source.BuildModel(builder, false);
             TableSource source = new TableSource(SqlQueryBuilder<T>.RootAlias, _Source.Metadata);
-            model.GroupBy.AddRange(_Grouping.KeySql(new SqlExpressionTranslator(builder, Context.Converter), source));
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
-            _Grouping.Install(translator, source);
+            model.GroupBy.AddRange(Context.CreateTranslator(builder).GroupKeySql(_Grouping, source));
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
+            translator.UseGrouping(_Grouping, source);
             foreach (LambdaExpression having in _Grouping.Having) model.Having.Add(translator.Predicate(having.Body));
 
-            SqlExpressionTranslator plain = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator plain = Context.CreateTranslator(builder);
             plain.Bind(selector.Parameters[0], source);
             string value = plain.Value(selector.Body);
             string outer;
@@ -210,7 +211,7 @@ namespace Durable.Sql
         {
             SqlStatementBuilder builder = new SqlStatementBuilder(Context.Dialect);
             SelectModel model = _Source.BuildModel(builder, false);
-            SqlExpressionTranslator translator = new SqlExpressionTranslator(builder, Context.Converter);
+            SqlExpressionTranslator translator = Context.CreateTranslator(builder);
             translator.Bind(selector.Parameters[0], new TableSource(SqlQueryBuilder<T>.RootAlias, _Source.Metadata));
             string value = translator.Value(selector.Body);
             model.SelectList = function == "AVG" ? "AVG(CAST(" + value + " AS DECIMAL(38, 10)))" : function + "(" + value + ")";

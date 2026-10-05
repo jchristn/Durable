@@ -3,6 +3,8 @@ namespace Durable.Sql
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// Everything that differs between SQL databases. The shared engine (<see cref="SqlRepository{T}"/>,
@@ -104,13 +106,43 @@ namespace Durable.Sql
         string IsEmptyString(string expression);
 
         /// <summary>
+        /// Gets the type name used to convert a non-string value to text in concatenations (<c>CAST(x AS ...)</c>).
+        /// </summary>
+        string StringCastType { get; }
+
+        /// <summary>
+        /// Applies ordinal (binary, case- and accent-sensitive) comparison to a string expression, for
+        /// <see cref="StringMatchMode.Ordinal"/> and <see cref="StringMatchMode.IgnoreCase"/>; typically
+        /// <c>expression COLLATE &lt;binary collation&gt;</c>. Applied to one operand of =, &lt;&gt;, &lt;, &gt;, IN and LIKE.
+        /// </summary>
+        /// <param name="expression">String SQL expression.</param>
+        /// <returns>The expression with ordinal comparison semantics.</returns>
+        string OrdinalCollation(string expression);
+
+        /// <summary>
+        /// Gets whether LIKE honours <see cref="OrdinalCollation"/>. When false (SQLite, whose LIKE folds ASCII case
+        /// regardless of collation), ordinal Contains/StartsWith/EndsWith use <see cref="OrdinalStringMatch"/>.
+        /// </summary>
+        bool SupportsOrdinalLike { get; }
+
+        /// <summary>
+        /// Returns an exact, case-sensitive substring test without LIKE. Used only when <see cref="SupportsOrdinalLike"/> is false.
+        /// </summary>
+        /// <param name="kind">Kind of test.</param>
+        /// <param name="target">Searched string SQL expression.</param>
+        /// <param name="value">Literal text SQL expression (a parameter or expression; not a LIKE pattern).</param>
+        /// <returns>The condition.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect supports ordinal LIKE instead.</exception>
+        string OrdinalStringMatch(StringMatchKind kind, string target, string value);
+
+        /// <summary>
         /// Translates a scalar function.
         /// </summary>
         /// <param name="function">Function.</param>
         /// <param name="arguments">SQL fragments for the arguments.</param>
         /// <returns>The SQL expression.</returns>
         /// <exception cref="NotSupportedException">Thrown when the dialect cannot express the function.</exception>
-        string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments);
+        string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments);
 
         /// <summary>
         /// Gets the keyword introducing a recursive CTE ("WITH RECURSIVE" or "WITH").

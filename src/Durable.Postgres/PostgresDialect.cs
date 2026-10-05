@@ -6,6 +6,7 @@ namespace Durable.Postgres
     using Npgsql;
     using NpgsqlTypes;
     using Durable;
+    using Durable.Query;
     using Durable.Sql;
 
     /// <summary>
@@ -31,6 +32,12 @@ namespace Durable.Postgres
         /// <inheritdoc />
         public override int MaxParameters => 32000;
 
+        /// <summary>
+        /// Gets the binary collation applied by <see cref="OrdinalCollation"/> for ordinal and ignore-case string matching.
+        /// Default: C. PostgreSQL equality and LIKE are already case- and accent-sensitive under deterministic collations; the collation mainly fixes ordering comparisons.
+        /// </summary>
+        public string OrdinalCollationName { get; }
+
         #endregion
 
         #region Constructors-and-Factories
@@ -39,13 +46,22 @@ namespace Durable.Postgres
         /// Instantiates the dialect.
         /// </summary>
         /// <param name="converter">Converter; null uses <see cref="PostgresDataTypeConverter"/>.</param>
-        public PostgresDialect(IDataTypeConverter? converter = null) : base(converter ?? new PostgresDataTypeConverter())
+        /// <param name="ordinalCollation">Binary collation for ordinal string matching. Default: C (byte order of UTF-8, which is code-point order).</param>
+        /// <exception cref="ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        public PostgresDialect(IDataTypeConverter? converter = null, string ordinalCollation = "C") : base(converter ?? new PostgresDataTypeConverter())
         {
+            OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <inheritdoc />
+        public override string OrdinalCollation(string expression)
+        {
+            return expression + " COLLATE \"" + OrdinalCollationName + "\"";
+        }
 
         /// <inheritdoc />
         public override void ConfigureParameter(DbParameter parameter, SqlParameterValue value)
@@ -57,30 +73,30 @@ namespace Durable.Postgres
         }
 
         /// <inheritdoc />
-        public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
+        public override string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.IndexOf: return "(STRPOS(" + a0 + ", " + a1 + ") - 1)";
-                case SqlFunction.Round:
+                case QueryFunction.IndexOf: return "(STRPOS(" + a0 + ", " + a1 + ") - 1)";
+                case QueryFunction.Round:
                     return arguments.Count > 1 ? "ROUND(CAST(" + a0 + " AS NUMERIC), " + a1 + ")" : "ROUND(CAST(" + a0 + " AS NUMERIC))";
-                case SqlFunction.Year: return "CAST(EXTRACT(YEAR FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Month: return "CAST(EXTRACT(MONTH FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Day: return "CAST(EXTRACT(DAY FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Hour: return "CAST(EXTRACT(HOUR FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Minute: return "CAST(EXTRACT(MINUTE FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Second: return "CAST(FLOOR(EXTRACT(SECOND FROM " + a0 + ")) AS INTEGER)";
-                case SqlFunction.DayOfYear: return "CAST(EXTRACT(DOY FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.DayOfWeek: return "CAST(EXTRACT(DOW FROM " + a0 + ") AS INTEGER)";
-                case SqlFunction.Date: return "DATE_TRUNC('day', " + a0 + ")";
-                case SqlFunction.AddYears: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 year')";
-                case SqlFunction.AddMonths: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 month')";
-                case SqlFunction.AddDays: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 day')";
-                case SqlFunction.AddHours: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 hour')";
-                case SqlFunction.AddMinutes: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 minute')";
-                case SqlFunction.AddSeconds: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 second')";
+                case QueryFunction.Year: return "CAST(EXTRACT(YEAR FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Month: return "CAST(EXTRACT(MONTH FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Day: return "CAST(EXTRACT(DAY FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Hour: return "CAST(EXTRACT(HOUR FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Minute: return "CAST(EXTRACT(MINUTE FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Second: return "CAST(FLOOR(EXTRACT(SECOND FROM " + a0 + ")) AS INTEGER)";
+                case QueryFunction.DayOfYear: return "CAST(EXTRACT(DOY FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.DayOfWeek: return "CAST(EXTRACT(DOW FROM " + a0 + ") AS INTEGER)";
+                case QueryFunction.Date: return "DATE_TRUNC('day', " + a0 + ")";
+                case QueryFunction.AddYears: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 year')";
+                case QueryFunction.AddMonths: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 month')";
+                case QueryFunction.AddDays: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 day')";
+                case QueryFunction.AddHours: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 hour')";
+                case QueryFunction.AddMinutes: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 minute')";
+                case QueryFunction.AddSeconds: return "(" + a0 + " + (" + a1 + ") * INTERVAL '1 second')";
                 default:
                     return base.TranslateFunction(function, arguments);
             }

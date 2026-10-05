@@ -2981,6 +2981,1201 @@
             <param name="maxLength">Maximum length for string columns; zero for no limit.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when name is null or whitespace.</exception>
         </member>
+        <member name="T:Durable.Query.AggregateFunction">
+            <summary>
+            Aggregates over the rows of a group in an <see cref="T:Durable.Query.AggregateNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Count">
+            <summary>Number of rows (matching the predicate, when present).</summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Sum">
+            <summary>Sum of the operand; zero for an empty group.</summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Average">
+            <summary>Average of the operand.</summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Min">
+            <summary>Minimum of the operand.</summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Max">
+            <summary>Maximum of the operand.</summary>
+        </member>
+        <member name="F:Durable.Query.AggregateFunction.Any">
+            <summary>At least one row (matching the predicate, when present).</summary>
+        </member>
+        <member name="T:Durable.Query.AggregateNode">
+            <summary>
+            An aggregate over the rows of the current group (<c>g.Count()</c>, <c>g.Sum(x =&gt; x.Price)</c>, <c>g.Any(x =&gt; ...)</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.AggregateNode.Function">
+            <summary>
+            Gets the aggregate.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.AggregateNode.Operand">
+            <summary>
+            Gets the aggregated value for Sum/Average/Min/Max, or the row condition for Count/Any; null for an unconditional Count/Any.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.AggregateNode.#ctor(Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="function">The aggregate.</param>
+            <param name="operand">The aggregated value for Sum/Average/Min/Max, or the row condition for Count/Any; null for an unconditional Count/Any.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.AggregateNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ArithmeticNode">
+            <summary>
+            A binary arithmetic expression.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ArithmeticNode.Operator">
+            <summary>
+            Gets the operator.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ArithmeticNode.Left">
+            <summary>
+            Gets the left operand. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ArithmeticNode.Right">
+            <summary>
+            Gets the right operand. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ArithmeticNode.IntegerDivision">
+            <summary>
+            Gets whether a division has integral operands in C# and therefore truncates.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ArithmeticNode.#ctor(Durable.Query.ArithmeticOperator,Durable.Query.QueryNode,Durable.Query.QueryNode,System.Boolean,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="op">The operator.</param>
+            <param name="left">The left operand. Must not be null.</param>
+            <param name="right">The right operand. Must not be null.</param>
+            <param name="integerDivision">Whether a division has integral operands in C# and therefore truncates.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ArithmeticNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ArithmeticOperator">
+            <summary>
+            Arithmetic operators in an <see cref="T:Durable.Query.ArithmeticNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.ArithmeticOperator.Add">
+            <summary>Addition.</summary>
+        </member>
+        <member name="F:Durable.Query.ArithmeticOperator.Subtract">
+            <summary>Subtraction.</summary>
+        </member>
+        <member name="F:Durable.Query.ArithmeticOperator.Multiply">
+            <summary>Multiplication.</summary>
+        </member>
+        <member name="F:Durable.Query.ArithmeticOperator.Divide">
+            <summary>Division (see <see cref="P:Durable.Query.ArithmeticNode.IntegerDivision"/>).</summary>
+        </member>
+        <member name="F:Durable.Query.ArithmeticOperator.Modulo">
+            <summary>Remainder.</summary>
+        </member>
+        <member name="T:Durable.Query.CoalesceNode">
+            <summary>
+            The left value, or the right value when the left is null (<c>??</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CoalesceNode.Left">
+            <summary>
+            Gets the preferred value. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CoalesceNode.Right">
+            <summary>
+            Gets the fallback value. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.CoalesceNode.#ctor(Durable.Query.QueryNode,Durable.Query.QueryNode,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="left">The preferred value. Must not be null.</param>
+            <param name="right">The fallback value. Must not be null.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.CoalesceNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.CollectionNode">
+            <summary>
+            An operation over the related rows of a collection or many-to-many navigation (<c>author.Books.Any(b =&gt; ...)</c>, <c>All</c>, <c>Count</c>). Soft-deleted related rows are excluded.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CollectionNode.Operation">
+            <summary>
+            Gets the operation.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CollectionNode.Navigation">
+            <summary>
+            Gets the collection navigation. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CollectionNode.OwnerKey">
+            <summary>
+            Gets the owner-side key value. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CollectionNode.RelatedSource">
+            <summary>
+            Gets the source representing each related row; <see cref="P:Durable.Query.CollectionNode.Predicate"/> refers to it. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.CollectionNode.Predicate">
+            <summary>
+            Gets the condition on related rows; null when there is none.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.CollectionNode.#ctor(Durable.Query.CollectionOperation,Durable.NavigationMetadata,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.Query.QueryNode,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="operation">The operation.</param>
+            <param name="navigation">The collection navigation. Must not be null.</param>
+            <param name="ownerKey">The owner-side key value. Must not be null.</param>
+            <param name="relatedSource">The source representing each related row; <see cref="P:Durable.Query.CollectionNode.Predicate"/> refers to it. Must not be null.</param>
+            <param name="predicate">The condition on related rows; null when there is none.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.CollectionNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.CollectionOperation">
+            <summary>
+            Operations over a collection navigation in a <see cref="T:Durable.Query.CollectionNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.CollectionOperation.Any">
+            <summary>At least one related row (matching the predicate, when present) exists.</summary>
+        </member>
+        <member name="F:Durable.Query.CollectionOperation.All">
+            <summary>Every related row matches the predicate.</summary>
+        </member>
+        <member name="F:Durable.Query.CollectionOperation.Count">
+            <summary>The number of related rows (matching the predicate, when present).</summary>
+        </member>
+        <member name="T:Durable.Query.ColumnNode">
+            <summary>
+            A mapped column of an entity bound to a <see cref="T:Durable.Query.QuerySource"/>.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ColumnNode.Source">
+            <summary>
+            Gets the source (entity instance) the column belongs to. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ColumnNode.Column">
+            <summary>
+            Gets the column. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ColumnNode.#ctor(Durable.Query.QuerySource,Durable.ColumnMetadata)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="source">The source (entity instance) the column belongs to. Must not be null.</param>
+            <param name="column">The column. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ColumnNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ComparisonNode">
+            <summary>
+            A comparison with C# semantics: <c>null == null</c> is true and <c>null != value</c> is true. Comparisons with a null constant are normalized to <see cref="T:Durable.Query.NullCheckNode"/>. For string operands, <see cref="P:Durable.Query.ComparisonNode.StringMode"/> says how to compare.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ComparisonNode.Operator">
+            <summary>
+            Gets the operator.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ComparisonNode.Left">
+            <summary>
+            Gets the left operand. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ComparisonNode.Right">
+            <summary>
+            Gets the right operand. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ComparisonNode.StringMode">
+            <summary>
+            Gets the string comparison mode; meaningful only for string operands.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ComparisonNode.#ctor(Durable.Query.ComparisonOperator,Durable.Query.QueryNode,Durable.Query.QueryNode,Durable.StringMatchMode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="op">The operator.</param>
+            <param name="left">The left operand. Must not be null.</param>
+            <param name="right">The right operand. Must not be null.</param>
+            <param name="stringMode">The string comparison mode; meaningful only for string operands.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ComparisonNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ComparisonOperator">
+            <summary>
+            Binary comparison operators in a <see cref="T:Durable.Query.ComparisonNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.Equal">
+            <summary>Equal (C# semantics: null equals null).</summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.NotEqual">
+            <summary>Not equal (C# semantics: null differs from any value).</summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.LessThan">
+            <summary>Less than.</summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.LessThanOrEqual">
+            <summary>Less than or equal.</summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.GreaterThan">
+            <summary>Greater than.</summary>
+        </member>
+        <member name="F:Durable.Query.ComparisonOperator.GreaterThanOrEqual">
+            <summary>Greater than or equal.</summary>
+        </member>
+        <member name="T:Durable.Query.ConcatNode">
+            <summary>
+            String concatenation with C# semantics: null parts become empty strings and non-string parts are converted to text.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ConcatNode.Parts">
+            <summary>
+            Gets the parts in order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ConcatNode.#ctor(System.Collections.Generic.IReadOnlyList{Durable.Query.QueryNode})">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="parts">The parts in order. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ConcatNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ConditionalNode">
+            <summary>
+            A conditional value (<c>test ? a : b</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ConditionalNode.Test">
+            <summary>
+            Gets the condition. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ConditionalNode.IfTrue">
+            <summary>
+            Gets the value when the condition holds. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ConditionalNode.IfFalse">
+            <summary>
+            Gets the value otherwise. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ConditionalNode.#ctor(Durable.Query.QueryNode,Durable.Query.QueryNode,Durable.Query.QueryNode,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="test">The condition. Must not be null.</param>
+            <param name="ifTrue">The value when the condition holds. Must not be null.</param>
+            <param name="ifFalse">The value otherwise. Must not be null.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ConditionalNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ExpressionEvaluator">
+            <summary>
+            Evaluates client-side expression subtrees (constants, captured variables, static members, method calls on them)
+            so their values can be bound as parameters.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ExpressionEvaluator.IsEvaluable(System.Linq.Expressions.Expression)">
+            <summary>
+            Determines whether an expression can be evaluated on the client: it references no lambda parameter other than
+            those declared by lambdas nested inside it.
+            </summary>
+            <param name="expression">Expression. Must not be null.</param>
+            <returns>True when the expression has no free parameters.</returns>
+        </member>
+        <member name="M:Durable.Query.ExpressionEvaluator.Evaluate(System.Linq.Expressions.Expression)">
+            <summary>
+            Evaluates an expression without free parameters.
+            </summary>
+            <param name="expression">Expression. Must not be null.</param>
+            <returns>The value; may be null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
+        </member>
+        <member name="T:Durable.Query.FreeParameterFinder">
+            <summary>
+            Detects parameters that are not declared by a lambda inside the visited expression.
+            </summary>
+        </member>
+        <member name="T:Durable.Query.FunctionNode">
+            <summary>
+            A scalar function call (string, math and date functions; see <see cref="T:Durable.Query.QueryFunction"/>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.FunctionNode.Function">
+            <summary>
+            Gets the function.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.FunctionNode.Arguments">
+            <summary>
+            Gets the arguments in the order documented on <see cref="T:Durable.Query.QueryFunction"/>. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.FunctionNode.StringMode">
+            <summary>
+            Gets the string comparison mode for functions that compare text (Replace, IndexOf).
+            </summary>
+        </member>
+        <member name="M:Durable.Query.FunctionNode.#ctor(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{Durable.Query.QueryNode},Durable.StringMatchMode,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="function">The function.</param>
+            <param name="arguments">The arguments in the order documented on <see cref="T:Durable.Query.QueryFunction"/>. Must not be null.</param>
+            <param name="stringMode">The string comparison mode for functions that compare text (Replace, IndexOf).</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.FunctionNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.GroupingSpecification">
+            <summary>
+            Describes a grouping: the key selector split into key parts, and the predicates applied to each group (HAVING).
+            <see cref="M:Durable.Query.QueryNormalizer.UseGrouping(Durable.Query.GroupingSpecification,Durable.Query.QuerySource)"/> uses it to translate grouping expressions (<c>g.Key</c>, <c>g.Key.Part</c>,
+            <c>g.Count()</c>, <c>g.Sum(x =&gt; ...)</c>, <c>g.Average</c>, <c>g.Min</c>, <c>g.Max</c>, <c>g.Any</c>) into
+            <see cref="T:Durable.Query.AggregateNode"/>s and key nodes.
+            Thread safety: not thread-safe while <see cref="P:Durable.Query.GroupingSpecification.Having"/> is being modified.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.GroupingSpecification.KeySelector">
+            <summary>
+            Gets the key selector. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.GroupingSpecification.GroupingType">
+            <summary>
+            Gets the grouping type (<c>IGrouping&lt;TKey, T&gt;</c>). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.GroupingSpecification.Having">
+            <summary>
+            Gets the group predicates (HAVING), as lambdas over the grouping type. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.GroupingSpecification.KeyParts">
+            <summary>
+            Gets the key parts: the member name (null for a single, unnamed key) and the expression over the entity
+            parameter of <see cref="P:Durable.Query.GroupingSpecification.KeySelector"/>. Never null; at least one element.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.GroupingSpecification.#ctor(System.Linq.Expressions.LambdaExpression,System.Type)">
+            <summary>
+            Instantiates a grouping specification.
+            </summary>
+            <param name="keySelector">Key selector over the entity. Must not be null. Anonymous-type and member-init bodies are split into parts.</param>
+            <param name="groupingType">The <c>IGrouping&lt;TKey, T&gt;</c> type. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.GroupingSpecification.IsGrouping(System.Linq.Expressions.Expression)">
+            <summary>
+            Returns whether an expression is the grouping parameter (<c>g</c>).
+            </summary>
+            <param name="expression">Expression; may be null.</param>
+            <returns>True when the expression is a parameter of <see cref="P:Durable.Query.GroupingSpecification.GroupingType"/>.</returns>
+        </member>
+        <member name="T:Durable.Query.InNode">
+            <summary>
+            Membership of a value in a client-side list (<c>list.Contains(x.Prop)</c>, <c>x.Prop.In(...)</c>). <see cref="P:Durable.Query.InNode.Values"/> may contain null and duplicates; C# semantics apply (null matches a null element).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.InNode.Item">
+            <summary>
+            Gets the tested value. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.InNode.Values">
+            <summary>
+            Gets the candidate values, already evaluated (integers for enum columns are converted to the enum). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.InNode.Negated">
+            <summary>
+            Gets whether the test is negated (<c>NotIn</c>).
+            </summary>
+        </member>
+        <member name="P:Durable.Query.InNode.StringMode">
+            <summary>
+            Gets the string comparison mode; meaningful only for string items.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.InNode.#ctor(Durable.Query.QueryNode,System.Collections.Generic.IReadOnlyList{System.Object},System.Boolean,Durable.StringMatchMode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="item">The tested value. Must not be null.</param>
+            <param name="values">The candidate values, already evaluated (integers for enum columns are converted to the enum). Must not be null.</param>
+            <param name="negated">Whether the test is negated (<c>NotIn</c>).</param>
+            <param name="stringMode">The string comparison mode; meaningful only for string items.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.InNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.LogicalNode">
+            <summary>
+            A boolean AND or OR of two conditions.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.LogicalNode.Operator">
+            <summary>
+            Gets the operator.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.LogicalNode.Left">
+            <summary>
+            Gets the left condition. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.LogicalNode.Right">
+            <summary>
+            Gets the right condition. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.LogicalNode.#ctor(Durable.Query.LogicalOperator,Durable.Query.QueryNode,Durable.Query.QueryNode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="op">The operator.</param>
+            <param name="left">The left condition. Must not be null.</param>
+            <param name="right">The right condition. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.LogicalNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.LogicalOperator">
+            <summary>
+            Boolean connectives in a <see cref="T:Durable.Query.LogicalNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.LogicalOperator.And">
+            <summary>Both operands are true.</summary>
+        </member>
+        <member name="F:Durable.Query.LogicalOperator.Or">
+            <summary>Either operand is true.</summary>
+        </member>
+        <member name="T:Durable.Query.NavigationMemberNode">
+            <summary>
+            A member of a related entity reached through a reference navigation (<c>book.Author.Name</c>): the value of <see cref="P:Durable.Query.NavigationMemberNode.Column"/> on the related row whose key equals <see cref="P:Durable.Query.NavigationMemberNode.OwnerKey"/>, or null when there is none.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NavigationMemberNode.Navigation">
+            <summary>
+            Gets the reference navigation. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NavigationMemberNode.OwnerKey">
+            <summary>
+            Gets the owner-side key value (the navigation's local column). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NavigationMemberNode.RelatedSource">
+            <summary>
+            Gets the source representing the related row. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NavigationMemberNode.Column">
+            <summary>
+            Gets the related column read. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NavigationMemberNode.#ctor(Durable.NavigationMetadata,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ColumnMetadata,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="navigation">The reference navigation. Must not be null.</param>
+            <param name="ownerKey">The owner-side key value (the navigation's local column). Must not be null.</param>
+            <param name="relatedSource">The source representing the related row. Must not be null.</param>
+            <param name="column">The related column read. Must not be null.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NavigationMemberNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.NegateNode">
+            <summary>
+            Arithmetic negation.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NegateNode.Operand">
+            <summary>
+            Gets the negated value. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NegateNode.#ctor(Durable.Query.QueryNode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="operand">The negated value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NegateNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.NotNode">
+            <summary>
+            Boolean negation with C# semantics (a comparison involving null is false, so its negation is true).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NotNode.Operand">
+            <summary>
+            Gets the negated condition. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NotNode.#ctor(Durable.Query.QueryNode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="operand">The negated condition. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NotNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.NullCheckNode">
+            <summary>
+            A null test (<c>x == null</c>, <c>x != null</c>, <c>HasValue</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NullCheckNode.Operand">
+            <summary>
+            Gets the tested value. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.NullCheckNode.IsNull">
+            <summary>
+            Gets whether the test is for null (true) or for a value (false).
+            </summary>
+        </member>
+        <member name="M:Durable.Query.NullCheckNode.#ctor(Durable.Query.QueryNode,System.Boolean)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="operand">The tested value. Must not be null.</param>
+            <param name="isNull">Whether the test is for null (true) or for a value (false).</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.NullCheckNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.QueryFunction">
+            <summary>
+            Scalar functions recognized by <see cref="T:Durable.Query.QueryNormalizer"/> in LINQ expressions; each backend translates them (SQL dialects via <c>ISqlDialect.TranslateFunction</c>).
+            </summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Length">
+            <summary>String length in characters. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Upper">
+            <summary>Upper-case. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Lower">
+            <summary>Lower-case. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Trim">
+            <summary>Trim both ends. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.TrimStart">
+            <summary>Trim start. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.TrimEnd">
+            <summary>Trim end. Arguments: string.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Substring">
+            <summary>Substring with a zero-based start. Arguments: string, start, [length].</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Replace">
+            <summary>Replace. Arguments: string, old, new.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.IndexOf">
+            <summary>Zero-based index of a substring, or -1. Arguments: string, value.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Abs">
+            <summary>Absolute value. Arguments: number.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Round">
+            <summary>Round. Arguments: number, [digits].</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Ceiling">
+            <summary>Ceiling. Arguments: number.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Floor">
+            <summary>Floor. Arguments: number.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Power">
+            <summary>Power. Arguments: base, exponent.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Sqrt">
+            <summary>Square root. Arguments: number.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Year">
+            <summary>Year part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Month">
+            <summary>Month part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Day">
+            <summary>Day-of-month part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Hour">
+            <summary>Hour part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Minute">
+            <summary>Minute part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Second">
+            <summary>Second part. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.DayOfYear">
+            <summary>Day of year (1-366). Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.DayOfWeek">
+            <summary>Day of week (0 = Sunday, matching <see cref="T:System.DayOfWeek"/>). Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.Date">
+            <summary>Date part with time removed. Arguments: date.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddYears">
+            <summary>Add years. Arguments: date, amount.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddMonths">
+            <summary>Add months. Arguments: date, amount.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddDays">
+            <summary>Add days. Arguments: date, amount.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddHours">
+            <summary>Add hours. Arguments: date, amount.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddMinutes">
+            <summary>Add minutes. Arguments: date, amount.</summary>
+        </member>
+        <member name="F:Durable.Query.QueryFunction.AddSeconds">
+            <summary>Add seconds. Arguments: date, amount.</summary>
+        </member>
+        <member name="T:Durable.Query.QueryNode">
+            <summary>
+            Base class of the backend-neutral query tree that <see cref="T:Durable.Query.QueryNormalizer"/> produces from LINQ expressions.
+            Every backend (SQL dialects, document stores, search engines, graph stores, in-memory) translates the same tree,
+            so closure evaluation, enum and null handling, navigation analysis and grouping are implemented once.
+            Nodes carry C# semantics: comparisons treat <c>null == null</c> as true, negation of a comparison with null is true,
+            and string operations carry a <see cref="T:Durable.StringMatchMode"/>. Translate a tree with a <see cref="T:Durable.Query.QueryNodeVisitor`1"/>.
+            Thread safety: nodes are immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryNode.ClrType">
+            <summary>
+            Gets the CLR type of the value the node produces (<see cref="T:System.Boolean"/> for conditions). Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryNode.#ctor(System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when clrType is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <summary>
+            Dispatches to the matching <c>Visit</c> method of a visitor.
+            </summary>
+            <typeparam name="TResult">Visitor result type.</typeparam>
+            <param name="visitor">Visitor. Must not be null.</param>
+            <returns>The visitor's result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when visitor is null.</exception>
+        </member>
+        <member name="T:Durable.Query.QueryNodeVisitor`1">
+            <summary>
+            Base class for translating a <see cref="T:Durable.Query.QueryNode"/> tree into a backend's representation (SQL text, a document
+            filter, a predicate delegate, ...). Override the <c>Visit</c> methods for the nodes the backend supports; the
+            defaults throw <see cref="T:System.NotSupportedException"/> naming the node, so unsupported constructs fail clearly.
+            Thread safety: depends on the implementation; the base class holds no state.
+            </summary>
+            <typeparam name="TResult">Translation result type.</typeparam>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.Visit(Durable.Query.QueryNode)">
+            <summary>
+            Translates a node by dispatching to its <c>Visit</c> method.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when node is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitColumn(Durable.Query.ColumnNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ColumnNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitValue(Durable.Query.ValueNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ValueNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitComparison(Durable.Query.ComparisonNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ComparisonNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitLogical(Durable.Query.LogicalNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.LogicalNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitNot(Durable.Query.NotNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.NotNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.NullCheckNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitIn(Durable.Query.InNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.InNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.StringMatchNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitStringTest(Durable.Query.StringTestNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.StringTestNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ArithmeticNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitNegate(Durable.Query.NegateNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.NegateNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitConcat(Durable.Query.ConcatNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ConcatNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.CoalesceNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitConditional(Durable.Query.ConditionalNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.ConditionalNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitFunction(Durable.Query.FunctionNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.FunctionNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.NavigationMemberNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitCollection(Durable.Query.CollectionNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.CollectionNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.VisitAggregate(Durable.Query.AggregateNode)">
+            <summary>
+            Translates a <see cref="T:Durable.Query.AggregateNode"/>. The default throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="node">Node. Never null.</param>
+            <returns>The translation.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the backend does not support the node.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNodeVisitor`1.Unsupported(Durable.Query.QueryNode)">
+            <summary>
+            Creates the exception thrown for a node the backend cannot translate.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The exception.</returns>
+        </member>
+        <member name="T:Durable.Query.QueryNormalizer">
+            <summary>
+            Converts LINQ expressions over mapped entities into the backend-neutral <see cref="T:Durable.Query.QueryNode"/> tree.
+            Client-side subtrees (constants, captured variables, method calls that do not touch a bound parameter) are
+            evaluated once into <see cref="T:Durable.Query.ValueNode"/>s; integers compared with enum columns become enum values; comparisons
+            with null become <see cref="T:Durable.Query.NullCheckNode"/>s; string methods carry a <see cref="T:Durable.StringMatchMode"/> taken from an
+            explicit <see cref="T:System.StringComparison"/> argument or from <see cref="P:Durable.Query.QueryNormalizer.DefaultStringMatching"/>.
+            Supported: comparisons, boolean logic, arithmetic, string concatenation, <c>??</c>, conditionals, Nullable
+            HasValue/Value, string methods (Contains, StartsWith, EndsWith, Equals, CompareTo/Compare, ToUpper/ToLower, Trim,
+            TrimStart, TrimEnd, Substring, Replace, IndexOf, Length, IsNullOrEmpty, IsNullOrWhiteSpace, Concat), collection
+            Contains, <see cref="T:Durable.ExpressionExtensions"/> helpers, DateTime parts and Add* methods, Math functions, reference
+            navigation members, collection navigation Any/All/Count, and grouping expressions (see <see cref="M:Durable.Query.QueryNormalizer.UseGrouping(Durable.Query.GroupingSpecification,Durable.Query.QuerySource)"/>).
+            Thread safety: not thread-safe; create one per query translation.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryNormalizer.DefaultStringMatching">
+            <summary>
+            Gets or sets the string comparison mode used when a string comparison has no explicit
+            <see cref="T:System.StringComparison"/> argument (for example <c>==</c> or <c>Contains(string)</c>).
+            Default: <see cref="F:Durable.StringMatchMode.Database"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryNormalizer.Grouping">
+            <summary>
+            Gets the active grouping, or null when the query is not grouped.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryNormalizer.GroupingSource">
+            <summary>
+            Gets the source the grouping's rows come from, or null when the query is not grouped.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.#ctor(Durable.StringMatchMode)">
+            <summary>
+            Instantiates a normalizer.
+            </summary>
+            <param name="defaultStringMatching">Mode for string comparisons without an explicit <see cref="T:System.StringComparison"/>.</param>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.Bind(System.Linq.Expressions.ParameterExpression,Durable.Query.QuerySource)">
+            <summary>
+            Binds a lambda parameter to a source.
+            </summary>
+            <param name="parameter">Lambda parameter. Must not be null.</param>
+            <param name="source">Source. Must not be null.</param>
+            <returns>This normalizer.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.SourceOf(System.Linq.Expressions.ParameterExpression)">
+            <summary>
+            Returns the source bound to a parameter, or null.
+            </summary>
+            <param name="parameter">Parameter. Must not be null.</param>
+            <returns>The source or null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.UseGrouping(Durable.Query.GroupingSpecification,Durable.Query.QuerySource)">
+            <summary>
+            Activates grouping translation: <c>g.Key</c> and its members become key-part nodes, and <c>g.Count()</c>,
+            <c>g.Sum(...)</c>, <c>g.Average(...)</c>, <c>g.Min(...)</c>, <c>g.Max(...)</c>, <c>g.Any(...)</c> become
+            <see cref="T:Durable.Query.AggregateNode"/>s over rows of <paramref name="source"/>.
+            </summary>
+            <param name="grouping">Grouping. Must not be null.</param>
+            <param name="source">Source of the grouped rows. Must not be null.</param>
+            <returns>This normalizer.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.NormalizeGroupKey(Durable.Query.GroupingSpecification,Durable.Query.QuerySource)">
+            <summary>
+            Normalizes the key parts of a grouping, binding its key selector to a source.
+            </summary>
+            <param name="grouping">Grouping. Must not be null.</param>
+            <param name="source">Source of the grouped rows. Must not be null.</param>
+            <returns>One node per key part, in order.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.NormalizeLambda(System.Linq.Expressions.LambdaExpression,Durable.Query.QuerySource)">
+            <summary>
+            Normalizes a lambda body, binding its first parameter to a source.
+            </summary>
+            <param name="lambda">Lambda. Must not be null.</param>
+            <param name="source">Source for the first parameter. Must not be null.</param>
+            <returns>The node.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown for constructs that cannot be translated.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.Normalize(System.Linq.Expressions.Expression)">
+            <summary>
+            Normalizes an expression whose parameters are already bound.
+            </summary>
+            <param name="expression">Expression. Must not be null.</param>
+            <returns>The node.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown for constructs that cannot be translated.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.ResolveColumn(System.Linq.Expressions.Expression)">
+            <summary>
+            Resolves an expression to a mapped column when it is a direct member access on a bound parameter
+            (ignoring conversions and <c>Nullable.Value</c>), without translating anything else.
+            </summary>
+            <param name="expression">Expression. Must not be null.</param>
+            <returns>The column node, or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when expression is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryNormalizer.ModeFor(System.StringComparison)">
+            <summary>
+            Maps a <see cref="T:System.StringComparison"/> to the string match mode it requests: ordinal comparisons map to
+            <see cref="F:Durable.StringMatchMode.Ordinal"/>, any ignore-case comparison to <see cref="F:Durable.StringMatchMode.IgnoreCase"/>,
+            and culture-sensitive comparisons to <see cref="F:Durable.StringMatchMode.Database"/>.
+            </summary>
+            <param name="comparison">Comparison.</param>
+            <returns>The mode.</returns>
+        </member>
+        <member name="T:Durable.Query.QuerySource">
+            <summary>
+            Identifies one entity instance in a query: the root entity, or the related row of a navigation subquery.
+            Columns (<see cref="T:Durable.Query.ColumnNode"/>) refer to a source by reference identity; backends map sources to their own
+            constructs (SQL table aliases, document paths, in-memory objects).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QuerySource.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QuerySource.Name">
+            <summary>
+            Gets an optional name for diagnostics; may be null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QuerySource.#ctor(Durable.EntityMetadata,System.String)">
+            <summary>
+            Instantiates a source.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="name">Optional name for diagnostics.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QuerySource.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.StringMatchKind">
+            <summary>
+            Substring tests in a <see cref="T:Durable.Query.StringMatchNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.StringMatchKind.Contains">
+            <summary>The target contains the pattern.</summary>
+        </member>
+        <member name="F:Durable.Query.StringMatchKind.StartsWith">
+            <summary>The target starts with the pattern.</summary>
+        </member>
+        <member name="F:Durable.Query.StringMatchKind.EndsWith">
+            <summary>The target ends with the pattern.</summary>
+        </member>
+        <member name="T:Durable.Query.StringMatchNode">
+            <summary>
+            A substring test (Contains, StartsWith, EndsWith). The pattern is literal text, not a wildcard pattern; backends escape it as needed.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringMatchNode.Kind">
+            <summary>
+            Gets the kind of test.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringMatchNode.Target">
+            <summary>
+            Gets the searched string. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringMatchNode.Pattern">
+            <summary>
+            Gets the text to find. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringMatchNode.Mode">
+            <summary>
+            Gets how characters are compared.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.StringMatchNode.#ctor(Durable.Query.StringMatchKind,Durable.Query.QueryNode,Durable.Query.QueryNode,Durable.StringMatchMode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="kind">The kind of test.</param>
+            <param name="target">The searched string. Must not be null.</param>
+            <param name="pattern">The text to find. Must not be null.</param>
+            <param name="mode">How characters are compared.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.StringMatchNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.StringTestKind">
+            <summary>
+            Unary string tests in a <see cref="T:Durable.Query.StringTestNode"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Query.StringTestKind.IsNullOrEmpty">
+            <summary><c>string.IsNullOrEmpty</c>.</summary>
+        </member>
+        <member name="F:Durable.Query.StringTestKind.IsNullOrWhiteSpace">
+            <summary><c>string.IsNullOrWhiteSpace</c>.</summary>
+        </member>
+        <member name="T:Durable.Query.StringTestNode">
+            <summary>
+            A unary string test (<c>string.IsNullOrEmpty</c>, <c>string.IsNullOrWhiteSpace</c>).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringTestNode.Kind">
+            <summary>
+            Gets the kind of test.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.StringTestNode.Operand">
+            <summary>
+            Gets the tested string. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.StringTestNode.#ctor(Durable.Query.StringTestKind,Durable.Query.QueryNode)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="kind">The kind of test.</param>
+            <param name="operand">The tested string. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.StringTestNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Query.ValueNode">
+            <summary>
+            A client-side value (constant or captured variable), already evaluated. When the value is compared with a column, <see cref="P:Durable.Query.ValueNode.Column"/> names that column so the backend can convert the value with the column's rules (enums, converters, JSON).
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ValueNode.Value">
+            <summary>
+            Gets the value; may be null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.ValueNode.Column">
+            <summary>
+            Gets the column the value is compared with; null when there is none.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.ValueNode.#ctor(System.Object,Durable.ColumnMetadata,System.Type)">
+            <summary>
+            Instantiates the node.
+            </summary>
+            <param name="value">The value; may be null.</param>
+            <param name="column">The column the value is compared with; null when there is none.</param>
+            <param name="clrType">CLR type of the node's value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when a required argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.ValueNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
+            <inheritdoc />
+        </member>
         <member name="T:Durable.RepositoryExtensions">
             <summary>
             Provides extension methods for IRepository to simplify query operations.
@@ -3044,6 +4239,14 @@
             <summary>
             Gets or sets whether parameter values are included in logs and trace tags.
             Leave disabled when values may contain sensitive data. Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.RepositoryOptions.StringMatching">
+            <summary>
+            Gets or sets how string comparisons without an explicit <see cref="T:System.StringComparison"/> argument are evaluated
+            (<c>==</c>, <c>!=</c>, ordering, <c>Contains</c>/<c>StartsWith</c>/<c>EndsWith</c>, collection <c>Contains</c>,
+            <c>Replace</c>, <c>IndexOf</c>). Calls that pass a <see cref="T:System.StringComparison"/> always use the mode it requests.
+            Default: <see cref="F:Durable.StringMatchMode.Database"/> (the backend's collation).
             </summary>
         </member>
         <member name="P:Durable.RepositoryOptions.SlowCommandThreshold">
@@ -3282,6 +4485,20 @@
             deleted rows unless <see cref="M:Durable.IQueryBuilder`1.IgnoreQueryFilters"/> is used.
             At most one property per entity may carry this attribute.
             </summary>
+        </member>
+        <member name="T:Durable.StringMatchMode">
+            <summary>
+            How string comparisons in queries (equality, ordering, <c>IN</c>, Contains/StartsWith/EndsWith, Replace, IndexOf) are evaluated by the backend.
+            </summary>
+        </member>
+        <member name="F:Durable.StringMatchMode.Database">
+            <summary>Use the backend's own rules (for SQL, the column or database collation). Results can differ between databases: for example SQL Server's default collation is case-insensitive and MySQL's default is also accent-insensitive. This is the default and matches Durable 0.3.</summary>
+        </member>
+        <member name="F:Durable.StringMatchMode.Ordinal">
+            <summary>Exact, case- and accent-sensitive comparison by character code, like C# <c>StringComparison.Ordinal</c>. SQL dialects apply a binary collation (PostgreSQL <c>"C"</c>, MySQL <c>utf8mb4_bin</c>, SQL Server <c>Latin1_General_100_BIN2</c>, SQLite <c>BINARY</c> plus exact substring functions).</summary>
+        </member>
+        <member name="F:Durable.StringMatchMode.IgnoreCase">
+            <summary>Case-insensitive but accent-sensitive comparison, like C# <c>StringComparison.OrdinalIgnoreCase</c>: both sides are lower-cased and then compared ordinally. SQLite's built-in lower() folds ASCII letters only.</summary>
         </member>
         <member name="T:Durable.TransactionScope">
             <summary>

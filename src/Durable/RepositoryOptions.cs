@@ -24,6 +24,14 @@ namespace Durable
         public bool LogParameterValues { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets how string comparisons without an explicit <see cref="StringComparison"/> argument are evaluated
+        /// (<c>==</c>, <c>!=</c>, ordering, <c>Contains</c>/<c>StartsWith</c>/<c>EndsWith</c>, collection <c>Contains</c>,
+        /// <c>Replace</c>, <c>IndexOf</c>). Calls that pass a <see cref="StringComparison"/> always use the mode it requests.
+        /// Default: <see cref="StringMatchMode.Database"/> (the backend's collation).
+        /// </summary>
+        public StringMatchMode StringMatching { get; set; } = StringMatchMode.Database;
+
+        /// <summary>
         /// Gets or sets the duration above which a command is logged as slow at Warning level.
         /// Null disables slow-command logging. Default: 1 second. Minimum: <see cref="TimeSpan.Zero"/>.
         /// </summary>

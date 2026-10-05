@@ -7,6 +7,7 @@ namespace Durable.Sql
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Query;
 
     /// <summary>
     /// Base dialect with ANSI SQL defaults. Providers override what differs.
@@ -48,6 +49,12 @@ namespace Durable.Sql
 
         /// <inheritdoc />
         public virtual bool SupportsStoredProcedures => true;
+
+        /// <inheritdoc />
+        public virtual string StringCastType => "TEXT";
+
+        /// <inheritdoc />
+        public virtual bool SupportsOrdinalLike => true;
 
         #endregion
 
@@ -139,36 +146,48 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public virtual string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
+        public virtual string OrdinalCollation(string expression)
+        {
+            return expression;
+        }
+
+        /// <inheritdoc />
+        public virtual string OrdinalStringMatch(StringMatchKind kind, string target, string value)
+        {
+            throw new NotSupportedException(GetType().Name + " supports ordinal LIKE; OrdinalStringMatch is not used.");
+        }
+
+        /// <inheritdoc />
+        public virtual string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.Length: return "LENGTH(" + a0 + ")";
-                case SqlFunction.Upper: return "UPPER(" + a0 + ")";
-                case SqlFunction.Lower: return "LOWER(" + a0 + ")";
-                case SqlFunction.Trim: return "TRIM(" + a0 + ")";
-                case SqlFunction.TrimStart: return "LTRIM(" + a0 + ")";
-                case SqlFunction.TrimEnd: return "RTRIM(" + a0 + ")";
-                case SqlFunction.Substring:
+                case QueryFunction.Length: return "LENGTH(" + a0 + ")";
+                case QueryFunction.Upper: return "UPPER(" + a0 + ")";
+                case QueryFunction.Lower: return "LOWER(" + a0 + ")";
+                case QueryFunction.Trim: return "TRIM(" + a0 + ")";
+                case QueryFunction.TrimStart: return "LTRIM(" + a0 + ")";
+                case QueryFunction.TrimEnd: return "RTRIM(" + a0 + ")";
+                case QueryFunction.Substring:
                     return arguments.Count > 2
                         ? "SUBSTR(" + a0 + ", (" + a1 + ") + 1, " + arguments[2] + ")"
                         : "SUBSTR(" + a0 + ", (" + a1 + ") + 1)";
-                case SqlFunction.Replace: return "REPLACE(" + a0 + ", " + a1 + ", " + arguments[2] + ")";
-                case SqlFunction.IndexOf: return "(INSTR(" + a0 + ", " + a1 + ") - 1)";
-                case SqlFunction.Abs: return "ABS(" + a0 + ")";
-                case SqlFunction.Round: return arguments.Count > 1 ? "ROUND(" + a0 + ", " + a1 + ")" : "ROUND(" + a0 + ")";
-                case SqlFunction.Ceiling: return "CEILING(" + a0 + ")";
-                case SqlFunction.Floor: return "FLOOR(" + a0 + ")";
-                case SqlFunction.Power: return "POWER(" + a0 + ", " + a1 + ")";
-                case SqlFunction.Sqrt: return "SQRT(" + a0 + ")";
-                case SqlFunction.Year: return "EXTRACT(YEAR FROM " + a0 + ")";
-                case SqlFunction.Month: return "EXTRACT(MONTH FROM " + a0 + ")";
-                case SqlFunction.Day: return "EXTRACT(DAY FROM " + a0 + ")";
-                case SqlFunction.Hour: return "EXTRACT(HOUR FROM " + a0 + ")";
-                case SqlFunction.Minute: return "EXTRACT(MINUTE FROM " + a0 + ")";
-                case SqlFunction.Second: return "FLOOR(EXTRACT(SECOND FROM " + a0 + "))";
+                case QueryFunction.Replace: return "REPLACE(" + a0 + ", " + a1 + ", " + arguments[2] + ")";
+                case QueryFunction.IndexOf: return "(INSTR(" + a0 + ", " + a1 + ") - 1)";
+                case QueryFunction.Abs: return "ABS(" + a0 + ")";
+                case QueryFunction.Round: return arguments.Count > 1 ? "ROUND(" + a0 + ", " + a1 + ")" : "ROUND(" + a0 + ")";
+                case QueryFunction.Ceiling: return "CEILING(" + a0 + ")";
+                case QueryFunction.Floor: return "FLOOR(" + a0 + ")";
+                case QueryFunction.Power: return "POWER(" + a0 + ", " + a1 + ")";
+                case QueryFunction.Sqrt: return "SQRT(" + a0 + ")";
+                case QueryFunction.Year: return "EXTRACT(YEAR FROM " + a0 + ")";
+                case QueryFunction.Month: return "EXTRACT(MONTH FROM " + a0 + ")";
+                case QueryFunction.Day: return "EXTRACT(DAY FROM " + a0 + ")";
+                case QueryFunction.Hour: return "EXTRACT(HOUR FROM " + a0 + ")";
+                case QueryFunction.Minute: return "EXTRACT(MINUTE FROM " + a0 + ")";
+                case QueryFunction.Second: return "FLOOR(EXTRACT(SECOND FROM " + a0 + "))";
                 default:
                     throw new NotSupportedException("Function " + function + " is not supported by " + RepositoryType.DisplayName + ".");
             }

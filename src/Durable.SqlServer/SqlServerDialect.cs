@@ -8,6 +8,7 @@ namespace Durable.SqlServer
     using System.Linq;
     using Microsoft.Data.SqlClient;
     using Durable;
+    using Durable.Query;
     using Durable.Sql;
 
     /// <summary>
@@ -39,6 +40,15 @@ namespace Durable.SqlServer
         /// <inheritdoc />
         public override InsertKeyStrategy InsertKeyStrategy => InsertKeyStrategy.Output;
 
+        /// <summary>
+        /// Gets the binary collation applied by <see cref="OrdinalCollation"/> for ordinal and ignore-case string matching.
+        /// Default: Latin1_General_100_BIN2. BIN2 collations compare Unicode code points, so the Latin1 name does not restrict the languages compared.
+        /// </summary>
+        public string OrdinalCollationName { get; }
+
+        /// <inheritdoc />
+        public override string StringCastType => "NVARCHAR(MAX)";
+
         #endregion
 
         #region Constructors-and-Factories
@@ -47,13 +57,22 @@ namespace Durable.SqlServer
         /// Instantiates the dialect.
         /// </summary>
         /// <param name="converter">Converter; null uses <see cref="SqlServerDataTypeConverter"/>.</param>
-        public SqlServerDialect(IDataTypeConverter? converter = null) : base(converter ?? new SqlServerDataTypeConverter())
+        /// <param name="ordinalCollation">Binary collation for ordinal string matching. Default: Latin1_General_100_BIN2 (code-point order).</param>
+        /// <exception cref="ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        public SqlServerDialect(IDataTypeConverter? converter = null, string ordinalCollation = "Latin1_General_100_BIN2") : base(converter ?? new SqlServerDataTypeConverter())
         {
+            OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <inheritdoc />
+        public override string OrdinalCollation(string expression)
+        {
+            return expression + " COLLATE " + OrdinalCollationName;
+        }
 
         /// <inheritdoc />
         public override void ConfigureParameter(DbParameter parameter, SqlParameterValue value)
@@ -84,34 +103,34 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc />
-        public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
+        public override string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.Length: return "(LEN(" + a0 + " + N'.') - 1)";
-                case SqlFunction.Substring:
+                case QueryFunction.Length: return "(LEN(" + a0 + " + N'.') - 1)";
+                case QueryFunction.Substring:
                     return arguments.Count > 2
                         ? "SUBSTRING(" + a0 + ", (" + a1 + ") + 1, " + arguments[2] + ")"
                         : "SUBSTRING(" + a0 + ", (" + a1 + ") + 1, LEN(" + a0 + "))";
-                case SqlFunction.IndexOf: return "(CHARINDEX(" + a1 + ", " + a0 + ") - 1)";
-                case SqlFunction.Round: return arguments.Count > 1 ? "ROUND(" + a0 + ", " + a1 + ")" : "ROUND(" + a0 + ", 0)";
-                case SqlFunction.Year: return "DATEPART(year, " + a0 + ")";
-                case SqlFunction.Month: return "DATEPART(month, " + a0 + ")";
-                case SqlFunction.Day: return "DATEPART(day, " + a0 + ")";
-                case SqlFunction.Hour: return "DATEPART(hour, " + a0 + ")";
-                case SqlFunction.Minute: return "DATEPART(minute, " + a0 + ")";
-                case SqlFunction.Second: return "DATEPART(second, " + a0 + ")";
-                case SqlFunction.DayOfYear: return "DATEPART(dayofyear, " + a0 + ")";
-                case SqlFunction.DayOfWeek: return "((DATEPART(weekday, " + a0 + ") + @@DATEFIRST - 1) % 7)";
-                case SqlFunction.Date: return "CAST(CAST(" + a0 + " AS DATE) AS DATETIME2)";
-                case SqlFunction.AddYears: return "DATEADD(year, " + a1 + ", " + a0 + ")";
-                case SqlFunction.AddMonths: return "DATEADD(month, " + a1 + ", " + a0 + ")";
-                case SqlFunction.AddDays: return "DATEADD(day, " + a1 + ", " + a0 + ")";
-                case SqlFunction.AddHours: return "DATEADD(hour, " + a1 + ", " + a0 + ")";
-                case SqlFunction.AddMinutes: return "DATEADD(minute, " + a1 + ", " + a0 + ")";
-                case SqlFunction.AddSeconds: return "DATEADD(second, " + a1 + ", " + a0 + ")";
+                case QueryFunction.IndexOf: return "(CHARINDEX(" + a1 + ", " + a0 + ") - 1)";
+                case QueryFunction.Round: return arguments.Count > 1 ? "ROUND(" + a0 + ", " + a1 + ")" : "ROUND(" + a0 + ", 0)";
+                case QueryFunction.Year: return "DATEPART(year, " + a0 + ")";
+                case QueryFunction.Month: return "DATEPART(month, " + a0 + ")";
+                case QueryFunction.Day: return "DATEPART(day, " + a0 + ")";
+                case QueryFunction.Hour: return "DATEPART(hour, " + a0 + ")";
+                case QueryFunction.Minute: return "DATEPART(minute, " + a0 + ")";
+                case QueryFunction.Second: return "DATEPART(second, " + a0 + ")";
+                case QueryFunction.DayOfYear: return "DATEPART(dayofyear, " + a0 + ")";
+                case QueryFunction.DayOfWeek: return "((DATEPART(weekday, " + a0 + ") + @@DATEFIRST - 1) % 7)";
+                case QueryFunction.Date: return "CAST(CAST(" + a0 + " AS DATE) AS DATETIME2)";
+                case QueryFunction.AddYears: return "DATEADD(year, " + a1 + ", " + a0 + ")";
+                case QueryFunction.AddMonths: return "DATEADD(month, " + a1 + ", " + a0 + ")";
+                case QueryFunction.AddDays: return "DATEADD(day, " + a1 + ", " + a0 + ")";
+                case QueryFunction.AddHours: return "DATEADD(hour, " + a1 + ", " + a0 + ")";
+                case QueryFunction.AddMinutes: return "DATEADD(minute, " + a1 + ", " + a0 + ")";
+                case QueryFunction.AddSeconds: return "DATEADD(second, " + a1 + ", " + a0 + ")";
                 default:
                     return base.TranslateFunction(function, arguments);
             }

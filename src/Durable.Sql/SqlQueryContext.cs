@@ -39,5 +39,17 @@ namespace Durable.Sql
             Executor = executor ?? throw new ArgumentNullException(nameof(executor));
             Converter = converter ?? throw new ArgumentNullException(nameof(converter));
         }
+
+        /// <summary>
+        /// Creates an expression translator for a statement, using this context's converter and string matching option.
+        /// </summary>
+        /// <param name="builder">Statement builder. Must not be null.</param>
+        /// <returns>The translator.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when builder is null.</exception>
+        public SqlExpressionTranslator CreateTranslator(SqlStatementBuilder builder)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            return new SqlExpressionTranslator(builder, Converter, Options.StringMatching);
+        }
     }
 }

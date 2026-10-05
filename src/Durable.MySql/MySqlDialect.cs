@@ -4,6 +4,7 @@ namespace Durable.MySql
     using System.Collections.Generic;
     using System.Linq;
     using Durable;
+    using Durable.Query;
     using Durable.Sql;
 
     /// <summary>
@@ -37,6 +38,15 @@ namespace Durable.MySql
         /// <inheritdoc />
         public override string InsertDefaultValuesClause => "() VALUES ()";
 
+        /// <summary>
+        /// Gets the binary collation applied by <see cref="OrdinalCollation"/> for ordinal and ignore-case string matching.
+        /// Default: utf8mb4_bin. Columns using another character set need a matching binary collation (for example latin1_bin).
+        /// </summary>
+        public string OrdinalCollationName { get; }
+
+        /// <inheritdoc />
+        public override string StringCastType => "CHAR";
+
         #endregion
 
         #region Constructors-and-Factories
@@ -45,13 +55,23 @@ namespace Durable.MySql
         /// Instantiates the dialect.
         /// </summary>
         /// <param name="converter">Converter; null uses <see cref="MySqlDataTypeConverter"/>.</param>
-        public MySqlDialect(IDataTypeConverter? converter = null) : base(converter ?? new MySqlDataTypeConverter())
+        /// <param name="ordinalCollation">Binary collation for ordinal string matching; must be valid for the character set of
+        /// the compared columns. Default: utf8mb4_bin.</param>
+        /// <exception cref="ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        public MySqlDialect(IDataTypeConverter? converter = null, string ordinalCollation = "utf8mb4_bin") : base(converter ?? new MySqlDataTypeConverter())
         {
+            OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <inheritdoc />
+        public override string OrdinalCollation(string expression)
+        {
+            return expression + " COLLATE " + OrdinalCollationName;
+        }
 
         /// <inheritdoc />
         public override string BooleanLiteral(bool value)
@@ -72,29 +92,29 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc />
-        public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
+        public override string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.Length: return "CHAR_LENGTH(" + a0 + ")";
-                case SqlFunction.IndexOf: return "(LOCATE(" + a1 + ", " + a0 + ") - 1)";
-                case SqlFunction.Year: return "YEAR(" + a0 + ")";
-                case SqlFunction.Month: return "MONTH(" + a0 + ")";
-                case SqlFunction.Day: return "DAY(" + a0 + ")";
-                case SqlFunction.Hour: return "HOUR(" + a0 + ")";
-                case SqlFunction.Minute: return "MINUTE(" + a0 + ")";
-                case SqlFunction.Second: return "SECOND(" + a0 + ")";
-                case SqlFunction.DayOfYear: return "DAYOFYEAR(" + a0 + ")";
-                case SqlFunction.DayOfWeek: return "(DAYOFWEEK(" + a0 + ") - 1)";
-                case SqlFunction.Date: return "CAST(DATE(" + a0 + ") AS DATETIME(6))";
-                case SqlFunction.AddYears: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " YEAR)";
-                case SqlFunction.AddMonths: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " MONTH)";
-                case SqlFunction.AddDays: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " DAY)";
-                case SqlFunction.AddHours: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " HOUR)";
-                case SqlFunction.AddMinutes: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " MINUTE)";
-                case SqlFunction.AddSeconds: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " SECOND)";
+                case QueryFunction.Length: return "CHAR_LENGTH(" + a0 + ")";
+                case QueryFunction.IndexOf: return "(LOCATE(" + a1 + ", " + a0 + ") - 1)";
+                case QueryFunction.Year: return "YEAR(" + a0 + ")";
+                case QueryFunction.Month: return "MONTH(" + a0 + ")";
+                case QueryFunction.Day: return "DAY(" + a0 + ")";
+                case QueryFunction.Hour: return "HOUR(" + a0 + ")";
+                case QueryFunction.Minute: return "MINUTE(" + a0 + ")";
+                case QueryFunction.Second: return "SECOND(" + a0 + ")";
+                case QueryFunction.DayOfYear: return "DAYOFYEAR(" + a0 + ")";
+                case QueryFunction.DayOfWeek: return "(DAYOFWEEK(" + a0 + ") - 1)";
+                case QueryFunction.Date: return "CAST(DATE(" + a0 + ") AS DATETIME(6))";
+                case QueryFunction.AddYears: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " YEAR)";
+                case QueryFunction.AddMonths: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " MONTH)";
+                case QueryFunction.AddDays: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " DAY)";
+                case QueryFunction.AddHours: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " HOUR)";
+                case QueryFunction.AddMinutes: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " MINUTE)";
+                case QueryFunction.AddSeconds: return "DATE_ADD(" + a0 + ", INTERVAL " + a1 + " SECOND)";
                 default:
                     return base.TranslateFunction(function, arguments);
             }

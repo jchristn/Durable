@@ -3,6 +3,7 @@ namespace Durable.Sqlite
     using System;
     using System.Collections.Generic;
     using Durable;
+    using Durable.Query;
     using Durable.Sql;
 
     /// <summary>
@@ -30,6 +31,10 @@ namespace Durable.Sqlite
         /// <inheritdoc />
         public override bool SupportsStoredProcedures => false;
 
+        /// <inheritdoc />
+        /// <remarks>SQLite's LIKE folds ASCII case regardless of collation, so ordinal substring tests use INSTR/SUBSTR.</remarks>
+        public override bool SupportsOrdinalLike => false;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -53,33 +58,53 @@ namespace Durable.Sqlite
         }
 
         /// <inheritdoc />
-        public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
+        public override string TranslateFunction(QueryFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.Ceiling:
+                case QueryFunction.Ceiling:
                     return "(CAST(" + a0 + " AS INTEGER) + (" + a0 + " > CAST(" + a0 + " AS INTEGER)))";
-                case SqlFunction.Floor:
+                case QueryFunction.Floor:
                     return "(CAST(" + a0 + " AS INTEGER) - (" + a0 + " < CAST(" + a0 + " AS INTEGER)))";
-                case SqlFunction.Year: return "CAST(strftime('%Y', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Month: return "CAST(strftime('%m', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Day: return "CAST(strftime('%d', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Hour: return "CAST(strftime('%H', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Minute: return "CAST(strftime('%M', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Second: return "CAST(strftime('%S', " + a0 + ") AS INTEGER)";
-                case SqlFunction.DayOfYear: return "CAST(strftime('%j', " + a0 + ") AS INTEGER)";
-                case SqlFunction.DayOfWeek: return "CAST(strftime('%w', " + a0 + ") AS INTEGER)";
-                case SqlFunction.Date: return "strftime('%Y-%m-%d 00:00:00.0000000', " + a0 + ")";
-                case SqlFunction.AddYears: return AddInterval(a0, a1, "years");
-                case SqlFunction.AddMonths: return AddInterval(a0, a1, "months");
-                case SqlFunction.AddDays: return AddInterval(a0, a1, "days");
-                case SqlFunction.AddHours: return AddInterval(a0, a1, "hours");
-                case SqlFunction.AddMinutes: return AddInterval(a0, a1, "minutes");
-                case SqlFunction.AddSeconds: return AddInterval(a0, a1, "seconds");
+                case QueryFunction.Year: return "CAST(strftime('%Y', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Month: return "CAST(strftime('%m', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Day: return "CAST(strftime('%d', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Hour: return "CAST(strftime('%H', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Minute: return "CAST(strftime('%M', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Second: return "CAST(strftime('%S', " + a0 + ") AS INTEGER)";
+                case QueryFunction.DayOfYear: return "CAST(strftime('%j', " + a0 + ") AS INTEGER)";
+                case QueryFunction.DayOfWeek: return "CAST(strftime('%w', " + a0 + ") AS INTEGER)";
+                case QueryFunction.Date: return "strftime('%Y-%m-%d 00:00:00.0000000', " + a0 + ")";
+                case QueryFunction.AddYears: return AddInterval(a0, a1, "years");
+                case QueryFunction.AddMonths: return AddInterval(a0, a1, "months");
+                case QueryFunction.AddDays: return AddInterval(a0, a1, "days");
+                case QueryFunction.AddHours: return AddInterval(a0, a1, "hours");
+                case QueryFunction.AddMinutes: return AddInterval(a0, a1, "minutes");
+                case QueryFunction.AddSeconds: return AddInterval(a0, a1, "seconds");
                 default:
                     return base.TranslateFunction(function, arguments);
+            }
+        }
+
+        /// <inheritdoc />
+        public override string OrdinalCollation(string expression)
+        {
+            return expression + " COLLATE BINARY";
+        }
+
+        /// <inheritdoc />
+        public override string OrdinalStringMatch(StringMatchKind kind, string target, string value)
+        {
+            switch (kind)
+            {
+                case StringMatchKind.Contains:
+                    return "(INSTR(" + target + ", " + value + ") > 0)";
+                case StringMatchKind.StartsWith:
+                    return "(SUBSTR(" + target + ", 1, LENGTH(" + value + ")) = " + value + " COLLATE BINARY)";
+                default:
+                    return "(LENGTH(" + target + ") >= LENGTH(" + value + ") AND SUBSTR(" + target + ", LENGTH(" + target + ") - LENGTH(" + value + ") + 1) = " + value + " COLLATE BINARY)";
             }
         }
 

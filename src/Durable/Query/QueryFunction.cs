@@ -1,9 +1,9 @@
-namespace Durable.Sql
+namespace Durable.Query
 {
     /// <summary>
-    /// Scalar functions translated from LINQ to dialect-specific SQL by <see cref="ISqlDialect.TranslateFunction"/>.
+    /// Scalar functions recognized by <see cref="QueryNormalizer"/> in LINQ expressions; each backend translates them (SQL dialects via <c>ISqlDialect.TranslateFunction</c>).
     /// </summary>
-    public enum SqlFunction
+    public enum QueryFunction
     {
         /// <summary>String length in characters. Arguments: string.</summary>
         Length,
