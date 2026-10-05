@@ -252,6 +252,136 @@ namespace Durable.Sql
         /// <returns>SQL text.</returns>
         string DropIndexSql(string indexName, string? tableName);
 
+        // Migrations
+
+        /// <summary>
+        /// Gets whether DDL statements participate in transactions (they can be rolled back). When false (MySQL), DDL
+        /// commits implicitly and a failed migration may leave partial changes behind.
+        /// </summary>
+        bool SupportsTransactionalDdl { get; }
+
+        /// <summary>
+        /// Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
+        /// </summary>
+        bool SupportsDropColumn { get; }
+
+        /// <summary>
+        /// Gets the maximum identifier length. Longer names are truncated (PostgreSQL) or rejected by the database;
+        /// schema comparison truncates expected index names to this length.
+        /// </summary>
+        int MaxIdentifierLength { get; }
+
+        /// <summary>
+        /// Gets the batch separator written after each statement in generated migration scripts (for example "GO" on
+        /// SQL Server), or null when statements are separated by <see cref="StatementSeparator"/> only.
+        /// </summary>
+        string? ScriptBatchSeparator { get; }
+
+        /// <summary>
+        /// Gets a SQL expression evaluating to the current UTC date and time, used in generated scripts.
+        /// </summary>
+        string CurrentUtcTimestampSql { get; }
+
+        /// <summary>
+        /// Gets the statement that starts a transaction in generated migration scripts (for example "BEGIN TRANSACTION").
+        /// </summary>
+        string ScriptBeginTransactionSql { get; }
+
+        /// <summary>
+        /// Gets the statement that commits a transaction in generated migration scripts (for example "COMMIT").
+        /// </summary>
+        string ScriptCommitTransactionSql { get; }
+
+        /// <summary>
+        /// Returns a query describing the columns of a table, one row per column in ordinal order, with the columns:
+        /// 0 name (string), 1 declared type including length/precision (string), 2 nullable (1/0),
+        /// 3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0).
+        /// Returns no rows when the table does not exist.
+        /// </summary>
+        /// <param name="tableName">Table name. Must not be null.</param>
+        /// <returns>The statement.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        SqlStatement ColumnSchemaQuery(string tableName);
+
+        /// <summary>
+        /// Returns a query describing the secondary indexes of a table (excluding the primary key and indexes that back
+        /// constraints), one row per index column ordered by index name then position, with the columns:
+        /// 0 index name (string), 1 column name (string), 2 unique (1/0), 3 position (integer), 4 included/non-key column (1/0).
+        /// </summary>
+        /// <param name="tableName">Table name. Must not be null.</param>
+        /// <returns>The statement.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        SqlStatement IndexSchemaQuery(string tableName);
+
+        /// <summary>
+        /// Normalizes a column type to a canonical form so that a declared type (from <see cref="GetColumnType"/>) and the
+        /// type reported by <see cref="ColumnSchemaQuery"/> compare equal when they denote the same type
+        /// (lower case, no redundant whitespace, synonyms resolved).
+        /// </summary>
+        /// <param name="columnType">Column type. Must not be null.</param>
+        /// <returns>The canonical type.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when columnType is null.</exception>
+        string NormalizeColumnType(string columnType);
+
+        /// <summary>
+        /// Returns SQL adding a column to an existing table.
+        /// </summary>
+        /// <param name="tableName">Table name. Must not be null.</param>
+        /// <param name="column">Column. Must not be null.</param>
+        /// <param name="nullable">Whether the column is declared nullable (may differ from the mapping when added as nullable).</param>
+        /// <param name="defaultLiteral">SQL literal for the column default, from <see cref="FormatLiteral"/>; null for none.</param>
+        /// <returns>SQL text.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when tableName or column is null.</exception>
+        string AddColumnSql(string tableName, ColumnMetadata column, bool nullable, string? defaultLiteral);
+
+        /// <summary>
+        /// Returns SQL dropping a column (including anything the database requires to be dropped first, such as a
+        /// SQL Server default constraint).
+        /// </summary>
+        /// <param name="tableName">Table name. Must not be null.</param>
+        /// <param name="columnName">Column name. Must not be null.</param>
+        /// <returns>SQL text.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when tableName or columnName is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when <see cref="SupportsDropColumn"/> is false.</exception>
+        string DropColumnSql(string tableName, string columnName);
+
+        /// <summary>
+        /// Renders a database value (already converted with <see cref="Converter"/>) as a SQL literal, escaping as required.
+        /// Used for column defaults in DDL and for inlining parameters in generated scripts.
+        /// </summary>
+        /// <param name="value">Value; null or <see cref="DBNull"/> renders NULL.</param>
+        /// <returns>The literal.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the value type cannot be rendered as a literal.</exception>
+        string FormatLiteral(object? value);
+
+        /// <summary>
+        /// Returns SQL creating the migration history table when it does not exist, with the columns
+        /// id (string key, up to 150 characters), description (nullable string, up to 1000 characters),
+        /// applied_utc (date/time, not null) and duration_ms (64-bit integer, not null).
+        /// </summary>
+        /// <param name="tableName">History table name. Must not be null.</param>
+        /// <returns>SQL text.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when tableName is null.</exception>
+        string CreateMigrationHistoryTableSql(string tableName);
+
+        /// <summary>
+        /// Returns a statement that tries to take a session-level exclusive lock and yields a single value of 1 when the
+        /// lock was acquired and 0 otherwise, waiting up to waitSeconds where the database supports waiting. Returns null
+        /// when the database has no session lock; the migrator then relies on each migration's write transaction
+        /// (SQLite's BEGIN IMMEDIATE) for mutual exclusion.
+        /// </summary>
+        /// <param name="lockName">Lock name. Must not be null.</param>
+        /// <param name="waitSeconds">Seconds to wait inside the statement. Minimum: 0.</param>
+        /// <returns>The statement, or null.</returns>
+        SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds);
+
+        /// <summary>
+        /// Returns a statement releasing the lock taken by <see cref="AcquireMigrationLockSql"/>, or null when there is none.
+        /// </summary>
+        /// <param name="lockName">Lock name. Must not be null.</param>
+        /// <returns>The statement, or null.</returns>
+        SqlStatement? ReleaseMigrationLockSql(string lockName);
+
         #endregion
     }
 }

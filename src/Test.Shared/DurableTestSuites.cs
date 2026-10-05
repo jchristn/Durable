@@ -39,6 +39,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<ConcurrencyTestSuite>("Concurrency", "Optimistic Concurrency Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<BatchInsertTestSuite>("BatchInsert", "Batch Insert Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<SchemaManagementTestSuite>("SchemaManagement", "Schema Management Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<MigrationTestSuite>("Migration", "Migration (Introspection / Diff / Sync / Versioned) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConnectionPoolStressTestSuite>("ConnectionPoolStress", "Connection Pool Stress Tests", providerTag, BeforeEach));
 
                 // Provider-agnostic exhaustive suites authored for Touchstone (positive and negative coverage).

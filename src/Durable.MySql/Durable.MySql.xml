@@ -88,6 +88,20 @@
         <member name="P:Durable.MySql.MySqlDialect.InsertDefaultValuesClause">
             <inheritdoc />
         </member>
+        <member name="P:Durable.MySql.MySqlDialect.SupportsTransactionalDdl">
+            <summary>
+            Gets false: MySQL commits DDL implicitly, so a failed migration may leave earlier statements applied.
+            </summary>
+        </member>
+        <member name="P:Durable.MySql.MySqlDialect.MaxIdentifierLength">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.MySql.MySqlDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.MySql.MySqlDialect.ScriptBeginTransactionSql">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.MySql.MySqlDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.
@@ -127,6 +141,24 @@
         <member name="M:Durable.MySql.MySqlDialect.DropIndexSql(System.String,System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.MySql.MySqlDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.MySql.MySqlDialect.IdentifierOpen">
             <inheritdoc />
         </member>
@@ -138,6 +170,13 @@
         </member>
         <member name="M:Durable.MySql.MySqlDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
             <inheritdoc />
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.StringLiteral(System.String)">
+            <summary>
+            Renders a string literal, escaping backslashes (MySQL treats them as escape characters by default) and quotes.
+            </summary>
+            <param name="value">Text. Must not be null.</param>
+            <returns>The literal.</returns>
         </member>
         <member name="T:Durable.MySql.MySqlRepository`1">
             <summary>
