@@ -652,14 +652,7 @@ namespace Durable.Sql
 
         internal Func<DbDataReader, T> CreateMapper()
         {
-            RowMaterializer? materializer = null;
-            IDataTypeConverter converter = Context.Converter;
-            EntityMetadata metadata = Metadata;
-            return reader =>
-            {
-                materializer ??= RowMaterializer.For(metadata, reader);
-                return (T)materializer.Materialize(reader, converter);
-            };
+            return RowMaterializer.CreateMapper<T>(Metadata, Context.Converter);
         }
 
         internal SqlStatement WrapAsDerived(string selectList, Func<SqlExpressionTranslator, TableSource, string>? innerSelect)

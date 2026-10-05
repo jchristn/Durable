@@ -438,7 +438,7 @@
             Resets the instance formats to use the default format list.
             </summary>
         </member>
-        <member name="M:Durable.Sql.Helpers.DateTimeParser.EnsureUtcKindForUtcIndicators(System.String,System.DateTime)">
+        <member name="M:Durable.Sql.Helpers.DateTimeParser.TryParseCanonical(System.String,System.DateTime@)">
             <summary>
             Post-processes a parsed DateTime to ensure that UTC indicators in the input string
             result in Kind=Utc, even when .NET's literal format matching doesn't set it.
@@ -3270,7 +3270,7 @@
             <summary>
             Creates row mappers for arbitrary result types: scalar types read the first column; other types are materialized
             by column name with <see cref="T:Durable.Sql.RowMaterializer"/>.
-            Thread safety: returned mappers are not thread-safe (they cache the materializer on first use).
+            Thread safety: returned mappers are not thread-safe (they cache the materializer on first use); create one per command.
             </summary>
         </member>
         <member name="M:Durable.Sql.ResultMapper.Create``1(Durable.Sql.IDataTypeConverter)">
@@ -3289,11 +3289,12 @@
         </member>
         <member name="T:Durable.Sql.RowMaterializer">
             <summary>
-            Maps result rows to objects. For each (type, result shape) a typed row reader is compiled once and cached: columns
-            whose driver type matches (or numerically converts to) the property type are read with <c>GetFieldValue&lt;T&gt;</c>
-            and assigned without boxing; enums, JSON, converter-backed and mismatched columns go through the
-            <see cref="T:Durable.Sql.IDataTypeConverter"/>. If a provider returns an unexpected value type at runtime, the materializer
-            switches to the converter path for every column.
+            Maps result rows to objects. For each (type, result shape) a typed row reader is compiled once and cached: it
+            constructs the instance inline and reads columns whose driver type matches (or numerically converts to) the property
+            type with the reader's typed getters, without boxing. Enums, booleans, GUIDs and dates that the stock
+            <see cref="T:Durable.Sql.DataTypeConverter"/> converts cheaply are converted inline with identical rules; JSON, converter-backed
+            and other mismatched columns go through the <see cref="T:Durable.Sql.IDataTypeConverter"/>. If a provider returns an unexpected
+            value type at runtime, the materializer switches to the converter path for every column.
             Thread safety: instances are thread-safe; the cache is concurrent.
             </summary>
         </member>
@@ -3316,10 +3317,33 @@
             <returns>The materializer.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
         </member>
+        <member name="M:Durable.Sql.RowMaterializer.CreateMapper``1(Durable.EntityMetadata,Durable.Sql.IDataTypeConverter)">
+            <summary>
+            Creates a row mapper for <typeparamref name="T"/> that resolves the materializer from the first row's result shape
+            and then reads every row with a compiled, typed reader. Create one mapper per command; the mapper caches the
+            result shape of the first reader it sees.
+            </summary>
+            <typeparam name="T">Result type; <paramref name="metadata"/> must describe it or a type assignable to it.</typeparam>
+            <param name="metadata">Target metadata. Must not be null.</param>
+            <param name="converter">Converter for values that need conversion. Must not be null.</param>
+            <returns>The mapper. Not thread-safe; use one per command.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the metadata type is not assignable to <typeparamref name="T"/>.</exception>
+        </member>
         <member name="M:Durable.Sql.RowMaterializer.Materialize(System.Data.Common.DbDataReader,Durable.Sql.IDataTypeConverter)">
             <summary>
             Materializes the current row.
             </summary>
+            <param name="reader">Reader positioned on a row. Must not be null.</param>
+            <param name="converter">Converter for values that need conversion. Must not be null.</param>
+            <returns>The new object.</returns>
+        </member>
+        <member name="M:Durable.Sql.RowMaterializer.Materialize``1(System.Data.Common.DbDataReader,Durable.Sql.IDataTypeConverter)">
+            <summary>
+            Materializes the current row as <typeparamref name="T"/> without casting through <see cref="T:System.Object"/> when
+            <typeparamref name="T"/> is the metadata type.
+            </summary>
+            <typeparam name="T">Result type; must be the metadata type or assignable from it.</typeparam>
             <param name="reader">Reader positioned on a row. Must not be null.</param>
             <param name="converter">Converter for values that need conversion. Must not be null.</param>
             <returns>The new object.</returns>
@@ -3332,6 +3356,34 @@
             <param name="column">Column. Must not be null.</param>
             <param name="converter">Converter. Must not be null.</param>
             <returns>The value, or null when the column is absent or null.</returns>
+        </member>
+        <member name="T:Durable.Sql.RowReaderCompiler">
+            <summary>
+            Compiles row readers for <see cref="T:Durable.Sql.RowMaterializer"/>: a delegate that constructs the instance inline and assigns
+            every bound column with the reader's typed getters. Internal to <see cref="T:Durable.Sql.RowMaterializer"/>.
+            When the converter is a stock <see cref="T:Durable.Sql.DataTypeConverter"/> (its read conversion is not overridden), cheap
+            conversions are inlined with exactly the converter's semantics; everything else calls the converter.
+            Thread safety: stateless apart from a concurrent cache; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RowReaderCompiler.CanInline(Durable.Sql.IDataTypeConverter)">
+            <summary>
+            Returns whether conversions for this converter may be inlined: true only for a <see cref="T:Durable.Sql.DataTypeConverter"/>
+            whose read path (<c>ConvertFromDatabase</c> and <c>FromDatabaseCore</c>) is the stock implementation.
+            </summary>
+            <param name="converter">Converter. Must not be null.</param>
+            <returns>True when inlining is safe.</returns>
+        </member>
+        <member name="M:Durable.Sql.RowReaderCompiler.Compile(Durable.EntityMetadata,Durable.Sql.RowBinding[],System.Type[],System.Boolean,System.Type)">
+            <summary>
+            Compiles a reader returning the entity typed as <paramref name="resultType"/>.
+            </summary>
+            <param name="metadata">Entity metadata.</param>
+            <param name="bindings">Bound columns.</param>
+            <param name="fieldTypes">Driver field types per ordinal (null when unknown).</param>
+            <param name="inline">Whether converter conversions may be inlined.</param>
+            <param name="resultType">Delegate return type: the entity type or <see cref="T:System.Object"/>.</param>
+            <returns>A <c>Func&lt;DbDataReader, IDataTypeConverter, TResult&gt;</c>.</returns>
         </member>
         <member name="T:Durable.Sql.SelectModel">
             <summary>
@@ -5791,6 +5843,14 @@
             <param name="qualifier">Column qualifier; null for none.</param>
             <param name="metadata">Metadata. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="T:Durable.Sql.TypedRowMapper`1">
+            <summary>
+            Per-command row mapper created by <see cref="M:Durable.Sql.RowMaterializer.CreateMapper``1(Durable.EntityMetadata,Durable.Sql.IDataTypeConverter)"/>: resolves the materializer and its
+            compiled typed reader on the first row, then maps every row with a single delegate call.
+            Thread safety: not thread-safe; use one instance per command.
+            </summary>
+            <typeparam name="T">Result type.</typeparam>
         </member>
     </members>
 </doc>

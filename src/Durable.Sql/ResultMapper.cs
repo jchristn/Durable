@@ -7,7 +7,7 @@ namespace Durable.Sql
     /// <summary>
     /// Creates row mappers for arbitrary result types: scalar types read the first column; other types are materialized
     /// by column name with <see cref="RowMaterializer"/>.
-    /// Thread safety: returned mappers are not thread-safe (they cache the materializer on first use).
+    /// Thread safety: returned mappers are not thread-safe (they cache the materializer on first use); create one per command.
     /// </summary>
     public static class ResultMapper
     {
@@ -33,13 +33,7 @@ namespace Durable.Sql
                 };
             }
 
-            EntityMetadata metadata = EntityMetadata.For(type);
-            RowMaterializer? materializer = null;
-            return reader =>
-            {
-                materializer ??= RowMaterializer.For(metadata, reader);
-                return (TResult)materializer.Materialize(reader, converter);
-            };
+            return RowMaterializer.CreateMapper<TResult>(EntityMetadata.For(type), converter);
         }
     }
 }

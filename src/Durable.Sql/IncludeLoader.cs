@@ -176,6 +176,7 @@ namespace Durable.Sql
             RowMaterializer? materializer = null;
             int ownerOrdinal = -1;
             IDataTypeConverter converter = _Converter;
+            bool inline = RowReaderCompiler.CanInline(converter);
 
             return reader =>
             {
@@ -185,7 +186,7 @@ namespace Durable.Sql
                     if (navigation.Kind == NavigationKind.ManyToMany) ownerOrdinal = reader.GetOrdinal(OwnerColumnAlias);
                 }
 
-                object entity = materializer.Materialize(reader, converter);
+                object entity = materializer.Materialize(reader, converter, inline);
                 object? ownerKey;
                 if (navigation.Kind == NavigationKind.ManyToMany)
                 {
