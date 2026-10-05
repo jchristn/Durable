@@ -6,6 +6,7 @@ namespace Durable.Sql
     using System.Globalization;
     using System.Linq;
     using System.Text;
+    using System.Text.RegularExpressions;
     using Durable;
     using Durable.Query;
 
@@ -55,6 +56,29 @@ namespace Durable.Sql
 
         /// <inheritdoc />
         public virtual bool SupportsOrdinalLike => true;
+
+        // Migrations
+
+        /// <inheritdoc />
+        public virtual bool SupportsTransactionalDdl => true;
+
+        /// <inheritdoc />
+        public virtual bool SupportsDropColumn => true;
+
+        /// <inheritdoc />
+        public virtual int MaxIdentifierLength => int.MaxValue;
+
+        /// <inheritdoc />
+        public virtual string? ScriptBatchSeparator => null;
+
+        /// <inheritdoc />
+        public virtual string CurrentUtcTimestampSql => "CURRENT_TIMESTAMP";
+
+        /// <inheritdoc />
+        public virtual string ScriptBeginTransactionSql => "BEGIN TRANSACTION";
+
+        /// <inheritdoc />
+        public virtual string ScriptCommitTransactionSql => "COMMIT";
 
         #endregion
 
@@ -278,6 +302,101 @@ namespace Durable.Sql
             return "DROP INDEX " + QuoteIdentifier(indexName);
         }
 
+        // Migrations
+
+        /// <inheritdoc />
+        public virtual SqlStatement ColumnSchemaQuery(string tableName)
+        {
+            throw new NotSupportedException(RepositoryType.DisplayName + " does not support column schema introspection.");
+        }
+
+        /// <inheritdoc />
+        public virtual SqlStatement IndexSchemaQuery(string tableName)
+        {
+            throw new NotSupportedException(RepositoryType.DisplayName + " does not support index schema introspection.");
+        }
+
+        /// <inheritdoc />
+        public virtual string NormalizeColumnType(string columnType)
+        {
+            return CanonicalizeColumnType(columnType);
+        }
+
+        /// <inheritdoc />
+        public virtual string AddColumnSql(string tableName, ColumnMetadata column, bool nullable, string? defaultLiteral)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            ArgumentNullException.ThrowIfNull(column);
+            StringBuilder sb = new StringBuilder();
+            sb.Append("ALTER TABLE ").Append(QuoteIdentifier(tableName)).Append(' ').Append(AddColumnKeyword).Append(' ')
+                .Append(QuoteIdentifier(column.Name)).Append(' ').Append(GetColumnType(column));
+            if (defaultLiteral != null) sb.Append(" DEFAULT ").Append(defaultLiteral);
+            sb.Append(nullable ? " NULL" : " NOT NULL");
+            return sb.ToString();
+        }
+
+        /// <inheritdoc />
+        public virtual string DropColumnSql(string tableName, string columnName)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            ArgumentNullException.ThrowIfNull(columnName);
+            if (!SupportsDropColumn) throw new NotSupportedException(RepositoryType.DisplayName + " does not support dropping columns.");
+            return "ALTER TABLE " + QuoteIdentifier(tableName) + " DROP COLUMN " + QuoteIdentifier(columnName);
+        }
+
+        /// <inheritdoc />
+        public virtual string FormatLiteral(object? value)
+        {
+            if (value == null || value == DBNull.Value) return "NULL";
+            switch (value)
+            {
+                case string text: return StringLiteral(text);
+                case char character: return StringLiteral(character.ToString());
+                case bool flag: return BooleanLiteral(flag);
+                case byte or sbyte or short or ushort or int or uint or long or ulong:
+                    return Convert.ToString(value, CultureInfo.InvariantCulture)!;
+                case decimal number: return number.ToString(CultureInfo.InvariantCulture);
+                case double number:
+                    if (double.IsNaN(number) || double.IsInfinity(number)) throw new NotSupportedException("Non-finite numbers cannot be rendered as SQL literals.");
+                    return number.ToString("R", CultureInfo.InvariantCulture);
+                case float number:
+                    if (float.IsNaN(number) || float.IsInfinity(number)) throw new NotSupportedException("Non-finite numbers cannot be rendered as SQL literals.");
+                    return number.ToString("R", CultureInfo.InvariantCulture);
+                case Guid guid: return StringLiteral(guid.ToString("D"));
+                case DateTime dateTime: return StringLiteral(dateTime.ToString("yyyy-MM-dd HH:mm:ss.ffffff", CultureInfo.InvariantCulture));
+                case DateTimeOffset offset: return StringLiteral(offset.ToString("yyyy-MM-dd HH:mm:ss.ffffffzzz", CultureInfo.InvariantCulture));
+                case DateOnly date: return StringLiteral(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                case TimeOnly time: return StringLiteral(time.ToString("HH:mm:ss.ffffff", CultureInfo.InvariantCulture));
+                case TimeSpan span: return StringLiteral(span.ToString("c", CultureInfo.InvariantCulture));
+                case byte[] bytes: return BinaryLiteral(bytes);
+                default:
+                    throw new NotSupportedException("Values of type " + value.GetType().Name + " cannot be rendered as SQL literals.");
+            }
+        }
+
+        /// <inheritdoc />
+        public virtual string CreateMigrationHistoryTableSql(string tableName)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            return "CREATE TABLE IF NOT EXISTS " + QuoteIdentifier(tableName) + " ("
+                + QuoteIdentifier("id") + " VARCHAR(150) NOT NULL PRIMARY KEY, "
+                + QuoteIdentifier("description") + " VARCHAR(1000) NULL, "
+                + QuoteIdentifier("applied_utc") + " TIMESTAMP NOT NULL, "
+                + QuoteIdentifier("duration_ms") + " BIGINT NOT NULL)";
+        }
+
+        /// <inheritdoc />
+        public virtual SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds)
+        {
+            return null;
+        }
+
+        /// <inheritdoc />
+        public virtual SqlStatement? ReleaseMigrationLockSql(string lockName)
+        {
+            return null;
+        }
+
         #endregion
 
         #region Private-Methods
@@ -376,6 +495,48 @@ namespace Durable.Sql
         {
             int length = column.MaxLength > 0 ? column.MaxLength : (column.IsPrimaryKey || column.Indexes.Count > 0 || column.ForeignKey != null ? defaultLength : 0);
             return length > 0 ? boundedType + "(" + length.ToString(CultureInfo.InvariantCulture) + ")" : unboundedType;
+        }
+
+        // Migrations
+
+        /// <summary>
+        /// Gets the keyword(s) following the table name when adding a column. Default: "ADD COLUMN".
+        /// </summary>
+        protected virtual string AddColumnKeyword => "ADD COLUMN";
+
+        /// <summary>
+        /// Renders a string literal, doubling embedded single quotes.
+        /// </summary>
+        /// <param name="value">Text. Must not be null.</param>
+        /// <returns>The literal.</returns>
+        protected virtual string StringLiteral(string value)
+        {
+            return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+        }
+
+        /// <summary>
+        /// Renders a binary literal. Default: X'hex'.
+        /// </summary>
+        /// <param name="value">Bytes. Must not be null.</param>
+        /// <returns>The literal.</returns>
+        protected virtual string BinaryLiteral(byte[] value)
+        {
+            return "X'" + Convert.ToHexString(value) + "'";
+        }
+
+        /// <summary>
+        /// Canonicalizes type text: lower case, single spaces, no spaces around parentheses and commas.
+        /// </summary>
+        /// <param name="columnType">Type text. Must not be null.</param>
+        /// <returns>The canonical text.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when columnType is null.</exception>
+        protected static string CanonicalizeColumnType(string columnType)
+        {
+            ArgumentNullException.ThrowIfNull(columnType);
+            string text = Regex.Replace(columnType.Trim().ToLowerInvariant(), "\\s+", " ");
+            text = Regex.Replace(text, "\\s*\\(\\s*", "(");
+            text = Regex.Replace(text, "\\s*,\\s*", ",");
+            return Regex.Replace(text, "\\s*\\)", ")");
         }
 
         #endregion

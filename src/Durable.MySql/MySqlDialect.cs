@@ -3,6 +3,7 @@ namespace Durable.MySql
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Text.RegularExpressions;
     using Durable;
     using Durable.Query;
     using Durable.Sql;
@@ -46,6 +47,22 @@ namespace Durable.MySql
 
         /// <inheritdoc />
         public override string StringCastType => "CHAR";
+
+        // Migrations
+
+        /// <summary>
+        /// Gets false: MySQL commits DDL implicitly, so a failed migration may leave earlier statements applied.
+        /// </summary>
+        public override bool SupportsTransactionalDdl => false;
+
+        /// <inheritdoc />
+        public override int MaxIdentifierLength => 64;
+
+        /// <inheritdoc />
+        public override string CurrentUtcTimestampSql => "UTC_TIMESTAMP(6)";
+
+        /// <inheritdoc />
+        public override string ScriptBeginTransactionSql => "START TRANSACTION";
 
         #endregion
 
@@ -199,6 +216,73 @@ namespace Durable.MySql
             return "DROP INDEX " + QuoteIdentifier(indexName) + " ON " + QuoteIdentifier(tableName);
         }
 
+        // Migrations
+
+        /// <inheritdoc />
+        public override SqlStatement ColumnSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT column_name, column_type, CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END, character_maximum_length, " +
+                "CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END FROM information_schema.columns " +
+                "WHERE table_schema = DATABASE() AND table_name = @p0 ORDER BY ordinal_position",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement IndexSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT index_name, column_name, CASE WHEN non_unique = 0 THEN 1 ELSE 0 END, seq_in_index, 0 " +
+                "FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = @p0 AND index_name <> 'PRIMARY' " +
+                "ORDER BY index_name, seq_in_index",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override string NormalizeColumnType(string columnType)
+        {
+            string type = base.NormalizeColumnType(columnType);
+            if (type == "bool" || type == "boolean") return "tinyint(1)";
+            Match integer = Regex.Match(type, "^(tinyint|smallint|mediumint|integer|bigint|int)(\\((\\d+)\\))?(.*)$");
+            if (integer.Success)
+            {
+                string name = integer.Groups[1].Value == "integer" ? "int" : integer.Groups[1].Value;
+                string width = name == "tinyint" && integer.Groups[3].Value == "1" ? "(1)" : string.Empty;
+                return name + width + integer.Groups[4].Value;
+            }
+
+            if (type.StartsWith("numeric", StringComparison.Ordinal)) return "decimal" + type.Substring(7);
+            if (type == "double precision" || type == "real") return "double";
+            return type;
+        }
+
+        /// <inheritdoc />
+        public override string CreateMigrationHistoryTableSql(string tableName)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            return "CREATE TABLE IF NOT EXISTS " + QuoteIdentifier(tableName) + " ("
+                + QuoteIdentifier("id") + " VARCHAR(150) NOT NULL PRIMARY KEY, "
+                + QuoteIdentifier("description") + " VARCHAR(1000) NULL, "
+                + QuoteIdentifier("applied_utc") + " DATETIME(6) NOT NULL, "
+                + QuoteIdentifier("duration_ms") + " BIGINT NOT NULL)";
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement(
+                "SELECT COALESCE(GET_LOCK(@p0, @p1), 0)",
+                new[] { new SqlParameterValue("@p0", lockName), new SqlParameterValue("@p1", Math.Max(0, waitSeconds)) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? ReleaseMigrationLockSql(string lockName)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement("SELECT RELEASE_LOCK(@p0)", new[] { new SqlParameterValue("@p0", lockName) });
+        }
+
         #endregion
 
         #region Private-Methods
@@ -218,6 +302,18 @@ namespace Durable.MySql
             Type type = column.ClrType;
             string baseType = type == typeof(long) ? "BIGINT" : type == typeof(short) ? "SMALLINT" : "INT";
             return baseType + " NOT NULL AUTO_INCREMENT" + (inlinePrimaryKey ? " PRIMARY KEY" : string.Empty);
+        }
+
+        // Migrations
+
+        /// <summary>
+        /// Renders a string literal, escaping backslashes (MySQL treats them as escape characters by default) and quotes.
+        /// </summary>
+        /// <param name="value">Text. Must not be null.</param>
+        /// <returns>The literal.</returns>
+        protected override string StringLiteral(string value)
+        {
+            return "'" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "''", StringComparison.Ordinal) + "'";
         }
 
         #endregion

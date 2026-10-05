@@ -3,6 +3,7 @@ namespace Durable.Postgres
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Text.RegularExpressions;
     using Npgsql;
     using NpgsqlTypes;
     using Durable;
@@ -37,6 +38,14 @@ namespace Durable.Postgres
         /// Default: C. PostgreSQL equality and LIKE are already case- and accent-sensitive under deterministic collations; the collation mainly fixes ordering comparisons.
         /// </summary>
         public string OrdinalCollationName { get; }
+
+        // Migrations
+
+        /// <inheritdoc />
+        public override int MaxIdentifierLength => 63;
+
+        /// <inheritdoc />
+        public override string CurrentUtcTimestampSql => "(now() AT TIME ZONE 'utc')";
 
         #endregion
 
@@ -168,6 +177,86 @@ namespace Durable.Postgres
             return sql;
         }
 
+        // Migrations
+
+        /// <inheritdoc />
+        public override SqlStatement ColumnSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT a.attname, format_type(a.atttypid, a.atttypmod), CASE WHEN a.attnotnull THEN 0 ELSE 1 END, " +
+                "CASE WHEN a.atttypid IN (1042, 1043) AND a.atttypmod > 4 THEN a.atttypmod - 4 ELSE NULL END, " +
+                "CASE WHEN EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY(i.indkey)) THEN 1 ELSE 0 END " +
+                "FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+                "WHERE n.nspname = current_schema() AND c.relname = @p0 AND c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped " +
+                "ORDER BY a.attnum",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement IndexSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT ic.relname, a.attname, CASE WHEN ix.indisunique THEN 1 ELSE 0 END, k.ord, CASE WHEN k.ord > ix.indnkeyatts THEN 1 ELSE 0 END " +
+                "FROM pg_index ix JOIN pg_class t ON t.oid = ix.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace " +
+                "JOIN pg_class ic ON ic.oid = ix.indexrelid " +
+                "CROSS JOIN LATERAL unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord) " +
+                "JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum " +
+                "WHERE n.nspname = current_schema() AND t.relname = @p0 AND NOT ix.indisprimary " +
+                "AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = ix.indexrelid) " +
+                "ORDER BY ic.relname, k.ord",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override string NormalizeColumnType(string columnType)
+        {
+            string type = base.NormalizeColumnType(columnType);
+            Match temporal = Regex.Match(type, "^(timestamp|time)(\\(\\d+\\))? (with|without) time zone$");
+            if (temporal.Success)
+                return temporal.Groups[1].Value + (temporal.Groups[3].Value == "with" ? "tz" : string.Empty) + temporal.Groups[2].Value;
+
+            int paren = type.IndexOf('(');
+            string name = paren < 0 ? type : type.Substring(0, paren);
+            string suffix = paren < 0 ? string.Empty : type.Substring(paren);
+            switch (name)
+            {
+                case "character varying": name = "varchar"; break;
+                case "character": name = "char"; break;
+                case "int":
+                case "int4":
+                case "serial":
+                case "serial4": name = "integer"; break;
+                case "int8":
+                case "bigserial":
+                case "serial8": name = "bigint"; break;
+                case "int2":
+                case "smallserial":
+                case "serial2": name = "smallint"; break;
+                case "float8": name = "double precision"; break;
+                case "float4": name = "real"; break;
+                case "bool": name = "boolean"; break;
+                case "decimal": name = "numeric"; break;
+            }
+
+            return name + suffix;
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement(
+                "SELECT CASE WHEN pg_try_advisory_lock(hashtext(@p0)) THEN 1 ELSE 0 END",
+                new[] { new SqlParameterValue("@p0", lockName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? ReleaseMigrationLockSql(string lockName)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement("SELECT pg_advisory_unlock(hashtext(@p0))", new[] { new SqlParameterValue("@p0", lockName) });
+        }
+
         #endregion
 
         #region Private-Methods
@@ -178,6 +267,14 @@ namespace Durable.Postgres
             Type type = column.ClrType;
             string baseType = type == typeof(long) ? "BIGINT" : type == typeof(short) ? "SMALLINT" : "INTEGER";
             return baseType + " GENERATED BY DEFAULT AS IDENTITY" + (inlinePrimaryKey ? " PRIMARY KEY" : string.Empty);
+        }
+
+        // Migrations
+
+        /// <inheritdoc />
+        protected override string BinaryLiteral(byte[] value)
+        {
+            return "'\\x" + Convert.ToHexString(value) + "'::bytea";
         }
 
         #endregion

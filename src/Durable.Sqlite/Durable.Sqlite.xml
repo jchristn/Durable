@@ -80,6 +80,9 @@
             <inheritdoc />
             <remarks>SQLite's LIKE folds ASCII case regardless of collation, so ordinal substring tests use INSTR/SUBSTR.</remarks>
         </member>
+        <member name="P:Durable.Sqlite.SqliteDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sqlite.SqliteDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.
@@ -112,6 +115,21 @@
         </member>
         <member name="M:Durable.Sqlite.SqliteDialect.CreateIndexSql(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.NormalizeColumnType(System.String)">
+            <summary>
+            Normalizes a column type to its SQLite type affinity (integer, text, blob, real or numeric), because SQLite
+            stores values by affinity and ignores declared lengths.
+            </summary>
+            <param name="columnType">Column type. Must not be null.</param>
+            <returns>The affinity name.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnType is null.</exception>
         </member>
         <member name="P:Durable.Sqlite.SqliteDialect.UnboundedLimit">
             <inheritdoc />

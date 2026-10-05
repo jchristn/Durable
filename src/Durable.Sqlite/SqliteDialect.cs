@@ -35,6 +35,11 @@ namespace Durable.Sqlite
         /// <remarks>SQLite's LIKE folds ASCII case regardless of collation, so ordinal substring tests use INSTR/SUBSTR.</remarks>
         public override bool SupportsOrdinalLike => false;
 
+        // Migrations
+
+        /// <inheritdoc />
+        public override string CurrentUtcTimestampSql => "(strftime('%Y-%m-%d %H:%M:%f', 'now') || '0000')";
+
         #endregion
 
         #region Constructors-and-Factories
@@ -148,6 +153,45 @@ namespace Durable.Sqlite
         public override string CreateIndexSql(string indexName, string tableName, IReadOnlyList<string> columns, bool unique, IReadOnlyList<string>? includedColumns)
         {
             return base.CreateIndexSql(indexName, tableName, columns, unique, null);
+        }
+
+        // Migrations
+
+        /// <inheritdoc />
+        public override SqlStatement ColumnSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT name, type, CASE WHEN \"notnull\" = 0 THEN 1 ELSE 0 END, " +
+                "CASE WHEN instr(type, '(') > 0 THEN CAST(substr(type, instr(type, '(') + 1) AS INTEGER) ELSE NULL END, " +
+                "CASE WHEN pk > 0 THEN 1 ELSE 0 END FROM pragma_table_info(@p0) ORDER BY cid",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement IndexSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT il.name, ii.name, il.\"unique\", ii.seqno, 0 FROM pragma_index_list(@p0) AS il " +
+                "JOIN pragma_index_info(il.name) AS ii WHERE il.origin = 'c' ORDER BY il.name, ii.seqno",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <summary>
+        /// Normalizes a column type to its SQLite type affinity (integer, text, blob, real or numeric), because SQLite
+        /// stores values by affinity and ignores declared lengths.
+        /// </summary>
+        /// <param name="columnType">Column type. Must not be null.</param>
+        /// <returns>The affinity name.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when columnType is null.</exception>
+        public override string NormalizeColumnType(string columnType)
+        {
+            ArgumentNullException.ThrowIfNull(columnType);
+            string type = columnType.ToUpperInvariant();
+            if (type.Contains("INT", StringComparison.Ordinal)) return "integer";
+            if (type.Contains("CHAR", StringComparison.Ordinal) || type.Contains("CLOB", StringComparison.Ordinal) || type.Contains("TEXT", StringComparison.Ordinal)) return "text";
+            if (type.Trim().Length == 0 || type.Contains("BLOB", StringComparison.Ordinal)) return "blob";
+            if (type.Contains("REAL", StringComparison.Ordinal) || type.Contains("FLOA", StringComparison.Ordinal) || type.Contains("DOUB", StringComparison.Ordinal)) return "real";
+            return "numeric";
         }
 
         #endregion

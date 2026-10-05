@@ -79,6 +79,17 @@
         <member name="P:Durable.SqlServer.SqlServerDialect.StringCastType">
             <inheritdoc />
         </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.MaxIdentifierLength">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.ScriptBatchSeparator">
+            <summary>
+            Gets "GO": generated scripts separate statements into batches so later statements can reference columns added earlier.
+            </summary>
+        </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
             <summary>
             Instantiates the dialect.
@@ -141,6 +152,27 @@
         <member name="M:Durable.SqlServer.SqlServerDialect.DropIndexSql(System.String,System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.DropColumnSql(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.SqlServer.SqlServerDialect.IdentifierOpen">
             <inheritdoc />
         </member>
@@ -152,6 +184,25 @@
         </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
             <inheritdoc />
+        </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.AddColumnKeyword">
+            <summary>
+            Gets "ADD": SQL Server's ALTER TABLE does not use the COLUMN keyword when adding columns.
+            </summary>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.StringLiteral(System.String)">
+            <summary>
+            Renders a Unicode string literal (N'...').
+            </summary>
+            <param name="value">Text. Must not be null.</param>
+            <returns>The literal.</returns>
+        </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.BinaryLiteral(System.Byte[])">
+            <summary>
+            Renders a binary literal (0x...).
+            </summary>
+            <param name="value">Bytes. Must not be null.</param>
+            <returns>The literal.</returns>
         </member>
         <member name="T:Durable.SqlServer.SqlServerRepository`1">
             <summary>

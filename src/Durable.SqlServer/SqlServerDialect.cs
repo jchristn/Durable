@@ -49,6 +49,19 @@ namespace Durable.SqlServer
         /// <inheritdoc />
         public override string StringCastType => "NVARCHAR(MAX)";
 
+        // Migrations
+
+        /// <inheritdoc />
+        public override int MaxIdentifierLength => 128;
+
+        /// <summary>
+        /// Gets "GO": generated scripts separate statements into batches so later statements can reference columns added earlier.
+        /// </summary>
+        public override string? ScriptBatchSeparator => "GO";
+
+        /// <inheritdoc />
+        public override string CurrentUtcTimestampSql => "SYSUTCDATETIME()";
+
         #endregion
 
         #region Constructors-and-Factories
@@ -274,6 +287,110 @@ namespace Durable.SqlServer
             return "DROP INDEX " + QuoteIdentifier(indexName) + " ON " + QuoteIdentifier(tableName);
         }
 
+        // Migrations
+
+        /// <inheritdoc />
+        public override SqlStatement ColumnSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT c.COLUMN_NAME, " +
+                "CASE WHEN c.CHARACTER_MAXIMUM_LENGTH = -1 THEN c.DATA_TYPE + '(max)' " +
+                "WHEN c.CHARACTER_MAXIMUM_LENGTH IS NOT NULL AND c.DATA_TYPE NOT IN ('text', 'ntext', 'image', 'xml') THEN c.DATA_TYPE + '(' + CAST(c.CHARACTER_MAXIMUM_LENGTH AS VARCHAR(10)) + ')' " +
+                "WHEN c.DATA_TYPE IN ('decimal', 'numeric') THEN c.DATA_TYPE + '(' + CAST(c.NUMERIC_PRECISION AS VARCHAR(10)) + ',' + CAST(c.NUMERIC_SCALE AS VARCHAR(10)) + ')' " +
+                "ELSE c.DATA_TYPE END, " +
+                "CASE WHEN c.IS_NULLABLE = 'YES' THEN 1 ELSE 0 END, c.CHARACTER_MAXIMUM_LENGTH, " +
+                "CASE WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k " +
+                "ON k.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND k.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA AND k.TABLE_NAME = tc.TABLE_NAME " +
+                "WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_SCHEMA = c.TABLE_SCHEMA AND tc.TABLE_NAME = c.TABLE_NAME AND k.COLUMN_NAME = c.COLUMN_NAME) THEN 1 ELSE 0 END " +
+                "FROM INFORMATION_SCHEMA.COLUMNS c WHERE c.TABLE_SCHEMA = SCHEMA_NAME() AND c.TABLE_NAME = @p0 ORDER BY c.ORDINAL_POSITION",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement IndexSchemaQuery(string tableName)
+        {
+            return new SqlStatement(
+                "SELECT i.name, c.name, CAST(i.is_unique AS INT), " +
+                "CASE WHEN ic.is_included_column = 1 THEN 1000 + ic.index_column_id ELSE ic.key_ordinal END, CAST(ic.is_included_column AS INT) " +
+                "FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id " +
+                "JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id " +
+                "WHERE i.object_id = OBJECT_ID(QUOTENAME(SCHEMA_NAME()) + '.' + QUOTENAME(@p0)) AND i.is_primary_key = 0 " +
+                "AND i.is_unique_constraint = 0 AND i.name IS NOT NULL " +
+                "ORDER BY i.name, CASE WHEN ic.is_included_column = 1 THEN 1000 + ic.index_column_id ELSE ic.key_ordinal END",
+                new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override string NormalizeColumnType(string columnType)
+        {
+            string type = base.NormalizeColumnType(columnType);
+            int paren = type.IndexOf('(');
+            string name = paren < 0 ? type : type.Substring(0, paren);
+            string suffix = paren < 0 ? string.Empty : type.Substring(paren);
+            switch (name)
+            {
+                case "integer": name = "int"; break;
+                case "dec":
+                case "numeric": name = "decimal"; break;
+                case "double precision": name = "float"; break;
+                case "rowversion": name = "timestamp"; break;
+                case "national character varying":
+                case "national char varying": name = "nvarchar"; break;
+                case "national character":
+                case "national char": name = "nchar"; break;
+            }
+
+            if (name == "float" && suffix == "(53)") suffix = string.Empty;
+            return name + suffix;
+        }
+
+        /// <inheritdoc />
+        public override string DropColumnSql(string tableName, string columnName)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            ArgumentNullException.ThrowIfNull(columnName);
+            string table = QuoteIdentifier(tableName);
+            return "DECLARE @durable_default SYSNAME; DECLARE @durable_sql NVARCHAR(MAX); " +
+                "SELECT @durable_default = d.name FROM sys.default_constraints d JOIN sys.columns c " +
+                "ON c.object_id = d.parent_object_id AND c.column_id = d.parent_column_id " +
+                "WHERE d.parent_object_id = OBJECT_ID(" + FormatLiteral(table) + ") AND c.name = " + FormatLiteral(columnName) + "; " +
+                "IF @durable_default IS NOT NULL BEGIN SET @durable_sql = " + FormatLiteral("ALTER TABLE " + table + " DROP CONSTRAINT ") +
+                " + QUOTENAME(@durable_default); EXEC sp_executesql @durable_sql; END; " +
+                "ALTER TABLE " + table + " DROP COLUMN " + QuoteIdentifier(columnName);
+        }
+
+        /// <inheritdoc />
+        public override string CreateMigrationHistoryTableSql(string tableName)
+        {
+            ArgumentNullException.ThrowIfNull(tableName);
+            string table = QuoteIdentifier(tableName);
+            return "IF OBJECT_ID(" + FormatLiteral(table) + ", N'U') IS NULL CREATE TABLE " + table + " ("
+                + QuoteIdentifier("id") + " NVARCHAR(150) NOT NULL PRIMARY KEY, "
+                + QuoteIdentifier("description") + " NVARCHAR(1000) NULL, "
+                + QuoteIdentifier("applied_utc") + " DATETIME2 NOT NULL, "
+                + QuoteIdentifier("duration_ms") + " BIGINT NOT NULL)";
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement(
+                "DECLARE @durable_lock INT; " +
+                "EXEC @durable_lock = sp_getapplock @Resource = @p0, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = @p1; " +
+                "SELECT CASE WHEN @durable_lock >= 0 THEN 1 ELSE 0 END",
+                new[] { new SqlParameterValue("@p0", lockName), new SqlParameterValue("@p1", Math.Max(0, waitSeconds) * 1000) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement? ReleaseMigrationLockSql(string lockName)
+        {
+            ArgumentNullException.ThrowIfNull(lockName);
+            return new SqlStatement(
+                "EXEC sp_releaseapplock @Resource = @p0, @LockOwner = 'Session'",
+                new[] { new SqlParameterValue("@p0", lockName) });
+        }
+
         #endregion
 
         #region Private-Methods
@@ -296,6 +413,33 @@ namespace Durable.SqlServer
             Type type = column.ClrType;
             string baseType = type == typeof(long) ? "BIGINT" : type == typeof(short) ? "SMALLINT" : "INT";
             return baseType + " IDENTITY(1,1) NOT NULL" + (inlinePrimaryKey ? " PRIMARY KEY" : string.Empty);
+        }
+
+        // Migrations
+
+        /// <summary>
+        /// Gets "ADD": SQL Server's ALTER TABLE does not use the COLUMN keyword when adding columns.
+        /// </summary>
+        protected override string AddColumnKeyword => "ADD";
+
+        /// <summary>
+        /// Renders a Unicode string literal (N'...').
+        /// </summary>
+        /// <param name="value">Text. Must not be null.</param>
+        /// <returns>The literal.</returns>
+        protected override string StringLiteral(string value)
+        {
+            return "N" + base.StringLiteral(value);
+        }
+
+        /// <summary>
+        /// Renders a binary literal (0x...).
+        /// </summary>
+        /// <param name="value">Bytes. Must not be null.</param>
+        /// <returns>The literal.</returns>
+        protected override string BinaryLiteral(byte[] value)
+        {
+            return "0x" + Convert.ToHexString(value);
         }
 
         #endregion

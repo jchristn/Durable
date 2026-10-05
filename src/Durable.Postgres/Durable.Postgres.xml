@@ -87,6 +87,12 @@
             Default: C. PostgreSQL equality and LIKE are already case- and accent-sensitive under deterministic collations; the collation mainly fixes ordering comparisons.
             </summary>
         </member>
+        <member name="P:Durable.Postgres.PostgresDialect.MaxIdentifierLength">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Postgres.PostgresDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Postgres.PostgresDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
             <summary>
             Instantiates the dialect.
@@ -119,7 +125,25 @@
         <member name="M:Durable.Postgres.PostgresDialect.CreateIndexSql(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Postgres.PostgresDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Postgres.PostgresDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.BinaryLiteral(System.Byte[])">
             <inheritdoc />
         </member>
         <member name="T:Durable.Postgres.PostgresRepository`1">

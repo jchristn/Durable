@@ -972,6 +972,134 @@
             <param name="tableName">Owning table name; required by some databases. May be null when unknown.</param>
             <returns>SQL text.</returns>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsTransactionalDdl">
+            <summary>
+            Gets whether DDL statements participate in transactions (they can be rolled back). When false (MySQL), DDL
+            commits implicitly and a failed migration may leave partial changes behind.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsDropColumn">
+            <summary>
+            Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.MaxIdentifierLength">
+            <summary>
+            Gets the maximum identifier length. Longer names are truncated (PostgreSQL) or rejected by the database;
+            schema comparison truncates expected index names to this length.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.ScriptBatchSeparator">
+            <summary>
+            Gets the batch separator written after each statement in generated migration scripts (for example "GO" on
+            SQL Server), or null when statements are separated by <see cref="P:Durable.Sql.ISqlDialect.StatementSeparator"/> only.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.CurrentUtcTimestampSql">
+            <summary>
+            Gets a SQL expression evaluating to the current UTC date and time, used in generated scripts.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.ScriptBeginTransactionSql">
+            <summary>
+            Gets the statement that starts a transaction in generated migration scripts (for example "BEGIN TRANSACTION").
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.ScriptCommitTransactionSql">
+            <summary>
+            Gets the statement that commits a transaction in generated migration scripts (for example "COMMIT").
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.ColumnSchemaQuery(System.String)">
+            <summary>
+            Returns a query describing the columns of a table, one row per column in ordinal order, with the columns:
+            0 name (string), 1 declared type including length/precision (string), 2 nullable (1/0),
+            3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0).
+            Returns no rows when the table does not exist.
+            </summary>
+            <param name="tableName">Table name. Must not be null.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.IndexSchemaQuery(System.String)">
+            <summary>
+            Returns a query describing the secondary indexes of a table (excluding the primary key and indexes that back
+            constraints), one row per index column ordered by index name then position, with the columns:
+            0 index name (string), 1 column name (string), 2 unique (1/0), 3 position (integer), 4 included/non-key column (1/0).
+            </summary>
+            <param name="tableName">Table name. Must not be null.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.NormalizeColumnType(System.String)">
+            <summary>
+            Normalizes a column type to a canonical form so that a declared type (from <see cref="M:Durable.Sql.ISqlDialect.GetColumnType(Durable.ColumnMetadata)"/>) and the
+            type reported by <see cref="M:Durable.Sql.ISqlDialect.ColumnSchemaQuery(System.String)"/> compare equal when they denote the same type
+            (lower case, no redundant whitespace, synonyms resolved).
+            </summary>
+            <param name="columnType">Column type. Must not be null.</param>
+            <returns>The canonical type.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnType is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.AddColumnSql(System.String,Durable.ColumnMetadata,System.Boolean,System.String)">
+            <summary>
+            Returns SQL adding a column to an existing table.
+            </summary>
+            <param name="tableName">Table name. Must not be null.</param>
+            <param name="column">Column. Must not be null.</param>
+            <param name="nullable">Whether the column is declared nullable (may differ from the mapping when added as nullable).</param>
+            <param name="defaultLiteral">SQL literal for the column default, from <see cref="M:Durable.Sql.ISqlDialect.FormatLiteral(System.Object)"/>; null for none.</param>
+            <returns>SQL text.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when tableName or column is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.DropColumnSql(System.String,System.String)">
+            <summary>
+            Returns SQL dropping a column (including anything the database requires to be dropped first, such as a
+            SQL Server default constraint).
+            </summary>
+            <param name="tableName">Table name. Must not be null.</param>
+            <param name="columnName">Column name. Must not be null.</param>
+            <returns>SQL text.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when tableName or columnName is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when <see cref="P:Durable.Sql.ISqlDialect.SupportsDropColumn"/> is false.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.FormatLiteral(System.Object)">
+            <summary>
+            Renders a database value (already converted with <see cref="P:Durable.Sql.ISqlDialect.Converter"/>) as a SQL literal, escaping as required.
+            Used for column defaults in DDL and for inlining parameters in generated scripts.
+            </summary>
+            <param name="value">Value; null or <see cref="T:System.DBNull"/> renders NULL.</param>
+            <returns>The literal.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the value type cannot be rendered as a literal.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.CreateMigrationHistoryTableSql(System.String)">
+            <summary>
+            Returns SQL creating the migration history table when it does not exist, with the columns
+            id (string key, up to 150 characters), description (nullable string, up to 1000 characters),
+            applied_utc (date/time, not null) and duration_ms (64-bit integer, not null).
+            </summary>
+            <param name="tableName">History table name. Must not be null.</param>
+            <returns>SQL text.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when tableName is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <summary>
+            Returns a statement that tries to take a session-level exclusive lock and yields a single value of 1 when the
+            lock was acquired and 0 otherwise, waiting up to waitSeconds where the database supports waiting. Returns null
+            when the database has no session lock; the migrator then relies on each migration's write transaction
+            (SQLite's BEGIN IMMEDIATE) for mutual exclusion.
+            </summary>
+            <param name="lockName">Lock name. Must not be null.</param>
+            <param name="waitSeconds">Seconds to wait inside the statement. Minimum: 0.</param>
+            <returns>The statement, or null.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.ReleaseMigrationLockSql(System.String)">
+            <summary>
+            Returns a statement releasing the lock taken by <see cref="M:Durable.Sql.ISqlDialect.AcquireMigrationLockSql(System.String,System.Int32)"/>, or null when there is none.
+            </summary>
+            <param name="lockName">Lock name. Must not be null.</param>
+            <returns>The statement, or null.</returns>
+        </member>
         <member name="T:Durable.Sql.ISqlQueryBuilder`1">
             <summary>
             SQL query builder: the backend-neutral <see cref="T:Durable.IQueryBuilder`1"/> plus raw SQL fragments, set operations,
@@ -1803,6 +1931,1305 @@
             so predicates and orderings over a projection translate against the source table.
             </summary>
         </member>
+        <member name="T:Durable.Sql.AppliedMigration">
+            <summary>
+            A row of the migration history table.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.AppliedMigration.Id">
+            <summary>
+            Gets the migration identifier. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.AppliedMigration.Description">
+            <summary>
+            Gets the description recorded when applied; may be null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.AppliedMigration.AppliedUtc">
+            <summary>
+            Gets when the migration was applied (UTC).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.AppliedMigration.DurationMs">
+            <summary>
+            Gets how long the migration took, in milliseconds. Minimum: 0.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.AppliedMigration.#ctor(System.String,System.String,System.DateTime,System.Int64)">
+            <summary>
+            Instantiates a history record.
+            </summary>
+            <param name="id">Migration identifier. Must not be null or empty.</param>
+            <param name="description">Description; may be null.</param>
+            <param name="appliedUtc">Application time (UTC).</param>
+            <param name="durationMs">Duration in milliseconds. Negative values are clamped to 0.</param>
+            <exception cref="T:System.ArgumentException">Thrown when id is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.AppliedMigration.ToString">
+            <summary>
+            Returns "Id (applied at ...)".
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.ColumnSchema">
+            <summary>
+            A column of a live database table, as read by <see cref="T:Durable.Sql.DatabaseSchemaReader"/>.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.Name">
+            <summary>
+            Gets the column name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.DataType">
+            <summary>
+            Gets the declared type as reported by the database, including length or precision (for example "varchar(64)").
+            Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.IsNullable">
+            <summary>
+            Gets whether the column accepts null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.MaxLength">
+            <summary>
+            Gets the maximum character length; -1 for unbounded (MAX) types; null when not applicable or unknown.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.IsPrimaryKey">
+            <summary>
+            Gets whether the column is part of the primary key.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ColumnSchema.Ordinal">
+            <summary>
+            Gets the zero-based position of the column in the table.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ColumnSchema.#ctor(System.String,System.String,System.Boolean,System.Nullable{System.Int32},System.Boolean,System.Int32)">
+            <summary>
+            Instantiates a column description.
+            </summary>
+            <param name="name">Column name. Must not be null or empty.</param>
+            <param name="dataType">Declared type. Must not be null.</param>
+            <param name="isNullable">Whether the column accepts null.</param>
+            <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
+            <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
+            <param name="ordinal">Zero-based position. Minimum: 0.</param>
+            <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when dataType is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
+        </member>
+        <member name="M:Durable.Sql.ColumnSchema.ToString">
+            <summary>
+            Returns a readable description, for example "email varchar(128) NULL".
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.DatabaseSchemaReader">
+            <summary>
+            Reads the live schema of tables (columns with type, nullability, max length and key membership; secondary indexes)
+            through the dialect's introspection queries (<see cref="M:Durable.Sql.ISqlDialect.ColumnSchemaQuery(System.String)"/>,
+            <see cref="M:Durable.Sql.ISqlDialect.IndexSchemaQuery(System.String)"/>). Tables are resolved in the connection's default schema.
+            Thread safety: safe for concurrent use; each call opens its own connection.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.DatabaseSchemaReader.Dialect">
+            <summary>
+            Gets the dialect. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.DatabaseSchemaReader.ConnectionFactory">
+            <summary>
+            Gets the connection factory. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.#ctor(Durable.Sql.IConnectionFactory,Durable.Sql.ISqlDialect,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Instantiates a schema reader. The reader never disposes the connection factory.
+            </summary>
+            <param name="connectionFactory">Connection factory. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="options">Command options (timeout, interceptors, logging); null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.TableExists(System.String)">
+            <summary>
+            Returns whether a table exists.
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <returns>True when the table exists.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.TableExistsAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Returns whether a table exists.
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>True when the table exists.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTable(System.String)">
+            <summary>
+            Reads a table's columns and secondary indexes.
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <returns>The table, or null when it does not exist.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support introspection.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTableAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Reads a table's columns and secondary indexes.
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The table, or null when it does not exist.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support introspection.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTables(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Reads several tables; tables that do not exist are omitted from the result.
+            </summary>
+            <param name="tableNames">Table names. Must not be null.</param>
+            <returns>Existing tables keyed by name (case-insensitive).</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when tableNames is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTablesAsync(System.Collections.Generic.IEnumerable{System.String},System.Threading.CancellationToken)">
+            <summary>
+            Reads several tables; tables that do not exist are omitted from the result.
+            </summary>
+            <param name="tableNames">Table names. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Existing tables keyed by name (case-insensitive).</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when tableNames is null.</exception>
+        </member>
+        <member name="T:Durable.Sql.IndexColumnRow">
+            <summary>
+            One row of <see cref="M:Durable.Sql.ISqlDialect.IndexSchemaQuery(System.String)"/>: a column's membership in an index.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.IndexSchema">
+            <summary>
+            A secondary index, either read from a live table by <see cref="T:Durable.Sql.DatabaseSchemaReader"/> or expected from entity
+            attributes (<see cref="T:Durable.IndexAttribute"/>, <see cref="T:Durable.CompositeIndexAttribute"/>).
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.IndexSchema.Name">
+            <summary>
+            Gets the index name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.IndexSchema.Columns">
+            <summary>
+            Gets the key column names in index order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.IndexSchema.IncludedColumns">
+            <summary>
+            Gets the included (covering, non-key) column names; empty when none or unsupported. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.IndexSchema.IsUnique">
+            <summary>
+            Gets whether the index is unique.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.IndexSchema.#ctor(System.String,System.Collections.Generic.IEnumerable{System.String},System.Boolean,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Instantiates an index description.
+            </summary>
+            <param name="name">Index name. Must not be null or empty.</param>
+            <param name="columns">Key column names in order. Must not be null.</param>
+            <param name="isUnique">Whether the index is unique.</param>
+            <param name="includedColumns">Included column names; null for none.</param>
+            <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when columns is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.IndexSchema.HasSameDefinition(Durable.Sql.IndexSchema)">
+            <summary>
+            Returns true when another index has the same key columns (in order, case-insensitive) and uniqueness.
+            Names and included columns are not compared.
+            </summary>
+            <param name="other">Other index. Must not be null.</param>
+            <returns>True when the definitions match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.IndexSchema.ToString">
+            <summary>
+            Returns a readable description, for example "UNIQUE idx_users_email (email)".
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.Migration">
+            <summary>
+            A versioned schema change applied once per database by <see cref="T:Durable.Sql.SqlMigrator"/> and recorded in the history table.
+            <para>
+            <see cref="P:Durable.Sql.Migration.Id"/> must be stable forever and sort chronologically with ordinal string comparison, for example
+            "20261005_0001_AddEmail". Implement <see cref="M:Durable.Sql.Migration.Up(Durable.Sql.MigrationContext)"/>; override <see cref="M:Durable.Sql.Migration.UpAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)"/> for a truly
+            asynchronous implementation (used by <see cref="M:Durable.Sql.SqlMigrator.MigrateAsync(System.Threading.CancellationToken)"/>). Override <see cref="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)"/>
+            (and optionally <see cref="M:Durable.Sql.Migration.DownAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)"/>) to support <see cref="M:Durable.Sql.SqlMigrator.RollbackTo(System.String)"/>.
+            </para>
+            Thread safety: implementations should be stateless; one instance may be used by several migrators.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.Migration.Id">
+            <summary>
+            Gets the unique, stable identifier. Ordinal order defines application order. Must not be null or empty and at
+            most 150 characters.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.Migration.Description">
+            <summary>
+            Gets a human-readable description stored in the history table (truncated to 1000 characters).
+            Default: the class name. May be null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.Migration.UseTransaction">
+            <summary>
+            Gets whether the migration runs inside a transaction (together with its history record) on databases with
+            transactional DDL. Return false for statements that cannot run in a transaction (for example PostgreSQL's
+            CREATE INDEX CONCURRENTLY). Note that on SQLite the transaction also serializes concurrent migrators.
+            Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.Migration.SupportsDown">
+            <summary>
+            Gets whether <see cref="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)"/> or <see cref="M:Durable.Sql.Migration.DownAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)"/> is overridden.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.Migration.Up(Durable.Sql.MigrationContext)">
+            <summary>
+            Applies the migration.
+            </summary>
+            <param name="context">Context for executing SQL and synchronizing schema. Never null.</param>
+        </member>
+        <member name="M:Durable.Sql.Migration.UpAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)">
+            <summary>
+            Applies the migration asynchronously. Default: calls <see cref="M:Durable.Sql.Migration.Up(Durable.Sql.MigrationContext)"/>.
+            </summary>
+            <param name="context">Context for executing SQL and synchronizing schema. Never null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+        </member>
+        <member name="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)">
+            <summary>
+            Reverts the migration. Default: throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+            <param name="context">Context for executing SQL and synchronizing schema. Never null.</param>
+            <exception cref="T:System.NotSupportedException">Thrown when the migration does not support reverting.</exception>
+        </member>
+        <member name="M:Durable.Sql.Migration.DownAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)">
+            <summary>
+            Reverts the migration asynchronously. Default: calls <see cref="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)"/>.
+            </summary>
+            <param name="context">Context for executing SQL and synchronizing schema. Never null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the migration does not support reverting.</exception>
+        </member>
+        <member name="M:Durable.Sql.Migration.ToString">
+            <summary>
+            Returns "Id: Description".
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.MigrationContext">
+            <summary>
+            Passed to <see cref="M:Durable.Sql.Migration.Up(Durable.Sql.MigrationContext)"/> and <see cref="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)"/>: executes
+            parameterized SQL and synchronizes schema on the migration's connection and transaction.
+            <para>
+            While a script is being generated (<see cref="P:Durable.Sql.MigrationContext.IsScripting"/>), statements are written to the script instead of being
+            executed, schema reads still query the live database, and <see cref="M:Durable.Sql.MigrationContext.ExecuteScalar(System.String,System.Object[])"/> is unavailable.
+            </para>
+            Thread safety: not thread-safe; valid only for the duration of the migration call.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationContext.Dialect">
+            <summary>
+            Gets the dialect. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationContext.Migration">
+            <summary>
+            Gets the migration being run. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationContext.IsScripting">
+            <summary>
+            Gets whether statements are being written to a script rather than executed.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationContext.Transaction">
+            <summary>
+            Gets the migration's connection and transaction, for passing to repository methods so they run inside the
+            migration (for example to seed data). When the migration runs without a transaction this wraps the connection only.
+            Null while scripting.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])">
+            <summary>
+            Executes a statement that returns no rows. Parameters are referenced by the dialect's positional names
+            (@p0, @p1, ...), as with <see cref="M:Durable.Sql.ISqlRepository`1.ExecuteSql(System.String,Durable.ITransaction,System.Object[])"/>, and are always bound, never inlined
+            (except in generated scripts).
+            </summary>
+            <param name="sql">SQL. Must not be null or empty.</param>
+            <param name="parameters">Parameter values; may be empty.</param>
+            <returns>Rows affected; 0 while scripting.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSqlAsync(System.String,System.Object[],System.Threading.CancellationToken)">
+            <summary>
+            Executes a statement that returns no rows. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            </summary>
+            <param name="sql">SQL. Must not be null or empty.</param>
+            <param name="parameters">Parameter values; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows affected; 0 while scripting.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalar(System.String,System.Object[])">
+            <summary>
+            Executes a query and returns the first column of the first row. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            </summary>
+            <param name="sql">SQL. Must not be null or empty.</param>
+            <param name="parameters">Parameter values; may be empty.</param>
+            <returns>The value, or null for no row or a database null.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalarAsync(System.String,System.Object[],System.Threading.CancellationToken)">
+            <summary>
+            Executes a query and returns the first column of the first row. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            </summary>
+            <param name="sql">SQL. Must not be null or empty.</param>
+            <param name="parameters">Parameter values; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The value, or null for no row or a database null.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchema(System.Type[])">
+            <summary>
+            Brings the tables of the given entity types up to date with additive operations (create tables, add columns,
+            create indexes) using default <see cref="T:Durable.Sql.SchemaSyncOptions"/>. Destructive operations are skipped and
+            differences are reported in the result.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchema(Durable.Sql.SchemaSyncOptions,System.Type[])">
+            <summary>
+            Brings the tables of the given entity types up to date. Runs inside the migration's transaction (the
+            <see cref="P:Durable.Sql.SchemaSyncOptions.UseTransaction"/> option does not apply).
+            </summary>
+            <param name="options">Options. Must not be null.</param>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when options or entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Brings the tables of the given entity types up to date. Runs inside the migration's transaction.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ReadTable(System.String)">
+            <summary>
+            Reads a table's live schema on the migration's connection (sees uncommitted changes of this migration).
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <returns>The table, or null when it does not exist.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ReadTableAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Reads a table's live schema on the migration's connection (sees uncommitted changes of this migration).
+            </summary>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The table, or null when it does not exist.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+        </member>
+        <member name="T:Durable.Sql.MigrationException">
+            <summary>
+            Thrown when a migration or schema synchronization fails. The failed migration is never recorded in the history
+            table. When <see cref="P:Durable.Sql.MigrationException.MayBePartiallyApplied"/> is false the failed work was rolled back; when true (no transactional
+            DDL, such as MySQL, or a migration with <see cref="P:Durable.Sql.Migration.UseTransaction"/> false) statements executed before the
+            failure remain applied and must be reconciled manually before retrying.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationException.MigrationId">
+            <summary>
+            Gets the identifier of the failed migration; null for a schema synchronization.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationException.MayBePartiallyApplied">
+            <summary>
+            Gets whether some statements of the failed work may remain applied.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.MigrationException.#ctor">
+            <summary>
+            Instantiates the exception.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.MigrationException.#ctor(System.String)">
+            <summary>
+            Instantiates the exception.
+            </summary>
+            <param name="message">Message.</param>
+        </member>
+        <member name="M:Durable.Sql.MigrationException.#ctor(System.String,System.Exception)">
+            <summary>
+            Instantiates the exception.
+            </summary>
+            <param name="message">Message.</param>
+            <param name="innerException">Cause; may be null.</param>
+        </member>
+        <member name="M:Durable.Sql.MigrationException.#ctor(System.String,System.String,System.Boolean,System.Exception)">
+            <summary>
+            Instantiates the exception.
+            </summary>
+            <param name="migrationId">Failed migration identifier; null for a schema synchronization.</param>
+            <param name="message">Message.</param>
+            <param name="mayBePartiallyApplied">Whether some statements may remain applied.</param>
+            <param name="innerException">Cause; may be null.</param>
+        </member>
+        <member name="T:Durable.Sql.MigrationOperation">
+            <summary>
+            One schema change with the SQL statements (rendered by the dialect) that perform it.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.Kind">
+            <summary>
+            Gets the kind of change.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.TableName">
+            <summary>
+            Gets the affected table name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.ColumnName">
+            <summary>
+            Gets the affected column name for column operations; null otherwise.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.IndexName">
+            <summary>
+            Gets the affected index name for index operations; null otherwise.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.IsDestructive">
+            <summary>
+            Gets whether the operation can lose data or break existing readers (drops, or re-creating a changed index).
+            Destructive operations are applied only when <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/> is true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.Description">
+            <summary>
+            Gets a human-readable description. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.Warning">
+            <summary>
+            Gets a warning about how the operation deviates from the mapping (for example a NOT NULL column added as
+            nullable); null when none.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationOperation.Statements">
+            <summary>
+            Gets the statements to execute, in order. Never null or empty.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.MigrationOperation.#ctor(Durable.Sql.MigrationOperationKind,System.String,System.String,System.String,System.Boolean,System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlStatement},System.String)">
+            <summary>
+            Instantiates an operation.
+            </summary>
+            <param name="kind">Kind of change.</param>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <param name="columnName">Column name; null for non-column operations.</param>
+            <param name="indexName">Index name; null for non-index operations.</param>
+            <param name="isDestructive">Whether the operation is destructive.</param>
+            <param name="description">Description. Must not be null.</param>
+            <param name="statements">Statements. Must not be null or empty.</param>
+            <param name="warning">Optional warning.</param>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is empty or statements is empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when description or statements is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationOperation.ToString">
+            <summary>
+            Returns the description, prefixed with "[destructive]" when applicable.
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.MigrationOperationKind">
+            <summary>
+            Kind of a schema change produced by <see cref="T:Durable.Sql.SchemaDiffer"/>. Operations are applied in the order
+            DropIndex, CreateTable, AddColumn, DropColumn, CreateIndex.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.MigrationOperationKind.DropIndex">
+            <summary>
+            Drop a secondary index (destructive).
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.MigrationOperationKind.CreateTable">
+            <summary>
+            Create a missing table.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.MigrationOperationKind.AddColumn">
+            <summary>
+            Add a missing column to an existing table.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.MigrationOperationKind.DropColumn">
+            <summary>
+            Drop a column that is not mapped by the entity (destructive).
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.MigrationOperationKind.CreateIndex">
+            <summary>
+            Create a missing secondary index.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.MigrationRunResult">
+            <summary>
+            The outcome of <see cref="M:Durable.Sql.SqlMigrator.Migrate"/> or <see cref="M:Durable.Sql.SqlMigrator.RollbackTo(System.String)"/>.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationRunResult.Applied">
+            <summary>
+            Gets the migrations applied by this run, in order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationRunResult.Reverted">
+            <summary>
+            Gets the identifiers of migrations reverted by this run, in order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.MigrationRunResult.Skipped">
+            <summary>
+            Gets the identifiers of migrations that were pending when the run started but had already been applied (or
+            reverted) by a concurrent migrator when their turn came. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.MigrationRunResult.#ctor(System.Collections.Generic.IEnumerable{Durable.Sql.AppliedMigration},System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Instantiates a result.
+            </summary>
+            <param name="applied">Applied migrations. Must not be null.</param>
+            <param name="reverted">Reverted migration identifiers. Must not be null.</param>
+            <param name="skipped">Skipped migration identifiers. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationRunResult.ToString">
+            <summary>
+            Returns a one-line summary of the counts.
+            </summary>
+            <returns>The summary.</returns>
+        </member>
+        <member name="T:Durable.Sql.MigrationScriptWriter">
+            <summary>
+            Renders statements into a reviewable SQL script: parameters are inlined as literals through the dialect, each
+            statement is terminated, and the dialect's batch separator (for example GO) is written after it.
+            Thread safety: stateless.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.MigrationSession">
+            <summary>
+            One dedicated connection used by the migrator: executes statements through a <see cref="T:Durable.Sql.SqlCommandExecutor"/> (so
+            interceptors, logging, tracing and capture apply), manages an optional local transaction and holds the session lock.
+            Thread safety: not thread-safe; used by one operation at a time.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.SchemaDiff">
+            <summary>
+            The result of comparing entity mappings with the live schema: ordered operations (additive and destructive) and
+            differences that need a manual step.
+            Thread safety: immutable after construction; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.Dialect">
+            <summary>
+            Gets the dialect the statements were rendered for. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.Operations">
+            <summary>
+            Gets all operations in application order (DropIndex, CreateTable, AddColumn, DropColumn, CreateIndex). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.Differences">
+            <summary>
+            Gets the differences that are reported but never applied automatically. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.AdditiveOperations">
+            <summary>
+            Gets the additive (safe) operations. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.DestructiveOperations">
+            <summary>
+            Gets the destructive operations. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDiff.IsEmpty">
+            <summary>
+            Gets whether the schema matches the mappings exactly (no operations and no differences).
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiff.#ctor(Durable.Sql.ISqlDialect,System.Collections.Generic.IEnumerable{Durable.Sql.MigrationOperation},System.Collections.Generic.IEnumerable{Durable.Sql.SchemaDifference})">
+            <summary>
+            Instantiates a diff.
+            </summary>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="operations">Operations in application order. Must not be null.</param>
+            <param name="differences">Differences. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiff.ToScript(System.Boolean)">
+            <summary>
+            Renders the diff as a SQL script for review or CI. Parameters are inlined as literals. Destructive operations
+            are included only when requested; otherwise they are listed as comments. Differences are listed as comments.
+            </summary>
+            <param name="includeDestructive">Whether destructive operations are emitted as statements. Default: false.</param>
+            <returns>The script; contains only comments when there is nothing to apply.</returns>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiff.ToString">
+            <summary>
+            Returns a one-line summary of the counts.
+            </summary>
+            <returns>The summary.</returns>
+        </member>
+        <member name="T:Durable.Sql.SchemaDiffer">
+            <summary>
+            Compares entity mappings (<see cref="T:Durable.EntityMetadata"/>) with a live schema and produces a <see cref="T:Durable.Sql.SchemaDiff"/>.
+            The comparison is a pure function of its inputs: it performs no I/O, so it can be unit-tested and used to generate
+            scripts. All SQL is rendered through the <see cref="T:Durable.Sql.ISqlDialect"/>.
+            <para>
+            Produced operations: create missing tables (with their indexes), add missing columns, create missing indexes, and
+            (destructive) drop unmapped indexes and columns and re-create indexes whose definition changed.
+            Reported only (never applied): type, max length, nullability and primary key differences, NOT NULL columns without a
+            derivable default (see <see cref="T:Durable.Sql.SchemaSyncOptions"/>), and changes the dialect cannot express.
+            </para>
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiffer.Compare(Durable.Sql.ISqlDialect,System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.IReadOnlyDictionary{System.String,Durable.Sql.TableSchema},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Compares entity types with the live tables.
+            </summary>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="entityTypes">Entity types. Must not be null; must not contain two types mapping the same table.</param>
+            <param name="liveTables">Existing tables keyed by table name (case-insensitive lookup); a missing key means the
+            table does not exist. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when dialect, entityTypes or liveTables is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when two entity types map the same table.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when an entity has no primary key or no mapped columns.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiffer.GetExpectedIndexes(Durable.EntityMetadata)">
+            <summary>
+            Returns the secondary indexes an entity declares through <see cref="T:Durable.IndexAttribute"/> (default name
+            "idx_{table}_{column}"; attributes sharing a name form one index ordered by <see cref="P:Durable.IndexAttribute.Order"/>)
+            and <see cref="T:Durable.CompositeIndexAttribute"/>.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The expected indexes.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiffer.GetDefaultLiteral(Durable.Sql.ISqlDialect,Durable.ColumnMetadata,Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Returns the SQL literal used as DEFAULT when a NOT NULL column is added to an existing table, following the rule
+            documented on <see cref="T:Durable.Sql.SchemaSyncOptions"/>, or null when no default can be derived.
+            </summary>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="column">Column. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The literal, or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when dialect or column is null.</exception>
+        </member>
+        <member name="T:Durable.Sql.SchemaDifference">
+            <summary>
+            A difference between an entity mapping and the live schema that is reported but not applied automatically.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.Kind">
+            <summary>
+            Gets the kind of difference.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.TableName">
+            <summary>
+            Gets the table name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.ColumnName">
+            <summary>
+            Gets the column name; null when the difference is not about a column.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.Expected">
+            <summary>
+            Gets what the mapping expects (for example "varchar(100)"); null when not applicable.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.Actual">
+            <summary>
+            Gets what the database has (for example "varchar(50)"); null when not applicable.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaDifference.Message">
+            <summary>
+            Gets a human-readable explanation including the suggested manual step. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaDifference.#ctor(Durable.Sql.SchemaDifferenceKind,System.String,System.String,System.String,System.String,System.String)">
+            <summary>
+            Instantiates a difference.
+            </summary>
+            <param name="kind">Kind of difference.</param>
+            <param name="tableName">Table name. Must not be null or empty.</param>
+            <param name="columnName">Column name; may be null.</param>
+            <param name="expected">Expected value; may be null.</param>
+            <param name="actual">Actual value; may be null.</param>
+            <param name="message">Explanation. Must not be null.</param>
+            <exception cref="T:System.ArgumentException">Thrown when tableName is null or empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when message is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaDifference.ToString">
+            <summary>
+            Returns "Kind: message".
+            </summary>
+            <returns>The description.</returns>
+        </member>
+        <member name="T:Durable.Sql.SchemaDifferenceKind">
+            <summary>
+            Kind of a schema difference that is detected but never applied automatically; each needs a manual step
+            (typically a versioned <see cref="T:Durable.Sql.Migration"/>).
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.TypeMismatch">
+            <summary>
+            The column's type differs from the type the mapping declares.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.MaxLengthMismatch">
+            <summary>
+            The column's maximum length differs from the mapping's MaxLength.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.NullabilityMismatch">
+            <summary>
+            The column's nullability differs from the mapping.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.PrimaryKeyMismatch">
+            <summary>
+            The column's primary key membership differs from the mapping, or a key column would have to be added or dropped.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.NotNullColumnWithoutDefault">
+            <summary>
+            A NOT NULL column is missing and no default value can be derived for the existing rows.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.SchemaDifferenceKind.UnsupportedChange">
+            <summary>
+            A required change cannot be expressed on this database (for example dropping a column where unsupported,
+            or adding an auto-increment column to an existing table).
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.SchemaSynchronizer">
+            <summary>
+            Reads the live schema for entity types on a session, diffs it, and applies (or scripts) the permitted operations.
+            Thread safety: stateless.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.SchemaSyncOptions">
+            <summary>
+            Options controlling schema comparison and synchronization (<see cref="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)"/>,
+            <see cref="M:Durable.Sql.MigrationContext.EnsureSchema(Durable.Sql.SchemaSyncOptions,System.Type[])"/>).
+            <para>
+            Rule for NOT NULL columns added to existing tables (existing rows need a value):
+            1) a constant <see cref="T:Durable.DefaultValueAttribute"/> (StaticValue, Zero, EmptyString, EmptyGuid, True, False) becomes the column DEFAULT;
+            2) otherwise, when <see cref="P:Durable.Sql.SchemaSyncOptions.UseClrDefaultsForNotNullColumns"/> is true and the property is numeric, bool or an enum
+            (without a value converter), the CLR default (0, false, the enum's zero value) becomes the DEFAULT;
+            3) otherwise the column is not added and a <see cref="F:Durable.Sql.SchemaDifferenceKind.NotNullColumnWithoutDefault"/> difference is
+            reported, unless <see cref="P:Durable.Sql.SchemaSyncOptions.AddUnresolvableNotNullColumnsAsNullable"/> is true, in which case it is added as NULL
+            with a warning (a later sync then reports the nullability difference).
+            The rule never inspects data, so generated scripts are deterministic.
+            </para>
+            Thread safety: not thread-safe for mutation; do not change while an operation is using the instance.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.AllowDestructive">
+            <summary>
+            Gets or sets whether destructive operations (dropping unmapped columns and indexes, re-creating changed indexes)
+            are applied. When false they are returned as skipped. Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.UseClrDefaultsForNotNullColumns">
+            <summary>
+            Gets or sets whether a NOT NULL numeric, bool or enum column added to an existing table defaults to the CLR
+            default value when no constant <see cref="T:Durable.DefaultValueAttribute"/> is present. Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.AddUnresolvableNotNullColumnsAsNullable">
+            <summary>
+            Gets or sets whether a NOT NULL column for which no default can be derived is added as nullable (with a warning)
+            instead of being reported as a manual step. Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.DropUnmappedIndexes">
+            <summary>
+            Gets or sets whether indexes present in the database but not declared by the entity are dropped (destructive;
+            requires <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/>). Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.DropUnmappedColumns">
+            <summary>
+            Gets or sets whether columns present in the database but not mapped by the entity are dropped (destructive;
+            requires <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/>). Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncOptions.UseTransaction">
+            <summary>
+            Gets or sets whether a synchronization runs in one transaction on databases with transactional DDL, so that a
+            failure leaves the schema unchanged. Default: true.
+            </summary>
+        </member>
+        <member name="T:Durable.Sql.SchemaSyncResult">
+            <summary>
+            The outcome of a schema synchronization: the diff it was based on, the operations applied, and the destructive
+            operations skipped because they were not allowed.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncResult.Diff">
+            <summary>
+            Gets the diff computed against the live schema before applying. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncResult.AppliedOperations">
+            <summary>
+            Gets the operations that were applied (or written to the script when scripting), in order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncResult.SkippedOperations">
+            <summary>
+            Gets the destructive operations that were not applied because <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/>
+            was false. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncResult.Differences">
+            <summary>
+            Gets the differences that need a manual step (same as <see cref="P:Durable.Sql.SchemaDiff.Differences"/>). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaSyncResult.IsInSync">
+            <summary>
+            Gets whether the schema now matches the mappings: nothing was skipped and no differences remain.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaSyncResult.#ctor(Durable.Sql.SchemaDiff,System.Collections.Generic.IEnumerable{Durable.Sql.MigrationOperation},System.Collections.Generic.IEnumerable{Durable.Sql.MigrationOperation})">
+            <summary>
+            Instantiates a result.
+            </summary>
+            <param name="diff">Diff. Must not be null.</param>
+            <param name="appliedOperations">Applied operations. Must not be null.</param>
+            <param name="skippedOperations">Skipped operations. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaSyncResult.ToString">
+            <summary>
+            Returns a one-line summary of the counts.
+            </summary>
+            <returns>The summary.</returns>
+        </member>
+        <member name="T:Durable.Sql.SqlMigrator">
+            <summary>
+            Lightweight migrations without model snapshots: applies versioned <see cref="T:Durable.Sql.Migration"/>s once per database
+            (recorded in a history table) and synchronizes entity schemas additively.
+            <para>
+            Concurrency: every run that changes the database first takes a database-level lock through the dialect
+            (PostgreSQL advisory lock, SQL Server application lock, MySQL named lock), so several processes can call
+            <see cref="M:Durable.Sql.SqlMigrator.Migrate"/> at once and each migration is applied exactly once. SQLite has no session lock; there each
+            migration's write transaction (BEGIN IMMEDIATE) serializes migrators, and the history is re-checked inside it.
+            </para>
+            <para>
+            Transactions: on databases with transactional DDL each migration runs in a transaction together with its history
+            record, so a failed migration is rolled back and not recorded. On MySQL DDL commits implicitly: a failed migration
+            is not recorded but statements before the failure remain (reported through
+            <see cref="P:Durable.Sql.MigrationException.MayBePartiallyApplied"/>); keep MySQL migrations small and idempotent.
+            </para>
+            Thread safety: registering migrations is not thread-safe; configure before use. Running operations is safe to call
+            concurrently (they serialize through the database lock), but each call uses its own connection.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigrator.Dialect">
+            <summary>
+            Gets the dialect. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigrator.ConnectionFactory">
+            <summary>
+            Gets the connection factory. The migrator never disposes it. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigrator.Options">
+            <summary>
+            Gets the options. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigrator.Migrations">
+            <summary>
+            Gets the registered migrations in application (ordinal <see cref="P:Durable.Sql.Migration.Id"/>) order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.#ctor(Durable.Sql.IConnectionFactory,Durable.Sql.ISqlDialect,Durable.Sql.SqlMigratorOptions)">
+            <summary>
+            Instantiates a migrator.
+            </summary>
+            <param name="connectionFactory">Connection factory. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.#ctor(Durable.Sql.IConnectionFactory,Durable.Sql.ISqlDialect,System.Collections.Generic.IEnumerable{Durable.Sql.Migration},Durable.Sql.SqlMigratorOptions)">
+            <summary>
+            Instantiates a migrator with an explicit list of migrations.
+            </summary>
+            <param name="connectionFactory">Connection factory. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="migrations">Migrations. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument other than options is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when a migration identifier is invalid or duplicated.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.AddMigration(Durable.Sql.Migration)">
+            <summary>
+            Registers a migration.
+            </summary>
+            <param name="migration">Migration. Must not be null.</param>
+            <returns>This migrator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when migration is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the identifier is empty, longer than 150 characters, or already registered.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.AddMigrations(System.Collections.Generic.IEnumerable{Durable.Sql.Migration})">
+            <summary>
+            Registers migrations.
+            </summary>
+            <param name="migrations">Migrations. Must not be null.</param>
+            <returns>This migrator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when migrations is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when an identifier is invalid or duplicated.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.AddMigrationsFromAssembly(System.Reflection.Assembly,System.Func{System.Type,System.Boolean})">
+            <summary>
+            Registers every concrete <see cref="T:Durable.Sql.Migration"/> subclass in an assembly that has a public parameterless constructor.
+            </summary>
+            <param name="assembly">Assembly. Must not be null.</param>
+            <param name="filter">Optional type filter (for example by namespace); null registers all.</param>
+            <returns>This migrator.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when assembly is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when an identifier is invalid or duplicated.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GetAppliedMigrations">
+            <summary>
+            Reads the history table.
+            </summary>
+            <returns>Applied migrations in identifier order; empty when the history table does not exist.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GetAppliedMigrationsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Reads the history table.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>Applied migrations in identifier order; empty when the history table does not exist.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GetPendingMigrations">
+            <summary>
+            Returns the registered migrations that are not recorded in the history table, in application order.
+            </summary>
+            <returns>Pending migrations.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GetPendingMigrationsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Returns the registered migrations that are not recorded in the history table, in application order.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>Pending migrations.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.Migrate">
+            <summary>
+            Applies all pending migrations in identifier order under the migration lock, recording each in the history table.
+            Stops at the first failure.
+            </summary>
+            <returns>The migrations applied (and any skipped because a concurrent migrator applied them first).</returns>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when a migration fails; it is not recorded.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.MigrateAsync(System.Threading.CancellationToken)">
+            <summary>
+            Applies all pending migrations in identifier order under the migration lock, recording each in the history table.
+            Stops at the first failure.
+            </summary>
+            <param name="token">Cancellation token. Cancellation rolls back the running migration where possible.</param>
+            <returns>The migrations applied (and any skipped because a concurrent migrator applied them first).</returns>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when a migration fails; it is not recorded.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.RollbackTo(System.String)">
+            <summary>
+            Reverts applied migrations whose identifier sorts after targetId, newest first, using
+            <see cref="M:Durable.Sql.Migration.Down(Durable.Sql.MigrationContext)"/>, and removes their history records.
+            </summary>
+            <param name="targetId">Last migration to keep; null reverts every applied migration.</param>
+            <returns>The reverted migration identifiers.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown before any change when an applied migration to revert is not
+            registered or does not support Down.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when a Down fails; its history record is kept.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.RollbackToAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Reverts applied migrations whose identifier sorts after targetId, newest first, using
+            <see cref="M:Durable.Sql.Migration.DownAsync(Durable.Sql.MigrationContext,System.Threading.CancellationToken)"/>, and removes their history records.
+            </summary>
+            <param name="targetId">Last migration to keep; null reverts every applied migration.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The reverted migration identifiers.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown before any change when an applied migration to revert is not
+            registered or does not support Down.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when a Down fails; its history record is kept.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateScript">
+            <summary>
+            Generates a SQL script that creates the history table (if missing) and applies the currently pending migrations,
+            each followed by its history insert and wrapped in a transaction where the database supports transactional DDL.
+            Nothing is executed. Statements issued with <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> are scripted with their
+            parameters inlined; <see cref="M:Durable.Sql.MigrationContext.EnsureSchema(System.Type[])"/> is evaluated against the database as it is
+            now, so a later migration that depends on an earlier pending one may script differently than it would run.
+            </summary>
+            <returns>The script.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateScriptAsync(System.Threading.CancellationToken)">
+            <summary>
+            Generates a SQL script that creates the history table (if missing) and applies the currently pending migrations.
+            See <see cref="M:Durable.Sql.SqlMigrator.GenerateScript"/>.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.DiffSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Compares entity types with the live schema without changing anything.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.DiffSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Compares entity types with the live schema without changing anything.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScript(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Renders the schema diff for entity types as a SQL script (destructive operations included only when
+            <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/> is true). Nothing is executed.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScriptAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Renders the schema diff for entity types as a SQL script. Nothing is executed.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Synchronizes the tables of entity types with their mappings under the migration lock: creates missing tables,
+            adds missing columns and creates missing indexes; destructive operations only when
+            <see cref="P:Durable.Sql.SchemaSyncOptions.AllowDestructive"/> is true. Differences that need a manual step are reported in the
+            result, never applied. Runs in one transaction on databases with transactional DDL. Idempotent.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.SyncSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Synchronizes the tables of entity types with their mappings under the migration lock. See
+            <see cref="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)"/>.
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="T:Durable.Sql.SqlMigratorOptions">
+            <summary>
+            Options for <see cref="T:Durable.Sql.SqlMigrator"/>.
+            Thread safety: not thread-safe for mutation; configure before use and do not change while a migration runs.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.HistoryTableName">
+            <summary>
+            Gets or sets the history table name (letters, digits and underscores; resolved in the connection's default schema).
+            Default: "__durable_migrations".
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when the value is not a valid identifier (at most 128 characters).</exception>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.LockName">
+            <summary>
+            Gets or sets the name of the database lock that serializes migrators (PostgreSQL advisory lock, SQL Server
+            application lock, MySQL named lock). Null derives "durable_migrations_" + <see cref="P:Durable.Sql.SqlMigratorOptions.HistoryTableName"/>,
+            truncated to 64 characters. Default: null.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when the value is empty or longer than 64 characters.</exception>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.LockTimeoutSeconds">
+            <summary>
+            Gets or sets how long to wait for the migration lock before throwing <see cref="T:System.TimeoutException"/>.
+            Default: 120. Minimum: 1. Maximum: 86400.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.LockPollIntervalMilliseconds">
+            <summary>
+            Gets or sets the delay between lock attempts on databases whose lock function does not wait (PostgreSQL).
+            Default: 250. Minimum: 10. Maximum: 60000.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.UseTransactions">
+            <summary>
+            Gets or sets whether each migration runs in a transaction together with its history record on databases with
+            transactional DDL (<see cref="P:Durable.Sql.ISqlDialect.SupportsTransactionalDdl"/>). Individual migrations can opt out with
+            <see cref="P:Durable.Sql.Migration.UseTransaction"/>. Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.CommandOptions">
+            <summary>
+            Gets or sets command options (timeout, interceptors, logger, tracing) applied to every statement the migrator
+            executes. Null uses defaults. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SqlMigratorOptions.StatementExecuted">
+            <summary>
+            Gets or sets a callback invoked after each statement the migrator executes (on the migrating thread), for
+            example to log or capture SQL. Null for none. Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SqlMigratorOptions.GetEffectiveLockName">
+            <summary>
+            Returns the effective lock name: <see cref="P:Durable.Sql.SqlMigratorOptions.LockName"/>, or the name derived from <see cref="P:Durable.Sql.SqlMigratorOptions.HistoryTableName"/>.
+            </summary>
+            <returns>The lock name; at most 64 characters.</returns>
+        </member>
+        <member name="T:Durable.Sql.TableSchema">
+            <summary>
+            A live database table: its columns and secondary indexes, as read by <see cref="T:Durable.Sql.DatabaseSchemaReader"/>.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableSchema.Name">
+            <summary>
+            Gets the table name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableSchema.Columns">
+            <summary>
+            Gets the columns in ordinal order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableSchema.Indexes">
+            <summary>
+            Gets the secondary indexes (excluding the primary key and constraint-backed indexes). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableSchema.PrimaryKeyColumns">
+            <summary>
+            Gets the primary key column names in ordinal order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.TableSchema.#ctor(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.ColumnSchema},System.Collections.Generic.IEnumerable{Durable.Sql.IndexSchema})">
+            <summary>
+            Instantiates a table description.
+            </summary>
+            <param name="name">Table name. Must not be null or empty.</param>
+            <param name="columns">Columns. Must not be null.</param>
+            <param name="indexes">Indexes. Must not be null.</param>
+            <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when columns or indexes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.TableSchema.FindColumn(System.String)">
+            <summary>
+            Finds a column by name (case-insensitive).
+            </summary>
+            <param name="columnName">Column name. Must not be null.</param>
+            <returns>The column, or null when absent.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnName is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.TableSchema.FindIndex(System.String)">
+            <summary>
+            Finds an index by name (case-insensitive).
+            </summary>
+            <param name="indexName">Index name. Must not be null.</param>
+            <returns>The index, or null when absent.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.TableSchema.ToString">
+            <summary>
+            Returns the table name.
+            </summary>
+            <returns>The name.</returns>
+        </member>
         <member name="T:Durable.Sql.OrderClause">
             <summary>
             An ORDER BY key selector and direction. Internal to the query builders.
@@ -2399,6 +3826,27 @@
         <member name="P:Durable.Sql.SqlDialect.SupportsOrdinalLike">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsTransactionalDdl">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsDropColumn">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.MaxIdentifierLength">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.ScriptBatchSeparator">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.ScriptBeginTransactionSql">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.ScriptCommitTransactionSql">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sql.SqlDialect.#ctor(Durable.Sql.IDataTypeConverter)">
             <summary>
             Instantiates the dialect.
@@ -2475,6 +3923,33 @@
         <member name="M:Durable.Sql.SqlDialect.DropIndexSql(System.String,System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Sql.SqlDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.AddColumnSql(System.String,Durable.ColumnMetadata,System.Boolean,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.DropColumnSql(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.FormatLiteral(System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.Sql.SqlDialect.IdentifierOpen">
             <summary>
             Gets the opening identifier quote. Default: a double quote.
@@ -2534,6 +4009,33 @@
             <param name="unboundedType">Type for unbounded strings, for example "TEXT".</param>
             <param name="defaultLength">Length used for indexed or key strings without MaxLength; 0 for unbounded.</param>
             <returns>The SQL type.</returns>
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.AddColumnKeyword">
+            <summary>
+            Gets the keyword(s) following the table name when adding a column. Default: "ADD COLUMN".
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.StringLiteral(System.String)">
+            <summary>
+            Renders a string literal, doubling embedded single quotes.
+            </summary>
+            <param name="value">Text. Must not be null.</param>
+            <returns>The literal.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.BinaryLiteral(System.Byte[])">
+            <summary>
+            Renders a binary literal. Default: X'hex'.
+            </summary>
+            <param name="value">Bytes. Must not be null.</param>
+            <returns>The literal.</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.CanonicalizeColumnType(System.String)">
+            <summary>
+            Canonicalizes type text: lower case, single spaces, no spaces around parentheses and commas.
+            </summary>
+            <param name="columnType">Type text. Must not be null.</param>
+            <returns>The canonical text.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnType is null.</exception>
         </member>
         <member name="T:Durable.Sql.SqlExpressionTranslator">
             <summary>
