@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.SqlServer;
     using Microsoft.Data.SqlClient;
 
@@ -47,7 +48,7 @@ namespace Test.Shared
         /// </summary>
         /// <typeparam name="T">The entity type.</typeparam>
         /// <returns>A configured repository instance.</returns>
-        public IRepository<T> CreateRepository<T>() where T : class, new()
+        public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
             return new SqlServerRepository<T>(_ConnectionString);
         }
@@ -58,7 +59,7 @@ namespace Test.Shared
         /// <returns>A task representing the asynchronous setup operation.</returns>
         public async Task SetupDatabaseAsync()
         {
-            IRepository<Person> personRepo = CreateRepository<Person>();
+            ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
             await personRepo.ExecuteSqlAsync(@"
                 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'people')
@@ -176,7 +177,7 @@ namespace Test.Shared
         {
             try
             {
-                IRepository<Person> personRepo = CreateRepository<Person>();
+                ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'author_categories') DROP TABLE author_categories");
                 await personRepo.ExecuteSqlAsync("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'books') DROP TABLE books");

@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -39,8 +40,8 @@ namespace Test.Shared
         [Fact]
         public async Task CanIncludeOneToManyRelationships()
         {
-            IRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
-            IRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
+            ISqlRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
+            ISqlRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
 
             await authorRepo.ExecuteSqlAsync("DELETE FROM author_categories");
             await authorRepo.ExecuteSqlAsync("DELETE FROM books");
@@ -84,8 +85,8 @@ namespace Test.Shared
         [Fact]
         public async Task CanIncludeManyToOneRelationships()
         {
-            IRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
-            IRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
+            ISqlRepository<Author> authorRepo = _Provider.CreateRepository<Author>();
+            ISqlRepository<Book> bookRepo = _Provider.CreateRepository<Book>();
 
             await authorRepo.ExecuteSqlAsync("DELETE FROM author_categories");
             await authorRepo.ExecuteSqlAsync("DELETE FROM books");

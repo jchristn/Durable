@@ -76,11 +76,11 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token);
+            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
             try
             {
-                await func();
-                await scope.CompleteAsync(token);
+                await func().ConfigureAwait(false);
+                await scope.CompleteAsync(token).ConfigureAwait(false);
             }
             catch
             {
@@ -104,24 +104,10 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            // Create the transaction manually and pass it explicitly to avoid async context issues
-            ITransaction transaction = await repository.BeginTransactionAsync(token);
-            try
-            {
-                using TransactionScope scope = TransactionScope.Create(transaction);
-                TResult result = await func();
-                await scope.CompleteAsync(token);
-                return result;
-            }
-            catch
-            {
-                await transaction.RollbackAsync(token);
-                throw;
-            }
-            finally
-            {
-                transaction?.Dispose();
-            }
+            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
+            TResult result = await func().ConfigureAwait(false);
+            await scope.CompleteAsync(token).ConfigureAwait(false);
+            return result;
         }
 
         /// <summary>
@@ -191,8 +177,8 @@ namespace Durable
             using TransactionScope scope = TransactionScope.Create(transaction);
             try
             {
-                await func();
-                await scope.CompleteAsync(token);
+                await func().ConfigureAwait(false);
+                await scope.CompleteAsync(token).ConfigureAwait(false);
             }
             catch
             {
@@ -218,8 +204,8 @@ namespace Durable
             using TransactionScope scope = TransactionScope.Create(transaction);
             try
             {
-                TResult result = await func();
-                await scope.CompleteAsync(token);
+                TResult result = await func().ConfigureAwait(false);
+                await scope.CompleteAsync(token).ConfigureAwait(false);
                 return result;
             }
             catch
@@ -228,115 +214,5 @@ namespace Durable
                 throw;
             }
         }
-
-        /// <summary>
-        /// Executes an action within a savepoint scope for the specified transaction.
-        /// </summary>
-        /// <param name="transaction">The transaction to create a savepoint for.</param>
-        /// <param name="action">The action to execute within the savepoint scope.</param>
-        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
-        /// <exception cref="ArgumentNullException">Thrown when transaction or action is null.</exception>
-        public static void ExecuteWithSavepoint(this ITransaction transaction, Action action, string? savepointName = null)
-        {
-            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
-            if (action == null) throw new ArgumentNullException(nameof(action));
-
-            using ISavepoint savepoint = transaction.CreateSavepoint(savepointName);
-            try
-            {
-                action();
-                savepoint.Release();
-            }
-            catch
-            {
-                savepoint.Rollback();
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Executes a function within a savepoint scope for the specified transaction and returns the result.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-        /// <param name="transaction">The transaction to create a savepoint for.</param>
-        /// <param name="func">The function to execute within the savepoint scope.</param>
-        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
-        /// <returns>The result of the function execution.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when transaction or func is null.</exception>
-        public static TResult ExecuteWithSavepoint<TResult>(this ITransaction transaction, Func<TResult> func, string? savepointName = null)
-        {
-            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
-            if (func == null) throw new ArgumentNullException(nameof(func));
-
-            using ISavepoint savepoint = transaction.CreateSavepoint(savepointName);
-            try
-            {
-                TResult result = func();
-                savepoint.Release();
-                return result;
-            }
-            catch
-            {
-                savepoint.Rollback();
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Asynchronously executes a task within a savepoint scope for the specified transaction.
-        /// </summary>
-        /// <param name="transaction">The transaction to create a savepoint for.</param>
-        /// <param name="func">The task function to execute within the savepoint scope.</param>
-        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
-        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when transaction or func is null.</exception>
-        public static async Task ExecuteWithSavepointAsync(this ITransaction transaction, Func<Task> func, string? savepointName = null, CancellationToken token = default)
-        {
-            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
-            if (func == null) throw new ArgumentNullException(nameof(func));
-
-            using ISavepoint savepoint = await transaction.CreateSavepointAsync(savepointName, token);
-            try
-            {
-                await func();
-                await savepoint.ReleaseAsync(token);
-            }
-            catch
-            {
-                await savepoint.RollbackAsync(token);
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Asynchronously executes a task function within a savepoint scope for the specified transaction and returns the result.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-        /// <param name="transaction">The transaction to create a savepoint for.</param>
-        /// <param name="func">The task function to execute within the savepoint scope.</param>
-        /// <param name="savepointName">Optional name for the savepoint. If null, a default name will be used.</param>
-        /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
-        /// <returns>A task that represents the asynchronous operation containing the result.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when transaction or func is null.</exception>
-        public static async Task<TResult> ExecuteWithSavepointAsync<TResult>(this ITransaction transaction, Func<Task<TResult>> func, string? savepointName = null, CancellationToken token = default)
-        {
-            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
-            if (func == null) throw new ArgumentNullException(nameof(func));
-
-            using ISavepoint savepoint = await transaction.CreateSavepointAsync(savepointName, token);
-            try
-            {
-                TResult result = await func();
-                await savepoint.ReleaseAsync(token);
-                return result;
-            }
-            catch
-            {
-                await savepoint.RollbackAsync(token);
-                throw;
-            }
-        }
-        
     }
 }

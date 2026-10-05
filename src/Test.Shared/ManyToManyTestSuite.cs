@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -41,9 +42,9 @@ namespace Test.Shared
         [Fact]
         public async Task IncludeLoadsManyToManyRelationships()
         {
-            IRepository<Author> authorRepository = _Provider.CreateRepository<Author>();
-            IRepository<Category> categoryRepository = _Provider.CreateRepository<Category>();
-            IRepository<AuthorCategory> linkRepository = _Provider.CreateRepository<AuthorCategory>();
+            ISqlRepository<Author> authorRepository = _Provider.CreateRepository<Author>();
+            ISqlRepository<Category> categoryRepository = _Provider.CreateRepository<Category>();
+            ISqlRepository<AuthorCategory> linkRepository = _Provider.CreateRepository<AuthorCategory>();
 
             await linkRepository.ExecuteSqlAsync("DELETE FROM author_categories");
             await linkRepository.ExecuteSqlAsync("DELETE FROM categories");

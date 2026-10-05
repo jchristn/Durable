@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -38,7 +39,7 @@ namespace Test.Shared
         [Fact]
         public async Task CommitPersistsChanges()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
@@ -47,7 +48,7 @@ namespace Test.Shared
                 transaction.Commit();
             }
 
-            int count = await repository.CountAsync(p => p.Email == "tx-commit@example.com");
+            long count = await repository.CountAsync(p => p.Email == "tx-commit@example.com");
             Assert.Equal(1, count);
         }
 
@@ -57,7 +58,7 @@ namespace Test.Shared
         [Fact]
         public async Task RollbackDiscardsChanges()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
@@ -66,7 +67,7 @@ namespace Test.Shared
                 transaction.Rollback();
             }
 
-            int count = await repository.CountAsync(p => p.Email == "tx-rollback@example.com");
+            long count = await repository.CountAsync(p => p.Email == "tx-rollback@example.com");
             Assert.Equal(0, count);
         }
 
@@ -76,7 +77,7 @@ namespace Test.Shared
         [Fact]
         public async Task CommitAsyncPersistsChanges()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             ITransaction transaction = await repository.BeginTransactionAsync();
@@ -90,7 +91,7 @@ namespace Test.Shared
                 transaction.Dispose();
             }
 
-            int count = await repository.CountAsync(p => p.Email == "tx-commit-async@example.com");
+            long count = await repository.CountAsync(p => p.Email == "tx-commit-async@example.com");
             Assert.Equal(1, count);
         }
 
@@ -100,7 +101,7 @@ namespace Test.Shared
         [Fact]
         public async Task RollbackAsyncDiscardsChanges()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             ITransaction transaction = await repository.BeginTransactionAsync();
@@ -114,7 +115,7 @@ namespace Test.Shared
                 transaction.Dispose();
             }
 
-            int count = await repository.CountAsync(p => p.Email == "tx-rollback-async@example.com");
+            long count = await repository.CountAsync(p => p.Email == "tx-rollback-async@example.com");
             Assert.Equal(0, count);
         }
 
@@ -124,7 +125,7 @@ namespace Test.Shared
         [Fact]
         public async Task MultipleOperationsInTransactionCommitTogether()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
@@ -135,7 +136,7 @@ namespace Test.Shared
                 transaction.Commit();
             }
 
-            int count = await repository.CountAsync();
+            long count = await repository.CountAsync();
             Assert.Equal(3, count);
         }
 

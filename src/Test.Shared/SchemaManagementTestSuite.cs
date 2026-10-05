@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanInitializeTable()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
 
@@ -71,7 +72,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanInitializeTableAsync()
         {
-            IRepository<Employee> repository = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
 
@@ -102,7 +103,7 @@ namespace Test.Shared
         [Fact]
         public async Task ValidateTableReturnsTrueForValidSchema()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
@@ -132,8 +133,8 @@ namespace Test.Shared
         [Fact]
         public async Task ValidateTablesValidatesMultipleTables()
         {
-            IRepository<Product> productRepo = _Provider.CreateRepository<Product>();
-            IRepository<Employee> employeeRepo = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Product> productRepo = _Provider.CreateRepository<Product>();
+            ISqlRepository<Employee> employeeRepo = _Provider.CreateRepository<Employee>();
 
             await productRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             await employeeRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
@@ -159,7 +160,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanCreateIndexesFromAttributes()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
@@ -187,7 +188,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanCreateIndexesAsync()
         {
-            IRepository<Employee> repository = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
@@ -215,7 +216,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanGetIndexes()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
@@ -235,7 +236,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanGetIndexesAsync()
         {
-            IRepository<Employee> repository = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
@@ -255,7 +256,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanDropIndex()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
@@ -292,7 +293,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanDropIndexAsync()
         {
-            IRepository<Employee> repository = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
@@ -329,7 +330,7 @@ namespace Test.Shared
         [Fact]
         public async Task CompositeIndexAttributeCreatesMultiColumnIndexes()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
@@ -359,7 +360,7 @@ namespace Test.Shared
         [Fact]
         public async Task IndexAttributeWithOrderCreatesCompositeIndexes()
         {
-            IRepository<Employee> repository = _Provider.CreateRepository<Employee>();
+            ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
@@ -388,7 +389,7 @@ namespace Test.Shared
         [Fact]
         public async Task UniqueIndexesAreEnforced()
         {
-            IRepository<Product> repository = _Provider.CreateRepository<Product>();
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
             await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));

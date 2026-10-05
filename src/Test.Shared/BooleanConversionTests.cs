@@ -2,6 +2,7 @@
 {
     using System;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>

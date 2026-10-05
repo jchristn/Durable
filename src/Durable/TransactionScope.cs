@@ -5,180 +5,184 @@ namespace Durable
     using System.Threading.Tasks;
 
     /// <summary>
-    /// Provides a convenient way to manage database transactions with automatic rollback on disposal if not completed.
-    /// Supports nested transaction scopes by reusing existing transactions on the same connection.
+    /// An ambient transaction scope. While a scope is current, repository calls made without an explicit transaction
+    /// on the same async flow use <see cref="Transaction"/>. Disposing a scope that was not completed rolls back.
+    /// Nested scopes created for the same transaction share it and only the outermost scope commits.
+    /// Thread safety: a scope flows with the async execution context and must not be shared across concurrent flows.
     /// </summary>
     public class TransactionScope : ITransactionScope
     {
         #region Public-Members
 
         /// <summary>
-        /// Gets the current transaction scope for the current async context.
+        /// Gets the scope current on this async flow, or null. Completed or disposed scopes are skipped.
         /// </summary>
-        public static TransactionScope? Current => _Current.Value;
-        
-        /// <summary>
-        /// Gets the transaction associated with this scope.
-        /// </summary>
-        public ITransaction Transaction => _Transaction;
-        
-        /// <summary>
-        /// Gets a value indicating whether this transaction scope has been completed.
-        /// </summary>
+        public static TransactionScope? Current
+        {
+            get
+            {
+                TransactionScope? scope = _Current.Value;
+                while (scope != null && (scope._Disposed || scope._Faulted)) scope = scope._Parent;
+                return scope;
+            }
+        }
+
+        /// <inheritdoc />
+        /// <exception cref="InvalidOperationException">Thrown when accessed before an asynchronous scope finished starting its transaction.</exception>
+        public ITransaction Transaction => _Transaction ?? throw new InvalidOperationException("The transaction scope has not finished starting its transaction.");
+
+        /// <inheritdoc />
         public bool IsCompleted => _Completed;
 
         #endregion
 
         #region Private-Members
 
-        private static readonly AsyncLocal<TransactionScope> _Current = new AsyncLocal<TransactionScope>();
+        private static readonly AsyncLocal<TransactionScope?> _Current = new AsyncLocal<TransactionScope?>();
         private readonly TransactionScope? _Parent;
-        private readonly ITransaction _Transaction;
+        private ITransaction? _Transaction;
         private readonly bool _OwnsTransaction;
         private bool _Completed;
         private bool _Disposed;
+        private bool _Faulted;
 
         #endregion
 
         #region Constructors-and-Factories
 
-        /// <summary>
-        /// Initializes a new instance of the TransactionScope class.
-        /// </summary>
-        /// <param name="transaction">The transaction to manage.</param>
-        /// <param name="ownsTransaction">Whether this scope owns the transaction and should commit/rollback it.</param>
-        /// <param name="parent">The parent transaction scope, if any.</param>
-        private TransactionScope(ITransaction transaction, bool ownsTransaction, TransactionScope? parent)
+        private TransactionScope(ITransaction? transaction, bool ownsTransaction, TransactionScope? parent)
         {
-            _Transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
+            _Transaction = transaction;
             _OwnsTransaction = ownsTransaction;
             _Parent = parent;
             _Current.Value = this;
         }
 
         /// <summary>
-        /// Creates a new transaction scope with the specified transaction.
-        /// If there's an existing scope with the same connection, creates a nested scope.
+        /// Creates a scope around an existing transaction. If the current scope already uses the same transaction,
+        /// a nested, non-owning scope is created.
         /// </summary>
-        /// <param name="transaction">The transaction to use for the scope.</param>
-        /// <returns>A new transaction scope.</returns>
+        /// <param name="transaction">Transaction. Must not be null.</param>
+        /// <returns>The new scope, which is now current.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when transaction is null.</exception>
         public static TransactionScope Create(ITransaction transaction)
         {
-            if (transaction == null)
-                throw new ArgumentNullException(nameof(transaction));
-
-            TransactionScope? current = _Current.Value;
-            
-            // If we already have a transaction and it's the same connection, create a nested scope
-            if (current != null && 
-                current._Transaction.Connection == transaction.Connection)
-            {
-                return new TransactionScope(current._Transaction, false, current);
-            }
-
+            ArgumentNullException.ThrowIfNull(transaction);
+            TransactionScope? current = Current;
+            if (current != null && ReferenceEquals(current._Transaction, transaction))
+                return new TransactionScope(transaction, false, current);
             return new TransactionScope(transaction, true, current);
         }
 
         /// <summary>
-        /// Asynchronously creates a new transaction scope by beginning a transaction on the specified repository.
+        /// Begins a transaction on the repository and makes a new owning scope current.
         /// </summary>
-        /// <typeparam name="T">The entity type.</typeparam>
-        /// <param name="repository">The repository to begin the transaction on.</param>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task that resolves to a new transaction scope.</returns>
-        public static async Task<TransactionScope> CreateAsync<T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
+        /// <typeparam name="T">Entity type.</typeparam>
+        /// <param name="repository">Repository. Must not be null.</param>
+        /// <returns>The new scope.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
+        public static TransactionScope Create<T>(IRepository<T> repository) where T : class, new()
         {
-            ITransaction transaction = await repository.BeginTransactionAsync(token);
-            return new TransactionScope(transaction, true, _Current.Value);
+            ArgumentNullException.ThrowIfNull(repository);
+            ITransaction transaction = repository.BeginTransaction();
+            return new TransactionScope(transaction, true, Current);
         }
 
         /// <summary>
-        /// Creates a new transaction scope by beginning a transaction on the specified repository.
+        /// Begins a transaction asynchronously and makes a new owning scope current on the caller's async flow.
+        /// The scope becomes current immediately (before the returned task completes), so code that awaits this method
+        /// observes it via <see cref="Current"/>.
         /// </summary>
-        /// <typeparam name="T">The entity type.</typeparam>
-        /// <param name="repository">The repository to begin the transaction on.</param>
-        /// <returns>A new transaction scope.</returns>
-        public static TransactionScope Create<T>(IRepository<T> repository) where T : class, new()
+        /// <typeparam name="T">Entity type.</typeparam>
+        /// <param name="repository">Repository. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A task returning the new scope.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
+        public static Task<TransactionScope> CreateAsync<T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
         {
-            ITransaction transaction = repository.BeginTransaction();
-            return new TransactionScope(transaction, true, _Current.Value);
+            ArgumentNullException.ThrowIfNull(repository);
+
+            // Not an async method: assigning the AsyncLocal here mutates the caller's execution context.
+            // Inside an async method the assignment would be discarded when the method returns.
+            TransactionScope scope = new TransactionScope(null, true, Current);
+            return scope.StartAsync(repository, token);
         }
 
         #endregion
 
         #region Public-Methods
 
-        /// <summary>
-        /// Marks the transaction scope as completed, committing the transaction if this scope owns it.
-        /// </summary>
+        /// <inheritdoc />
+        /// <exception cref="ObjectDisposedException">Thrown when the scope is disposed.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the scope is already completed.</exception>
         public void Complete()
         {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(TransactionScope));
-            if (_Completed)
-                throw new InvalidOperationException("Transaction scope has already been completed");
-
+            ThrowIfUnusable();
             _Completed = true;
-
-            if (_OwnsTransaction)
-            {
-                _Transaction.Commit();
-            }
+            if (_OwnsTransaction) Transaction.Commit();
         }
 
-        /// <summary>
-        /// Asynchronously marks the transaction scope as completed, committing the transaction if this scope owns it.
-        /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <inheritdoc />
+        /// <exception cref="ObjectDisposedException">Thrown when the scope is disposed.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the scope is already completed.</exception>
         public async Task CompleteAsync(CancellationToken token = default)
         {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(TransactionScope));
-            if (_Completed)
-                throw new InvalidOperationException("Transaction scope has already been completed");
-
+            ThrowIfUnusable();
             _Completed = true;
-
-            if (_OwnsTransaction)
-            {
-                await _Transaction.CommitAsync(token);
-            }
+            if (_OwnsTransaction) await Transaction.CommitAsync(token).ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Disposes the transaction scope, rolling back the transaction if not completed and this scope owns it.
+        /// Disposes the scope, rolling back an owned transaction that was not completed, and restores the parent scope.
         /// </summary>
         public void Dispose()
         {
-            if (!_Disposed)
-            {
-                _Current.Value = _Parent!;
+            if (_Disposed) return;
+            _Disposed = true;
+            if (ReferenceEquals(_Current.Value, this)) _Current.Value = _Parent;
 
-                if (!_Completed && _OwnsTransaction)
+            if (_OwnsTransaction && _Transaction != null)
+            {
+                if (!_Completed && !_Transaction.IsCompleted)
                 {
                     try
                     {
                         _Transaction.Rollback();
                     }
-                    catch
+                    catch (InvalidOperationException)
                     {
-                        // Swallow rollback exceptions during dispose
                     }
                 }
 
-                if (_OwnsTransaction)
-                {
-                    _Transaction?.Dispose();
-                }
-
-                _Disposed = true;
+                _Transaction.Dispose();
             }
+
+            GC.SuppressFinalize(this);
         }
 
         #endregion
 
         #region Private-Methods
+
+        private async Task<TransactionScope> StartAsync<T>(IRepository<T> repository, CancellationToken token) where T : class, new()
+        {
+            try
+            {
+                _Transaction = await repository.BeginTransactionAsync(token).ConfigureAwait(false);
+                return this;
+            }
+            catch
+            {
+                _Faulted = true;
+                throw;
+            }
+        }
+
+        private void ThrowIfUnusable()
+        {
+            if (_Disposed) throw new ObjectDisposedException(nameof(TransactionScope));
+            if (_Completed) throw new InvalidOperationException("Transaction scope has already been completed.");
+        }
 
         #endregion
     }

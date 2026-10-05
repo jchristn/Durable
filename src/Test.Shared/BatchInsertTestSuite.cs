@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -39,7 +40,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanBatchInsertMultipleRecords()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int recordCount = 100;
@@ -65,7 +66,7 @@ namespace Test.Shared
             Assert.Equal(recordCount, inserted.Length);
             Assert.All(inserted, p => Assert.True(p.Id > 0));
 
-            int count = await repository.CountAsync();
+            long count = await repository.CountAsync();
             Assert.Equal(recordCount, count);
 
             Console.WriteLine($"     Inserted {recordCount} records in {sw.ElapsedMilliseconds}ms");
@@ -77,7 +78,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanBatchDeleteRecords()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int recordCount = 50;
@@ -102,7 +103,7 @@ namespace Test.Shared
 
             Assert.Equal(recordCount, deletedCount);
 
-            int remainingCount = await repository.CountAsync();
+            long remainingCount = await repository.CountAsync();
             Assert.Equal(0, remainingCount);
 
             Console.WriteLine($"     Deleted {deletedCount} records");

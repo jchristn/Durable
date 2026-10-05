@@ -3,6 +3,7 @@
     using System;
     using System.IO;
     using Durable;
+    using Durable.Sql;
     using Durable.Sqlite;
     using Durable.ConcurrencyConflictResolvers;
     using Xunit;
@@ -129,7 +130,7 @@
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
-                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
                 {
                     CreateTestTable(connectionString);
                 
@@ -177,7 +178,7 @@
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new DatabaseWinsResolver<Author>();
-                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
                 {
                     CreateTestTable(connectionString);
                 
@@ -227,7 +228,7 @@
                 if (File.Exists(dbFile)) File.Delete(dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new MergeChangesResolver<Author>("Id", "Version");
-                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString, null, null, resolver))
+                using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
                 {
                     CreateTestTable(connectionString);
                 

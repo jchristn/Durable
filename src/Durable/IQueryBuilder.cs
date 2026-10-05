@@ -1,371 +1,276 @@
-﻿namespace Durable
+namespace Durable
 {
     using System;
     using System.Collections.Generic;
-    using System.Data;
-    using System.Linq;
     using System.Linq.Expressions;
-    using System.Reflection;
-    using System.Text;
+    using System.Threading;
+    using System.Threading.Tasks;
 
     /// <summary>
-    /// Provides methods for building and executing LINQ-style queries with fluent syntax.
+    /// Backend-neutral fluent query. Builder methods mutate and return the same instance.
+    /// SQL providers return <c>Durable.Sql.ISqlQueryBuilder&lt;T&gt;</c>, which adds raw SQL, set operations, subqueries,
+    /// CTEs and window functions.
+    /// Thread safety: a query builder is not thread-safe; build and execute it on one flow.
     /// </summary>
-    /// <typeparam name="T">The entity type being queried.</typeparam>
+    /// <typeparam name="T">Entity or result type.</typeparam>
     public interface IQueryBuilder<T> where T : class, new()
     {
         /// <summary>
-        /// Adds a WHERE clause to filter query results.
+        /// Adds a predicate; multiple calls are combined with AND.
         /// </summary>
-        /// <param name="predicate">The condition to apply to the query.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <param name="predicate">Predicate. Must not be null.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
         IQueryBuilder<T> Where(Expression<Func<T, bool>> predicate);
+
         /// <summary>
-        /// Orders the query results in ascending order by the specified key.
+        /// Sets the primary ascending sort, replacing earlier sorts.
         /// </summary>
-        /// <typeparam name="TKey">The type of the ordering key.</typeparam>
-        /// <param name="keySelector">The expression to extract the ordering key.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TKey">Key type.</typeparam>
+        /// <param name="keySelector">Key selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
         IQueryBuilder<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector);
+
         /// <summary>
-        /// Orders the query results in descending order by the specified key.
+        /// Sets the primary descending sort, replacing earlier sorts.
         /// </summary>
-        /// <typeparam name="TKey">The type of the ordering key.</typeparam>
-        /// <param name="keySelector">The expression to extract the ordering key.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TKey">Key type.</typeparam>
+        /// <param name="keySelector">Key selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
         IQueryBuilder<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
+
         /// <summary>
-        /// Performs a subsequent ordering of the query results in ascending order.
+        /// Adds a secondary ascending sort.
         /// </summary>
-        /// <typeparam name="TKey">The type of the ordering key.</typeparam>
-        /// <param name="keySelector">The expression to extract the ordering key.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TKey">Key type.</typeparam>
+        /// <param name="keySelector">Key selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
         IQueryBuilder<T> ThenBy<TKey>(Expression<Func<T, TKey>> keySelector);
+
         /// <summary>
-        /// Performs a subsequent ordering of the query results in descending order.
+        /// Adds a secondary descending sort.
         /// </summary>
-        /// <typeparam name="TKey">The type of the ordering key.</typeparam>
-        /// <param name="keySelector">The expression to extract the ordering key.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TKey">Key type.</typeparam>
+        /// <param name="keySelector">Key selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
         IQueryBuilder<T> ThenByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
+
         /// <summary>
-        /// Skips the specified number of elements in the query results.
+        /// Skips rows. With includes, paging applies to root entities, not joined rows.
         /// </summary>
-        /// <param name="count">The number of elements to skip.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <param name="count">Rows to skip. Minimum: 0.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when count is negative.</exception>
         IQueryBuilder<T> Skip(int count);
+
         /// <summary>
-        /// Takes only the specified number of elements from the query results.
+        /// Limits rows. With includes, the limit applies to root entities, not joined rows.
         /// </summary>
-        /// <param name="count">The number of elements to take.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <param name="count">Maximum rows. Minimum: 0.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when count is negative.</exception>
         IQueryBuilder<T> Take(int count);
+
         /// <summary>
-        /// Returns distinct elements from the query results.
+        /// Returns distinct rows.
         /// </summary>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <returns>This builder.</returns>
         IQueryBuilder<T> Distinct();
 
         /// <summary>
-        /// Projects each element of the query into a new form.
+        /// Excludes the repository's global query filters and soft-delete filter from this query.
         /// </summary>
-        /// <typeparam name="TResult">The type of the result after projection.</typeparam>
-        /// <param name="selector">The projection expression.</param>
-        /// <returns>A new query builder for the projected type.</returns>
+        /// <returns>This builder.</returns>
+        IQueryBuilder<T> IgnoreQueryFilters();
+
+        /// <summary>
+        /// Projects to another type using a member-init or new expression, for example
+        /// <c>x =&gt; new PersonSummary { Name = x.First + " " + x.Last }</c>.
+        /// </summary>
+        /// <typeparam name="TResult">Result type with a parameterless constructor.</typeparam>
+        /// <param name="selector">Projection. Must not be null.</param>
+        /// <returns>A builder producing <typeparamref name="TResult"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         IQueryBuilder<TResult> Select<TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new();
 
         /// <summary>
-        /// Includes related data in the query results.
+        /// Eagerly loads a navigation property. Related rows are loaded with separate queries keyed by the root results,
+        /// so paging and row counts are unaffected.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the navigation property.</typeparam>
-        /// <param name="navigationProperty">The navigation property to include.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TProperty">Navigation type.</typeparam>
+        /// <param name="navigationProperty">Navigation selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentException">Thrown when the selector is not a mapped navigation property.</exception>
         IQueryBuilder<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty);
+
         /// <summary>
-        /// Includes additional related data based on a previously included navigation property.
+        /// Eagerly loads a navigation of the most recently included entity.
         /// </summary>
-        /// <typeparam name="TPreviousProperty">The type of the previously included property.</typeparam>
-        /// <typeparam name="TProperty">The type of the navigation property to include.</typeparam>
-        /// <param name="navigationProperty">The navigation property to include.</param>
-        /// <returns>The current query builder for method chaining.</returns>
+        /// <typeparam name="TPreviousProperty">Entity type of the previous include (the element type for collections).</typeparam>
+        /// <typeparam name="TProperty">Navigation type.</typeparam>
+        /// <param name="navigationProperty">Navigation selector. Must not be null.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no Include precedes this call.</exception>
         IQueryBuilder<T> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty);
 
         /// <summary>
-        /// Groups the query results by the specified key selector.
+        /// Groups by a key.
         /// </summary>
-        /// <typeparam name="TKey">The type of the grouping key.</typeparam>
-        /// <param name="keySelector">The expression to extract the grouping key.</param>
-        /// <returns>A grouped query builder for further operations.</returns>
+        /// <typeparam name="TKey">Key type.</typeparam>
+        /// <param name="keySelector">Key selector. Must not be null.</param>
+        /// <returns>A grouped builder.</returns>
         IGroupedQueryBuilder<T, TKey> GroupBy<TKey>(Expression<Func<T, TKey>> keySelector);
-        /// <summary>
-        /// Adds a HAVING clause to filter grouped results.
-        /// </summary>
-        /// <param name="predicate">The condition to apply to grouped results.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> Having(Expression<Func<T, bool>> predicate);
 
         /// <summary>
-        /// Performs a UNION operation with another query, combining results and removing duplicates.
+        /// Executes the query and buffers results.
         /// </summary>
-        /// <param name="other">The other query builder to union with.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> Union(IQueryBuilder<T> other);
-        /// <summary>
-        /// Performs a UNION ALL operation with another query, combining results including duplicates.
-        /// </summary>
-        /// <param name="other">The other query builder to union with.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> UnionAll(IQueryBuilder<T> other);
-        /// <summary>
-        /// Performs an INTERSECT operation with another query, returning only common results.
-        /// </summary>
-        /// <param name="other">The other query builder to intersect with.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> Intersect(IQueryBuilder<T> other);
-        /// <summary>
-        /// Performs an EXCEPT operation with another query, returning results not in the other query.
-        /// </summary>
-        /// <param name="other">The other query builder to except with.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> Except(IQueryBuilder<T> other);
-
-        /// <summary>
-        /// Adds a WHERE IN clause using a subquery.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key to match.</typeparam>
-        /// <param name="keySelector">The expression to extract the key from the main query.</param>
-        /// <param name="subquery">The subquery to check membership against.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereIn<TKey>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new();
-        /// <summary>
-        /// Adds a WHERE NOT IN clause using a subquery.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key to match.</typeparam>
-        /// <param name="keySelector">The expression to extract the key from the main query.</param>
-        /// <param name="subquery">The subquery to check membership against.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereNotIn<TKey>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TKey> subquery) where TKey : class, new();
-        /// <summary>
-        /// Adds a WHERE IN clause using raw SQL for the subquery.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key to match.</typeparam>
-        /// <param name="keySelector">The expression to extract the key from the main query.</param>
-        /// <param name="subquerySql">The raw SQL subquery string.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql);
-        /// <summary>
-        /// Adds a WHERE NOT IN clause using raw SQL for the subquery.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key to match.</typeparam>
-        /// <param name="keySelector">The expression to extract the key from the main query.</param>
-        /// <param name="subquerySql">The raw SQL subquery string.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereNotInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql);
-        /// <summary>
-        /// Adds a WHERE EXISTS clause using a subquery.
-        /// </summary>
-        /// <typeparam name="TOther">The type of the subquery entity.</typeparam>
-        /// <param name="subquery">The subquery to check for existence.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new();
-        /// <summary>
-        /// Adds a WHERE NOT EXISTS clause using a subquery.
-        /// </summary>
-        /// <typeparam name="TOther">The type of the subquery entity.</typeparam>
-        /// <param name="subquery">The subquery to check for non-existence.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery) where TOther : class, new();
-
-        /// <summary>
-        /// Adds a window function to the query.
-        /// </summary>
-        /// <param name="functionName">The name of the window function.</param>
-        /// <param name="partitionBy">Optional PARTITION BY clause.</param>
-        /// <param name="orderBy">Optional ORDER BY clause for the window.</param>
-        /// <returns>A windowed query builder for further window operations.</returns>
-        IWindowedQueryBuilder<T> WithWindowFunction(string functionName, string? partitionBy = null, string? orderBy = null);
-
-        /// <summary>
-        /// Adds a Common Table Expression (CTE) to the query.
-        /// </summary>
-        /// <param name="cteName">The name of the CTE.</param>
-        /// <param name="cteQuery">The SQL query for the CTE.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WithCte(string cteName, string cteQuery);
-        /// <summary>
-        /// Adds a recursive Common Table Expression (CTE) to the query.
-        /// </summary>
-        /// <param name="cteName">The name of the recursive CTE.</param>
-        /// <param name="anchorQuery">The anchor query for the recursive CTE.</param>
-        /// <param name="recursiveQuery">The recursive query for the CTE.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery);
-
-        /// <summary>
-        /// Adds a raw SQL WHERE clause with optional parameters.
-        /// </summary>
-        /// <param name="sql">The raw SQL condition.</param>
-        /// <param name="parameters">Optional parameters for the SQL.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> WhereRaw(string sql, params object[] parameters);
-        /// <summary>
-        /// Adds a raw SQL SELECT clause.
-        /// </summary>
-        /// <param name="sql">The raw SQL select statement.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> SelectRaw(string sql);
-        /// <summary>
-        /// Specifies a raw SQL FROM clause.
-        /// </summary>
-        /// <param name="sql">The raw SQL from statement.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> FromRaw(string sql);
-        /// <summary>
-        /// Adds a raw SQL JOIN clause.
-        /// </summary>
-        /// <param name="sql">The raw SQL join statement.</param>
-        /// <returns>The current query builder for method chaining.</returns>
-        IQueryBuilder<T> JoinRaw(string sql);
-
-        /// <summary>
-        /// Creates a CASE WHEN expression builder for conditional selections.
-        /// </summary>
-        /// <returns>A case expression builder for building conditional logic.</returns>
-        ICaseExpressionBuilder<T> SelectCase();
-
-        /// <summary>
-        /// Executes the query and returns the results.
-        /// </summary>
-        /// <returns>The query results as an enumerable sequence.</returns>
+        /// <returns>Results. Never null.</returns>
         IEnumerable<T> Execute();
+
         /// <summary>
-        /// Asynchronously executes the query and returns the results.
+        /// Executes the query and buffers results.
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with query results.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Results. Never null.</returns>
         Task<IEnumerable<T>> ExecuteAsync(CancellationToken token = default);
+
         /// <summary>
-        /// Executes the query and returns results as an asynchronous enumerable stream.
+        /// Executes the query and streams results as they are read. Includes are loaded per batch of streamed roots.
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>The query results as an asynchronous enumerable sequence.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>An async stream of results.</returns>
         IAsyncEnumerable<T> ExecuteAsyncEnumerable(CancellationToken token = default);
 
         /// <summary>
-        /// Executes the query and returns both the results and the executed SQL query.
+        /// Executes the query and returns results with the native query text.
         /// </summary>
-        /// <returns>A durable result containing both query and results.</returns>
+        /// <returns>Results and query text.</returns>
         IDurableResult<T> ExecuteWithQuery();
+
         /// <summary>
-        /// Asynchronously executes the query and returns both the results and the executed SQL query.
+        /// Executes the query and returns results with the native query text.
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with durable result.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Results and query text.</returns>
         Task<IDurableResult<T>> ExecuteWithQueryAsync(CancellationToken token = default);
+
         /// <summary>
-        /// Executes the query as an asynchronous enumerable and exposes the executed SQL query.
+        /// Streams results with the native query text.
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>An asynchronous durable result containing both query and streaming results.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Streamed results and query text.</returns>
         IAsyncDurableResult<T> ExecuteAsyncEnumerableWithQuery(CancellationToken token = default);
 
         /// <summary>
-        /// Counts the number of entities matching the query.
+        /// Counts matching rows (ignores paging).
         /// </summary>
-        /// <returns>The count of matching entities.</returns>
+        /// <returns>The count.</returns>
         long Count();
+
         /// <summary>
-        /// Asynchronously counts the number of entities matching the query.
+        /// Counts matching rows (ignores paging).
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the count of matching entities.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The count.</returns>
         Task<long> CountAsync(CancellationToken token = default);
 
         /// <summary>
-        /// Calculates the sum of a numeric property for entities matching the query.
+        /// Determines whether any row matches.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
-        /// <param name="selector">The expression to select the property to sum.</param>
-        /// <returns>The sum of the property values.</returns>
-        decimal Sum<TProperty>(Expression<Func<T, TProperty>> selector);
+        /// <returns>True when at least one row matches.</returns>
+        bool Any();
+
         /// <summary>
-        /// Asynchronously calculates the sum of a numeric property for entities matching the query.
+        /// Determines whether any row matches.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property to sum.</typeparam>
-        /// <param name="selector">The expression to select the property to sum.</param>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the sum of the property values.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>True when at least one row matches.</returns>
+        Task<bool> AnyAsync(CancellationToken token = default);
+
+        /// <summary>
+        /// Sums a numeric value over matching rows.
+        /// </summary>
+        /// <typeparam name="TProperty">Numeric type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <returns>The sum; zero when no rows match.</returns>
+        decimal Sum<TProperty>(Expression<Func<T, TProperty>> selector);
+
+        /// <summary>
+        /// Sums a numeric value over matching rows.
+        /// </summary>
+        /// <typeparam name="TProperty">Numeric type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The sum; zero when no rows match.</returns>
         Task<decimal> SumAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
-        /// Calculates the average of a numeric property for entities matching the query.
+        /// Averages a numeric value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
-        /// <param name="selector">The expression to select the property to average.</param>
-        /// <returns>The average of the property values.</returns>
+        /// <typeparam name="TProperty">Numeric type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <returns>The average; zero when no rows match.</returns>
         decimal Average<TProperty>(Expression<Func<T, TProperty>> selector);
+
         /// <summary>
-        /// Asynchronously calculates the average of a numeric property for entities matching the query.
+        /// Averages a numeric value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property to average.</typeparam>
-        /// <param name="selector">The expression to select the property to average.</param>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the average of the property values.</returns>
+        /// <typeparam name="TProperty">Numeric type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The average; zero when no rows match.</returns>
         Task<decimal> AverageAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
-        /// Finds the minimum value of a property for entities matching the query.
+        /// Returns the minimum of a value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property.</typeparam>
-        /// <param name="selector">The expression to select the property.</param>
-        /// <returns>The minimum property value.</returns>
+        /// <typeparam name="TProperty">Value type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <returns>The minimum; default when no rows match.</returns>
         TProperty Min<TProperty>(Expression<Func<T, TProperty>> selector);
+
         /// <summary>
-        /// Asynchronously finds the minimum value of a property for entities matching the query.
+        /// Returns the minimum of a value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property.</typeparam>
-        /// <param name="selector">The expression to select the property.</param>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the minimum property value.</returns>
+        /// <typeparam name="TProperty">Value type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The minimum; default when no rows match.</returns>
         Task<TProperty> MinAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
-        /// Finds the maximum value of a property for entities matching the query.
+        /// Returns the maximum of a value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property.</typeparam>
-        /// <param name="selector">The expression to select the property.</param>
-        /// <returns>The maximum property value.</returns>
+        /// <typeparam name="TProperty">Value type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <returns>The maximum; default when no rows match.</returns>
         TProperty Max<TProperty>(Expression<Func<T, TProperty>> selector);
+
         /// <summary>
-        /// Asynchronously finds the maximum value of a property for entities matching the query.
+        /// Returns the maximum of a value over matching rows.
         /// </summary>
-        /// <typeparam name="TProperty">The type of the property.</typeparam>
-        /// <param name="selector">The expression to select the property.</param>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the maximum property value.</returns>
+        /// <typeparam name="TProperty">Value type.</typeparam>
+        /// <param name="selector">Value selector. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The maximum; default when no rows match.</returns>
         Task<TProperty> MaxAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
-        /// Deletes all entities matching the query.
+        /// Deletes matching rows (soft-deletes when the entity has a soft-delete column).
         /// </summary>
-        /// <returns>The number of entities deleted.</returns>
+        /// <returns>The number of rows affected.</returns>
         int Delete();
+
         /// <summary>
-        /// Asynchronously deletes all entities matching the query.
+        /// Deletes matching rows (soft-deletes when the entity has a soft-delete column).
         /// </summary>
-        /// <param name="token">The cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation with the number of entities deleted.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The number of rows affected.</returns>
         Task<int> DeleteAsync(CancellationToken token = default);
 
         /// <summary>
-        /// Gets the SQL query that will be or was executed.
+        /// Gets the native query text for the current definition (for SQL backends, the parameterized SQL).
         /// </summary>
         string Query { get; }
-
-        /// <summary>
-        /// Builds and returns the SQL query string for debugging purposes.
-        /// </summary>
-        /// <returns>The SQL query string.</returns>
-        string BuildSql();
     }
 }

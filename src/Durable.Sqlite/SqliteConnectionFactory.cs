@@ -2,121 +2,103 @@ namespace Durable.Sqlite
 {
     using System;
     using System.Data.Common;
-    using System.Threading;
-    using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
+    using Durable.Sql;
 
     /// <summary>
-    /// Provides a factory for creating and managing SQLite database connections with connection pooling support.
-    /// Implements connection pooling to improve performance and resource management for SQLite databases.
+    /// Opens SQLite connections, relying on Microsoft.Data.Sqlite's built-in pooling.
+    /// In-memory databases stay alive for the factory's lifetime: a private ":memory:" data source is converted to a
+    /// uniquely named shared-cache database so every connection from this factory sees the same data, and one connection
+    /// is kept open until the factory is disposed.
+    /// Thread safety: safe for concurrent use.
     /// </summary>
-    public class SqliteConnectionFactory : IConnectionFactory
+    public sealed class SqliteConnectionFactory : ConnectionFactory
     {
         #region Public-Members
+
+        /// <summary>
+        /// Gets the effective connection string. Never null.
+        /// </summary>
+        public string ConnectionString { get; }
+
+        /// <summary>
+        /// Gets whether the database is in memory.
+        /// </summary>
+        public bool IsInMemory { get; }
 
         #endregion
 
         #region Private-Members
 
-        private readonly ConnectionPool _ConnectionPool;
-        private readonly string _ConnectionString;
-        private volatile bool _Disposed;
+        private readonly object _KeepAliveLock = new object();
+        private SqliteConnection? _KeepAlive;
 
         #endregion
 
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Initializes a new instance of the SqliteConnectionFactory with the specified connection string and pooling options.
+        /// Instantiates the factory.
         /// </summary>
-        /// <param name="connectionString">The SQLite connection string used to create database connections.</param>
-        /// <param name="options">Optional connection pool configuration settings. Uses default settings if null.</param>
+        /// <param name="connectionString">SQLite connection string. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
-        public SqliteConnectionFactory(string connectionString, ConnectionPoolOptions options = null)
+        public SqliteConnectionFactory(string connectionString, int? maxConcurrentConnections = null) : base(maxConcurrentConnections)
         {
-            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-            _ConnectionPool = new ConnectionPool(() => new SqliteConnection(_ConnectionString), options);
-        }
-
-        #endregion
-
-        #region Public-Methods
-
-        /// <summary>
-        /// Retrieves a database connection from the connection pool synchronously.
-        /// </summary>
-        /// <returns>A ready-to-use SQLite database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        public DbConnection GetConnection()
-        {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnection();
-        }
-
-        /// <summary>
-        /// Retrieves a database connection from the connection pool asynchronously.
-        /// </summary>
-        /// <param name="cancellationToken">A cancellation token to cancel the operation if needed.</param>
-        /// <returns>A task representing the asynchronous operation that returns a ready-to-use SQLite database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
-        {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnectionAsync(cancellationToken);
-        }
-
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        public void ReturnConnection(DbConnection connection)
-        {
-            if (!_Disposed && connection != null)
+            ArgumentNullException.ThrowIfNull(connectionString);
+            SqliteConnectionStringBuilder builder = new SqliteConnectionStringBuilder(connectionString);
+            if (string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase))
             {
-                _ConnectionPool.ReturnConnection(connection);
+                builder.DataSource = "durable-" + Guid.NewGuid().ToString("N");
+                builder.Mode = SqliteOpenMode.Memory;
+                builder.Cache = SqliteCacheMode.Shared;
             }
-        }
 
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse asynchronously.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        /// <returns>A task representing the asynchronous return operation.</returns>
-        public Task ReturnConnectionAsync(DbConnection connection)
-        {
-            if (_Disposed || connection == null)
-                return Task.CompletedTask;
-
-            return _ConnectionPool.ReturnConnectionAsync(connection);
-        }
-
-        /// <summary>
-        /// Disposes of the connection factory and releases all managed resources including the connection pool.
-        /// All connections in the pool will be closed and disposed, and SQLite's internal connection pool will be cleared.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_Disposed)
-                return;
-
-            _Disposed = true;
-            _ConnectionPool?.Dispose();
-
-            // Clear SQLite's internal connection pool to ensure all file locks are released
-            // This is necessary because SQLite maintains its own ADO.NET connection pool
-            // independent of our custom ConnectionPool implementation
-            SqliteConnection.ClearAllPools();
+            IsInMemory = builder.Mode == SqliteOpenMode.Memory;
+            ConnectionString = builder.ToString();
         }
 
         #endregion
 
         #region Private-Methods
 
-        private void ThrowIfDisposed()
+        /// <inheritdoc />
+        protected override DbConnection CreateConnection()
         {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(SqliteConnectionFactory));
+            if (IsInMemory && _KeepAlive == null)
+            {
+                lock (_KeepAliveLock)
+                {
+                    if (_KeepAlive == null)
+                    {
+                        SqliteConnection keepAlive = new SqliteConnection(ConnectionString);
+                        keepAlive.Open();
+                        _KeepAlive = keepAlive;
+                    }
+                }
+            }
+
+            return new SqliteConnection(ConnectionString);
+        }
+
+        /// <inheritdoc />
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (_KeepAliveLock)
+                {
+                    _KeepAlive?.Dispose();
+                    _KeepAlive = null;
+                }
+
+                using (SqliteConnection connection = new SqliteConnection(ConnectionString))
+                {
+                    SqliteConnection.ClearPool(connection);
+                }
+            }
+
+            base.Dispose(disposing);
         }
 
         #endregion

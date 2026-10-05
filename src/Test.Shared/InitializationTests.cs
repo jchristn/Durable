@@ -6,6 +6,7 @@
     using System.Linq;
     using System.Reflection;
     using Durable;
+    using Durable.Sql;
     using Durable.DefaultValueProviders;
     using Durable.Sqlite;
     using Xunit;
@@ -161,9 +162,9 @@
         public class InvalidEntity
         {
             /// <summary>
-            /// Gets or sets the ID.
+            /// Gets or sets a code. Not recognized as a key by convention, so the entity has no primary key.
             /// </summary>
-            public int Id { get; set; }
+            public int Code { get; set; }
 
             /// <summary>
             /// Gets or sets the name.

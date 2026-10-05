@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadByIdReturnsNullWhenNotFound()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             Person? result = await repository.ReadByIdAsync(999999);
             Assert.Null(result);
         }
@@ -51,7 +52,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadFirstOrDefaultReturnsNullWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             Person? result = await repository.ReadFirstOrDefaultAsync(p => p.Department == "NoSuchDepartment");
             Assert.Null(result);
         }
@@ -62,9 +63,9 @@ namespace Test.Shared
         [Fact]
         public async Task CountReturnsZeroWhenEmpty()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
-            int count = await repository.CountAsync();
+            long count = await repository.CountAsync();
             Assert.Equal(0, count);
         }
 
@@ -74,8 +75,8 @@ namespace Test.Shared
         [Fact]
         public async Task CountWithPredicateReturnsZeroWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
-            int count = await repository.CountAsync(p => p.Age > 1000);
+            ISqlRepository<Person> repository = await SeedAsync();
+            long count = await repository.CountAsync(p => p.Age > 1000);
             Assert.Equal(0, count);
         }
 
@@ -85,7 +86,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadManyReturnsEmptyWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query().Where(p => p.Age > 1000).ExecuteAsync()).ToList();
             Assert.Empty(results);
         }
@@ -96,7 +97,7 @@ namespace Test.Shared
         [Fact]
         public async Task ExistsReturnsFalseWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             bool exists = await repository.ExistsAsync(p => p.Email == "nobody@nowhere.test");
             Assert.False(exists);
         }
@@ -107,7 +108,7 @@ namespace Test.Shared
         [Fact]
         public async Task ExistsByIdReturnsFalseWhenNotFound()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             bool exists = await repository.ExistsByIdAsync(999999);
             Assert.False(exists);
         }
@@ -118,7 +119,7 @@ namespace Test.Shared
         [Fact]
         public async Task DeleteByIdReturnsFalseWhenNotFound()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             bool deleted = await repository.DeleteByIdAsync(999999);
             Assert.False(deleted);
         }
@@ -129,7 +130,7 @@ namespace Test.Shared
         [Fact]
         public async Task DeleteManyReturnsZeroWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             int deleted = await repository.DeleteManyAsync(p => p.Department == "NoSuchDepartment");
             Assert.Equal(0, deleted);
         }
@@ -140,7 +141,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadSingleThrowsWhenMultipleMatches()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             Exception? exception = await Record.ExceptionAsync(() => repository.ReadSingleAsync(p => p.Department == "Engineering"));
             Assert.NotNull(exception);
         }
@@ -151,7 +152,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadSingleThrowsWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             Exception? exception = await Record.ExceptionAsync(() => repository.ReadSingleAsync(p => p.Department == "NoSuchDepartment"));
             Assert.NotNull(exception);
         }
@@ -162,7 +163,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadSingleOrDefaultNullWhenNoneThrowsWhenMultiple()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             Person? none = await repository.ReadSingleOrDefaultAsync(p => p.Department == "NoSuchDepartment");
             Assert.Null(none);
@@ -177,7 +178,7 @@ namespace Test.Shared
         [Fact]
         public async Task DeleteNonExistentEntityReturnsFalse()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             Person ghost = new Person { Id = 999999, FirstName = "Ghost", LastName = "Ghost", Age = 20, Email = "ghost@example.com", Salary = 1m, Department = "None" };
             bool deleted = await repository.DeleteAsync(ghost);
             Assert.False(deleted);
@@ -187,9 +188,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] people = new[]

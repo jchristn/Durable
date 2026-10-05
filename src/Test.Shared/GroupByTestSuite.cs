@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task GroupByProducesGroupsPerKey()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<IGrouping<string, Person>> groups = (await repository.Query()
                 .GroupBy(p => p.Department)
@@ -60,7 +61,7 @@ namespace Test.Shared
         [Fact]
         public async Task GroupByWithWhereFiltersFirst()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<IGrouping<string, Person>> groups = (await repository.Query()
                 .Where(p => p.Age > 30)
@@ -80,7 +81,7 @@ namespace Test.Shared
         [Fact]
         public async Task GroupByWithHavingFiltersGroups()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<IGrouping<string, Person>> groups = (await repository.Query()
                 .GroupBy(p => p.Department)
@@ -99,7 +100,7 @@ namespace Test.Shared
         [Fact]
         public async Task GroupedAggregatesComputeValues()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             IGroupedQueryBuilder<Person, string> grouped = repository.Query().GroupBy(p => p.Department);
 
@@ -127,9 +128,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             List<Person> people = new List<Person>

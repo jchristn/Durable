@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
 
     /// <summary>
     /// Provides database-specific repository instances for shared testing infrastructure.
@@ -27,7 +28,7 @@ namespace Test.Shared
         /// </summary>
         /// <typeparam name="T">The entity type.</typeparam>
         /// <returns>A configured repository instance.</returns>
-        IRepository<T> CreateRepository<T>() where T : class, new();
+        ISqlRepository<T> CreateRepository<T>() where T : class, new();
 
         /// <summary>
         /// Sets up the database schema for testing.

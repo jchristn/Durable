@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.Sqlite;
     using Microsoft.Data.Sqlite;
 
@@ -48,7 +49,7 @@ namespace Test.Shared
         /// </summary>
         /// <typeparam name="T">The entity type.</typeparam>
         /// <returns>A configured repository instance.</returns>
-        public IRepository<T> CreateRepository<T>() where T : class, new()
+        public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
             return new SqliteRepository<T>(_ConnectionString);
         }
@@ -62,7 +63,7 @@ namespace Test.Shared
             _KeepAliveConnection = new SqliteConnection(_ConnectionString);
             _KeepAliveConnection.Open();
 
-            IRepository<Person> personRepo = CreateRepository<Person>();
+            ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
             await personRepo.ExecuteSqlAsync(@"
                 CREATE TABLE IF NOT EXISTS people (

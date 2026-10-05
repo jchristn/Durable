@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -37,7 +38,7 @@ namespace Test.Shared
         [Fact]
         public async Task VersionColumnIncrementsOnUpdate()
         {
-            IRepository<Author> repository = _Provider.CreateRepository<Author>();
+            ISqlRepository<Author> repository = _Provider.CreateRepository<Author>();
             await repository.ExecuteSqlAsync("DELETE FROM author_categories");
             await repository.ExecuteSqlAsync("DELETE FROM authors");
 
@@ -65,7 +66,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConcurrentUpdatesThrowException()
         {
-            IRepository<Author> repository = _Provider.CreateRepository<Author>();
+            ISqlRepository<Author> repository = _Provider.CreateRepository<Author>();
             await repository.ExecuteSqlAsync("DELETE FROM author_categories");
             await repository.ExecuteSqlAsync("DELETE FROM authors");
 

@@ -59,7 +59,7 @@ namespace Test.Shared
         /// <summary>
         /// Gets or sets the status of the entity as an integer value.
         /// </summary>
-        [Property("status_int")]
+        [Property("status_int", Flags.Integer)]
         public Status StatusAsInt { get; set; }
 
         /// <summary>

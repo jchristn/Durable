@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task AndConditionNarrowsResults()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Age >= 30 && p.Salary > 60000m)
                 .ExecuteAsync()).ToList();
@@ -53,7 +54,7 @@ namespace Test.Shared
         [Fact]
         public async Task OrConditionBroadensResults()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Department == "IT" || p.Department == "HR")
                 .ExecuteAsync()).ToList();
@@ -67,7 +68,7 @@ namespace Test.Shared
         [Fact]
         public async Task RangeConditionFiltersInclusiveBounds()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Age >= 30 && p.Age <= 40)
                 .ExecuteAsync()).ToList();
@@ -80,7 +81,7 @@ namespace Test.Shared
         [Fact]
         public async Task StringStartsWithFilters()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.FirstName.StartsWith("A"))
                 .ExecuteAsync()).ToList();
@@ -93,7 +94,7 @@ namespace Test.Shared
         [Fact]
         public async Task StringContainsFilters()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Email.Contains("company.com"))
                 .ExecuteAsync()).ToList();
@@ -106,7 +107,7 @@ namespace Test.Shared
         [Fact]
         public async Task NotConditionExcludesRows()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Department != "IT")
                 .ExecuteAsync()).ToList();
@@ -117,9 +118,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             List<Person> people = new List<Person>

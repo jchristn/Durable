@@ -4,6 +4,7 @@ namespace Test.Shared
 {
     using System;
     using Durable;
+    using Durable.Sql;
     using Durable.Sqlite;
     using Microsoft.Data.Sqlite;
     using Xunit;

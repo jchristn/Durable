@@ -2,116 +2,64 @@ namespace Durable.MySql
 {
     using System;
     using System.Data.Common;
-    using System.Threading;
-    using System.Threading.Tasks;
     using MySqlConnector;
+    using Durable.Sql;
 
     /// <summary>
-    /// Provides a factory for creating and managing MySQL database connections with connection pooling support.
-    /// Implements connection pooling to improve performance and resource management for MySQL databases.
+    /// Opens MySQL connections through MySqlConnector's pooling, either from a connection string or a caller-supplied
+    /// <see cref="MySqlDataSource"/>.
+    /// Thread safety: safe for concurrent use.
     /// </summary>
-    public class MySqlConnectionFactory : IConnectionFactory
+    public sealed class MySqlConnectionFactory : ConnectionFactory
     {
         #region Public-Members
 
-        #endregion
+        /// <summary>
+        /// Gets the data source supplied by the caller, or null when the factory uses a connection string
+        /// (connections then come from MySqlConnector's shared per-connection-string pool).
+        /// </summary>
+        public MySqlDataSource? DataSource { get; }
 
-        #region Private-Members
-
-        private readonly ConnectionPool _ConnectionPool;
-        private readonly string _ConnectionString;
-        private volatile bool _Disposed;
+        /// <summary>
+        /// Gets the connection string, or null when the factory wraps a caller-supplied data source.
+        /// </summary>
+        public string? ConnectionString { get; }
 
         #endregion
 
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Initializes a new instance of the MySqlConnectionFactory with the specified connection string and pooling options.
+        /// Instantiates the factory from a connection string. Connections share MySqlConnector's pool for that connection
+        /// string, so any number of factories and repositories with the same connection string use one pool.
         /// </summary>
-        /// <param name="connectionString">The MySQL connection string used to create database connections.</param>
-        /// <param name="options">Optional connection pool configuration settings. Uses default settings if null.</param>
+        /// <param name="connectionString">MySqlConnector connection string. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
-        public MySqlConnectionFactory(string connectionString, ConnectionPoolOptions? options = null)
+        public MySqlConnectionFactory(string connectionString, int? maxConcurrentConnections = null) : base(maxConcurrentConnections)
         {
-            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-            _ConnectionPool = new ConnectionPool(() => new MySqlConnection(_ConnectionString), options);
-        }
-
-        #endregion
-
-        #region Public-Methods
-
-        /// <summary>
-        /// Retrieves a database connection from the connection pool synchronously.
-        /// </summary>
-        /// <returns>A ready-to-use MySQL database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        public DbConnection GetConnection()
-        {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnection();
+            ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         }
 
         /// <summary>
-        /// Retrieves a database connection from the connection pool asynchronously.
+        /// Instantiates the factory over an existing data source, which is not disposed with the factory.
         /// </summary>
-        /// <param name="cancellationToken">A cancellation token to cancel the operation if needed.</param>
-        /// <returns>A task representing the asynchronous operation that returns a ready-to-use MySQL database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
+        /// <param name="dataSource">Data source. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+        /// <exception cref="ArgumentNullException">Thrown when dataSource is null.</exception>
+        public MySqlConnectionFactory(MySqlDataSource dataSource, int? maxConcurrentConnections = null) : base(maxConcurrentConnections)
         {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnectionAsync(cancellationToken);
-        }
-
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        public void ReturnConnection(DbConnection connection)
-        {
-            if (!_Disposed && connection != null)
-            {
-                _ConnectionPool.ReturnConnection(connection);
-            }
-        }
-
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse asynchronously.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        /// <returns>A task representing the asynchronous return operation.</returns>
-        public Task ReturnConnectionAsync(DbConnection connection)
-        {
-            if (_Disposed || connection == null)
-                return Task.CompletedTask;
-
-            return _ConnectionPool.ReturnConnectionAsync(connection);
-        }
-
-        /// <summary>
-        /// Disposes of the connection factory and releases all managed resources including the connection pool.
-        /// All connections in the pool will be closed and disposed.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_Disposed)
-                return;
-
-            _Disposed = true;
-            _ConnectionPool?.Dispose();
+            DataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
         }
 
         #endregion
 
         #region Private-Methods
 
-        private void ThrowIfDisposed()
+        /// <inheritdoc />
+        protected override DbConnection CreateConnection()
         {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(MySqlConnectionFactory));
+            return DataSource != null ? DataSource.CreateConnection() : new MySqlConnection(ConnectionString);
         }
 
         #endregion

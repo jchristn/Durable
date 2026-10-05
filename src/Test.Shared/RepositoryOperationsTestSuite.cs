@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -43,7 +44,7 @@ namespace Test.Shared
         [Fact]
         public async Task FromSqlMapsRawSqlRowsToEntities()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<Person> engineers = repository
                 .FromSql("SELECT * FROM people WHERE department = @p0", null, "Engineering")
@@ -61,7 +62,7 @@ namespace Test.Shared
         [Fact]
         public async Task FromSqlAsyncStreamsRawSqlRows()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int streamed = 0;
             await foreach (Person person in repository.FromSqlAsync(
@@ -80,7 +81,7 @@ namespace Test.Shared
         [Fact]
         public async Task FromSqlReturnsEmptyWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<Person> results = repository
                 .FromSql("SELECT * FROM people WHERE department = @p0", null, "NoSuchDepartment")
@@ -95,7 +96,7 @@ namespace Test.Shared
         [Fact]
         public async Task BatchUpdateUpdatesMatchingRows()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int updated = await repository.BatchUpdateAsync(
                 p => p.Department == "Engineering",
@@ -103,8 +104,8 @@ namespace Test.Shared
 
             Assert.Equal(3, updated);
 
-            int remainingEngineering = await repository.CountAsync(p => p.Department == "Engineering");
-            int relabeled = await repository.CountAsync(p => p.Department == "Engineering-Updated");
+            long remainingEngineering = await repository.CountAsync(p => p.Department == "Engineering");
+            long relabeled = await repository.CountAsync(p => p.Department == "Engineering-Updated");
 
             Assert.Equal(0, remainingEngineering);
             Assert.Equal(3, relabeled);
@@ -116,7 +117,7 @@ namespace Test.Shared
         [Fact]
         public async Task BatchUpdateReturnsZeroWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int updated = await repository.BatchUpdateAsync(
                 p => p.Department == "NoSuchDepartment",
@@ -131,7 +132,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpdateFieldUpdatesSingleColumn()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int updated = await repository.UpdateFieldAsync(
                 p => p.Department == "Marketing",
@@ -151,7 +152,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpdateFieldReturnsZeroWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int updated = await repository.UpdateFieldAsync(
                 p => p.Department == "NoSuchDepartment",
@@ -169,7 +170,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpsertManyInsertsAndUpdatesInOneCall()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<Person> existing = (await repository.Query()
                 .Where(p => p.Department == "Engineering")
@@ -197,7 +198,7 @@ namespace Test.Shared
             List<Person> upserted = (await repository.UpsertManyAsync(batch)).ToList();
             Assert.Equal(4, upserted.Count);
 
-            int total = await repository.CountAsync();
+            long total = await repository.CountAsync();
             Assert.Equal(5, total); // 4 seeded + 1 inserted
 
             Person? updatedExisting = await repository.ReadByIdAsync(existing[0].Id);
@@ -216,12 +217,12 @@ namespace Test.Shared
         [Fact]
         public async Task BatchDeleteRemovesMatchingRows()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int deleted = await repository.BatchDeleteAsync(p => p.Department == "Engineering");
             Assert.Equal(3, deleted);
 
-            int remaining = await repository.CountAsync();
+            long remaining = await repository.CountAsync();
             Assert.Equal(1, remaining); // only the Marketing row survives
 
             bool anyEngineering = await repository.ExistsAsync(p => p.Department == "Engineering");
@@ -234,12 +235,12 @@ namespace Test.Shared
         [Fact]
         public async Task BatchDeleteReturnsZeroWhenNoMatch()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             int deleted = await repository.BatchDeleteAsync(p => p.Department == "NoSuchDepartment");
             Assert.Equal(0, deleted);
 
-            int remaining = await repository.CountAsync();
+            long remaining = await repository.CountAsync();
             Assert.Equal(4, remaining);
         }
 
@@ -247,9 +248,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] people = new[]

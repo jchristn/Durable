@@ -310,7 +310,7 @@ namespace Sample.BlogApp.MySql
         {
             Console.WriteLine("=== Scenario 1: Creating Authors ===");
 
-            int existingCount = await authorRepo.CountAsync();
+            long existingCount = await authorRepo.CountAsync();
             if (existingCount > 0)
             {
                 Console.WriteLine($"Found {existingCount} existing authors, skipping creation.\n");
@@ -370,7 +370,7 @@ namespace Sample.BlogApp.MySql
         {
             Console.WriteLine("=== Scenario 2: Creating Blog Posts ===");
 
-            int existingCount = await postRepo.CountAsync();
+            long existingCount = await postRepo.CountAsync();
             if (existingCount > 0)
             {
                 Console.WriteLine($"Found {existingCount} existing posts, skipping creation.\n");
@@ -473,7 +473,7 @@ namespace Sample.BlogApp.MySql
         {
             Console.WriteLine("=== Scenario 3: Adding Comments ===");
 
-            int existingCount = await commentRepo.CountAsync();
+            long existingCount = await commentRepo.CountAsync();
             if (existingCount > 0)
             {
                 Console.WriteLine($"Found {existingCount} existing comments, skipping creation.\n");
@@ -526,8 +526,8 @@ namespace Sample.BlogApp.MySql
             IEnumerable<Comment> createdComments = await commentRepo.CreateManyAsync(comments);
             Console.WriteLine($"✓ Created {createdComments.Count()} comments");
 
-            int approvedCount = await commentRepo.CountAsync(c => c.IsApproved == true);
-            int pendingCount = await commentRepo.CountAsync(c => c.IsApproved == false);
+            long approvedCount = await commentRepo.CountAsync(c => c.IsApproved == true);
+            long pendingCount = await commentRepo.CountAsync(c => c.IsApproved == false);
 
             Console.WriteLine($"  Approved: {approvedCount}, Pending: {pendingCount}");
             Console.WriteLine();
@@ -651,14 +651,14 @@ namespace Sample.BlogApp.MySql
         {
             Console.WriteLine("=== Scenario 6: Aggregations ===");
 
-            int totalAuthors = await authorRepo.CountAsync();
-            int activeAuthors = await authorRepo.CountAsync(a => a.IsActive == true);
+            long totalAuthors = await authorRepo.CountAsync();
+            long activeAuthors = await authorRepo.CountAsync(a => a.IsActive == true);
 
-            int totalPosts = await postRepo.CountAsync();
-            int publishedPosts = await postRepo.CountAsync(p => p.IsPublished == true);
+            long totalPosts = await postRepo.CountAsync();
+            long publishedPosts = await postRepo.CountAsync(p => p.IsPublished == true);
 
-            int totalComments = await commentRepo.CountAsync();
-            int approvedComments = await commentRepo.CountAsync(c => c.IsApproved == true);
+            long totalComments = await commentRepo.CountAsync();
+            long approvedComments = await commentRepo.CountAsync(c => c.IsApproved == true);
 
             Console.WriteLine($"\n📊 Blog Statistics:");
             Console.WriteLine($"   Authors: {totalAuthors} ({activeAuthors} active)");
@@ -739,15 +739,16 @@ namespace Sample.BlogApp.MySql
             }
 
             Console.WriteLine("\n2. Testing rollback scenario:");
-            int postCountBefore = await postRepo.CountAsync();
+            long postCountBefore = await postRepo.CountAsync();
 
             using (ITransaction transaction = await postRepo.BeginTransactionAsync())
             {
                 try
                 {
+                    int existingAuthorId = (await postRepo.ReadFirstAsync(null, transaction))?.AuthorId ?? 1;
                     BlogPost tempPost = new BlogPost
                     {
-                        AuthorId = 999,
+                        AuthorId = existingAuthorId,
                         Title = "This Post Will Be Rolled Back",
                         Slug = "rollback-test",
                         Content = "Temporary content",
@@ -770,7 +771,7 @@ namespace Sample.BlogApp.MySql
                 }
             }
 
-            int postCountAfter = await postRepo.CountAsync();
+            long postCountAfter = await postRepo.CountAsync();
             Console.WriteLine($"   Post count before: {postCountBefore}, after: {postCountAfter} (unchanged)");
 
             Console.WriteLine();
@@ -986,7 +987,7 @@ namespace Sample.BlogApp.MySql
             Console.WriteLine($"   Total streamed: {streamedCount} posts (memory efficient!)");
 
             Console.WriteLine("\n4. Calculate total pages:");
-            int totalPosts = await postRepo.CountAsync(p => p.IsPublished == true);
+            long totalPosts = await postRepo.CountAsync(p => p.IsPublished == true);
             int totalPages = (int)Math.Ceiling((double)totalPosts / pageSize);
             Console.WriteLine($"   Total posts: {totalPosts}, Page size: {pageSize}, Total pages: {totalPages}");
 
@@ -1056,7 +1057,7 @@ namespace Sample.BlogApp.MySql
             Console.WriteLine($"   DeleteById(99999) returned: {deleteResult}");
 
             Console.WriteLine("\n7. Count with always-false condition:");
-            int noneCount = await postRepo.CountAsync(p => p.Id < 0);
+            long noneCount = await postRepo.CountAsync(p => p.Id < 0);
             Console.WriteLine($"   Count with impossible condition: {noneCount}");
 
             Console.WriteLine("\n8. Exists with complex condition:");

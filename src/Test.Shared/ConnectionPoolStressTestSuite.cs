@@ -8,6 +8,7 @@ namespace Test.Shared
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -44,7 +45,7 @@ namespace Test.Shared
         [Fact]
         public async Task SequentialQueries_ShouldReuseConnections()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person testPerson = new Person
@@ -81,7 +82,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConcurrentQueries_ShouldHandleMultipleThreads()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[100];
@@ -146,7 +147,7 @@ namespace Test.Shared
         [Fact]
         public async Task MixedReadWriteOperations_ShouldHandleHighLoad()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int operationCount = 2000;
@@ -170,7 +171,7 @@ namespace Test.Shared
                 }
                 else if (i % 4 == 1)
                 {
-                    int count = await repository.CountAsync(p => p.Department == "Testing");
+                    long count = await repository.CountAsync(p => p.Department == "Testing");
                     Assert.True(count >= 0);
                 }
                 else if (i % 4 == 2)
@@ -210,7 +211,7 @@ namespace Test.Shared
         [Fact]
         public async Task RapidConnectionCycling_ShouldNotLeakConnections()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person testPerson = new Person
@@ -260,7 +261,7 @@ namespace Test.Shared
         [Fact]
         public async Task ComplexQueries_ShouldMaintainPoolIntegrity()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[500];
@@ -312,7 +313,7 @@ namespace Test.Shared
         [Fact]
         public async Task HighVolumeTransactions_ShouldReleaseConnections()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int transactionCount = 1000;
@@ -358,48 +359,56 @@ namespace Test.Shared
         [Fact]
         public async Task ParallelBatchOperations_ShouldHandleConcurrency()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int batchCount = 50;
             int recordsPerBatch = 100;
-            long initialMemory = GC.GetTotalMemory(true);
 
-            Task[] tasks = new Task[batchCount];
-
-            for (int b = 0; b < batchCount; b++)
+            async Task RunBatchesAsync(string prefix)
             {
-                int batchId = b;
-                tasks[b] = Task.Run(async () =>
+                Task[] tasks = new Task[batchCount];
+                for (int b = 0; b < batchCount; b++)
                 {
-                    string departmentName = "Batch" + batchId.ToString();
-                    Person[] batch = new Person[recordsPerBatch];
-                    for (int i = 0; i < recordsPerBatch; i++)
+                    int batchId = b;
+                    tasks[b] = Task.Run(async () =>
                     {
-                        batch[i] = new Person
+                        string departmentName = prefix + batchId.ToString();
+                        Person[] batch = new Person[recordsPerBatch];
+                        for (int i = 0; i < recordsPerBatch; i++)
                         {
-                            FirstName = "Batch" + batchId.ToString() + "Person" + i.ToString(),
-                            LastName = "Test" + i.ToString(),
-                            Age = 25,
-                            Email = "batch" + batchId.ToString() + "person" + i.ToString() + "@example.com",
-                            Salary = 50000m,
-                            Department = departmentName
-                        };
-                    }
+                            batch[i] = new Person
+                            {
+                                FirstName = prefix + batchId.ToString() + "Person" + i.ToString(),
+                                LastName = "Test" + i.ToString(),
+                                Age = 25,
+                                Email = prefix.ToLowerInvariant() + batchId.ToString() + "person" + i.ToString() + "@example.com",
+                                Salary = 50000m,
+                                Department = departmentName
+                            };
+                        }
 
-                    await repository.CreateManyAsync(batch);
+                        await repository.CreateManyAsync(batch);
 
-                    int count = await repository.CountAsync(p => p.Department == departmentName);
-                    Assert.Equal(recordsPerBatch, count);
-                });
+                        long count = await repository.CountAsync(p => p.Department == departmentName);
+                        Assert.Equal(recordsPerBatch, count);
+                    });
+                }
+
+                await Task.WhenAll(tasks);
             }
 
-            await Task.WhenAll(tasks);
+            // Warm-up pass: lets the driver pool grow to the workload's concurrency and JIT/caches settle,
+            // so the measured pass reflects leaks rather than one-time growth.
+            await RunBatchesAsync("Warm");
+            await repository.ExecuteSqlAsync("DELETE FROM people");
 
+            long initialMemory = GC.GetTotalMemory(true);
+            await RunBatchesAsync("Batch");
             long finalMemory = GC.GetTotalMemory(true);
             long memoryGrowth = finalMemory - initialMemory;
 
-            int totalRecords = await repository.CountAsync();
+            long totalRecords = await repository.CountAsync();
 
             Console.WriteLine($"  Created {totalRecords:N0} records in {batchCount} parallel batches");
             Console.WriteLine($"  Memory growth: {memoryGrowth:N0} bytes");
@@ -415,7 +424,7 @@ namespace Test.Shared
         [Fact]
         public async Task SustainedLoad_ShouldNotLeakMemory()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] initialData = new Person[200];
@@ -478,7 +487,7 @@ namespace Test.Shared
         [Fact]
         public async Task ExtremeConcurrentLoad_ShouldHandleBackpressure()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             // Create test data
@@ -541,7 +550,7 @@ namespace Test.Shared
         [Fact]
         public async Task TransactionsUnderLoad_ShouldNotStarveQueries()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             // Create test data
@@ -575,7 +584,7 @@ namespace Test.Shared
                     try
                     {
                         transaction = await repository.BeginTransactionAsync();
-                        int count = await repository.CountAsync(p => p.Department == "TransLoadTest", transaction);
+                        long count = await repository.CountAsync(p => p.Department == "TransLoadTest", transaction);
                         await Task.Delay(transactionHoldTimeMs);
                         await transaction.CommitAsync();
                         Interlocked.Increment(ref transactionSuccess);
@@ -605,7 +614,7 @@ namespace Test.Shared
                 {
                     try
                     {
-                        int count = await repository.CountAsync();
+                        long count = await repository.CountAsync();
                         Interlocked.Increment(ref querySuccess);
                     }
                     catch
@@ -632,7 +641,7 @@ namespace Test.Shared
         [Fact]
         public async Task ManyExceptions_ShouldNotLeakConnections()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             // Cause 100 exceptions with invalid SQL
@@ -676,7 +685,7 @@ namespace Test.Shared
 
             Assert.Equal(20, successCount);
 
-            int count = await repository.CountAsync(p => p.Department == "ExceptionRecovery");
+            long count = await repository.CountAsync(p => p.Department == "ExceptionRecovery");
             Assert.Equal(20, count);
         }
 
@@ -686,7 +695,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConcurrentRollbacks_ShouldReturnConnections()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int rollbackCount = 30;
@@ -735,7 +744,7 @@ namespace Test.Shared
             Console.WriteLine($"  {successfulRollbacks}/{rollbackCount} rollbacks completed");
 
             // Verify data was actually rolled back
-            int count = await repository.CountAsync(p => p.Department == "RollbackTest");
+            long count = await repository.CountAsync(p => p.Department == "RollbackTest");
             Assert.Equal(0, count);
 
             // Pool should still work after all rollbacks
@@ -759,7 +768,7 @@ namespace Test.Shared
         [Fact]
         public async Task HighConcurrencyMixedOperations_ShouldComplete()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             int threadCount = 20;
@@ -840,7 +849,7 @@ namespace Test.Shared
         [Fact]
         public async Task LargeResultSets_ShouldNotExhaustPool()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             // Create many records

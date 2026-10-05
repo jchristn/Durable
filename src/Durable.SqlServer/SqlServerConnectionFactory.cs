@@ -2,119 +2,35 @@ namespace Durable.SqlServer
 {
     using System;
     using System.Data.Common;
-    using System.Threading;
-    using System.Threading.Tasks;
     using Microsoft.Data.SqlClient;
+    using Durable.Sql;
 
     /// <summary>
-    /// Provides a factory for creating and managing SQL Server database connections with connection pooling support.
-    /// Implements connection pooling to improve performance and resource management for SQL Server databases.
+    /// Opens SQL Server connections, relying on SqlClient's built-in pooling.
+    /// Thread safety: safe for concurrent use.
     /// </summary>
-    public class SqlServerConnectionFactory : IConnectionFactory
+    public sealed class SqlServerConnectionFactory : ConnectionFactory
     {
-
-        #region Public-Members
-
-        #endregion
-
-        #region Private-Members
-
-        private readonly ConnectionPool _ConnectionPool;
-        private readonly string _ConnectionString;
-        private volatile bool _Disposed;
-
-        #endregion
-
-        #region Constructors-and-Factories
+        /// <summary>
+        /// Gets the connection string. Never null.
+        /// </summary>
+        public string ConnectionString { get; }
 
         /// <summary>
-        /// Initializes a new instance of the SqlServerConnectionFactory with the specified connection string and pooling options.
+        /// Instantiates the factory.
         /// </summary>
-        /// <param name="connectionString">The SQL Server connection string used to create database connections.</param>
-        /// <param name="options">Optional connection pool configuration settings. Uses default settings if null.</param>
+        /// <param name="connectionString">SqlClient connection string. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
-        public SqlServerConnectionFactory(string connectionString, ConnectionPoolOptions? options = null)
+        public SqlServerConnectionFactory(string connectionString, int? maxConcurrentConnections = null) : base(maxConcurrentConnections)
         {
-            _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-            _ConnectionPool = new ConnectionPool(() => new SqlConnection(_ConnectionString), options);
+            ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         }
 
-        #endregion
-
-        #region Public-Methods
-
-        /// <summary>
-        /// Retrieves a database connection from the connection pool synchronously.
-        /// </summary>
-        /// <returns>A ready-to-use SQL Server database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        public DbConnection GetConnection()
+        /// <inheritdoc />
+        protected override DbConnection CreateConnection()
         {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnection();
+            return new SqlConnection(ConnectionString);
         }
-
-        /// <summary>
-        /// Retrieves a database connection from the connection pool asynchronously.
-        /// </summary>
-        /// <param name="cancellationToken">A cancellation token to cancel the operation if needed.</param>
-        /// <returns>A task representing the asynchronous operation that returns a ready-to-use SQL Server database connection from the pool.</returns>
-        /// <exception cref="ObjectDisposedException">Thrown when the factory has been disposed.</exception>
-        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled via the cancellation token.</exception>
-        public Task<DbConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
-        {
-            ThrowIfDisposed();
-            return _ConnectionPool.GetConnectionAsync(cancellationToken);
-        }
-
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        public void ReturnConnection(DbConnection connection)
-        {
-            if (!_Disposed && connection != null)
-            {
-                _ConnectionPool.ReturnConnection(connection);
-            }
-        }
-
-        /// <summary>
-        /// Returns a database connection to the connection pool for reuse asynchronously.
-        /// </summary>
-        /// <param name="connection">The database connection to return to the pool. Null connections are safely ignored.</param>
-        /// <returns>A task representing the asynchronous return operation.</returns>
-        public Task ReturnConnectionAsync(DbConnection connection)
-        {
-            if (_Disposed || connection == null)
-                return Task.CompletedTask;
-
-            return _ConnectionPool.ReturnConnectionAsync(connection);
-        }
-
-        /// <summary>
-        /// Disposes of the connection factory and releases all managed resources including the connection pool.
-        /// All connections in the pool will be closed and disposed.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_Disposed)
-                return;
-
-            _Disposed = true;
-            _ConnectionPool?.Dispose();
-        }
-
-        #endregion
-
-        #region Private-Methods
-
-        private void ThrowIfDisposed()
-        {
-            if (_Disposed)
-                throw new ObjectDisposedException(nameof(SqlServerConnectionFactory));
-        }
-
-        #endregion
     }
 }

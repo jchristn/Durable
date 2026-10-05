@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task SelectProjectsIntoResultType()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<PersonSummary> summaries = (await repository.Query()
                 .Select(p => new PersonSummary
@@ -67,7 +68,7 @@ namespace Test.Shared
         [Fact]
         public async Task SelectProjectsColumnSubset()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<DepartmentInfo> info = (await repository.Query()
                 .Select(p => new DepartmentInfo
@@ -91,7 +92,7 @@ namespace Test.Shared
         [Fact]
         public async Task SelectWithFilterProjectsSubset()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<DepartmentInfo> itInfo = (await repository.Query()
                 .Where(p => p.Department == "IT")
@@ -113,7 +114,7 @@ namespace Test.Shared
         [Fact]
         public async Task SelectWithOrderingAndPagination()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             List<PersonSummary> page = (await repository.Query()
                 .Select(p => new PersonSummary
@@ -138,9 +139,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             List<Person> people = new List<Person>

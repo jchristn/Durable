@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,10 +41,10 @@ namespace Test.Shared
         [Fact]
         public async Task WhereExistsReturnsRowsWhenSubqueryHasResults()
         {
-            IRepository<Author> repository = await SeedAsync();
-            IRepository<Book> bookRepository = _Provider.CreateRepository<Book>();
+            ISqlRepository<Author> repository = await SeedAsync();
+            ISqlRepository<Book> bookRepository = _Provider.CreateRepository<Book>();
 
-            IQueryBuilder<Book> books = bookRepository.Query();
+            ISqlQueryBuilder<Book> books = bookRepository.Query();
             List<Author> results = (await repository.Query().WhereExists(books).ExecuteAsync()).ToList();
 
             Assert.Equal(4, results.Count);
@@ -55,7 +56,7 @@ namespace Test.Shared
         [Fact]
         public async Task RawPredicateFilters()
         {
-            IRepository<Author> repository = await SeedAsync();
+            ISqlRepository<Author> repository = await SeedAsync();
 
             List<Author> results = (await repository.Query()
                 .WhereRaw("company_id = {0}", 1)
@@ -69,10 +70,10 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Author>> SeedAsync()
+        private async Task<ISqlRepository<Author>> SeedAsync()
         {
-            IRepository<Author> authorRepository = _Provider.CreateRepository<Author>();
-            IRepository<Book> bookRepository = _Provider.CreateRepository<Book>();
+            ISqlRepository<Author> authorRepository = _Provider.CreateRepository<Author>();
+            ISqlRepository<Book> bookRepository = _Provider.CreateRepository<Book>();
 
             await bookRepository.ExecuteSqlAsync("DELETE FROM books");
             await authorRepository.ExecuteSqlAsync("DELETE FROM authors");

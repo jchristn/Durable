@@ -4,6 +4,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -39,10 +40,10 @@ namespace Test.Shared
         [Fact]
         public void CanCreateRepository()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
 
             Assert.NotNull(repository);
-            Assert.IsAssignableFrom<IRepository<Person>>(repository);
+            Assert.IsAssignableFrom<ISqlRepository<Person>>(repository);
         }
 
         /// <summary>
@@ -51,7 +52,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanConnectToDatabase()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
 
             int rowsAffected = await repository.ExecuteSqlAsync(
                 "DELETE FROM people WHERE email = 'connectivity-test@example.com'"
@@ -66,7 +67,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanPerformCrudOperations()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person person = new Person
@@ -124,7 +125,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanQueryWithWhereConditions()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
@@ -159,7 +160,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanOrderResults()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
@@ -198,7 +199,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanPaginateResults()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[10];
@@ -242,10 +243,10 @@ namespace Test.Shared
         [Fact]
         public async Task CanCountRecords()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
-            int initialCount = await repository.CountAsync();
+            long initialCount = await repository.CountAsync();
             Assert.Equal(0, initialCount);
 
             Person[] testPeople = new[]
@@ -257,10 +258,10 @@ namespace Test.Shared
 
             await repository.CreateManyAsync(testPeople);
 
-            int totalCount = await repository.CountAsync();
+            long totalCount = await repository.CountAsync();
             Assert.Equal(3, totalCount);
 
-            int engineeringCount = await repository.CountAsync(p => p.Department == "Engineering");
+            long engineeringCount = await repository.CountAsync(p => p.Department == "Engineering");
             Assert.Equal(2, engineeringCount);
         }
 
@@ -270,7 +271,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanUpsertRecords()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person person = new Person
@@ -295,7 +296,7 @@ namespace Test.Shared
             Assert.True(ValidationHelpers.AreIntegersEqual(31, upserted.Age));
             Assert.True(ValidationHelpers.AreDecimalsEqual(80000m, upserted.Salary));
 
-            int count = await repository.CountAsync();
+            long count = await repository.CountAsync();
             Assert.Equal(1, count);
         }
 
@@ -305,7 +306,7 @@ namespace Test.Shared
         [Fact]
         public async Task CanBulkDelete()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
@@ -321,7 +322,7 @@ namespace Test.Shared
 
             Assert.Equal(2, deletedCount);
 
-            int remainingCount = await repository.CountAsync();
+            long remainingCount = await repository.CountAsync();
             Assert.Equal(1, remainingCount);
         }
 

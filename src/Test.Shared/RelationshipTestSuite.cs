@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -41,7 +42,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadManyAsyncStreamsResults()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] people = new[]
@@ -68,7 +69,7 @@ namespace Test.Shared
         [Fact]
         public async Task QueryExecuteAsyncEnumerableStreamsResults()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] people = new[]

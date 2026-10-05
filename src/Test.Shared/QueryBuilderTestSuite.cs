@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Xunit;
 
     /// <summary>
@@ -40,7 +41,7 @@ namespace Test.Shared
         [Fact]
         public async Task WhereFiltersResults()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> engineers = (await repository.Query().Where(p => p.Department == "Engineering").ExecuteAsync()).ToList();
             Assert.Equal(3, engineers.Count);
             Assert.All(engineers, p => Assert.Equal("Engineering", p.Department));
@@ -52,7 +53,7 @@ namespace Test.Shared
         [Fact]
         public async Task ChainedWhereCombinesWithAnd()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .Where(p => p.Department == "Engineering")
                 .Where(p => p.Age > 30)
@@ -66,7 +67,7 @@ namespace Test.Shared
         [Fact]
         public async Task OrderByAscendingSorts()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> ordered = (await repository.Query().OrderBy(p => p.Age).ExecuteAsync()).ToList();
             for (int i = 1; i < ordered.Count; i++)
             {
@@ -80,7 +81,7 @@ namespace Test.Shared
         [Fact]
         public async Task OrderByDescendingSorts()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> ordered = (await repository.Query().OrderByDescending(p => p.Salary).ExecuteAsync()).ToList();
             for (int i = 1; i < ordered.Count; i++)
             {
@@ -94,7 +95,7 @@ namespace Test.Shared
         [Fact]
         public async Task ThenByAppliesSecondaryOrdering()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> ordered = (await repository.Query()
                 .OrderBy(p => p.Department)
                 .ThenByDescending(p => p.Salary)
@@ -115,7 +116,7 @@ namespace Test.Shared
         [Fact]
         public async Task SkipAndTakePaginate()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> page1 = (await repository.Query().OrderBy(p => p.Id).Take(2).ExecuteAsync()).ToList();
             List<Person> page2 = (await repository.Query().OrderBy(p => p.Id).Skip(2).Take(2).ExecuteAsync()).ToList();
 
@@ -130,7 +131,7 @@ namespace Test.Shared
         [Fact]
         public async Task DistinctRemovesDuplicates()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> distinctByDept = (await repository.Query()
                 .SelectRaw("DISTINCT department")
                 .ExecuteAsync()).ToList();
@@ -144,7 +145,7 @@ namespace Test.Shared
         [Fact]
         public async Task QueryCountMatchesRows()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             long count = await repository.Query().Where(p => p.Department == "Engineering").CountAsync();
             Assert.Equal(3, count);
         }
@@ -155,7 +156,7 @@ namespace Test.Shared
         [Fact]
         public async Task AggregationHelpersComputeValues()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             decimal sum = await repository.Query().SumAsync(p => p.Salary);
             decimal avg = await repository.Query().AverageAsync(p => p.Salary);
@@ -174,7 +175,7 @@ namespace Test.Shared
         [Fact]
         public async Task RepositoryAggregationWithPredicate()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
 
             decimal engineeringSum = await repository.SumAsync(p => p.Salary, p => p.Department == "Engineering");
             int engineeringMax = await repository.MaxAsync(p => p.Age, p => p.Department == "Engineering");
@@ -189,7 +190,7 @@ namespace Test.Shared
         [Fact]
         public async Task WhereRawFiltersResults()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
                 .WhereRaw("age >= {0}", 40)
                 .ExecuteAsync()).ToList();
@@ -202,7 +203,7 @@ namespace Test.Shared
         [Fact]
         public async Task BuildSqlReturnsSelectStatement()
         {
-            IRepository<Person> repository = await SeedAsync();
+            ISqlRepository<Person> repository = await SeedAsync();
             string sql = repository.Query().Where(p => p.Age > 20).BuildSql();
             Assert.False(string.IsNullOrWhiteSpace(sql));
             Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
@@ -212,9 +213,9 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private async Task<IRepository<Person>> SeedAsync()
+        private async Task<ISqlRepository<Person>> SeedAsync()
         {
-            IRepository<Person> repository = _Provider.CreateRepository<Person>();
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await repository.ExecuteSqlAsync("DELETE FROM people");
 
             Person[] people = new[]

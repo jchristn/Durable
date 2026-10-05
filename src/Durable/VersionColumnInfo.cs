@@ -147,36 +147,6 @@ namespace Durable
             return null!;
         }
         
-        /// <summary>
-        /// Formats the version value for SQL queries
-        /// </summary>
-        /// <param name="version">The version value to format</param>
-        /// <returns>The SQL-formatted version string</returns>
-        public string FormatVersionForSql(object version)
-        {
-            if (version == null)
-                return "NULL";
-                
-            switch (Type)
-            {
-                case VersionColumnType.Integer:
-                    return version.ToString() ?? "NULL";
-                    
-                case VersionColumnType.Timestamp:
-                    DateTime dt = (DateTime)version;
-                    return $"'{dt:yyyy-MM-dd HH:mm:ss.fffffff}'";
-                    
-                case VersionColumnType.RowVersion:
-                    byte[] bytes = (byte[])version;
-                    return $"X'{BitConverter.ToString(bytes).Replace("-", "")}'";
-                    
-                case VersionColumnType.Guid:
-                    return $"'{version}'";
-            }
-            
-            return "NULL";
-        }
-
         #endregion
 
         #region Private-Methods
