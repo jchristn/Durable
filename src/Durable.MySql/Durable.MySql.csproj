@@ -10,7 +10,7 @@
 		<Title>Durable.MySql</Title>
 		<Version>0.3.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
-		<Description>A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes</Description>
+		<Description>MySQL provider for the Durable ORM (MySqlConnector): dialect, connection factory, repository and MySqlBulkCopy bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>

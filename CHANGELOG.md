@@ -17,6 +17,7 @@ Correctness
 - Repositories no longer dispose connection factories they were given.
 - No sync-over-async; `ExecuteAsyncEnumerable` streams on every provider (including with includes); cancellation tokens flow to the driver.
 - Set operations and many-to-many includes work on all four databases.
+- Collection `Contains` translates on .NET 10 / C# 14, where `array.Contains(x)` binds to the span overload `MemoryExtensions.Contains`.
 
 Features
 - Composite primary keys (`KeyOrder`; pass `object[]` keys).

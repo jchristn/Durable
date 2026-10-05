@@ -61,7 +61,6 @@ namespace Durable
         /// </summary>
         /// <param name="instanceLevelSetting">The instance-level setting from the repository, or null if not configured</param>
         /// <returns>A ConfigurationSettingResult object containing the effective setting and the source of that setting for debugging</returns>
-        /// <exception cref="ArgumentException">This method cannot throw exceptions as all inputs are valid</exception>
         public static ConfigurationSettingResult ResolveIncludeQuerySetting(bool? instanceLevelSetting)
         {
             if (instanceLevelSetting.HasValue)

@@ -137,6 +137,7 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 - The xUnit/NUnit adapters and the CLI all consume the same Touchstone suites in `Test.Shared`, so coverage stays in sync.
 - Provider selection for the adapters can also be set via environment variables (`DURABLE_TEST_DB`, `DURABLE_TEST_HOST`, etc.).
 - Every behavioral suite runs on all four providers; run all four before committing engine changes (Docker runs can execute in parallel).
+- The test projects target net8.0 and net10.0; run both (C# 14 changes some expression trees, e.g. `array.Contains` binds to `MemoryExtensions.Contains`).
 
 ### Creating NuGet Packages
 

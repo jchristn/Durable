@@ -124,12 +124,12 @@ public class Program
 
 ## Requirements
 
-- **.NET 8.0** or later
+- **.NET 8.0** or later (tested on .NET 8 and .NET 10)
 - **Database versions:**
   - SQLite 3.35+ (bundled with Microsoft.Data.Sqlite)
-  - MySQL 8.0.31+ (via MySqlConnector 2.x)
-  - PostgreSQL 12+ (via Npgsql 8+)
-  - SQL Server 2017+ (via Microsoft.Data.SqlClient 5+)
+  - MySQL 8.0.31+ (via MySqlConnector 2.6)
+  - PostgreSQL 12+ (via Npgsql 10)
+  - SQL Server 2017+ (via Microsoft.Data.SqlClient 7)
 
 ## Installation
 
@@ -555,13 +555,20 @@ Please follow the existing code style and conventions outlined in [CLAUDE.md](sr
 
 ### Running Tests
 
-```bash
-# Run all tests
-dotnet test src/Durable.sln
+Tests are written once in `src/Test.Shared` (Touchstone) and run by three runners.
 
-# Run tests for a specific database
-dotnet test src/Test.Sqlite/Test.Sqlite.csproj
-dotnet test src/Test.MySql/Test.MySql.csproj
-dotnet test src/Test.Postgres/Test.Postgres.csproj
-dotnet test src/Test.SqlServer/Test.SqlServer.csproj
+```bash
+# xUnit / NUnit adapters (in-memory SQLite by default)
+dotnet test src/Test.Xunit/Test.Xunit.csproj
+dotnet test src/Test.Nunit/Test.Nunit.csproj
+
+# CLI runner; --docker starts a disposable database container
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type postgres --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type mysql --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type sqlserver --docker
+
+# Use --help for options to target an existing server (--host, --port, --user, --pass, --database)
 ```
+
+Engine changes should pass on all four databases, on both net8.0 and net10.0.
