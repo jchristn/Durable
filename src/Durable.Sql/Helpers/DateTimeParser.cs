@@ -189,7 +189,8 @@ namespace Durable.Sql.Helpers
         /// <exception cref="FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
         public static DateTime ParseString(string input)
         {
-            return ParseString(input, _defaultFormats);
+            if (input != null && TryParseCanonical(input, out DateTime canonical)) return canonical;
+            return ParseString(input!, _defaultFormats);
         }
 
         /// <summary>
@@ -371,6 +372,36 @@ namespace Durable.Sql.Helpers
         /// This handles cases like "Z", "+00", "-00", "+00:00", "-00:00" which are UTC but
         /// .NET's literal format matching sets Kind=Unspecified or converts to Local.
         /// </summary>
+        // Fast path for the canonical 7-digit form the first default formats describe ("yyyy-MM-dd HH:mm:ss.fffffff" or
+        // with a 'T' separator), which is how Durable stores dates as text. Produces exactly what TryParseExact returns for
+        // those formats (an unspecified-kind value); anything else returns false and takes the general path.
+        private static bool TryParseCanonical(string input, out DateTime result)
+        {
+            result = default;
+            if (input.Length != 27) return false;
+            if (input[4] != '-' || input[7] != '-' || (input[10] != ' ' && input[10] != 'T') || input[13] != ':' || input[16] != ':' || input[19] != '.') return false;
+            if (!TryDigits(input, 0, 4, out int year) || !TryDigits(input, 5, 2, out int month) || !TryDigits(input, 8, 2, out int day)
+                || !TryDigits(input, 11, 2, out int hour) || !TryDigits(input, 14, 2, out int minute) || !TryDigits(input, 17, 2, out int second)
+                || !TryDigits(input, 20, 7, out int fraction))
+                return false;
+            if (year < 1 || month < 1 || month > 12 || day < 1 || day > DateTime.DaysInMonth(year, month) || hour > 23 || minute > 59 || second > 59) return false;
+            result = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified).AddTicks(fraction);
+            return true;
+        }
+
+        private static bool TryDigits(string input, int start, int length, out int value)
+        {
+            value = 0;
+            for (int i = start; i < start + length; i++)
+            {
+                int digit = input[i] - '0';
+                if (digit < 0 || digit > 9) return false;
+                value = value * 10 + digit;
+            }
+
+            return true;
+        }
+
         private static DateTime EnsureUtcKindForUtcIndicators(string input, DateTime parsed)
         {
             // Check if the input ends with UTC indicators

@@ -145,8 +145,10 @@ namespace Durable.Sql
             command.Transaction = lease.Transaction;
             command.CommandText = statement.Sql;
             if (Options.CommandTimeoutSeconds.HasValue) command.CommandTimeout = Options.CommandTimeoutSeconds.Value;
-            foreach (SqlParameterValue value in statement.Parameters)
+            IReadOnlyList<SqlParameterValue> parameters = statement.Parameters;
+            for (int i = 0; i < parameters.Count; i++)
             {
+                SqlParameterValue value = parameters[i];
                 DbParameter parameter = command.CreateParameter();
                 parameter.ParameterName = value.Name;
                 parameter.Value = value.Value ?? DBNull.Value;
@@ -318,8 +320,7 @@ namespace Durable.Sql
         /// <returns>The mapped rows, streamed.</returns>
         public IEnumerable<TResult> Query<TResult>(SqlStatement statement, ITransaction? transaction, string operation, Func<DbDataReader, TResult> map, CommandType commandType = CommandType.Text)
         {
-            using ConnectionLease lease = Lease(transaction);
-            foreach (TResult item in Query(lease, statement, operation, map, commandType)) yield return item;
+            return QueryCore(null, true, transaction, statement, operation, map, commandType);
         }
 
         /// <summary>
@@ -334,48 +335,7 @@ namespace Durable.Sql
         /// <returns>The mapped rows, streamed.</returns>
         public IEnumerable<TResult> Query<TResult>(ConnectionLease lease, SqlStatement statement, string operation, Func<DbDataReader, TResult> map, CommandType commandType = CommandType.Text)
         {
-            using DbCommand command = CreateCommand(lease, statement);
-            command.CommandType = commandType;
-            CommandScope scope = Begin(command, statement, operation);
-            DbDataReader reader;
-            try
-            {
-                reader = command.ExecuteReader();
-            }
-            catch (Exception e)
-            {
-                scope.Fail(e);
-                throw;
-            }
-
-            long rows = 0;
-            try
-            {
-                using (reader)
-                {
-                    while (true)
-                    {
-                        TResult item;
-                        try
-                        {
-                            if (!reader.Read()) break;
-                            item = map(reader);
-                            rows++;
-                        }
-                        catch (Exception e)
-                        {
-                            scope.Fail(e);
-                            throw;
-                        }
-
-                        yield return item;
-                    }
-                }
-            }
-            finally
-            {
-                scope.Complete(rows);
-            }
+            return QueryCore(lease, false, null, statement, operation, map, commandType);
         }
 
         /// <summary>
@@ -389,14 +349,9 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="commandType">Command type. Default: text.</param>
         /// <returns>The mapped rows, streamed.</returns>
-        public async IAsyncEnumerable<TResult> QueryAsync<TResult>(SqlStatement statement, ITransaction? transaction, string operation, Func<DbDataReader, TResult> map, [EnumeratorCancellation] CancellationToken token = default, CommandType commandType = CommandType.Text)
+        public IAsyncEnumerable<TResult> QueryAsync<TResult>(SqlStatement statement, ITransaction? transaction, string operation, Func<DbDataReader, TResult> map, CancellationToken token = default, CommandType commandType = CommandType.Text)
         {
-            ConnectionLease lease = await LeaseAsync(transaction, token).ConfigureAwait(false);
-            await using (lease.ConfigureAwait(false))
-            {
-                await foreach (TResult item in QueryAsync(lease, statement, operation, map, token, commandType).ConfigureAwait(false))
-                    yield return item;
-            }
+            return QueryCoreAsync(null, true, transaction, statement, operation, map, commandType, token);
         }
 
         /// <summary>
@@ -410,54 +365,9 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="commandType">Command type. Default: text.</param>
         /// <returns>The mapped rows, streamed.</returns>
-        public async IAsyncEnumerable<TResult> QueryAsync<TResult>(ConnectionLease lease, SqlStatement statement, string operation, Func<DbDataReader, TResult> map, [EnumeratorCancellation] CancellationToken token = default, CommandType commandType = CommandType.Text)
+        public IAsyncEnumerable<TResult> QueryAsync<TResult>(ConnectionLease lease, SqlStatement statement, string operation, Func<DbDataReader, TResult> map, CancellationToken token = default, CommandType commandType = CommandType.Text)
         {
-            DbCommand command = CreateCommand(lease, statement);
-            await using (command.ConfigureAwait(false))
-            {
-                command.CommandType = commandType;
-                CommandScope scope = Begin(command, statement, operation);
-                DbDataReader reader;
-                try
-                {
-                    reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    scope.Fail(e);
-                    throw;
-                }
-
-                long rows = 0;
-                try
-                {
-                    await using (reader.ConfigureAwait(false))
-                    {
-                        while (true)
-                        {
-                            TResult item;
-                            try
-                            {
-                                token.ThrowIfCancellationRequested();
-                                if (!await reader.ReadAsync(token).ConfigureAwait(false)) break;
-                                item = map(reader);
-                                rows++;
-                            }
-                            catch (Exception e)
-                            {
-                                scope.Fail(e);
-                                throw;
-                            }
-
-                            yield return item;
-                        }
-                    }
-                }
-                finally
-                {
-                    scope.Complete(rows);
-                }
-            }
+            return QueryCoreAsync(lease, false, null, statement, operation, map, commandType, token);
         }
 
         /// <summary>
@@ -627,6 +537,118 @@ namespace Durable.Sql
 
         #region Private-Methods
 
+        private IEnumerable<TResult> QueryCore<TResult>(ConnectionLease? lease, bool acquireLease, ITransaction? transaction, SqlStatement statement, string operation, Func<DbDataReader, TResult> map, CommandType commandType)
+        {
+            ConnectionLease? owned = acquireLease ? Lease(transaction) : null;
+            try
+            {
+                using DbCommand command = CreateCommand(owned ?? lease!, statement);
+                command.CommandType = commandType;
+                CommandScope scope = Begin(command, statement, operation);
+                DbDataReader reader;
+                try
+                {
+                    reader = command.ExecuteReader();
+                }
+                catch (Exception e)
+                {
+                    scope.Fail(e);
+                    throw;
+                }
+
+                long rows = 0;
+                try
+                {
+                    using (reader)
+                    {
+                        while (true)
+                        {
+                            TResult item;
+                            try
+                            {
+                                if (!reader.Read()) break;
+                                item = map(reader);
+                                rows++;
+                            }
+                            catch (Exception e)
+                            {
+                                scope.Fail(e);
+                                throw;
+                            }
+
+                            yield return item;
+                        }
+                    }
+                }
+                finally
+                {
+                    scope.Complete(rows);
+                }
+            }
+            finally
+            {
+                owned?.Dispose();
+            }
+        }
+
+        private async IAsyncEnumerable<TResult> QueryCoreAsync<TResult>(ConnectionLease? lease, bool acquireLease, ITransaction? transaction, SqlStatement statement, string operation, Func<DbDataReader, TResult> map, CommandType commandType, [EnumeratorCancellation] CancellationToken token)
+        {
+            ConnectionLease? owned = acquireLease ? await LeaseAsync(transaction, token).ConfigureAwait(false) : null;
+            try
+            {
+                DbCommand command = CreateCommand(owned ?? lease!, statement);
+                await using (command.ConfigureAwait(false))
+                {
+                    command.CommandType = commandType;
+                    CommandScope scope = Begin(command, statement, operation);
+                    DbDataReader reader;
+                    try
+                    {
+                        reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        scope.Fail(e);
+                        throw;
+                    }
+
+                    long rows = 0;
+                    try
+                    {
+                        await using (reader.ConfigureAwait(false))
+                        {
+                            while (true)
+                            {
+                                TResult item;
+                                try
+                                {
+                                    token.ThrowIfCancellationRequested();
+                                    if (!await reader.ReadAsync(token).ConfigureAwait(false)) break;
+                                    item = map(reader);
+                                    rows++;
+                                }
+                                catch (Exception e)
+                                {
+                                    scope.Fail(e);
+                                    throw;
+                                }
+
+                                yield return item;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        scope.Complete(rows);
+                    }
+                }
+            }
+            finally
+            {
+                if (owned != null) await owned.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
         private static void CopyOutputParameters(DbCommand command, SqlStatement statement)
         {
             foreach (SqlParameterValue value in statement.Parameters)
@@ -669,7 +691,7 @@ namespace Durable.Sql
 
         internal void OnComplete(CommandScope scope, long? rows)
         {
-            TimeSpan elapsed = scope.Stopwatch.Elapsed;
+            TimeSpan elapsed = scope.Elapsed;
             if (scope.Context != null)
             {
                 foreach (ISqlCommandInterceptor interceptor in Options.Interceptors) interceptor.CommandExecuted(scope.Context, elapsed, rows);
@@ -695,7 +717,7 @@ namespace Durable.Sql
 
         internal void OnFail(CommandScope scope, Exception exception)
         {
-            TimeSpan elapsed = scope.Stopwatch.Elapsed;
+            TimeSpan elapsed = scope.Elapsed;
             if (scope.Context != null)
             {
                 foreach (ISqlCommandInterceptor interceptor in Options.Interceptors) interceptor.CommandFailed(scope.Context, exception, elapsed);

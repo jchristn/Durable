@@ -10,6 +10,7 @@ namespace Durable.Sql
     internal sealed class CommandScope
     {
         private readonly SqlCommandExecutor _Executor;
+        private readonly long _StartTimestamp;
         private bool _Finished;
 
         internal CommandScope(SqlCommandExecutor executor, DbCommand command, SqlStatement statement, string operation, SqlCommandContext? context, Activity? activity)
@@ -20,7 +21,7 @@ namespace Durable.Sql
             Operation = operation;
             Context = context;
             Activity = activity;
-            Stopwatch = Stopwatch.StartNew();
+            _StartTimestamp = Stopwatch.GetTimestamp();
         }
 
         internal DbCommand Command { get; }
@@ -33,13 +34,13 @@ namespace Durable.Sql
 
         internal Activity? Activity { get; }
 
-        internal Stopwatch Stopwatch { get; }
+        internal TimeSpan Elapsed { get; private set; }
 
         internal void Complete(long? rows)
         {
             if (_Finished) return;
             _Finished = true;
-            Stopwatch.Stop();
+            Elapsed = Stopwatch.GetElapsedTime(_StartTimestamp);
             _Executor.OnComplete(this, rows);
         }
 
@@ -47,7 +48,7 @@ namespace Durable.Sql
         {
             if (_Finished) return;
             _Finished = true;
-            Stopwatch.Stop();
+            Elapsed = Stopwatch.GetElapsedTime(_StartTimestamp);
             _Executor.OnFail(this, exception);
         }
     }

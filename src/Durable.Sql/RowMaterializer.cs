@@ -4,17 +4,16 @@ namespace Durable.Sql
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Data.Common;
-    using System.Linq.Expressions;
-    using System.Reflection;
-    using System.Text;
+    using System.Threading;
     using Durable;
 
     /// <summary>
-    /// Maps result rows to objects. For each (type, result shape) a typed row reader is compiled once and cached: columns
-    /// whose driver type matches (or numerically converts to) the property type are read with <c>GetFieldValue&lt;T&gt;</c>
-    /// and assigned without boxing; enums, JSON, converter-backed and mismatched columns go through the
-    /// <see cref="IDataTypeConverter"/>. If a provider returns an unexpected value type at runtime, the materializer
-    /// switches to the converter path for every column.
+    /// Maps result rows to objects. For each (type, result shape) a typed row reader is compiled once and cached: it
+    /// constructs the instance inline and reads columns whose driver type matches (or numerically converts to) the property
+    /// type with the reader's typed getters, without boxing. Enums, booleans, GUIDs and dates that the stock
+    /// <see cref="DataTypeConverter"/> converts cheaply are converted inline with identical rules; JSON, converter-backed
+    /// and other mismatched columns go through the <see cref="IDataTypeConverter"/>. If a provider returns an unexpected
+    /// value type at runtime, the materializer switches to the converter path for every column.
     /// Thread safety: instances are thread-safe; the cache is concurrent.
     /// </summary>
     public sealed class RowMaterializer
@@ -35,25 +34,26 @@ namespace Durable.Sql
 
         #region Private-Members
 
-        private static readonly ConcurrentDictionary<string, RowMaterializer> _Cache = new ConcurrentDictionary<string, RowMaterializer>(StringComparer.Ordinal);
-        private static readonly MethodInfo _GetFieldValue = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetFieldValue))!;
-        private static readonly MethodInfo _IsDbNull = typeof(DbDataReader).GetMethod(nameof(DbDataReader.IsDBNull), new[] { typeof(int) })!;
-        private static readonly MethodInfo _GetValue = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue), new[] { typeof(int) })!;
-        private static readonly MethodInfo _ConvertFromDatabase = typeof(IDataTypeConverter).GetMethod(nameof(IDataTypeConverter.ConvertFromDatabase))!;
+        private static readonly ConcurrentDictionary<EntityMetadata, RowMaterializer[]> _Shapes = new ConcurrentDictionary<EntityMetadata, RowMaterializer[]>();
+        private static readonly object _ShapesLock = new object();
 
+        private readonly string[] _Names;
+        private readonly Type?[] _FieldTypes;
         private readonly RowBinding[] _Bindings;
-        private readonly Action<DbDataReader, object, IDataTypeConverter> _Compiled;
+        private readonly Delegate?[] _TypedReaders = new Delegate?[2];
+        private readonly Func<DbDataReader, IDataTypeConverter, object>?[] _ObjectReaders = new Func<DbDataReader, IDataTypeConverter, object>?[2];
         private volatile bool _UseFallback;
 
         #endregion
 
         #region Constructors-and-Factories
 
-        private RowMaterializer(EntityMetadata metadata, RowBinding[] bindings, Type?[] fieldTypes)
+        private RowMaterializer(EntityMetadata metadata, string[] names, Type?[] fieldTypes, RowBinding[] bindings)
         {
             Metadata = metadata;
+            _Names = names;
+            _FieldTypes = fieldTypes;
             _Bindings = bindings;
-            _Compiled = Compile(metadata, bindings, fieldTypes);
         }
 
         /// <summary>
@@ -69,17 +69,57 @@ namespace Durable.Sql
             ArgumentNullException.ThrowIfNull(reader);
 
             int fieldCount = reader.FieldCount;
-            StringBuilder key = new StringBuilder(metadata.EntityType.FullName, 64 + fieldCount * 24);
+            if (_Shapes.TryGetValue(metadata, out RowMaterializer[]? shapes))
+            {
+                foreach (RowMaterializer candidate in shapes)
+                {
+                    if (candidate.Matches(reader, fieldCount)) return candidate;
+                }
+            }
+
             string[] names = new string[fieldCount];
             Type?[] fieldTypes = new Type?[fieldCount];
             for (int i = 0; i < fieldCount; i++)
             {
                 names[i] = reader.GetName(i);
                 fieldTypes[i] = SafeFieldType(reader, i);
-                key.Append('|').Append(names[i]).Append(':').Append(fieldTypes[i]?.Name);
             }
 
-            return _Cache.GetOrAdd(key.ToString(), _ => Build(metadata, names, fieldTypes));
+            lock (_ShapesLock)
+            {
+                RowMaterializer[] current = _Shapes.TryGetValue(metadata, out RowMaterializer[]? existing) ? existing : Array.Empty<RowMaterializer>();
+                foreach (RowMaterializer candidate in current)
+                {
+                    if (candidate.Matches(names, fieldTypes)) return candidate;
+                }
+
+                RowMaterializer built = Build(metadata, names, fieldTypes);
+                RowMaterializer[] updated = new RowMaterializer[current.Length + 1];
+                Array.Copy(current, updated, current.Length);
+                updated[current.Length] = built;
+                _Shapes[metadata] = updated;
+                return built;
+            }
+        }
+
+        /// <summary>
+        /// Creates a row mapper for <typeparamref name="T"/> that resolves the materializer from the first row's result shape
+        /// and then reads every row with a compiled, typed reader. Create one mapper per command; the mapper caches the
+        /// result shape of the first reader it sees.
+        /// </summary>
+        /// <typeparam name="T">Result type; <paramref name="metadata"/> must describe it or a type assignable to it.</typeparam>
+        /// <param name="metadata">Target metadata. Must not be null.</param>
+        /// <param name="converter">Converter for values that need conversion. Must not be null.</param>
+        /// <returns>The mapper. Not thread-safe; use one per command.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the metadata type is not assignable to <typeparamref name="T"/>.</exception>
+        public static Func<DbDataReader, T> CreateMapper<T>(EntityMetadata metadata, IDataTypeConverter converter)
+        {
+            ArgumentNullException.ThrowIfNull(metadata);
+            ArgumentNullException.ThrowIfNull(converter);
+            if (!typeof(T).IsAssignableFrom(metadata.EntityType))
+                throw new ArgumentException("Metadata for " + metadata.EntityType.Name + " cannot produce " + typeof(T).Name + ".", nameof(metadata));
+            return new TypedRowMapper<T>(metadata, converter, RowReaderCompiler.CanInline(converter)).Map;
         }
 
         #endregion
@@ -94,30 +134,22 @@ namespace Durable.Sql
         /// <returns>The new object.</returns>
         public object Materialize(DbDataReader reader, IDataTypeConverter converter)
         {
-            object instance = Metadata.CreateInstance();
-            if (!_UseFallback)
-            {
-                try
-                {
-                    _Compiled(reader, instance, converter);
-                    return instance;
-                }
-                catch (InvalidCastException)
-                {
-                    _UseFallback = true;
-                }
-                catch (FormatException)
-                {
-                    _UseFallback = true;
-                }
-                catch (OverflowException)
-                {
-                    _UseFallback = true;
-                }
-            }
+            return Materialize(reader, converter, RowReaderCompiler.CanInline(converter));
+        }
 
-            MaterializeWithConverter(reader, instance, converter);
-            return instance;
+        /// <summary>
+        /// Materializes the current row as <typeparamref name="T"/> without casting through <see cref="object"/> when
+        /// <typeparamref name="T"/> is the metadata type.
+        /// </summary>
+        /// <typeparam name="T">Result type; must be the metadata type or assignable from it.</typeparam>
+        /// <param name="reader">Reader positioned on a row. Must not be null.</param>
+        /// <param name="converter">Converter for values that need conversion. Must not be null.</param>
+        /// <returns>The new object.</returns>
+        public T Materialize<T>(DbDataReader reader, IDataTypeConverter converter)
+        {
+            bool inline = RowReaderCompiler.CanInline(converter);
+            if (typeof(T) != Metadata.EntityType) return (T)Materialize(reader, converter, inline);
+            return Read(reader, converter, GetTypedReader<T>(inline));
         }
 
         /// <summary>
@@ -142,6 +174,87 @@ namespace Durable.Sql
         #endregion
 
         #region Private-Methods
+
+        internal object Materialize(DbDataReader reader, IDataTypeConverter converter, bool inline)
+        {
+            int index = inline ? 1 : 0;
+            Func<DbDataReader, IDataTypeConverter, object>? compiled = _ObjectReaders[index];
+            if (compiled == null)
+            {
+                Delegate built = Metadata.EntityType.IsValueType
+                    ? RowReaderCompiler.Compile(Metadata, _Bindings, _FieldTypes, inline, typeof(object))
+                    : GetTypedReader(inline);
+                Interlocked.CompareExchange(ref _ObjectReaders[index], (Func<DbDataReader, IDataTypeConverter, object>)built, null);
+                compiled = _ObjectReaders[index]!;
+            }
+
+            return Read(reader, converter, compiled);
+        }
+
+        internal Func<DbDataReader, IDataTypeConverter, T> GetTypedReader<T>(bool inline)
+        {
+            return (Func<DbDataReader, IDataTypeConverter, T>)GetTypedReader(inline);
+        }
+
+        internal T Read<T>(DbDataReader reader, IDataTypeConverter converter, Func<DbDataReader, IDataTypeConverter, T> compiled)
+        {
+            if (!_UseFallback)
+            {
+                try
+                {
+                    return compiled(reader, converter);
+                }
+                catch (InvalidCastException)
+                {
+                    _UseFallback = true;
+                }
+                catch (FormatException)
+                {
+                    _UseFallback = true;
+                }
+                catch (OverflowException)
+                {
+                    _UseFallback = true;
+                }
+            }
+
+            object instance = Metadata.CreateInstance();
+            MaterializeWithConverter(reader, instance, converter);
+            return (T)instance;
+        }
+
+        private Delegate GetTypedReader(bool inline)
+        {
+            int index = inline ? 1 : 0;
+            Delegate? compiled = _TypedReaders[index];
+            if (compiled != null) return compiled;
+            Delegate built = RowReaderCompiler.Compile(Metadata, _Bindings, _FieldTypes, inline, Metadata.EntityType);
+            return Interlocked.CompareExchange(ref _TypedReaders[index], built, null) ?? built;
+        }
+
+        private bool Matches(DbDataReader reader, int fieldCount)
+        {
+            if (_Names.Length != fieldCount) return false;
+            for (int i = 0; i < fieldCount; i++)
+            {
+                if (_FieldTypes[i] != SafeFieldType(reader, i)) return false;
+                if (!string.Equals(_Names[i], reader.GetName(i), StringComparison.Ordinal)) return false;
+            }
+
+            return true;
+        }
+
+        private bool Matches(string[] names, Type?[] fieldTypes)
+        {
+            if (_Names.Length != names.Length) return false;
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (_FieldTypes[i] != fieldTypes[i]) return false;
+                if (!string.Equals(_Names[i], names[i], StringComparison.Ordinal)) return false;
+            }
+
+            return true;
+        }
 
         private static Type? SafeFieldType(DbDataReader reader, int ordinal)
         {
@@ -170,7 +283,7 @@ namespace Durable.Sql
                 bindings.Add(new RowBinding(i, column, column.Converter == null && !column.IsEnum && !column.IsJson));
             }
 
-            return new RowMaterializer(metadata, bindings.ToArray(), fieldTypes);
+            return new RowMaterializer(metadata, names, fieldTypes, bindings.ToArray());
         }
 
         private void MaterializeWithConverter(DbDataReader reader, object instance, IDataTypeConverter converter)
@@ -191,67 +304,6 @@ namespace Durable.Sql
                     : converter.ConvertFromDatabase(raw, binding.Column.PropertyType, binding.Column);
                 binding.Column.SetValue(instance, value);
             }
-        }
-
-        private static Action<DbDataReader, object, IDataTypeConverter> Compile(EntityMetadata metadata, RowBinding[] bindings, Type?[] fieldTypes)
-        {
-            ParameterExpression reader = Expression.Parameter(typeof(DbDataReader), "reader");
-            ParameterExpression instance = Expression.Parameter(typeof(object), "instance");
-            ParameterExpression converter = Expression.Parameter(typeof(IDataTypeConverter), "converter");
-            ParameterExpression typed = Expression.Variable(metadata.EntityType, "entity");
-            List<Expression> body = new List<Expression> { Expression.Assign(typed, Expression.Convert(instance, metadata.EntityType)) };
-
-            foreach (RowBinding binding in bindings)
-            {
-                ColumnMetadata column = binding.Column;
-                PropertyInfo property = column.Property;
-                if (property.GetSetMethod(true) == null) continue;
-
-                Expression ordinal = Expression.Constant(binding.Ordinal);
-                Expression isNull = Expression.Call(reader, _IsDbNull, ordinal);
-                Expression target = Expression.Property(typed, property);
-                Expression valueExpression = ReadValue(reader, converter, binding, fieldTypes[binding.Ordinal]);
-                Expression assignValue = Expression.Assign(target, valueExpression);
-
-                bool acceptsNull = !column.PropertyType.IsValueType || Nullable.GetUnderlyingType(column.PropertyType) != null;
-                Expression whenNull = column.IsNullable && acceptsNull
-                    ? Expression.Assign(target, Expression.Default(column.PropertyType))
-                    : (Expression)Expression.Empty();
-                body.Add(Expression.IfThenElse(isNull, whenNull, assignValue));
-            }
-
-            body.Add(Expression.Empty());
-            BlockExpression block = Expression.Block(new[] { typed }, body);
-            return Expression.Lambda<Action<DbDataReader, object, IDataTypeConverter>>(block, reader, instance, converter).Compile();
-        }
-
-        private static Expression ReadValue(ParameterExpression reader, ParameterExpression converter, RowBinding binding, Type? fieldType)
-        {
-            ColumnMetadata column = binding.Column;
-            Type propertyType = column.PropertyType;
-            Type target = column.ClrType;
-            Expression ordinal = Expression.Constant(binding.Ordinal);
-
-            if (binding.Direct && fieldType != null)
-            {
-                if (fieldType == target)
-                    return Expression.Convert(Expression.Call(reader, _GetFieldValue.MakeGenericMethod(target), ordinal), propertyType);
-                if (IsNumeric(fieldType) && IsNumeric(target))
-                    return Expression.Convert(Expression.Convert(Expression.Call(reader, _GetFieldValue.MakeGenericMethod(fieldType), ordinal), target), propertyType);
-            }
-
-            Expression raw = Expression.Call(reader, _GetValue, ordinal);
-            Expression converted = Expression.Call(converter, _ConvertFromDatabase, raw, Expression.Constant(propertyType, typeof(Type)), Expression.Constant(column, typeof(ColumnMetadata)));
-            return propertyType.IsValueType && Nullable.GetUnderlyingType(propertyType) == null
-                ? Expression.Unbox(converted, propertyType)
-                : Expression.Convert(converted, propertyType);
-        }
-
-        private static bool IsNumeric(Type type)
-        {
-            return type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort)
-                || type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong)
-                || type == typeof(float) || type == typeof(double) || type == typeof(decimal);
         }
 
         #endregion

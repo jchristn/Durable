@@ -499,14 +499,7 @@ namespace Durable.Sql
 
         private Func<DbDataReader, TResult> CreateMapper()
         {
-            RowMaterializer? materializer = null;
-            IDataTypeConverter converter = Context.Converter;
-            EntityMetadata metadata = _ResultMetadata;
-            return reader =>
-            {
-                materializer ??= RowMaterializer.For(metadata, reader);
-                return (TResult)materializer.Materialize(reader, converter);
-            };
+            return RowMaterializer.CreateMapper<TResult>(_ResultMetadata, Context.Converter);
         }
 
         private static decimal ToDecimal(object? value)
