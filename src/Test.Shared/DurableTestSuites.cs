@@ -73,12 +73,11 @@ namespace Test.Shared
                 suites.Add(SharedSuite<WriteFeaturesTestSuite>("WriteFeatures", "Write Feature (CreateMany / Bulk / Upsert / Batch) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConcurrencyResolutionTestSuite>("ConcurrencyResolution", "Concurrency Resolution Tests", providerTag, BeforeEach));
 
-                // Set operations (UNION / INTERSECT / EXCEPT) are only supported by the SQLite and PostgreSQL
-                // providers; the MySQL and SQL Server implementations do not currently generate correct SQL.
-                if (configuration.DatabaseType == TestDatabaseType.Sqlite || configuration.DatabaseType == TestDatabaseType.Postgres)
-                {
-                    suites.Add(SharedSuite<SetOperationTestSuite>("SetOperations", "Set Operation Tests", providerTag, BeforeEach));
-                }
+                suites.Add(SharedSuite<SetOperationTestSuite>("SetOperations", "Set Operation Tests", providerTag, BeforeEach));
+
+                // Query translation correctness (predicates, functions, navigation, subqueries, windows, CTEs, projections, paging).
+                suites.Add(SharedSuite<QueryTranslationTestSuite>("QueryTranslation", "Query Translation (Predicates / Functions) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
 
                 // Provider-specific unit suites.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite)

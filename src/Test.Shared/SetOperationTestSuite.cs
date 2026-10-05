@@ -9,9 +9,8 @@ namespace Test.Shared
     using Xunit;
 
     /// <summary>
-    /// Coverage for SQL set operations (UNION, UNION ALL, INTERSECT, EXCEPT). These are only included by
-    /// <see cref="DurableTestSuites"/> for providers whose Durable implementation supports them
-    /// (SQLite and PostgreSQL); other providers do not currently generate correct set-operation SQL.
+    /// Coverage for SQL set operations (UNION, UNION ALL, INTERSECT, EXCEPT). Executed identically across all
+    /// database providers.
     /// </summary>
     public class SetOperationTestSuite : IDisposable
     {
