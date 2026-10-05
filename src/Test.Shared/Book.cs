@@ -9,8 +9,6 @@ namespace Test.Shared
     [Entity("books")]
     public class Book
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -25,7 +23,7 @@ namespace Test.Shared
         [Property("title", Flags.String, 200)]
         [Required(ErrorMessage = "Book title is required")]
         [StringLength(200, MinimumLength = 1, ErrorMessage = "Book title must be between 1 and 200 characters")]
-        public string Title { get; set; }
+        public string Title { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the ID of the book's author.
@@ -38,9 +36,10 @@ namespace Test.Shared
 
         /// <summary>
         /// Gets or sets the author navigation property.
+        /// Null when not loaded.
         /// </summary>
         [NavigationProperty("AuthorId")]
-        public Author Author { get; set; }
+        public Author? Author { get; set; }
 
         /// <summary>
         /// Gets or sets the ID of the book's publisher (optional).
@@ -52,9 +51,10 @@ namespace Test.Shared
 
         /// <summary>
         /// Gets or sets the publisher navigation property.
+        /// Null when not loaded.
         /// </summary>
         [NavigationProperty("PublisherId")]
-        public Company Publisher { get; set; }
+        public Company? Publisher { get; set; }
 
         #endregion
 
@@ -81,7 +81,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

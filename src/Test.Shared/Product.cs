@@ -11,8 +11,6 @@ namespace Test.Shared
     [CompositeIndex("idx_name_sku", "name", "sku", IsUnique = true)]
     public class Product
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -26,20 +24,20 @@ namespace Test.Shared
         /// </summary>
         [Property("name", Flags.String, 200)]
         [Index("idx_product_name")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the SKU (Stock Keeping Unit) with a unique index.
         /// </summary>
         [Property("sku", Flags.String, 50)]
         [Index("idx_product_sku", isUnique: true)]
-        public string Sku { get; set; }
+        public string Sku { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the product category (part of composite index).
         /// </summary>
         [Property("category", Flags.String, 100)]
-        public string Category { get; set; }
+        public string Category { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the product price (part of composite index).
@@ -72,7 +70,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

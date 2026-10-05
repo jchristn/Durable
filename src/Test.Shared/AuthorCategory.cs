@@ -8,8 +8,6 @@ namespace Test.Shared
     [Entity("author_categories")]
     public class AuthorCategory
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -34,15 +32,17 @@ namespace Test.Shared
 
         /// <summary>
         /// Gets or sets the author associated with this relationship.
+        /// Null when not loaded.
         /// </summary>
         [NavigationProperty("AuthorId")]
-        public Author Author { get; set; }
+        public Author? Author { get; set; }
 
         /// <summary>
         /// Gets or sets the category associated with this relationship.
+        /// Null when not loaded.
         /// </summary>
         [NavigationProperty("CategoryId")]
-        public Category Category { get; set; }
+        public Category? Category { get; set; }
 
         #endregion
 
@@ -69,7 +69,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

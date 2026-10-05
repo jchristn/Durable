@@ -5,8 +5,8 @@ namespace Test.Shared
     /// </summary>
     public class DepartmentInfo
     {
-        /// <summary>Gets or sets the department name.</summary>
-        public string Department { get; set; } = string.Empty;
+        /// <summary>Gets or sets the department name. Null when the source column is null.</summary>
+        public string? Department { get; set; } = string.Empty;
 
         /// <summary>Gets or sets the salary.</summary>
         public decimal Salary { get; set; }

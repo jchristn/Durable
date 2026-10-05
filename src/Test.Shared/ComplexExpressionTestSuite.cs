@@ -96,7 +96,7 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = await SeedAsync();
             List<Person> results = (await repository.Query()
-                .Where(p => p.Email.Contains("company.com"))
+                .Where(p => p.Email!.Contains("company.com"))
                 .ExecuteAsync()).ToList();
             Assert.All(results, p => Assert.Contains("company.com", p.Email));
         }

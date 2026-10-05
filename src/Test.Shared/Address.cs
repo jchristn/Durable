@@ -5,24 +5,22 @@ namespace Test.Shared
     /// </summary>
     public class Address
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
         /// Gets or sets the street address.
         /// </summary>
-        public string Street { get; set; }
+        public string Street { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the city name.
         /// </summary>
-        public string City { get; set; }
+        public string City { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the ZIP/postal code.
         /// </summary>
-        public string ZipCode { get; set; }
+        public string ZipCode { get; set; } = string.Empty;
 
         #endregion
 
@@ -36,7 +34,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

@@ -113,10 +113,11 @@ namespace Test.Shared
                 .ToArray();
 
             Assert.Single(booksWithAuthor);
-            Assert.NotNull(booksWithAuthor[0].Author);
-            Assert.True(ValidationHelpers.AreStringsEqual("George Orwell", booksWithAuthor[0].Author.Name));
+            Author? loadedAuthor = booksWithAuthor[0].Author;
+            Assert.NotNull(loadedAuthor);
+            Assert.True(ValidationHelpers.AreStringsEqual("George Orwell", loadedAuthor.Name));
 
-            Console.WriteLine($"     Loaded book with author: {booksWithAuthor[0].Author.Name}");
+            Console.WriteLine($"     Loaded book with author: {loadedAuthor.Name}");
         }
 
         /// <summary>

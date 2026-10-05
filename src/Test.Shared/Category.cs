@@ -10,8 +10,6 @@ namespace Test.Shared
     [Entity("categories")]
     public class Category
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -26,14 +24,15 @@ namespace Test.Shared
         [Property("name", Flags.String, 100)]
         [Required(ErrorMessage = "Category name is required")]
         [StringLength(100, MinimumLength = 1, ErrorMessage = "Category name must be between 1 and 100 characters")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the description of the category.
+        /// Null when no value is stored.
         /// </summary>
         [Property("description", Flags.String, 255)]
         [StringLength(255, ErrorMessage = "Description cannot exceed 255 characters")]
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         /// <summary>
         /// Gets or sets the list of authors associated with this category.
@@ -66,7 +65,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

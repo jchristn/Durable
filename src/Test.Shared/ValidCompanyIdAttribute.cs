@@ -8,8 +8,6 @@ namespace Test.Shared.Validation
     /// </summary>
     public class ValidCompanyIdAttribute : ValidationAttribute
     {
-#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
-
         #region Constructors-and-Factories
 
         /// <summary>
@@ -28,7 +26,7 @@ namespace Test.Shared.Validation
         /// </summary>
         /// <param name="value">The value to validate</param>
         /// <returns>True if the value is valid, false otherwise</returns>
-        public override bool IsValid(object value)
+        public override bool IsValid(object? value)
         {
             if (value == null)
                 return true; // Null is allowed for optional company references
@@ -52,7 +50,5 @@ namespace Test.Shared.Validation
         }
 
         #endregion
-
-#pragma warning restore CS8765 // Nullability of type of parameter doesn't match overridden member (possibly because of nullability attributes).
     }
 }

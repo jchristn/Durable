@@ -10,8 +10,6 @@
     [Entity("people")]
     public class Person
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -26,7 +24,7 @@
         [Property("first", Flags.String, 64)]
         [Required(ErrorMessage = "First name is required")]
         [StringLength(64, MinimumLength = 1, ErrorMessage = "First name must be between 1 and 64 characters")]
-        public string FirstName { get; set; }
+        public string FirstName { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the last name of the person.
@@ -34,7 +32,7 @@
         [Property("last", Flags.String, 64)]
         [Required(ErrorMessage = "Last name is required")]
         [StringLength(64, MinimumLength = 1, ErrorMessage = "Last name must be between 1 and 64 characters")]
-        public string LastName { get; set; }
+        public string LastName { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the age of the person in years.
@@ -46,11 +44,12 @@
 
         /// <summary>
         /// Gets or sets the email address of the person.
+        /// Null when no value is stored.
         /// </summary>
         [Property("email", Flags.String, 128)]
         [EmailAddress(ErrorMessage = "Please provide a valid email address")]
         [StringLength(128, ErrorMessage = "Email cannot exceed 128 characters")]
-        public string Email { get; set; }
+        public string? Email { get; set; }
 
         /// <summary>
         /// Gets or sets the salary of the person.
@@ -62,10 +61,11 @@
 
         /// <summary>
         /// Gets or sets the department where the person works.
+        /// Null when no value is stored.
         /// </summary>
         [Property("department", Flags.String, 32)]
         [StringLength(32, ErrorMessage = "Department name cannot exceed 32 characters")]
-        public string Department { get; set; }
+        public string? Department { get; set; }
 
         /// <summary>
         /// Gets the full name of the person by combining first and last name.
@@ -105,7 +105,5 @@
         #region Private-Methods
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

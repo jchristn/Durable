@@ -10,8 +10,6 @@ namespace Test.Shared
     [Entity("complex_entities")]
     public class ComplexEntity
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -24,7 +22,7 @@ namespace Test.Shared
         /// Gets or sets the name of the complex entity.
         /// </summary>
         [Property("name", Flags.String, 100)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the date and time when the entity was created.
@@ -64,27 +62,31 @@ namespace Test.Shared
 
         /// <summary>
         /// Gets or sets the array of tags associated with the entity.
+        /// Null when no value is stored.
         /// </summary>
         [Property("tags")]
-        public string[] Tags { get; set; }
+        public string[]? Tags { get; set; }
 
         /// <summary>
         /// Gets or sets the list of scores associated with the entity.
+        /// Null when no value is stored.
         /// </summary>
         [Property("scores")]
-        public List<int> Scores { get; set; }
+        public List<int>? Scores { get; set; }
 
         /// <summary>
         /// Gets or sets the metadata dictionary containing additional key-value pairs.
+        /// Null when no value is stored.
         /// </summary>
         [Property("metadata")]
-        public Dictionary<string, object> Metadata { get; set; }
+        public Dictionary<string, object>? Metadata { get; set; }
 
         /// <summary>
         /// Gets or sets the address associated with the entity.
+        /// Null when no value is stored.
         /// </summary>
         [Property("address")]
-        public Address Address { get; set; }
+        public Address? Address { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the entity is active.
@@ -130,7 +132,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }

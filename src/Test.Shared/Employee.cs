@@ -9,8 +9,6 @@ namespace Test.Shared
     [Entity("employees")]
     public class Employee
     {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
         #region Public-Members
 
         /// <summary>
@@ -24,28 +22,28 @@ namespace Test.Shared
         /// </summary>
         [Property("first_name", Flags.String, 100)]
         [Index("idx_full_name", Order = 0)]
-        public string FirstName { get; set; }
+        public string FirstName { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the last name (part of composite index on name).
         /// </summary>
         [Property("last_name", Flags.String, 100)]
         [Index("idx_full_name", Order = 1)]
-        public string LastName { get; set; }
+        public string LastName { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the email with a unique index.
         /// </summary>
         [Property("email", Flags.String, 255)]
         [Index("idx_employee_email", isUnique: true)]
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the department (part of composite index on department and hire date).
         /// </summary>
         [Property("department", Flags.String, 100)]
         [Index("idx_dept_hire_date", Order = 0)]
-        public string Department { get; set; }
+        public string Department { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the hire date (part of composite index on department and hire date).
@@ -72,7 +70,5 @@ namespace Test.Shared
         }
 
         #endregion
-
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     }
 }
