@@ -394,7 +394,29 @@ List<Book> byAcme = (await books.Query().Where(b => b.Author.Company.Name == "Ac
 
 Supported in predicates: comparisons (with C# null semantics), `&&`/`||`/`!`, arithmetic, string concatenation, `??`, ternaries, enums, `HasValue`/`.Value`, `Contains`/`StartsWith`/`EndsWith` (wildcards escaped), case-insensitive `Equals`/`Contains` via `StringComparison`, `ToUpper`/`ToLower`/`Trim`/`Substring`/`Replace`/`IndexOf`/`Length`, `string.IsNullOrEmpty`, collection `Contains` (IN), date parts and `Add*` methods, `Math` functions, `Between`/`In`/`NotIn` helpers, and `Any`/`All`/`Count` over collection navigations.
 
-Null comparisons follow C# semantics (`x.A != x.B` and `!(x.N > 1)` include rows where a nullable operand is NULL). String equality, `LIKE` and `Replace` follow the database collation (for example, case- and accent-insensitive on MySQL's default collation), as in EF Core.
+Null comparisons follow C# semantics (`x.A != x.B` and `!(x.N > 1)` include rows where a nullable operand is NULL).
+
+### String matching
+
+By default, string comparisons follow the database collation, as in EF Core: SQL Server's default collation is case-insensitive, and MySQL's default is also accent-insensitive, so `x.Name == "cafe"` can match different rows on different databases. To get the same results everywhere, choose a `StringMatchMode`:
+
+| Mode | Behavior | Like C# |
+|---|---|---|
+| `Database` (default) | The database collation decides | Culture comparisons |
+| `Ordinal` | Exact: case- and accent-sensitive | `StringComparison.Ordinal` |
+| `IgnoreCase` | Case-insensitive, accent-sensitive | `StringComparison.OrdinalIgnoreCase` |
+
+```csharp
+// Repository default for ==, !=, <, >, IN, Contains/StartsWith/EndsWith, Replace and IndexOf
+SqlRepositoryOptions options = new SqlRepositoryOptions { StringMatching = StringMatchMode.Ordinal };
+PostgresRepository<Person> people = new PostgresRepository<Person>(connectionString, options);
+
+// Per call: an explicit StringComparison always wins
+people.ReadMany(p => p.LastName.StartsWith("Mc", StringComparison.Ordinal));
+people.ReadMany(p => p.Email.Equals(input, StringComparison.OrdinalIgnoreCase));
+```
+
+The SQL dialects apply a binary collation for the non-default modes: `"C"` on PostgreSQL, `utf8mb4_bin` on MySQL, `Latin1_General_100_BIN2` on SQL Server, and `BINARY` with `INSTR`/`SUBSTR` on SQLite, whose `LIKE` ignores collations. The collation names are constructor parameters of the MySQL, PostgreSQL and SQL Server dialects. MySQL columns that use a character set other than `utf8mb4` need a matching binary collation. Ordering (`OrderBy`) is not affected. SQLite's built-in `lower()` folds ASCII letters only, so `IgnoreCase` on SQLite does not fold non-ASCII letters such as `É`.
 
 `ISqlQueryBuilder<T>` adds `Union`/`UnionAll`/`Intersect`/`Except`, `WhereIn`/`WhereExists` subqueries, `WhereRaw("col = {0}", value)` (placeholders are parameters), CTEs, window functions and `SelectCase()`.
 

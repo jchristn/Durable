@@ -80,6 +80,10 @@ namespace Test.Shared
                 suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<StringMatchingTestSuite>("StringMatching", "String Matching Mode (Ordinal / IgnoreCase / Database) Tests", providerTag, BeforeEach));
 
+                // Backend-neutral unit suites (no database).
+                suites.Add(TouchstoneBridge.BuildSuite<QueryNormalizerTestSuite>(
+                    "QueryNormalizer", "Query Normalizer (Neutral Query Model) Tests", () => new QueryNormalizerTestSuite(), new List<string> { providerTag, "neutral" }));
+
                 // Provider-specific unit suites.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite)
                 {
