@@ -37,6 +37,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Nunit", "Test.Nunit\Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Sql", "Durable.Sql\Durable.Sql.csproj", "{69D81B86-56CE-4822-88C2-9AC8C65AAEBA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Conformance", "Durable.Conformance\Durable.Conformance.csproj", "{04D1F113-7DE2-4965-ADA9-8308882A739D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -215,6 +217,18 @@ Global
 		{69D81B86-56CE-4822-88C2-9AC8C65AAEBA}.Release|x64.Build.0 = Release|Any CPU
 		{69D81B86-56CE-4822-88C2-9AC8C65AAEBA}.Release|x86.ActiveCfg = Release|Any CPU
 		{69D81B86-56CE-4822-88C2-9AC8C65AAEBA}.Release|x86.Build.0 = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|x64.Build.0 = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Debug|x86.Build.0 = Debug|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x64.ActiveCfg = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x64.Build.0 = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x86.ActiveCfg = Release|Any CPU
+		{04D1F113-7DE2-4965-ADA9-8308882A739D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
