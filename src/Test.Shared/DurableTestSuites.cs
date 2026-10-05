@@ -80,6 +80,15 @@ namespace Test.Shared
                 suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<StringMatchingTestSuite>("StringMatching", "String Matching Mode (Ordinal / IgnoreCase / Database) Tests", providerTag, BeforeEach));
 
+                // Backend-neutral RepositoryBase over the in-memory backend (no database; runs in every provider configuration).
+                List<string> inMemoryTags = new List<string> { providerTag, "inmemory" };
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryBackendTestSuite>("InMemory.Backend", "In-Memory Backend (CRUD / Writes / Converters / Concurrency) Tests", () => new InMemoryBackendTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryQueryTestSuite>("InMemory.Query", "In-Memory Query Semantics Tests", () => new InMemoryQueryTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryIncludeTestSuite>("InMemory.Include", "In-Memory Include Tests", () => new InMemoryIncludeTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryTransactionTestSuite>("InMemory.Transaction", "In-Memory Transaction / Isolation Tests", () => new InMemoryTransactionTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<InMemoryCapabilityTestSuite>("InMemory.Capability", "In-Memory Capability Masking Tests", () => new InMemoryCapabilityTestSuite(), inMemoryTags));
+                suites.Add(SharedSuite<InMemorySqlParityTestSuite>("InMemory.SqlParity", "In-Memory vs SQL Parity Tests", providerTag, BeforeEach));
+
                 // Provider-specific unit suites.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite)
                 {
