@@ -60,6 +60,19 @@ namespace Test.Shared
                 suites.Add(SharedSuite<DiagnosticsTestSuite>("Diagnostics", "Diagnostics (Interceptor / Tracing / Logging / Capture) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<RawSqlAndProcedureTestSuite>("RawSqlProcedure", "Raw SQL / Procedure / Timeout / Cancellation Tests", providerTag, BeforeEach));
 
+                // Relationship and write-feature suites (split-query Include, many-to-many, composite keys, value
+                // converters, JSON, convention mapping, query filters, soft delete, bulk/batch writes, concurrency).
+                suites.Add(SharedSuite<ManyToManyTestSuite>("ManyToMany", "Many-to-Many Relationship Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<IncludeCorrectnessTestSuite>("IncludeCorrectness", "Include Correctness Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<CompositeKeyTestSuite>("CompositeKey", "Composite Primary Key Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<ValueConverterTestSuite>("ValueConverter", "Value Converter Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<JsonColumnTestSuite>("JsonColumn", "JSON Column Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<ConventionMappingTestSuite>("ConventionMapping", "Convention Mapping Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<QueryFilterTestSuite>("QueryFilter", "Global Query Filter Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<SoftDeleteTestSuite>("SoftDelete", "Soft Delete Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<WriteFeaturesTestSuite>("WriteFeatures", "Write Feature (CreateMany / Bulk / Upsert / Batch) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<ConcurrencyResolutionTestSuite>("ConcurrencyResolution", "Concurrency Resolution Tests", providerTag, BeforeEach));
+
                 // Set operations (UNION / INTERSECT / EXCEPT) are only supported by the SQLite and PostgreSQL
                 // providers; the MySQL and SQL Server implementations do not currently generate correct SQL.
                 if (configuration.DatabaseType == TestDatabaseType.Sqlite || configuration.DatabaseType == TestDatabaseType.Postgres)
@@ -72,7 +85,7 @@ namespace Test.Shared
                 {
                     List<string> sqliteTags = new List<string> { providerTag, "sqlite" };
 
-                    suites.Add(SharedSuite<ManyToManyTestSuite>("ManyToMany", "Many-to-Many Relationship Tests", providerTag, BeforeEach));
+                    suites.Add(SharedSuite<SqliteIncludeChunkingTestSuite>("Sqlite.IncludeChunking", "SQLite Include Chunking Tests", providerTag, BeforeEach));
 
                     suites.Add(TouchstoneBridge.BuildSuite<SqliteIntegrationTests>(
                         "Sqlite.Integration", "SQLite Integration Tests", () => new SqliteIntegrationTests(), sqliteTags));

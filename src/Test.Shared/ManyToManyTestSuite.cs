@@ -9,9 +9,7 @@ namespace Test.Shared
     using Xunit;
 
     /// <summary>
-    /// Coverage for many-to-many navigation loading via Include. Only included by <see cref="DurableTestSuites"/>
-    /// for the SQLite provider; the MySQL, PostgreSQL, and SQL Server join builders do not yet emit correct
-    /// join-table column names for many-to-many relationships.
+    /// Coverage for many-to-many navigation loading via Include. Runs on every provider.
     /// </summary>
     public class ManyToManyTestSuite : IDisposable
     {
