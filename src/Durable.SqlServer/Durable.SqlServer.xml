@@ -85,13 +85,16 @@
         <member name="M:Durable.SqlServer.SqlServerDialect.Concat(System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.IsEmptyString(System.String)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.AppendPaging(Durable.Sql.SqlStatementBuilder,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Boolean)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.SqlServer.SqlServerDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata})">
+        <member name="M:Durable.SqlServer.SqlServerDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
             <inheritdoc />
         </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.CreateSavepointSql(System.String)">

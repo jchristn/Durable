@@ -205,6 +205,9 @@ namespace Test.Shared
         [Fact]
         public async Task StringPatternWithAccentIsOrdinal()
         {
+            // String matching follows the database collation. MySQL's default utf8mb4_0900_ai_ci collation is
+            // accent-insensitive, so this ordinal expectation only holds on the other providers.
+            if (_Provider.DatabaseType == TestDatabaseType.MySql) return;
             using QueryTranslationFixture f = await SeedAsync();
             await CheckAsync(f, x => x.Name.Contains("ë"), Zoe);
         }
@@ -544,6 +547,10 @@ namespace Test.Shared
         {
             using QueryTranslationFixture f = await SeedAsync();
             await CheckAsync(f, x => x.Name.Replace("'", "") == "OBrien", OBrien);
+
+            // REPLACE follows the database collation; SQL Server's default collation is case-insensitive, so the
+            // case-sensitive expectation only holds on the other providers.
+            if (_Provider.DatabaseType == TestDatabaseType.SqlServer) return;
             await CheckAsync(f, x => x.Name.Replace("a", "4") == "Alph4", Alpha);
         }
 

@@ -1542,7 +1542,15 @@ namespace Durable.Sql
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
             List<ColumnMetadata> insertColumns = Metadata.Columns.Where(c => !c.IsAutoIncrement || c.IsPrimaryKey).ToList();
             List<string> placeholders = insertColumns.Select(c => builder.AddParameter(DatabaseValue(entity, c), c)).ToList();
-            Dialect.AppendUpsert(builder, Metadata, insertColumns, placeholders, Metadata.KeyColumns, _UpdateColumns);
+            string? versionPlaceholder = null;
+            ColumnMetadata? version = Metadata.VersionColumn;
+            if (version != null)
+            {
+                object? next = Metadata.VersionInfo!.IncrementVersion(version.GetValue(entity)!);
+                versionPlaceholder = builder.AddParameter(Converter.ConvertToDatabase(next, version), version);
+            }
+
+            Dialect.AppendUpsert(builder, Metadata, insertColumns, placeholders, Metadata.KeyColumns, _UpdateColumns, versionPlaceholder);
             return builder.Build();
         }
 

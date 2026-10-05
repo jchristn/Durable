@@ -88,6 +88,22 @@ namespace Durable.Sql
         string Concat(IReadOnlyList<string> parts);
 
         /// <summary>
+        /// Divides two SQL expressions. When both operands are integers the result must truncate like C# integer division.
+        /// </summary>
+        /// <param name="left">Dividend SQL.</param>
+        /// <param name="right">Divisor SQL.</param>
+        /// <param name="integerOperands">Whether both operands are integer-typed.</param>
+        /// <returns>The division expression.</returns>
+        string Divide(string left, string right, bool integerOperands);
+
+        /// <summary>
+        /// Returns a condition that is true when a non-null string expression is empty (zero characters, not blank).
+        /// </summary>
+        /// <param name="expression">String SQL expression.</param>
+        /// <returns>The condition.</returns>
+        string IsEmptyString(string expression);
+
+        /// <summary>
         /// Translates a scalar function.
         /// </summary>
         /// <param name="function">Function.</param>
@@ -134,7 +150,8 @@ namespace Durable.Sql
         /// <param name="placeholders">Placeholders aligned with insertColumns. Must not be null.</param>
         /// <param name="conflictColumns">Key columns identifying the row. Must not be null or empty.</param>
         /// <param name="updateColumns">Columns updated on conflict; may be empty.</param>
-        void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns);
+        /// <param name="versionPlaceholder">Placeholder holding the incremented version assigned to the version column on the update path; null when the entity has no version column.</param>
+        void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns, string? versionPlaceholder = null);
 
         /// <summary>
         /// Gets the statement separator used when batching statements in one command. Default ";".

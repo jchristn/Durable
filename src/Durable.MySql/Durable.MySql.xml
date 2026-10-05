@@ -100,10 +100,13 @@
         <member name="M:Durable.MySql.MySqlDialect.Concat(System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
+        <member name="M:Durable.MySql.MySqlDialect.Divide(System.String,System.String,System.Boolean)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.MySql.MySqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
-        <member name="M:Durable.MySql.MySqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata})">
+        <member name="M:Durable.MySql.MySqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
             <inheritdoc />
         </member>
         <member name="M:Durable.MySql.MySqlDialect.GetColumnType(Durable.ColumnMetadata)">

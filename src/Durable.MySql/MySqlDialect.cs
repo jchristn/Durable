@@ -66,6 +66,12 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc />
+        public override string Divide(string left, string right, bool integerOperands)
+        {
+            return integerOperands ? "(" + left + " DIV " + right + ")" : base.Divide(left, right, integerOperands);
+        }
+
+        /// <inheritdoc />
         public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
@@ -95,7 +101,7 @@ namespace Durable.MySql
         }
 
         /// <inheritdoc />
-        public override void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns)
+        public override void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns, string? versionPlaceholder = null)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(metadata);
@@ -103,7 +109,7 @@ namespace Durable.MySql
                 .Append(string.Join(", ", insertColumns.Select(c => QuoteIdentifier(c.Name))))
                 .Append(") VALUES (").Append(string.Join(", ", placeholders)).Append(") AS durable_new ON DUPLICATE KEY UPDATE ");
             IReadOnlyList<ColumnMetadata> assigned = updateColumns.Count > 0 ? updateColumns : conflictColumns;
-            builder.Append(string.Join(", ", assigned.Select(c => QuoteIdentifier(c.Name) + " = durable_new." + QuoteIdentifier(c.Name))));
+            builder.Append(string.Join(", ", assigned.Select(c => QuoteIdentifier(c.Name) + " = " + (c.IsVersion && versionPlaceholder != null ? versionPlaceholder : "durable_new." + QuoteIdentifier(c.Name)))));
         }
 
         /// <inheritdoc />

@@ -78,13 +78,19 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc />
+        public override string IsEmptyString(string expression)
+        {
+            return "DATALENGTH(" + expression + ") = 0";
+        }
+
+        /// <inheritdoc />
         public override string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
             string a1 = arguments.Count > 1 ? arguments[1] : string.Empty;
             switch (function)
             {
-                case SqlFunction.Length: return "LEN(" + a0 + ")";
+                case SqlFunction.Length: return "(LEN(" + a0 + " + N'.') - 1)";
                 case SqlFunction.Substring:
                     return arguments.Count > 2
                         ? "SUBSTRING(" + a0 + ", (" + a1 + ") + 1, " + arguments[2] + ")"
@@ -121,7 +127,7 @@ namespace Durable.SqlServer
         }
 
         /// <inheritdoc />
-        public override void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns)
+        public override void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns, string? versionPlaceholder = null)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(metadata);
@@ -141,7 +147,7 @@ namespace Durable.SqlServer
             if (updateColumns.Count > 0)
             {
                 builder.Append(" WHEN MATCHED THEN UPDATE SET ")
-                    .Append(string.Join(", ", updateColumns.Select(c => "durable_target." + QuoteIdentifier(c.Name) + " = durable_source." + QuoteIdentifier(c.Name))));
+                    .Append(string.Join(", ", updateColumns.Select(c => "durable_target." + QuoteIdentifier(c.Name) + " = " + (c.IsVersion && versionPlaceholder != null ? versionPlaceholder : "durable_source." + QuoteIdentifier(c.Name)))));
             }
 
             builder.Append(" WHEN NOT MATCHED THEN INSERT (")

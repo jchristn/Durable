@@ -893,6 +893,22 @@
             <param name="parts">SQL fragments. Must contain at least two items.</param>
             <returns>The concatenation expression.</returns>
         </member>
+        <member name="M:Durable.Sql.ISqlDialect.Divide(System.String,System.String,System.Boolean)">
+            <summary>
+            Divides two SQL expressions. When both operands are integers the result must truncate like C# integer division.
+            </summary>
+            <param name="left">Dividend SQL.</param>
+            <param name="right">Divisor SQL.</param>
+            <param name="integerOperands">Whether both operands are integer-typed.</param>
+            <returns>The division expression.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.IsEmptyString(System.String)">
+            <summary>
+            Returns a condition that is true when a non-null string expression is empty (zero characters, not blank).
+            </summary>
+            <param name="expression">String SQL expression.</param>
+            <returns>The condition.</returns>
+        </member>
         <member name="M:Durable.Sql.ISqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <summary>
             Translates a scalar function.
@@ -926,7 +942,7 @@
             Gets the statement returning the last generated identity for <see cref="F:Durable.Sql.InsertKeyStrategy.LastInsertId"/>; null otherwise.
             </summary>
         </member>
-        <member name="M:Durable.Sql.ISqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata})">
+        <member name="M:Durable.Sql.ISqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
             <summary>
             Appends an upsert statement (insert, or update on key conflict) without a terminating separator.
             Values are supplied as placeholders already registered with the builder.
@@ -937,6 +953,7 @@
             <param name="placeholders">Placeholders aligned with insertColumns. Must not be null.</param>
             <param name="conflictColumns">Key columns identifying the row. Must not be null or empty.</param>
             <param name="updateColumns">Columns updated on conflict; may be empty.</param>
+            <param name="versionPlaceholder">Placeholder holding the incremented version assigned to the version column on the update path; null when the entity has no version column.</param>
         </member>
         <member name="P:Durable.Sql.ISqlDialect.StatementSeparator">
             <summary>
@@ -2490,13 +2507,19 @@
         <member name="M:Durable.Sql.SqlDialect.Concat(System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Sql.SqlDialect.Divide(System.String,System.String,System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.IsEmptyString(System.String)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sql.SqlDialect.TranslateFunction(Durable.Sql.SqlFunction,System.Collections.Generic.IReadOnlyList{System.String})">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.AppendPaging(Durable.Sql.SqlStatementBuilder,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Boolean)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata})">
+        <member name="M:Durable.Sql.SqlDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.CreateSavepointSql(System.String)">

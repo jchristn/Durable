@@ -231,7 +231,15 @@ namespace Durable.Sql
                         return "(" + Predicate(binary.Left) + " OR " + Predicate(binary.Right) + ")";
                     }
                 case ExpressionType.Not when expression.Type == typeof(bool) || expression.Type == typeof(bool?):
-                    return "(NOT " + Predicate(((UnaryExpression)expression).Operand) + ")";
+                    {
+                        Expression operand = ((UnaryExpression)expression).Operand;
+                        string inner = Predicate(operand);
+                        // SQL three-valued logic would drop rows where the operand is UNKNOWN (a NULL compared);
+                        // C# evaluates such comparisons to false, so the negation is true.
+                        if (MayBeUnknown(operand))
+                            return "(CASE WHEN " + inner + " THEN " + Dialect.BooleanLiteral(false) + " ELSE " + Dialect.BooleanLiteral(true) + " END = " + Dialect.BooleanLiteral(true) + ")";
+                        return "(NOT " + inner + ")";
+                    }
                 case ExpressionType.Equal:
                 case ExpressionType.NotEqual:
                 case ExpressionType.LessThan:
@@ -254,7 +262,10 @@ namespace Durable.Sql
                 case ExpressionType.MultiplyChecked:
                     return Arithmetic((BinaryExpression)expression, "*");
                 case ExpressionType.Divide:
-                    return Arithmetic((BinaryExpression)expression, "/");
+                    {
+                        BinaryExpression binary = (BinaryExpression)expression;
+                        return Dialect.Divide(Value(binary.Left), Value(binary.Right), IsIntegralType(binary.Left.Type) && IsIntegralType(binary.Right.Type));
+                    }
                 case ExpressionType.Modulo:
                     return Arithmetic((BinaryExpression)expression, "%");
                 case ExpressionType.Coalesce:
@@ -385,17 +396,36 @@ namespace Durable.Sql
                 return "(" + comparison + ")";
             }
 
-            if (binary.NodeType == ExpressionType.Equal || binary.NodeType == ExpressionType.NotEqual)
+            string leftSql = Value(left);
+            string rightSql = Value(right);
+            bool leftNullable = !IsPredicateNode(UnwrapConvert(left)) && IsNullable(left, ResolveColumn(left));
+            bool rightNullable = !IsPredicateNode(UnwrapConvert(right)) && IsNullable(right, ResolveColumn(right));
+            string plain = "(" + leftSql + " " + op + " " + rightSql + ")";
+
+            // C# semantics for nullable operands: null == null is true, null != value is true.
+            if (binary.NodeType == ExpressionType.Equal && leftNullable && rightNullable)
+                return "(" + plain + " OR (" + leftSql + " IS NULL AND " + rightSql + " IS NULL))";
+            if (binary.NodeType == ExpressionType.NotEqual && (leftNullable || rightNullable))
             {
-                if (IsPredicateNode(UnwrapConvert(left)) || IsPredicateNode(UnwrapConvert(right)))
+                List<string> terms = new List<string> { plain };
+                if (leftNullable && rightNullable)
                 {
-                    string l = Value(left);
-                    string r = Value(right);
-                    return "(" + l + " " + op + " " + r + ")";
+                    terms.Add("(" + leftSql + " IS NULL AND " + rightSql + " IS NOT NULL)");
+                    terms.Add("(" + leftSql + " IS NOT NULL AND " + rightSql + " IS NULL)");
                 }
+                else if (leftNullable)
+                {
+                    terms.Add(leftSql + " IS NULL");
+                }
+                else
+                {
+                    terms.Add(rightSql + " IS NULL");
+                }
+
+                return "(" + string.Join(" OR ", terms) + ")";
             }
 
-            return "(" + Value(left) + " " + op + " " + Value(right) + ")";
+            return plain;
         }
 
         private bool TryTranslateCompareTo(Expression call, Expression zero, ExpressionType nodeType, out string? sql)
@@ -725,12 +755,12 @@ namespace Durable.Sql
                     case "IsNullOrEmpty":
                         {
                             string sql = Value(call.Arguments[0]);
-                            return "(" + sql + " IS NULL OR " + sql + " = '')";
+                            return "(" + sql + " IS NULL OR " + Dialect.IsEmptyString(sql) + ")";
                         }
                     case "IsNullOrWhiteSpace":
                         {
                             string sql = Value(call.Arguments[0]);
-                            return "(" + sql + " IS NULL OR " + Dialect.TranslateFunction(SqlFunction.Trim, new[] { sql }) + " = '')";
+                            return "(" + sql + " IS NULL OR " + Dialect.IsEmptyString(Dialect.TranslateFunction(SqlFunction.Trim, new[] { sql })) + ")";
                         }
                     case "Concat":
                         if (call.Arguments.Count == 1 && call.Arguments[0] is NewArrayExpression array)
@@ -919,6 +949,67 @@ namespace Durable.Sql
             }
 
             return "(" + condition + ")";
+        }
+
+        private bool MayBeUnknown(Expression expression)
+        {
+            expression = UnwrapConvert(StripQuotes(expression));
+            switch (expression.NodeType)
+            {
+                case ExpressionType.AndAlso:
+                case ExpressionType.OrElse:
+                case ExpressionType.And:
+                case ExpressionType.Or:
+                    {
+                        BinaryExpression binary = (BinaryExpression)expression;
+                        return MayBeUnknown(binary.Left) || MayBeUnknown(binary.Right);
+                    }
+                case ExpressionType.Not:
+                    return MayBeUnknown(((UnaryExpression)expression).Operand);
+                case ExpressionType.LessThan:
+                case ExpressionType.LessThanOrEqual:
+                case ExpressionType.GreaterThan:
+                case ExpressionType.GreaterThanOrEqual:
+                case ExpressionType.Equal:
+                case ExpressionType.NotEqual:
+                    {
+                        BinaryExpression binary = (BinaryExpression)expression;
+                        bool leftEvaluable = ExpressionEvaluator.IsEvaluable(binary.Left);
+                        bool rightEvaluable = ExpressionEvaluator.IsEvaluable(binary.Right);
+                        if (expression.NodeType == ExpressionType.Equal || expression.NodeType == ExpressionType.NotEqual)
+                        {
+                            if ((leftEvaluable && ExpressionEvaluator.Evaluate(binary.Left) == null) || (rightEvaluable && ExpressionEvaluator.Evaluate(binary.Right) == null))
+                                return false;
+                            if (expression.NodeType == ExpressionType.NotEqual) return false;
+                        }
+
+                        return (!leftEvaluable && IsNullable(binary.Left, ResolveColumn(binary.Left)))
+                            || (!rightEvaluable && IsNullable(binary.Right, ResolveColumn(binary.Right)));
+                    }
+                case ExpressionType.Call:
+                    {
+                        MethodCallExpression call = (MethodCallExpression)expression;
+                        if (call.Method.Name == "IsNullOrEmpty" || call.Method.Name == "IsNullOrWhiteSpace" || call.Method.Name == "Any" || call.Method.Name == "All") return false;
+                        if (call.Object != null && !ExpressionEvaluator.IsEvaluable(call.Object) && IsNullable(call.Object, ResolveColumn(call.Object))) return true;
+                        foreach (Expression argument in call.Arguments)
+                        {
+                            if (!ExpressionEvaluator.IsEvaluable(argument) && argument.Type != typeof(bool) && IsNullable(argument, ResolveColumn(argument))) return true;
+                        }
+
+                        return false;
+                    }
+                case ExpressionType.MemberAccess:
+                    return expression.Type == typeof(bool?);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsIntegralType(Type type)
+        {
+            Type t = Nullable.GetUnderlyingType(type) ?? type;
+            return t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)
+                || t == typeof(uint) || t == typeof(ulong) || t == typeof(ushort) || t == typeof(sbyte);
         }
 
         private static bool IsIntegral(object? value)

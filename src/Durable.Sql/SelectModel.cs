@@ -108,6 +108,8 @@ namespace Durable.Sql
         public string Render(ISqlDialect dialect)
         {
             ArgumentNullException.ThrowIfNull(dialect);
+            bool empty = Take.HasValue && Take.Value == 0;
+            if (empty && SetOperations.Count == 0) Conditions.Add("(1 = 0)");
             SqlStatementBuilder text = new SqlStatementBuilder(dialect);
             if (Ctes.Count > 0)
                 text.Append(RecursiveCte ? dialect.RecursiveCteKeyword : "WITH").Append(" ").Append(string.Join(", ", Ctes)).Append(" ");
@@ -118,6 +120,7 @@ namespace Durable.Sql
                 foreach (KeyValuePair<string, string> operation in SetOperations)
                     text.Append(" ").Append(operation.Key).Append(" ").Append(operation.Value);
                 text.Append(") t0");
+                if (empty) text.Append(" WHERE 1 = 0");
             }
             else
             {
@@ -125,7 +128,7 @@ namespace Durable.Sql
             }
 
             if (OrderBy.Count > 0) text.Append(" ORDER BY ").Append(string.Join(", ", OrderBy));
-            if (Skip.HasValue || Take.HasValue) dialect.AppendPaging(text, Skip, Take, OrderBy.Count > 0);
+            if (!empty && (Skip.HasValue || Take.HasValue)) dialect.AppendPaging(text, Skip, Take, OrderBy.Count > 0);
             return text.Sql.ToString();
         }
 

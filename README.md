@@ -394,6 +394,8 @@ List<Book> byAcme = (await books.Query().Where(b => b.Author.Company.Name == "Ac
 
 Supported in predicates: comparisons (with C# null semantics), `&&`/`||`/`!`, arithmetic, string concatenation, `??`, ternaries, enums, `HasValue`/`.Value`, `Contains`/`StartsWith`/`EndsWith` (wildcards escaped), case-insensitive `Equals`/`Contains` via `StringComparison`, `ToUpper`/`ToLower`/`Trim`/`Substring`/`Replace`/`IndexOf`/`Length`, `string.IsNullOrEmpty`, collection `Contains` (IN), date parts and `Add*` methods, `Math` functions, `Between`/`In`/`NotIn` helpers, and `Any`/`All`/`Count` over collection navigations.
 
+Null comparisons follow C# semantics (`x.A != x.B` and `!(x.N > 1)` include rows where a nullable operand is NULL). String equality, `LIKE` and `Replace` follow the database collation (for example, case- and accent-insensitive on MySQL's default collation), as in EF Core.
+
 `ISqlQueryBuilder<T>` adds `Union`/`UnionAll`/`Intersect`/`Except`, `WhereIn`/`WhereExists` subqueries, `WhereRaw("col = {0}", value)` (placeholders are parameters), CTEs, window functions and `SelectCase()`.
 
 ## Relationships

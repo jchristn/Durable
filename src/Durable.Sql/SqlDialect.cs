@@ -127,6 +127,18 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        public virtual string Divide(string left, string right, bool integerOperands)
+        {
+            return "(" + left + " / " + right + ")";
+        }
+
+        /// <inheritdoc />
+        public virtual string IsEmptyString(string expression)
+        {
+            return expression + " = ''";
+        }
+
+        /// <inheritdoc />
         public virtual string TranslateFunction(SqlFunction function, IReadOnlyList<string> arguments)
         {
             string a0 = arguments.Count > 0 ? arguments[0] : string.Empty;
@@ -175,7 +187,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public virtual void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns)
+        public virtual void AppendUpsert(SqlStatementBuilder builder, EntityMetadata metadata, IReadOnlyList<ColumnMetadata> insertColumns, IReadOnlyList<string> placeholders, IReadOnlyList<ColumnMetadata> conflictColumns, IReadOnlyList<ColumnMetadata> updateColumns, string? versionPlaceholder = null)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(metadata);
@@ -191,7 +203,7 @@ namespace Durable.Sql
             }
 
             builder.Append(" DO UPDATE SET ")
-                .Append(string.Join(", ", updateColumns.Select(c => QuoteIdentifier(c.Name) + " = EXCLUDED." + QuoteIdentifier(c.Name))));
+                .Append(string.Join(", ", updateColumns.Select(c => QuoteIdentifier(c.Name) + " = " + (c.IsVersion && versionPlaceholder != null ? versionPlaceholder : "EXCLUDED." + QuoteIdentifier(c.Name)))));
         }
 
         /// <inheritdoc />
