@@ -547,6 +547,104 @@ namespace Test.Shared
             Console.WriteLine("     Planned " + plan.Operations.Count + " operations for a missing table");
         }
 
+        /// <summary>
+        /// The schema reader lists user tables (without system tables) and reports database-generated key columns
+        /// (identity / auto-increment / SQLite row id alias) separately from plain keys.
+        /// </summary>
+        [Fact]
+        public async Task SchemaReader_ListsTablesAndGeneratedKeys()
+        {
+            await using IConnectionFactory factory = _Provider.CreateConnectionFactory();
+            await DropTablesAsync(factory, "mig_widgets", "mig_plain_keys");
+            try
+            {
+                SqlMigrator migrator = new SqlMigrator(factory, _Provider.Dialect);
+                await migrator.SyncSchemaAsync(new[] { typeof(MigWidgetV1) });
+                await ExecuteAsync(factory, "CREATE TABLE " + Q("mig_plain_keys") + " (" + Q("id") + " INT NOT NULL PRIMARY KEY, " + Q("label") + " VARCHAR(20) NULL)");
+
+                DatabaseSchemaReader reader = new DatabaseSchemaReader(factory, _Provider.Dialect);
+                List<string> names = await reader.ReadTableNamesAsync();
+                Assert.Contains(names, n => string.Equals(n, "mig_widgets", StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(names, n => string.Equals(n, "mig_plain_keys", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(names, n => n.StartsWith("sqlite_", StringComparison.OrdinalIgnoreCase));
+                Assert.Equal(names, reader.ReadTableNames());
+
+                TableSchema widgets = (await reader.ReadTableAsync("mig_widgets"))!;
+                Assert.True(widgets.FindColumn("id")!.IsAutoIncrement);
+                Assert.False(widgets.FindColumn("name")!.IsAutoIncrement);
+                TableSchema plain = reader.ReadTable("mig_plain_keys")!;
+                Assert.True(plain.FindColumn("id")!.IsPrimaryKey);
+                Assert.False(plain.FindColumn("id")!.IsAutoIncrement);
+                Assert.False(plain.FindColumn("label")!.IsAutoIncrement);
+            }
+            finally
+            {
+                await DropTablesAsync(factory, "mig_widgets", "mig_plain_keys");
+            }
+        }
+
+        /// <summary>
+        /// A script for a range of migrations ignores the history: (from, to] in Id order, with history inserts.
+        /// </summary>
+        [Fact]
+        public async Task GenerateScript_RangeIgnoresHistory()
+        {
+            await using IConnectionFactory factory = _Provider.CreateConnectionFactory();
+            await DropTablesAsync(factory, "mig_hist_range", "mig_range_log");
+            try
+            {
+                ISqlDialect dialect = _Provider.Dialect;
+                string table = dialect.QuoteIdentifier("mig_range_log");
+                SqlMigrator migrator = new SqlMigrator(factory, dialect, new SqlMigratorOptions { HistoryTableName = "mig_hist_range" })
+                    .AddMigration(new DelegateMigration("20261006_0001_A", "A", ctx => ctx.ExecuteSql("CREATE TABLE " + table + " (" + dialect.QuoteIdentifier("id") + " INT NOT NULL PRIMARY KEY)")))
+                    .AddMigration(new DelegateMigration("20261006_0002_B", "B", ctx => ctx.ExecuteSql("INSERT INTO " + table + " VALUES (2)")))
+                    .AddMigration(new DelegateMigration("20261006_0003_C", "C", ctx => ctx.ExecuteSql("INSERT INTO " + table + " VALUES (3)")));
+                await migrator.MigrateAsync();
+
+                string upToB = migrator.GenerateScript(null, "20261006_0002_B");
+                Assert.Contains("Migration 20261006_0001_A", upToB);
+                Assert.Contains("Migration 20261006_0002_B", upToB);
+                Assert.DoesNotContain("Migration 20261006_0003_C", upToB);
+                Assert.Contains("INSERT INTO " + dialect.QuoteIdentifier("mig_hist_range"), upToB);
+
+                string afterA = await migrator.GenerateScriptAsync("20261006_0001_A", null);
+                Assert.DoesNotContain("Migration 20261006_0001_A", afterA);
+                Assert.Contains("Migration 20261006_0002_B", afterA);
+                Assert.Contains("Migration 20261006_0003_C", afterA);
+                Assert.True(afterA.IndexOf("0002_B", StringComparison.Ordinal) < afterA.IndexOf("0003_C", StringComparison.Ordinal));
+                Assert.Equal(afterA, migrator.GenerateScript("20261006_0001_A", null));
+
+                string all = migrator.GenerateScript(null, null);
+                Assert.Contains("Migration 20261006_0001_A", all);
+                Assert.Contains("Migration 20261006_0003_C", all);
+                Assert.DoesNotContain("-- Migration", await migrator.GenerateScriptAsync());
+
+                Assert.Throws<ArgumentException>(() => migrator.GenerateScript("20261006_0003_C", "20261006_0001_A"));
+                await Assert.ThrowsAsync<ArgumentException>(() => migrator.GenerateScriptAsync("20261006_0003_C", "20261006_0001_A"));
+                Assert.Equal(3L, await CountAsync(factory, "mig_hist_range"));
+            }
+            finally
+            {
+                await DropTablesAsync(factory, "mig_hist_range", "mig_range_log");
+            }
+        }
+
+        /// <summary>
+        /// SqlStatement.ToInlineSql replaces each parameter with the dialect's literal (longest names first) without
+        /// touching similar names, and leaves parameterless statements unchanged.
+        /// </summary>
+        [Fact]
+        public void SqlStatement_ToInlineSqlFormatsLiterals()
+        {
+            ISqlDialect dialect = _Provider.Dialect;
+            SqlStatement statement = new SqlStatement(
+                "SELECT @p0, @p1, @p10, @p1x",
+                new[] { new SqlParameterValue("@p0", "O'Brien"), new SqlParameterValue("@p1", 42), new SqlParameterValue("@p10", null) });
+            Assert.Equal("SELECT " + dialect.FormatLiteral("O'Brien") + ", 42, NULL, @p1x", statement.ToInlineSql(dialect));
+            Assert.Equal("SELECT 1", new SqlStatement("SELECT 1").ToInlineSql(dialect));
+            Assert.Throws<ArgumentNullException>(() => statement.ToInlineSql(null!));
+        }
+
         #endregion
 
         #region Private-Methods

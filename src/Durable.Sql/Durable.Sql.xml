@@ -1022,10 +1022,19 @@
             <summary>
             Returns a query describing the columns of a table, one row per column in ordinal order, with the columns:
             0 name (string), 1 declared type including length/precision (string), 2 nullable (1/0),
-            3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0).
+            3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0), and optionally
+            5 database-generated key (identity / auto-increment, 1/0; treated as 0 when the column is absent).
             Returns no rows when the table does not exist.
             </summary>
             <param name="tableName">Table name. Must not be null.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.TableNamesQuery">
+            <summary>
+            Returns a query whose first column is the name of each user table in the current schema/database, ordered by
+            name. System and internal tables are excluded.
+            </summary>
             <returns>The statement.</returns>
             <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
         </member>
@@ -2011,7 +2020,13 @@
             Gets the zero-based position of the column in the table.
             </summary>
         </member>
-        <member name="M:Durable.Sql.ColumnSchema.#ctor(System.String,System.String,System.Boolean,System.Nullable{System.Int32},System.Boolean,System.Int32)">
+        <member name="P:Durable.Sql.ColumnSchema.IsAutoIncrement">
+            <summary>
+            Gets whether the database generates the column value on insert (identity / auto-increment / serial, or a SQLite
+            INTEGER PRIMARY KEY row id alias). False when the dialect does not report it.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ColumnSchema.#ctor(System.String,System.String,System.Boolean,System.Nullable{System.Int32},System.Boolean,System.Int32,System.Boolean)">
             <summary>
             Instantiates a column description.
             </summary>
@@ -2021,6 +2036,7 @@
             <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
             <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
             <param name="ordinal">Zero-based position. Minimum: 0.</param>
+            <param name="isAutoIncrement">Whether the database generates the value on insert. Default: false.</param>
             <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
             <exception cref="T:System.ArgumentNullException">Thrown when dataType is null.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
@@ -2110,6 +2126,21 @@
             <param name="token">Cancellation token.</param>
             <returns>Existing tables keyed by name (case-insensitive).</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when tableNames is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTableNames">
+            <summary>
+            Lists the user tables of the current schema/database, ordered by name (system tables excluded).
+            </summary>
+            <returns>The table names.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support table enumeration.</exception>
+        </member>
+        <member name="M:Durable.Sql.DatabaseSchemaReader.ReadTableNamesAsync(System.Threading.CancellationToken)">
+            <summary>
+            Lists the user tables of the current schema/database, ordered by name (system tables excluded).
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>The table names.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the dialect does not support table enumeration.</exception>
         </member>
         <member name="T:Durable.Sql.IndexColumnRow">
             <summary>
@@ -3047,6 +3078,32 @@
             <returns>The script.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
         </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateScript(System.String,System.String)">
+            <summary>
+            Generates a SQL script for a range of registered migrations regardless of the database history: every migration
+            whose Id is ordinally greater than <paramref name="fromId"/> and less than or equal to <paramref name="toId"/>,
+            in Id order, each followed by its history insert. Useful to script the upgrade between two released versions.
+            A database connection is still opened because <see cref="M:Durable.Sql.MigrationContext.EnsureSchema(System.Type[])"/> reads the
+            current schema. Nothing is executed.
+            </summary>
+            <param name="fromId">Exclusive lower bound; null starts with the first registered migration.</param>
+            <param name="toId">Inclusive upper bound; null ends with the last registered migration.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when both bounds are given and <paramref name="fromId"/> sorts after <paramref name="toId"/>.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateScriptAsync(System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Generates a SQL script for a range of registered migrations regardless of the database history.
+            See <see cref="M:Durable.Sql.SqlMigrator.GenerateScript(System.String,System.String)"/>.
+            </summary>
+            <param name="fromId">Exclusive lower bound; null starts with the first registered migration.</param>
+            <param name="toId">Inclusive upper bound; null ends with the last registered migration.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when both bounds are given and <paramref name="fromId"/> sorts after <paramref name="toId"/>.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        </member>
         <member name="M:Durable.Sql.SqlMigrator.DiffSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
             <summary>
             Compares entity types with the live schema without changing anything.
@@ -3980,6 +4037,9 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.TableNamesQuery">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.IndexSchemaQuery(System.String)">
@@ -5543,6 +5603,17 @@
             <param name="sql">Command text. Must not be null.</param>
             <param name="parameters">Parameters; null means none.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlStatement.ToInlineSql(Durable.Sql.ISqlDialect)">
+            <summary>
+            Renders the statement as standalone SQL with every parameter replaced by a literal formatted by the dialect
+            (<see cref="M:Durable.Sql.ISqlDialect.FormatLiteral(System.Object)"/>), the same way migration scripts are written. Intended for reviewable
+            scripts and generated code containing DDL; prefer parameters when executing statements that carry user data.
+            </summary>
+            <param name="dialect">Dialect used to format literals. Must not be null.</param>
+            <returns>The SQL text with literals in place of parameters.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="dialect"/> is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when a parameter value cannot be rendered as a literal.</exception>
         </member>
         <member name="M:Durable.Sql.SqlStatement.ToDebugString">
             <summary>

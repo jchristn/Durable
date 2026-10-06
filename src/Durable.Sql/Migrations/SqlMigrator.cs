@@ -369,7 +369,7 @@ namespace Durable.Sql
 
         /// <summary>
         /// Generates a SQL script that creates the history table (if missing) and applies the currently pending migrations.
-        /// See <see cref="GenerateScript"/>.
+        /// See <see cref="GenerateScript()"/>.
         /// </summary>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The script.</returns>
@@ -383,6 +383,61 @@ namespace Durable.Sql
                 HashSet<string> done = new HashSet<string>(history.Select(a => a.Id), StringComparer.Ordinal);
                 StringBuilder script = StartScript();
                 foreach (Migration migration in Migrations.Where(m => !done.Contains(m.Id)))
+                {
+                    bool transactional = BeginScriptedMigration(script, migration);
+                    await migration.UpAsync(new MigrationContext(session, migration, script), token).ConfigureAwait(false);
+                    EndScriptedMigration(script, migration, transactional);
+                }
+
+                return script.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Generates a SQL script for a range of registered migrations regardless of the database history: every migration
+        /// whose Id is ordinally greater than <paramref name="fromId"/> and less than or equal to <paramref name="toId"/>,
+        /// in Id order, each followed by its history insert. Useful to script the upgrade between two released versions.
+        /// A database connection is still opened because <see cref="MigrationContext.EnsureSchema(Type[])"/> reads the
+        /// current schema. Nothing is executed.
+        /// </summary>
+        /// <param name="fromId">Exclusive lower bound; null starts with the first registered migration.</param>
+        /// <param name="toId">Inclusive upper bound; null ends with the last registered migration.</param>
+        /// <returns>The script.</returns>
+        /// <exception cref="ArgumentException">Thrown when both bounds are given and <paramref name="fromId"/> sorts after <paramref name="toId"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        public string GenerateScript(string? fromId, string? toId)
+        {
+            List<Migration> range = SelectRange(fromId, toId);
+            using MigrationSession session = MigrationSession.Open(CreateExecutor());
+            StringBuilder script = StartScript();
+            foreach (Migration migration in range)
+            {
+                bool transactional = BeginScriptedMigration(script, migration);
+                migration.Up(new MigrationContext(session, migration, script));
+                EndScriptedMigration(script, migration, transactional);
+            }
+
+            return script.ToString();
+        }
+
+        /// <summary>
+        /// Generates a SQL script for a range of registered migrations regardless of the database history.
+        /// See <see cref="GenerateScript(string, string)"/>.
+        /// </summary>
+        /// <param name="fromId">Exclusive lower bound; null starts with the first registered migration.</param>
+        /// <param name="toId">Inclusive upper bound; null ends with the last registered migration.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The script.</returns>
+        /// <exception cref="ArgumentException">Thrown when both bounds are given and <paramref name="fromId"/> sorts after <paramref name="toId"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when a migration reads data while scripting.</exception>
+        public async Task<string> GenerateScriptAsync(string? fromId, string? toId, CancellationToken token = default)
+        {
+            List<Migration> range = SelectRange(fromId, toId);
+            MigrationSession session = await MigrationSession.OpenAsync(CreateExecutor(), token).ConfigureAwait(false);
+            await using (session.ConfigureAwait(false))
+            {
+                StringBuilder script = StartScript();
+                foreach (Migration migration in range)
                 {
                     bool transactional = BeginScriptedMigration(script, migration);
                     await migration.UpAsync(new MigrationContext(session, migration, script), token).ConfigureAwait(false);
@@ -630,6 +685,16 @@ namespace Durable.Sql
                 await session.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
+        }
+
+        private List<Migration> SelectRange(string? fromId, string? toId)
+        {
+            if (fromId != null && toId != null && string.CompareOrdinal(fromId, toId) > 0)
+                throw new ArgumentException("The script range starts at '" + fromId + "', which sorts after its end '" + toId + "'.", nameof(fromId));
+            return Migrations
+                .Where(m => fromId == null || string.CompareOrdinal(m.Id, fromId) > 0)
+                .Where(m => toId == null || string.CompareOrdinal(m.Id, toId) <= 0)
+                .ToList();
         }
 
         private List<Migration> PlanRollback(List<AppliedMigration> history, string? targetId)

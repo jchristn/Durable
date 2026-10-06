@@ -44,6 +44,21 @@ namespace Durable.Sql
         #region Public-Methods
 
         /// <summary>
+        /// Renders the statement as standalone SQL with every parameter replaced by a literal formatted by the dialect
+        /// (<see cref="ISqlDialect.FormatLiteral"/>), the same way migration scripts are written. Intended for reviewable
+        /// scripts and generated code containing DDL; prefer parameters when executing statements that carry user data.
+        /// </summary>
+        /// <param name="dialect">Dialect used to format literals. Must not be null.</param>
+        /// <returns>The SQL text with literals in place of parameters.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="dialect"/> is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when a parameter value cannot be rendered as a literal.</exception>
+        public string ToInlineSql(ISqlDialect dialect)
+        {
+            ArgumentNullException.ThrowIfNull(dialect);
+            return MigrationScriptWriter.Inline(dialect, this);
+        }
+
+        /// <summary>
         /// Renders the command text with parameter values substituted, for diagnostics only. Never execute the result.
         /// </summary>
         /// <returns>Readable SQL.</returns>

@@ -152,6 +152,33 @@ namespace Durable.Sql
             }
         }
 
+        /// <summary>
+        /// Lists the user tables of the current schema/database, ordered by name (system tables excluded).
+        /// </summary>
+        /// <returns>The table names.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect does not support table enumeration.</exception>
+        public List<string> ReadTableNames()
+        {
+            using MigrationSession session = MigrationSession.Open(_Executor);
+            return session.Query(Dialect.TableNamesQuery(), "SCHEMA", r => ReadString(r, 0));
+        }
+
+        /// <summary>
+        /// Lists the user tables of the current schema/database, ordered by name (system tables excluded).
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The table names.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect does not support table enumeration.</exception>
+        public async Task<List<string>> ReadTableNamesAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            MigrationSession session = await MigrationSession.OpenAsync(_Executor, token).ConfigureAwait(false);
+            await using (session.ConfigureAwait(false))
+            {
+                return await session.QueryAsync(Dialect.TableNamesQuery(), "SCHEMA", r => ReadString(r, 0), token).ConfigureAwait(false);
+            }
+        }
+
         #endregion
 
         #region Private-Methods
@@ -227,7 +254,8 @@ namespace Durable.Sql
                 ReadInt64(reader, 2) == 1,
                 ReadLength(reader, 3),
                 ReadInt64(reader, 4) == 1,
-                0);
+                0,
+                reader.FieldCount > 5 && ReadInt64(reader, 5) == 1);
         }
 
         private static IndexColumnRow ReadIndexColumnRow(DbDataReader reader)
@@ -246,7 +274,7 @@ namespace Durable.Sql
             for (int i = 0; i < columns.Count; i++)
             {
                 ColumnSchema c = columns[i];
-                ordered.Add(new ColumnSchema(c.Name, c.DataType, c.IsNullable, c.MaxLength, c.IsPrimaryKey, i));
+                ordered.Add(new ColumnSchema(c.Name, c.DataType, c.IsNullable, c.MaxLength, c.IsPrimaryKey, i, c.IsAutoIncrement));
             }
 
             List<IndexSchema> indexes = new List<IndexSchema>();

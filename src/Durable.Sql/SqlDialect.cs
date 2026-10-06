@@ -317,6 +317,12 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        public virtual SqlStatement TableNamesQuery()
+        {
+            throw new NotSupportedException(RepositoryType.DisplayName + " does not support table enumeration.");
+        }
+
+        /// <inheritdoc />
         public virtual SqlStatement IndexSchemaQuery(string tableName)
         {
             throw new NotSupportedException(RepositoryType.DisplayName + " does not support index schema introspection.");

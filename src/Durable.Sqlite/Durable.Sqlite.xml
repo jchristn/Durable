@@ -139,6 +139,9 @@
         <member name="M:Durable.Sqlite.SqliteDialect.ColumnSchemaQuery(System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Sqlite.SqliteDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sqlite.SqliteDialect.IndexSchemaQuery(System.String)">
             <inheritdoc />
         </member>

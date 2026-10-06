@@ -163,8 +163,16 @@ namespace Durable.Sqlite
             return new SqlStatement(
                 "SELECT name, type, CASE WHEN \"notnull\" = 0 THEN 1 ELSE 0 END, " +
                 "CASE WHEN instr(type, '(') > 0 THEN CAST(substr(type, instr(type, '(') + 1) AS INTEGER) ELSE NULL END, " +
-                "CASE WHEN pk > 0 THEN 1 ELSE 0 END FROM pragma_table_info(@p0) ORDER BY cid",
+                "CASE WHEN pk > 0 THEN 1 ELSE 0 END, " +
+                "CASE WHEN pk = 1 AND upper(type) = 'INTEGER' AND (SELECT COUNT(*) FROM pragma_table_info(@p0) WHERE pk > 0) = 1 THEN 1 ELSE 0 END " +
+                "FROM pragma_table_info(@p0) ORDER BY cid",
                 new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement TableNamesQuery()
+        {
+            return new SqlStatement("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name");
         }
 
         /// <inheritdoc />

@@ -335,13 +335,22 @@ namespace Durable.Sql
         /// <summary>
         /// Returns a query describing the columns of a table, one row per column in ordinal order, with the columns:
         /// 0 name (string), 1 declared type including length/precision (string), 2 nullable (1/0),
-        /// 3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0).
+        /// 3 maximum character length (integer, -1 for unbounded/MAX, or null), 4 primary key member (1/0), and optionally
+        /// 5 database-generated key (identity / auto-increment, 1/0; treated as 0 when the column is absent).
         /// Returns no rows when the table does not exist.
         /// </summary>
         /// <param name="tableName">Table name. Must not be null.</param>
         /// <returns>The statement.</returns>
         /// <exception cref="NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
         SqlStatement ColumnSchemaQuery(string tableName);
+
+        /// <summary>
+        /// Returns a query whose first column is the name of each user table in the current schema/database, ordered by
+        /// name. System and internal tables are excluded.
+        /// </summary>
+        /// <returns>The statement.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the dialect does not support schema introspection.</exception>
+        SqlStatement TableNamesQuery();
 
         /// <summary>
         /// Returns a query describing the secondary indexes of a table (excluding the primary key and indexes that back

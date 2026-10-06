@@ -132,6 +132,9 @@
         <member name="M:Durable.Postgres.PostgresDialect.ColumnSchemaQuery(System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Postgres.PostgresDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Postgres.PostgresDialect.IndexSchemaQuery(System.String)">
             <inheritdoc />
         </member>

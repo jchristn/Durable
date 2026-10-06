@@ -159,6 +159,9 @@
         <member name="M:Durable.MySql.MySqlDialect.ColumnSchemaQuery(System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.MySql.MySqlDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.MySql.MySqlDialect.IndexSchemaQuery(System.String)">
             <inheritdoc />
         </member>

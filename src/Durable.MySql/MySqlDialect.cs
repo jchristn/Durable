@@ -223,9 +223,15 @@ namespace Durable.MySql
         {
             return new SqlStatement(
                 "SELECT column_name, column_type, CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END, character_maximum_length, " +
-                "CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END FROM information_schema.columns " +
+                "CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END, CASE WHEN extra LIKE '%auto_increment%' THEN 1 ELSE 0 END FROM information_schema.columns " +
                 "WHERE table_schema = DATABASE() AND table_name = @p0 ORDER BY ordinal_position",
                 new[] { new SqlParameterValue("@p0", tableName) });
+        }
+
+        /// <inheritdoc />
+        public override SqlStatement TableNamesQuery()
+        {
+            return new SqlStatement("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name");
         }
 
         /// <inheritdoc />
