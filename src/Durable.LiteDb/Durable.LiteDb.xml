@@ -1,0 +1,835 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.LiteDb</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.LiteDb.LiteDbBackend">
+            <summary>
+            A LiteDB <see cref="T:Durable.Query.IRepositoryBackend"/>: stores entities in an embedded single-file (or in-memory) LiteDB
+            document database. Use it through <see cref="T:Durable.LiteDb.LiteDbRepository`1"/> (or any <see cref="T:Durable.Query.RepositoryBase`1"/>); one
+            backend wraps one <see cref="T:LiteDB.LiteDatabase"/> and serves every entity type, so includes, navigation predicates and
+            transactions work across repositories that share it. Create one backend per data file and share it.
+            <para>
+            Storage: each entity type is a collection named <see cref="P:Durable.EntityMetadata.TableName"/>; each mapped column is a
+            document field named after the column, built from Durable's <see cref="T:Durable.EntityMetadata"/> (LiteDB's reflection
+            <c>BsonMapper</c> is never used for entities). A single primary key is the document <c>_id</c>; a composite key is
+            stored as its fields plus an <c>_id</c> sub-document of the key parts. Values are stored the way a database driver
+            would (<see cref="T:Durable.IValueConverter"/> provider values, JSON text for JSON columns, enum names or numbers) and encoded
+            losslessly and so that LiteDB orders values like C#: integers as Int32/Int64, decimal (full precision and scale) and
+            ulong as Decimal, float/double as Double, DateTime as the decimal <c>Ticks + Kind / 4</c> (every tick and the
+            <see cref="T:System.DateTimeKind"/> survive; LiteDB's own date type keeps only milliseconds), DateTimeOffset as the decimal
+            <c>UtcTicks + (offset minutes + 840) / 2000</c>, TimeSpan and TimeOnly as Int64 ticks, DateOnly as an Int32 day
+            number, char as a one-character string, Guid, bool, string and byte[] natively. A field missing from a document
+            (for example one written before a column was added) reads as null, which sets a non-nullable property to its default.
+            Auto-increment keys (single integer primary key) come from LiteDB's per-collection sequence, which is atomic, so
+            concurrent creates never share a key; inserting a duplicate primary key throws <see cref="T:System.InvalidOperationException"/>.
+            Foreign key, composite key part and <see cref="T:Durable.IndexAttribute"/> fields get LiteDB indexes when a repository is
+            created (strings only when their <see cref="P:Durable.ColumnMetadata.MaxLength"/> is at most 250, because LiteDB index keys
+            are limited to 1023 bytes; indexes are never unique, so <see cref="P:Durable.IndexAttribute.IsUnique"/> is not enforced).
+            LiteDB collection and field names are case-insensitive: two entities whose table names differ only in case share a
+            collection.
+            </para>
+            <para>
+            Queries: the parts of a filter whose LiteDB semantics are exactly C#'s (comparisons, null checks and IN lists between
+            a column and a value, see <see cref="T:Durable.LiteDb.LiteDbQueryPlan"/>) are pushed down to LiteDB, where indexes apply; everything
+            else (string matching, functions, navigations, ordering, grouping, aggregates) is evaluated client-side with C#
+            semantics over the documents LiteDB returns, so push-down never changes results. Strings: new databases use an
+            ordinal collation, so <see cref="F:Durable.StringMatchMode.Database"/> behaves as <see cref="F:Durable.StringMatchMode.Ordinal"/> (case-
+            and accent-sensitive) and string keys are case-sensitive; for a database created with another collation (an
+            existing file or a <see cref="T:LiteDB.LiteDatabase"/> you pass in), <see cref="P:Durable.LiteDb.LiteDbBackend.HasOrdinalCollation"/> is false, only string
+            equality is pushed down (re-checked client-side), and string primary keys follow that collation. Unordered queries
+            return documents in primary key order.
+            </para>
+            <para>
+            Writes outside a transaction are atomic: each runs in its own LiteDB transaction that takes the collection's write
+            lock before reading, so conditional updates (optimistic concurrency) cannot lose updates. Transactions
+            (<see cref="T:Durable.LiteDb.LiteDbTransaction"/>) run on a dedicated thread, so they work across awaits. A write outside a
+            transaction waits (up to the database timeout) while an open transaction holds the collection's write lock; in
+            <see cref="F:Durable.LiteDb.LiteDbConnectionType.Shared"/> mode an open transaction holds the data file's mutex, so every other
+            operation on the file waits until it ends. LiteDB allows at most 100 concurrently open transactions per database,
+            including the short read transactions of concurrent queries.
+            </para>
+            <para>
+            Asynchrony: LiteDB is synchronous. Operations outside a transaction run synchronously on the calling thread and
+            return completed tasks (like the in-memory backend); operations inside a transaction are queued to the transaction
+            thread and complete asynchronously. Query results are read completely before the first entity is returned.
+            </para>
+            Thread safety: safe for concurrent use by any number of repositories and threads; LiteDB serializes writers per
+            collection and never blocks readers.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.Capabilities">
+            <summary>
+            Gets the optional features the backend supports: all of them.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.Database">
+            <summary>
+            Gets the LiteDB database. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.OwnsDatabase">
+            <summary>
+            Gets whether the backend disposes <see cref="P:Durable.LiteDb.LiteDbBackend.Database"/> when it is disposed (true when the backend opened it from
+            settings, false when the database was passed in).
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.HasOrdinalCollation">
+            <summary>
+            Gets whether the database compares strings ordinally (created by this backend, or otherwise with
+            <see cref="F:LiteDB.Collation.Binary"/>). When false, only string equality is pushed down to LiteDB.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.JsonOptions">
+            <summary>
+            Gets the JSON options used to store JSON columns. Never null.
+            Default: camelCase property names, not indented (the same as the SQL providers).
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.ExplainQueries">
+            <summary>
+            Gets or sets whether each query plan includes LiteDB's own plan (<see cref="P:Durable.LiteDb.LiteDbQueryPlan.LiteDbExplain"/>),
+            which costs an extra optimizer pass per query.
+            Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.LastQueryPlan">
+            <summary>
+            Gets the plan of the most recent read or write executed by any thread, or null before the first one. Use it
+            in single-threaded diagnostics and tests; use <see cref="P:Durable.LiteDb.LiteDbBackend.QueryPlanned"/> to observe every plan.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbBackend.QueryPlanned">
+            <summary>
+            Gets or sets a callback invoked with the plan of every read and write, on the thread that executed it (inside a
+            transaction, the transaction thread); null for none. The callback must be thread-safe, must not throw and must
+            not use this backend.
+            Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.#ctor(Durable.LiteDb.LiteDbRepositorySettings,System.Text.Json.JsonSerializerOptions,Microsoft.Extensions.Logging.ILogger)">
+            <summary>
+            Opens (or creates) a LiteDB database from settings. The backend owns the database and disposes it.
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
+            <param name="logger">Logger for query plans (Debug) and index maintenance problems (Warning); null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:LiteDB.LiteException">Thrown when LiteDB cannot open the database (for example a wrong password or a file locked by another process).</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.#ctor(LiteDB.LiteDatabase,System.Text.Json.JsonSerializerOptions,Microsoft.Extensions.Logging.ILogger)">
+            <summary>
+            Wraps an existing LiteDB database. The backend does not dispose it; dispose it yourself after the backend and its
+            repositories are no longer used.
+            </summary>
+            <param name="database">Database. Must not be null.</param>
+            <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
+            <param name="logger">Logger for query plans (Debug) and index maintenance problems (Warning); null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when database is null.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.CreateRepository``1(Durable.RepositoryOptions)">
+            <summary>
+            Creates a repository over this backend.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>A new repository.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in LiteDB (see <see cref="T:Durable.LiteDb.LiteDbRepository`1"/>).</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.Owns(Durable.ITransaction)">
+            <summary>
+            Determines whether a transaction was created over this backend's database.
+            </summary>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>True when the transaction belongs to this backend's database.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.EnsureIndexes(System.Type)">
+            <summary>
+            Creates the LiteDB indexes of an entity (foreign keys, composite key parts and <see cref="T:Durable.IndexAttribute"/>
+            columns) if they do not exist yet. Repositories call it when they are created; failures are logged, not thrown,
+            because indexes only affect performance.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.GetStoredDocuments(System.Type)">
+            <summary>
+            Returns the stored documents of an entity, in primary key order, for diagnostics and tests that check the stored
+            representation. Soft-deleted documents are included.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>Copies of the documents. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.Clear">
+            <summary>
+            Drops every user collection of the database (all data and indexes). Must not be called while a transaction is open.
+            </summary>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.QueryAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="function"/> is Count or Any.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when an assignment changes a primary key to one that already exists.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.BeginTransaction">
+            <summary>
+            Begins a transaction (see <see cref="T:Durable.LiteDb.LiteDbTransaction"/>).
+            </summary>
+            <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+            <exception cref="T:LiteDB.LiteException">Thrown when LiteDB cannot begin a transaction (for example 100 are already open).</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBackend.Dispose">
+            <summary>
+            Disposes the backend and, when <see cref="P:Durable.LiteDb.LiteDbBackend.OwnsDatabase"/> is true, the database. Repositories over the backend can
+            no longer be used.
+            </summary>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbBsonCodec">
+            <summary>
+            Encodes stored values (see <see cref="T:Durable.LiteDb.LiteDbValueConverter"/>) as <see cref="T:LiteDB.BsonValue"/>s and decodes them back,
+            losslessly. Encodings are chosen so that LiteDB orders and compares values of one stored type exactly as C# does:
+            <list type="bullet">
+            <item><description>string and char: BSON string; bool: boolean; Guid: guid; byte[]: binary.</description></item>
+            <item><description>byte, sbyte, short, ushort, int: Int32; uint, long: Int64; ulong and decimal: Decimal (decimal keeps its scale); float and double: Double.</description></item>
+            <item><description>DateTime: Decimal <c>Ticks + Kind / 4</c>, so ticks (the C# comparison key) order the values and the kind round-trips (LiteDB's own date type keeps only milliseconds in UTC).</description></item>
+            <item><description>DateTimeOffset: Decimal <c>UtcTicks + (Offset.TotalMinutes + 840) / 2000</c>, ordered by the UTC instant like C#, keeping the offset.</description></item>
+            <item><description>TimeSpan and TimeOnly: Int64 ticks; DateOnly: Int32 day number.</description></item>
+            </list>
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.Encode(System.Object)">
+            <summary>
+            Encodes a stored value.
+            </summary>
+            <param name="value">Stored value; may be null.</param>
+            <returns>The BSON value (<see cref="F:LiteDB.BsonValue.Null"/> for null). Never null.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the value's type has no BSON encoding.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.Decode(LiteDB.BsonValue,System.Type)">
+            <summary>
+            Decodes a BSON value into a stored value of a type.
+            </summary>
+            <param name="value">BSON value; null or <see cref="F:LiteDB.BsonValue.Null"/> decode to null.</param>
+            <param name="storedType">Stored type (see <see cref="M:Durable.LiteDb.LiteDbValueConverter.StoredType(Durable.ColumnMetadata)"/>). Must not be null.</param>
+            <returns>The stored value, or null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the BSON value cannot represent the stored type.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.IsPlain(System.Type)">
+            <summary>
+            Returns whether values of a stored type are encoded so that LiteDB equality and ordering (between values of that
+            type) are exactly C#'s: every encoded type except DateTime, DateTimeOffset (see <see cref="M:Durable.LiteDb.LiteDbBsonCodec.IsRanged(System.Type)"/>), byte
+            arrays and strings (which depend on the database collation).
+            </summary>
+            <param name="storedType">Stored type. Must not be null.</param>
+            <returns>True for directly comparable encodings.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.IsIntegral(System.Type)">
+            <summary>
+            Returns whether a type is an integral number type (LiteDB compares integers of different widths exactly).
+            </summary>
+            <param name="type">Type. Must not be null.</param>
+            <returns>True for byte, sbyte, short, ushort, int, uint, long and ulong.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.IsString(System.Type)">
+            <summary>
+            Returns whether a stored type is a string-like type (string, char) compared with the database collation.
+            </summary>
+            <param name="storedType">Stored type. Must not be null.</param>
+            <returns>True for string and char.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.IsRanged(System.Type)">
+            <summary>
+            Returns whether a stored type is encoded as a decimal whose integral part is the C# comparison key and whose
+            fraction carries extra information (DateTime kind, DateTimeOffset offset): equal C# values are a range of encoded values.
+            </summary>
+            <param name="storedType">Stored type. Must not be null.</param>
+            <returns>True for DateTime and DateTimeOffset.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbBsonCodec.RangeKey(System.Object)">
+            <summary>
+            Returns the comparison key of a ranged value: the ticks of a DateTime, the UTC ticks of a DateTimeOffset.
+            </summary>
+            <param name="value">DateTime or DateTimeOffset. Must not be null.</param>
+            <returns>The key.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the value is not ranged.</exception>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbCollectionSchema">
+            <summary>
+            How an entity is stored in a LiteDB collection: the collection is <see cref="P:Durable.EntityMetadata.TableName"/>; each
+            column is a document field named after the column, except a single primary key, which is stored as the document
+            <c>_id</c>; a composite key is stored both as its fields and as an <c>_id</c> sub-document holding the key parts in
+            key order. Auto-increment is supported for a single integral primary key (generated by LiteDB's per-collection
+            sequence). Also lists the fields that get secondary indexes: foreign keys, composite key parts and
+            <see cref="T:Durable.IndexAttribute"/> columns whose values are bounded (non-string types, or strings with a
+            <see cref="P:Durable.ColumnMetadata.MaxLength"/> of at most <see cref="F:Durable.LiteDb.LiteDbCollectionSchema.MaxIndexedStringLength"/>).
+            Thread safety: immutable once built; <see cref="M:Durable.LiteDb.LiteDbCollectionSchema.For(Durable.EntityMetadata)"/> is thread-safe.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteDb.LiteDbCollectionSchema.IdField">
+            <summary>
+            The document field holding the primary key.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteDb.LiteDbCollectionSchema.MaxIndexedStringLength">
+            <summary>
+            The longest string column (in characters) that gets a secondary index; LiteDB index keys are limited to 1023 bytes.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbCollectionSchema.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbCollectionSchema.CollectionName">
+            <summary>
+            Gets the collection name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbCollectionSchema.SingleKey">
+            <summary>
+            Gets whether the key is stored as the document <c>_id</c> directly (a single key column).
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbCollectionSchema.AutoId">
+            <summary>
+            Gets the LiteDB auto-id mode for generated keys, or null when the entity has no auto-increment column.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbCollectionSchema.IndexedColumns">
+            <summary>
+            Gets the columns that get secondary indexes, with their index names. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.For(Durable.EntityMetadata)">
+            <summary>
+            Returns the cached schema of an entity.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The schema.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in LiteDB (invalid collection name, reserved or colliding field names, unsupported auto-increment).</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.Field(Durable.ColumnMetadata)">
+            <summary>
+            Returns the document field of a column.
+            </summary>
+            <param name="column">Column of this entity. Must not be null.</param>
+            <returns>The field name.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the column does not belong to the entity.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.StoredType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the stored type of a column (see <see cref="M:Durable.LiteDb.LiteDbValueConverter.StoredType(Durable.ColumnMetadata)"/>).
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The stored type.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.Path(Durable.ColumnMetadata)">
+            <summary>
+            Returns the LiteDB path expression of a column's field, for example <c>$.["name"]</c>.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The path expression.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.FieldPath(System.String)">
+            <summary>
+            Returns the LiteDB path expression of a field.
+            </summary>
+            <param name="field">Field name. Must not be null.</param>
+            <returns>The path expression.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbCollectionSchema.Id(System.Object[])">
+            <summary>
+            Builds the document <c>_id</c> of a key.
+            </summary>
+            <param name="storedKey">Stored key values in key order. Must not be null; no part may be null.</param>
+            <returns>The _id value.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a key part is null.</exception>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbConnectionType">
+            <summary>
+            How a file-backed LiteDB database is opened.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteDb.LiteDbConnectionType.Direct">
+            <summary>
+            The process opens the data file exclusively and keeps it open (fastest; one process per file). Default.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteDb.LiteDbConnectionType.Shared">
+            <summary>
+            The data file is opened and closed around every operation under a named system mutex, so several processes can
+            share one file. Slower than <see cref="F:Durable.LiteDb.LiteDbConnectionType.Direct"/>.
+            </summary>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbPushdown">
+            <summary>
+            Translates the parts of a <see cref="T:Durable.Query.QueryNode"/> filter whose LiteDB semantics are exactly C#'s into LiteDB
+            <see cref="T:LiteDB.BsonExpression"/> predicates. The filter is split into AND-ed conjuncts; each conjunct is translated when
+            it is a comparison, null check or <c>Contains</c> (IN) between a column of the queried source and a client-side
+            value (or an AND/OR of such), and left to client-side evaluation otherwise. Every pushed predicate is a necessary
+            condition of the filter (so evaluating the full filter client-side afterwards never changes results); when every
+            conjunct translated exactly, <see cref="P:Durable.LiteDb.LiteDbPushdown.Exact"/> is true and LiteDB's result is final.
+            <para>
+            Exactness rules: parameters are converted to the column's stored form and must have the column's stored type;
+            comparisons with a value of another type are not pushed. Numbers, bool, Guid, TimeSpan, DateOnly and TimeOnly
+            compare exactly. DateTime and DateTimeOffset compare by their integral tick key (see <see cref="T:Durable.LiteDb.LiteDbBsonCodec"/>).
+            Strings and chars compare exactly only when the database collation is ordinal and the comparison is ordinal
+            (<see cref="F:Durable.StringMatchMode.Database"/> or <see cref="F:Durable.StringMatchMode.Ordinal"/>); with another collation only
+            equality and IN are pushed, as a superset, and the filter is re-evaluated client-side. Because LiteDB orders null
+            below every value, <c>&lt;</c> and <c>&lt;=</c> are pushed with an explicit <c>!= null</c> guard. Byte arrays,
+            case-insensitive matches, string functions, navigations and arithmetic are always evaluated client-side.
+            </para>
+            Thread safety: immutable once built; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbPushdown.Predicates">
+            <summary>
+            Gets the pushed predicates (ANDed). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbPushdown.Parameters">
+            <summary>
+            Gets the parameters referenced by the predicates. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbPushdown.Exact">
+            <summary>
+            Gets whether the predicates are exactly the filter.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbPushdown.Any">
+            <summary>
+            Gets whether anything was pushed.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbPushdown.Translate(Durable.Query.QuerySource,Durable.Query.QueryNode,Durable.LiteDb.LiteDbCollectionSchema,Durable.LiteDb.LiteDbValueConverter,System.Boolean)">
+            <summary>
+            Translates a filter.
+            </summary>
+            <param name="source">Source the filter's own columns refer to. Must not be null.</param>
+            <param name="filter">Filter; null pushes nothing and is exact.</param>
+            <param name="schema">Schema of the source's entity. Must not be null.</param>
+            <param name="values">Value converter. Must not be null.</param>
+            <param name="ordinalStrings">Whether the database collation is ordinal.</param>
+            <returns>The translation. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbPushdown.Combined">
+            <summary>
+            Builds one LiteDB expression ANDing every predicate.
+            </summary>
+            <returns>The expression, or null when nothing was pushed.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbPushdown.ParametersJson">
+            <summary>
+            Returns the parameters as JSON for diagnostics.
+            </summary>
+            <returns>The JSON, or null when there are no parameters.</returns>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbQueryEvaluator">
+            <summary>
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees client-side against LiteDB documents with the C# semantics of
+            <see cref="T:Durable.Query.QueryEvaluator`1"/>: everything a <see cref="T:Durable.LiteDb.LiteDbBackend"/> does not push down (residual
+            predicates, navigations, collection predicates, computed values, ordering, paging and aggregates). Values are
+            compared in their stored form (enum names, converter provider values, JSON text): fields are decoded with
+            <see cref="T:Durable.LiteDb.LiteDbBsonCodec"/> and parameter values converted with <see cref="M:Durable.LiteDb.LiteDbValueConverter.ToStored(Durable.ColumnMetadata,System.Object)"/>.
+            Related documents are read from LiteDB by <c>_id</c> or by an indexed field and cached for the evaluator's lifetime.
+            Thread safety: not thread-safe; create one per operation and use it on the thread that runs the operation.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryEvaluator.#ctor(LiteDB.LiteDatabase,Durable.LiteDb.LiteDbValueConverter)">
+            <summary>
+            Instantiates an evaluator.
+            </summary>
+            <param name="database">Database related documents are read from. Must not be null.</param>
+            <param name="values">Value converter. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryEvaluator.GetValue(Durable.EntityMetadata,LiteDB.BsonDocument,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryEvaluator.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryEvaluator.NormalizeValue(Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbQueryPlan">
+            <summary>
+            Describes how a <see cref="T:Durable.LiteDb.LiteDbBackend"/> executed one read or write: which parts of the filter were pushed down to
+            LiteDB as <c>BsonExpression</c> predicates (where LiteDB can use indexes), whether anything was evaluated client-side
+            afterwards, and whether paging or counting ran inside LiteDB. Pushed predicates are always necessary conditions of the
+            query, so client-side evaluation can only remove documents; when <see cref="P:Durable.LiteDb.LiteDbQueryPlan.Exact"/> is true the pushed predicates are
+            the whole filter. Observe plans with <see cref="P:Durable.LiteDb.LiteDbBackend.LastQueryPlan"/>, <see cref="P:Durable.LiteDb.LiteDbBackend.QueryPlanned"/>
+            or the backend's logger (Debug level).
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.Operation">
+            <summary>
+            Gets the operation: Query, Count, Aggregate, Replace, Update or Delete. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.Collection">
+            <summary>
+            Gets the LiteDB collection. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.PushedPredicates">
+            <summary>
+            Gets the predicates pushed down to LiteDB (ANDed), with parameters shown as <c>@pN</c>. Never null; empty when
+            every document of the collection was read.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.Parameters">
+            <summary>
+            Gets the LiteDB parameters of the pushed predicates as JSON, or null when there are none.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.Exact">
+            <summary>
+            Gets whether the pushed predicates are exactly the filter (nothing was evaluated client-side).
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.ClientSide">
+            <summary>
+            Gets the client-side part of the query (residual filter, ordering, paging) in Durable's neutral notation, or
+            null when LiteDB evaluated everything.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.PagingPushedDown">
+            <summary>
+            Gets whether Skip/Take (or counting) ran inside LiteDB.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.DocumentsRead">
+            <summary>
+            Gets the number of documents LiteDB returned (before client-side evaluation); -1 when LiteDB only counted.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbQueryPlan.LiteDbExplain">
+            <summary>
+            Gets LiteDB's own plan (index choice and cost, from <c>ILiteQueryable.GetPlan</c>) as JSON when
+            <see cref="P:Durable.LiteDb.LiteDbBackend.ExplainQueries"/> is enabled; otherwise null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryPlan.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Boolean,System.String,System.Boolean,System.Int64,System.String)">
+            <summary>
+            Instantiates a plan.
+            </summary>
+            <param name="operation">Operation. Must not be null.</param>
+            <param name="collection">Collection. Must not be null.</param>
+            <param name="pushedPredicates">Pushed predicates. Must not be null.</param>
+            <param name="parameters">Parameters as JSON; may be null.</param>
+            <param name="exact">Whether the pushed predicates are the whole filter.</param>
+            <param name="clientSide">Client-side part; may be null.</param>
+            <param name="pagingPushedDown">Whether paging or counting ran in LiteDB.</param>
+            <param name="documentsRead">Documents returned by LiteDB, or -1.</param>
+            <param name="liteDbExplain">LiteDB plan JSON; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when operation, collection or pushedPredicates is null.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbQueryPlan.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbRepository`1">
+            <summary>
+            A repository stored in LiteDB: the complete <see cref="T:Durable.IRepository`1"/> surface from <see cref="T:Durable.Query.RepositoryBase`1"/>
+            over a <see cref="T:Durable.LiteDb.LiteDbBackend"/>. Repositories created over the same backend (or the same
+            <see cref="T:LiteDB.LiteDatabase"/>) share data, so includes, navigation predicates and transactions work across entity types.
+            An ambient <see cref="T:Durable.TransactionScope"/> is used only when its transaction was created over the same database.
+            Creating a repository validates the entity's LiteDB mapping and creates its indexes.
+            <para>
+            Entities that cannot be stored (reported with <see cref="T:System.NotSupportedException"/> by the constructor): a table name
+            that is not a LiteDB collection name (letters, digits, '_' and '$', not starting with a digit or '$'), two columns
+            whose names differ only in case (LiteDB field names are case-insensitive), a column named <c>_id</c> that is not the
+            single primary key, and an auto-increment column that is not a single integer primary key.
+            </para>
+            Thread safety: safe for concurrent use once configured (see <see cref="T:Durable.Query.RepositoryBase`1"/>).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepository`1.Store">
+            <summary>
+            Gets the LiteDB backend. Never null. The repository does not own or dispose it.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepository`1.#ctor(Durable.LiteDb.LiteDbBackend,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository over a backend shared with other repositories.
+            </summary>
+            <param name="backend">Backend. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepository`1.#ctor(LiteDB.LiteDatabase,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository over an existing LiteDB database, which it does not dispose. Prefer one
+            <see cref="T:Durable.LiteDb.LiteDbBackend"/> shared by all repositories; repositories created over the same database with this
+            constructor still share data and transactions.
+            </summary>
+            <param name="database">Database. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when database is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepository`1.AcceptsAmbientTransaction(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbRepositorySettings">
+            <summary>
+            Strongly-typed settings for opening a LiteDB database for a <see cref="T:Durable.LiteDb.LiteDbBackend"/>: the data file (or
+            <see cref="F:Durable.LiteDb.LiteDbRepositorySettings.InMemoryFilename"/> for a database held in memory), password, connection type, lock timeout, read-only
+            mode and initial size. New databases are created with an ordinal (binary) string collation so that string
+            comparisons, keys and indexes behave like C# ordinal comparisons; the collation of an existing data file is never
+            changed (see <see cref="P:Durable.LiteDb.LiteDbBackend.HasOrdinalCollation"/>).
+            Thread safety: not thread-safe while being configured; treat as immutable once passed to a backend.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteDb.LiteDbRepositorySettings.InMemoryFilename">
+            <summary>
+            The filename that selects a database held in memory (a <see cref="T:System.IO.MemoryStream"/>), discarded when the
+            backend is disposed.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.Filename">
+            <summary>
+            Gets or sets the data file path, or <see cref="F:Durable.LiteDb.LiteDbRepositorySettings.InMemoryFilename"/> for an in-memory database.
+            Default: <see cref="F:Durable.LiteDb.LiteDbRepositorySettings.InMemoryFilename"/>.
+            </summary>
+            <exception cref="T:System.ArgumentNullException">Thrown when value is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when value is empty or whitespace.</exception>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.IsInMemory">
+            <summary>
+            Gets whether <see cref="P:Durable.LiteDb.LiteDbRepositorySettings.Filename"/> selects an in-memory database.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.Password">
+            <summary>
+            Gets or sets the password used to encrypt the data file (AES); null for an unencrypted file.
+            Default: null.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when value is empty.</exception>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.ConnectionType">
+            <summary>
+            Gets or sets how the data file is opened. Ignored for in-memory databases.
+            Default: <see cref="F:Durable.LiteDb.LiteDbConnectionType.Direct"/>.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is not a defined connection type.</exception>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.Timeout">
+            <summary>
+            Gets or sets how long an operation waits for a lock (for example a collection written by an open transaction)
+            before failing. LiteDB stores it in whole seconds (the value is rounded down) as a pragma of the data file; it is
+            applied when the backend opens a writable database.
+            Default: 1 minute. Minimum: 1 second. Maximum: 1 hour.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.ReadOnly">
+            <summary>
+            Gets or sets whether the data file is opened read-only (writes fail). Ignored for in-memory databases.
+            Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.InitialSizeBytes">
+            <summary>
+            Gets or sets the initial size, in bytes, of a newly created data file; 0 lets the file grow on demand.
+            Default: 0. Minimum: 0.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is negative.</exception>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbRepositorySettings.Upgrade">
+            <summary>
+            Gets or sets whether a LiteDB v4 data file is upgraded to the v5 format when opened.
+            Default: false.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.#ctor">
+            <summary>
+            Instantiates settings for an in-memory database.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.#ctor(System.String)">
+            <summary>
+            Instantiates settings for a data file.
+            </summary>
+            <param name="filename">Data file path, or <see cref="F:Durable.LiteDb.LiteDbRepositorySettings.InMemoryFilename"/>. Must not be null or empty.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when filename is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when filename is empty or whitespace.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.InMemory">
+            <summary>
+            Creates settings for an in-memory database.
+            </summary>
+            <returns>The settings.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.ForFile(System.String)">
+            <summary>
+            Creates settings for a data file.
+            </summary>
+            <param name="filename">Data file path. Must not be null or empty.</param>
+            <returns>The settings.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when filename is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when filename is empty or whitespace.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.ToConnectionString">
+            <summary>
+            Builds the LiteDB connection string for these settings. New databases are created with the binary (ordinal)
+            collation.
+            </summary>
+            <returns>The connection string. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbRepositorySettings.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbTransaction">
+            <summary>
+            A LiteDB transaction usable from asynchronous code. LiteDB binds a transaction (and its locks) to the thread that
+            began it, which breaks when an <c>await</c> resumes on another thread; this transaction therefore owns a dedicated
+            thread that begins the LiteDB transaction and runs every operation performed with it, in order, until it is
+            committed, rolled back or disposed. Callers on any thread (and any number of awaits) can use it; their operations
+            are queued to that thread and complete asynchronously.
+            <para>
+            Semantics are LiteDB's: reads inside the transaction see its own writes; other readers see committed data only and
+            are never blocked; the first write to a collection takes that collection's write lock until the transaction ends, so
+            other writers to the same collection wait (up to the database timeout, then fail). In
+            <see cref="F:Durable.LiteDb.LiteDbConnectionType.Shared"/> mode the transaction holds the data file's mutex until it ends, so every
+            other operation on the file (from any thread or process) waits for it; do not await non-transactional operations on
+            the same file while it is open. If an operation inside the
+            transaction fails inside LiteDB, LiteDB rolls the whole transaction back; this transaction then rejects further
+            operations and <see cref="M:Durable.LiteDb.LiteDbTransaction.Commit"/> with <see cref="T:System.InvalidOperationException"/> (rollback and dispose still succeed).
+            Disposing an uncommitted transaction rolls it back. Always dispose transactions: an abandoned transaction keeps its
+            thread and its locks. LiteDB allows at most 100 open transactions per database.
+            </para>
+            Thread safety: like every <see cref="T:Durable.ITransaction"/>, do not use one transaction from several threads at once;
+            operations are nevertheless serialized on the transaction thread.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbTransaction.IsCompleted">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbTransaction.Backend">
+            <summary>
+            Gets the backend that created the transaction. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.Commit">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has completed, or was rolled back because an operation inside it failed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.Rollback">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has already completed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.CommitAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has completed, or was rolled back because an operation inside it failed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.RollbackAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction has already completed.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.Dispose">
+            <summary>
+            Disposes the transaction, rolling it back when it was not completed, and ends its thread.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbTransaction.DisposeAsync">
+            <summary>
+            Disposes the transaction, rolling it back when it was not completed, and ends its thread.
+            </summary>
+            <returns>A task that completes when the transaction was rolled back.</returns>
+        </member>
+        <member name="T:Durable.LiteDb.LiteDbValueConverter">
+            <summary>
+            Converts between entity property values and the stored values of a <see cref="T:Durable.LiteDb.LiteDbBackend"/> (before BSON
+            encoding by <see cref="T:Durable.LiteDb.LiteDbBsonCodec"/>), the way a database driver would: per-property
+            <see cref="T:Durable.IValueConverter"/>s store their provider value; JSON columns store serialized text; enums store their name
+            (or their numeric value as <see cref="T:System.Int64"/> with <see cref="F:Durable.Flags.Integer"/>); byte arrays are copied; other values
+            are stored in the column's CLR type. The stored form is also the form queries compare values in.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteDb.LiteDbValueConverter.JsonOptions">
+            <summary>
+            Gets the JSON options used for JSON columns. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbValueConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates a converter.
+            </summary>
+            <param name="jsonOptions">JSON options. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when jsonOptions is null.</exception>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbValueConverter.StoredType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the CLR type a column's values are stored (and compared) as.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The stored type: the converter's provider type, string for JSON columns and name-stored enums, long for integer-stored enums, otherwise the column type.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbValueConverter.ToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a property (model) value to its stored value. Integral values for enum columns are converted to the
+            enum first, as SQL parameters are.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Model value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbValueConverter.ComputedToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a value computed by a query expression (already in the stored domain, or a plain CLR value) to the
+            stored representation of a column, applying a converter only to values of the converter's model type.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Computed value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.LiteDb.LiteDbValueConverter.FromStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a stored value back to a property value.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="stored">Stored value; may be null.</param>
+            <returns>The property value, or null.</returns>
+        </member>
+    </members>
+</doc>

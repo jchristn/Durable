@@ -108,6 +108,10 @@ namespace Test.Shared
                         suites.Add(conformance);
                     foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new InMemoryConformanceTarget(RepositoryCapabilities.None), "Conformance.InMemoryMinimal", new List<string> { providerTag, "conformance", "inmemory" }))
                         suites.Add(conformance);
+
+                    // The same kit against the LiteDB backend (in-memory LiteDB database).
+                    foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new LiteDbConformanceTarget(), "Conformance.LiteDb", new List<string> { providerTag, "conformance", "litedb" }))
+                        suites.Add(conformance);
                 }
 
                 // Backend-neutral RepositoryBase over the in-memory backend (no database; runs in every provider configuration).
@@ -117,6 +121,7 @@ namespace Test.Shared
                 suites.Add(TouchstoneBridge.BuildSuite<InMemoryIncludeTestSuite>("InMemory.Include", "In-Memory Include Tests", () => new InMemoryIncludeTestSuite(), inMemoryTags));
                 suites.Add(TouchstoneBridge.BuildSuite<InMemoryTransactionTestSuite>("InMemory.Transaction", "In-Memory Transaction / Isolation Tests", () => new InMemoryTransactionTestSuite(), inMemoryTags));
                 suites.Add(TouchstoneBridge.BuildSuite<InMemoryCapabilityTestSuite>("InMemory.Capability", "In-Memory Capability Masking Tests", () => new InMemoryCapabilityTestSuite(), inMemoryTags));
+                suites.Add(TouchstoneBridge.BuildSuite<LiteDbBackendTestSuite>("LiteDb.Backend", "LiteDB Backend (Persistence / Push-down / Precision / Concurrency / Transactions) Tests", () => new LiteDbBackendTestSuite(), new List<string> { providerTag, "litedb" }));
                 suites.Add(SharedSuite<InMemorySqlParityTestSuite>("InMemory.SqlParity", "In-Memory vs SQL Parity Tests", providerTag, BeforeEach));
 
                 // Provider-specific unit suites.

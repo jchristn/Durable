@@ -64,6 +64,28 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// Char constants, which C# promotes to int when comparing them with a char column, become chars again, so
+        /// backends compare them by the column's rules; integers outside the char range stay integers.
+        /// </summary>
+        [Fact]
+        public void CharConstantsComparedWithCharColumnsStayChars()
+        {
+            ComparisonNode node = Assert.IsType<ComparisonNode>(Normalize<LiteDbPrecisionItem>(x => x.Letter == 'e'));
+            ValueNode value = Assert.IsType<ValueNode>(node.Right);
+            Assert.Equal('e', value.Value);
+            Assert.Equal(typeof(char), value.ClrType);
+
+            ComparisonNode outOfRange = Assert.IsType<ComparisonNode>(Normalize<LiteDbPrecisionItem>(x => x.Letter < 70000));
+            Assert.Equal(70000, Assert.IsType<ValueNode>(outOfRange.Right).Value);
+
+            Durable.InMemory.InMemoryRepository<LiteDbPrecisionItem> repository = new Durable.InMemory.InMemoryBackend().CreateRepository<LiteDbPrecisionItem>();
+            repository.Create(new LiteDbPrecisionItem { Code = "x", Letter = 'e' });
+            Assert.Equal(1L, repository.Count(x => x.Letter == 'e'));
+            Assert.Equal(1L, repository.Count(x => x.Letter >= 'a' && x.Letter < 'f'));
+            Assert.Equal(0L, repository.Count(x => x.Letter > 'e'));
+        }
+
+        /// <summary>
         /// Explicit StringComparison arguments set the mode; otherwise the normalizer's default applies.
         /// </summary>
         [Fact]

@@ -440,6 +440,19 @@ namespace Durable.Query
         {
             if (value != null && column != null && column.IsEnum && column.Converter == null && !value.GetType().IsEnum && IsIntegral(value))
                 value = Enum.ToObject(column.ClrType, value);
+
+            // C# compares a char with a char constant as integers (x.Letter == 'a' is (int)x.Letter == 97); restore the
+            // char so backends compare and convert it by the column's rules.
+            if (value != null && column != null && column.ClrType == typeof(char) && column.Converter == null && value is not char && IsIntegral(value))
+            {
+                decimal code = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                if (code >= char.MinValue && code <= char.MaxValue)
+                {
+                    value = (char)code;
+                    type = typeof(char);
+                }
+            }
+
             return new ValueNode(value, column, type);
         }
 
