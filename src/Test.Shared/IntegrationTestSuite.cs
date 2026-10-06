@@ -54,7 +54,7 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
 
-            int rowsAffected = await repository.ExecuteSqlAsync(
+            int rowsAffected = await repository.ExecuteSqlRawAsync(
                 "DELETE FROM people WHERE email = 'connectivity-test@example.com'"
             );
 
@@ -68,7 +68,7 @@ namespace Test.Shared
         public async Task CanPerformCrudOperations()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person person = new Person
             {
@@ -126,7 +126,7 @@ namespace Test.Shared
         public async Task CanQueryWithWhereConditions()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
             {
@@ -161,7 +161,7 @@ namespace Test.Shared
         public async Task CanOrderResults()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
             {
@@ -200,7 +200,7 @@ namespace Test.Shared
         public async Task CanPaginateResults()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[10];
             for (int i = 0; i < 10; i++)
@@ -244,7 +244,7 @@ namespace Test.Shared
         public async Task CanCountRecords()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             long initialCount = await repository.CountAsync();
             Assert.Equal(0, initialCount);
@@ -272,7 +272,7 @@ namespace Test.Shared
         public async Task CanUpsertRecords()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person person = new Person
             {
@@ -307,7 +307,7 @@ namespace Test.Shared
         public async Task CanBulkDelete()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new[]
             {

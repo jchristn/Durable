@@ -138,7 +138,7 @@ namespace Test.Shared
                 CreatedUtc = DateTime.UtcNow
             });
 
-            string? displayName = await repository.ExecuteScalarAsync<string>("SELECT display_name FROM rel_snake_case_gadget WHERE id = @p0", null, default, gadget.Id);
+            string? displayName = await repository.ExecuteScalarRawAsync<string>("SELECT display_name FROM rel_snake_case_gadget WHERE id = {0}", new object?[] { gadget.Id });
             Assert.Equal("Snake", displayName);
 
             RelSnakeCaseGadget? loaded = await repository.ReadFirstAsync(g => g.DisplayName == "Snake" && g.IsActive);

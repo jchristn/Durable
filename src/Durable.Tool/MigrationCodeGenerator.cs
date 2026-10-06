@@ -26,7 +26,7 @@ namespace Durable.Tool
             code.Line("/// <param name=\"context\">Migration context.</param>");
             code.Line("public override void Up(MigrationContext context)").Open();
             code.Line("// Write the changes of this migration, for example:");
-            code.Line("// context.ExecuteSql(\"ALTER TABLE users ADD COLUMN email VARCHAR(128) NULL\");");
+            code.Line("// context.ExecuteSqlRaw(\"ALTER TABLE users ADD COLUMN email VARCHAR(128) NULL\");");
             code.Line("// context.EnsureSchema(typeof(User));");
             code.Close();
             code.Blank();
@@ -72,7 +72,7 @@ namespace Durable.Tool
                 code.Line("// " + OneLine(operation.ToString()));
                 if (operation.Warning != null) code.Line("// WARNING: " + OneLine(operation.Warning));
                 foreach (SqlStatement statement in operation.Statements)
-                    code.Line("context.ExecuteSql(" + CSharpNames.StringLiteral(statement.ToInlineSql(dialect)) + ");");
+                    code.Line("context.ExecuteSqlRaw(" + CSharpNames.StringLiteral(statement.ToInlineSql(dialect)) + ");");
             }
 
             if (skipped.Count > 0)
@@ -104,7 +104,7 @@ namespace Durable.Tool
                     MigrationOperation operation = included[i];
                     code.Blank();
                     code.Line("// Revert: " + OneLine(operation.Description));
-                    foreach (string sql in Reverse(dialect, operation)!) code.Line("context.ExecuteSql(" + CSharpNames.StringLiteral(sql) + ");");
+                    foreach (string sql in Reverse(dialect, operation)!) code.Line("context.ExecuteSqlRaw(" + CSharpNames.StringLiteral(sql) + ");");
                 }
 
                 code.Close();

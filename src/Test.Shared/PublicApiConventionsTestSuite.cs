@@ -59,9 +59,6 @@ namespace Test.Shared
             { "TokenWithoutDefault:LiteGraphBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:BackendIncludeLoader.*", "Backend SPI helper called by RepositoryBase with its token." },
 
-            // Conformance kit: suites are driven by the Touchstone runner, which owns cancellation through ConformanceSuite.Token.
-            { "MissingToken:*Suite.*", "Conformance test methods: cancellation comes from the suite's Token property." },
-            { "MissingToken:IConformanceTarget.ResetAsync", "Conformance SPI: the runner passes its token through ConformanceSuite." },
 
             // Unwraps an IAsyncDurableResult without starting enumeration; callers cancel with WithCancellation(token).
             { "MissingToken:RepositoryResultExtensions.AsAsyncEnumerable", "Pure accessor over an existing stream." },

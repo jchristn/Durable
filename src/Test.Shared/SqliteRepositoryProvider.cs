@@ -123,7 +123,7 @@ namespace Test.Shared
 
             ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS people (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     first TEXT NOT NULL,
@@ -135,7 +135,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS complex_entities (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -155,7 +155,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS authors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -164,7 +164,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS books (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
@@ -173,7 +173,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS author_categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     author_id INTEGER NOT NULL,
@@ -181,7 +181,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -189,7 +189,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS companies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -197,7 +197,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS employees (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     first_name TEXT NOT NULL,
@@ -209,7 +209,7 @@ namespace Test.Shared
                 )
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,

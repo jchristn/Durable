@@ -18,7 +18,7 @@ namespace Test.Shared.CliFixtures.Migrations
         /// <param name="context">Migration context.</param>
         public override void Up(MigrationContext context)
         {
-            context.ExecuteSql(context.Dialect.CreateIndexSql("idx_cli_items_name", "cli_items", new[] { "name" }, false, null));
+            context.ExecuteSqlRaw(context.Dialect.CreateIndexSql("idx_cli_items_name", "cli_items", new[] { "name" }, false, null));
         }
 
         /// <summary>
@@ -27,7 +27,7 @@ namespace Test.Shared.CliFixtures.Migrations
         /// <param name="context">Migration context.</param>
         public override void Down(MigrationContext context)
         {
-            context.ExecuteSql(context.Dialect.DropIndexSql("idx_cli_items_name", "cli_items"));
+            context.ExecuteSqlRaw(context.Dialect.DropIndexSql("idx_cli_items_name", "cli_items"));
         }
     }
 }

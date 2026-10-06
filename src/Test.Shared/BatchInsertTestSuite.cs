@@ -41,7 +41,7 @@ namespace Test.Shared
         public async Task CanBatchInsertMultipleRecords()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int recordCount = 100;
             Person[] people = new Person[recordCount];
@@ -79,7 +79,7 @@ namespace Test.Shared
         public async Task CanBatchDeleteRecords()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int recordCount = 50;
             Person[] people = new Person[recordCount];

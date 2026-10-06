@@ -40,7 +40,7 @@ namespace Test.Shared
         public async Task CommitPersistsChanges()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
             {
@@ -59,7 +59,7 @@ namespace Test.Shared
         public async Task RollbackDiscardsChanges()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
             {
@@ -78,7 +78,7 @@ namespace Test.Shared
         public async Task CommitAsyncPersistsChanges()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             ITransaction transaction = await repository.BeginTransactionAsync();
             try
@@ -102,7 +102,7 @@ namespace Test.Shared
         public async Task RollbackAsyncDiscardsChanges()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             ITransaction transaction = await repository.BeginTransactionAsync();
             try
@@ -126,7 +126,7 @@ namespace Test.Shared
         public async Task MultipleOperationsInTransactionCommitTogether()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             using (ITransaction transaction = repository.BeginTransaction())
             {

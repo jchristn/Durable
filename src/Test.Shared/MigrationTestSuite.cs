@@ -243,7 +243,7 @@ namespace Test.Shared
             {
                 new DelegateMigration("20261005_0001_CreateNotes", "Create notes", ctx => ctx.EnsureSchema(typeof(MigNote))),
                 new DelegateMigration("20261005_0002_SeedNote", "Seed a note", ctx =>
-                    ctx.ExecuteSql("INSERT INTO " + ctx.Dialect.QuoteIdentifier("mig_notes") + " (" + ctx.Dialect.QuoteIdentifier("body") + ") VALUES (@p0)", "hello"))
+                    ctx.ExecuteSqlRaw("INSERT INTO " + ctx.Dialect.QuoteIdentifier("mig_notes") + " (" + ctx.Dialect.QuoteIdentifier("body") + ") VALUES ({0})", new object?[] { "hello" }))
             };
 
             SqlMigrator migrator = new SqlMigrator(factory, _Provider.Dialect, migrations, options);
@@ -266,8 +266,8 @@ namespace Test.Shared
 
             migrations.Add(new DelegateMigration("20261005_0003_SeedAnother", "Seed another", ctx =>
             {
-                long count = ToInt64(ctx.ExecuteScalar("SELECT COUNT(*) FROM " + ctx.Dialect.QuoteIdentifier("mig_notes")));
-                ctx.ExecuteSql("INSERT INTO " + ctx.Dialect.QuoteIdentifier("mig_notes") + " (" + ctx.Dialect.QuoteIdentifier("body") + ") VALUES (@p0)", "after " + count);
+                long count = ToInt64(ctx.ExecuteScalarRaw("SELECT COUNT(*) FROM " + ctx.Dialect.QuoteIdentifier("mig_notes")));
+                ctx.ExecuteSqlRaw("INSERT INTO " + ctx.Dialect.QuoteIdentifier("mig_notes") + " (" + ctx.Dialect.QuoteIdentifier("body") + ") VALUES ({0})", new object?[] { "after " + count });
             }));
             SqlMigrator extended = new SqlMigrator(factory, _Provider.Dialect, migrations, options);
             Assert.Equal("20261005_0003_SeedAnother", Assert.Single(extended.GetPendingMigrations()).Id);
@@ -345,10 +345,10 @@ namespace Test.Shared
                 new DelegateMigration("20261005_0002_Broken", "Fails halfway", ctx =>
                 {
                     ctx.EnsureSchema(typeof(MigFailPartial));
-                    ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_fail_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES (@p0)", "partial");
-                    ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_no_such_table_for_failure") + " (x) VALUES (1)");
+                    ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_fail_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES ({0})", new object?[] { "partial" });
+                    ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_no_such_table_for_failure") + " (x) VALUES (1)");
                 }),
-                new DelegateMigration("20261005_0003_Never", "Never runs", ctx => ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_fail_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES ('never')"))
+                new DelegateMigration("20261005_0003_Never", "Never runs", ctx => ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_fail_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES ('never')"))
             };
             SqlMigrator migrator = new SqlMigrator(factory, dialect, migrations, new SqlMigratorOptions { HistoryTableName = "mig_hist_fail" });
             DatabaseSchemaReader reader = new DatabaseSchemaReader(factory, dialect);
@@ -402,7 +402,7 @@ namespace Test.Shared
                 string id = "20261005_000" + i.ToString(CultureInfo.InvariantCulture) + "_Log";
                 migrations.Add(new DelegateMigration(id, "Log " + i.ToString(CultureInfo.InvariantCulture), ctx =>
                 {
-                    ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_race_log") + " (" + dialect.QuoteIdentifier("migration_id") + ") VALUES (@p0)", id);
+                    ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_race_log") + " (" + dialect.QuoteIdentifier("migration_id") + ") VALUES ({0})", new object?[] { id });
                     Thread.Sleep(50);
                 }));
             }
@@ -441,7 +441,7 @@ namespace Test.Shared
                 {
                     Assert.True(ctx.IsScripting);
                     Assert.Null(ctx.Transaction);
-                    ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_script_items") + " (" + dialect.QuoteIdentifier("title") + ") VALUES (@p0)", "O'Brien");
+                    ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_script_items") + " (" + dialect.QuoteIdentifier("title") + ") VALUES ({0})", new object?[] { "O'Brien" });
                 }));
 
             string script = migrator.GenerateScript();
@@ -484,11 +484,11 @@ namespace Test.Shared
             Migration create = new DelegateMigration(
                 "20261005_0001_CreateDown", "Create",
                 ctx => ctx.EnsureSchema(typeof(MigDownItem)),
-                ctx => ctx.ExecuteSql(RelTestHelpers.DropTableSql(dialect, "mig_down_items")));
+                ctx => ctx.ExecuteSqlRaw(RelTestHelpers.DropTableSql(dialect, "mig_down_items")));
             Migration seed = new DelegateMigration(
                 "20261005_0002_SeedDown", "Seed",
-                ctx => ctx.ExecuteSql("INSERT INTO " + dialect.QuoteIdentifier("mig_down_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES (@p0)", "seeded"),
-                ctx => ctx.ExecuteSql("DELETE FROM " + dialect.QuoteIdentifier("mig_down_items")));
+                ctx => ctx.ExecuteSqlRaw("INSERT INTO " + dialect.QuoteIdentifier("mig_down_items") + " (" + dialect.QuoteIdentifier("name") + ") VALUES ({0})", new object?[] { "seeded" }),
+                ctx => ctx.ExecuteSqlRaw("DELETE FROM " + dialect.QuoteIdentifier("mig_down_items")));
             SqlMigrator migrator = new SqlMigrator(factory, dialect, new[] { create, seed }, options);
             DatabaseSchemaReader reader = new DatabaseSchemaReader(factory, dialect);
             Assert.True(create.SupportsDown);
@@ -596,9 +596,9 @@ namespace Test.Shared
                 ISqlDialect dialect = _Provider.Dialect;
                 string table = dialect.QuoteIdentifier("mig_range_log");
                 SqlMigrator migrator = new SqlMigrator(factory, dialect, new SqlMigratorOptions { HistoryTableName = "mig_hist_range" })
-                    .AddMigration(new DelegateMigration("20261006_0001_A", "A", ctx => ctx.ExecuteSql("CREATE TABLE " + table + " (" + dialect.QuoteIdentifier("id") + " INT NOT NULL PRIMARY KEY)")))
-                    .AddMigration(new DelegateMigration("20261006_0002_B", "B", ctx => ctx.ExecuteSql("INSERT INTO " + table + " VALUES (2)")))
-                    .AddMigration(new DelegateMigration("20261006_0003_C", "C", ctx => ctx.ExecuteSql("INSERT INTO " + table + " VALUES (3)")));
+                    .AddMigration(new DelegateMigration("20261006_0001_A", "A", ctx => ctx.ExecuteSqlRaw("CREATE TABLE " + table + " (" + dialect.QuoteIdentifier("id") + " INT NOT NULL PRIMARY KEY)")))
+                    .AddMigration(new DelegateMigration("20261006_0002_B", "B", ctx => ctx.ExecuteSqlRaw("INSERT INTO " + table + " VALUES (2)")))
+                    .AddMigration(new DelegateMigration("20261006_0003_C", "C", ctx => ctx.ExecuteSqlRaw("INSERT INTO " + table + " VALUES (3)")));
                 await migrator.MigrateAsync();
 
                 string upToB = migrator.GenerateScript(null, "20261006_0002_B");

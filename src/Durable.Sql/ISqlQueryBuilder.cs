@@ -122,7 +122,7 @@ namespace Durable.Sql
         /// </summary>
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key on this entity. Must not be null.</param>
-        /// <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
+        /// <param name="subquerySql">Subquery SQL; <c>{0}</c>, <c>{1}</c>... bind <paramref name="parameters"/> (see <see cref="RawSql"/>). Must not be null.</param>
         /// <param name="parameters">Placeholder values.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
@@ -133,7 +133,7 @@ namespace Durable.Sql
         /// </summary>
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key on this entity. Must not be null.</param>
-        /// <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
+        /// <param name="subquerySql">Subquery SQL; <c>{0}</c>, <c>{1}</c>... bind <paramref name="parameters"/> (see <see cref="RawSql"/>). Must not be null.</param>
         /// <param name="parameters">Placeholder values.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
@@ -165,11 +165,24 @@ namespace Durable.Sql
         #region Raw-SQL
 
         /// <summary>
-        /// Adds a raw SQL condition. <c>{0}</c>, <c>{1}</c>... placeholders are bound as parameters; columns may be
-        /// referenced unqualified or as <c>t0.column</c>.
+        /// Adds a SQL condition written as an interpolated string, for example
+        /// <c>WhereSql($"t0.price BETWEEN {min} AND {max}")</c>. Every hole becomes a bound parameter (see
+        /// <see cref="RawSql"/>), so values cannot inject SQL; columns may be referenced unqualified or as <c>t0.column</c>.
+        /// </summary>
+        /// <param name="condition">Interpolated condition. Must not be null.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when condition is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        ISqlQueryBuilder<T> WhereSql(FormattableString condition);
+
+        /// <summary>
+        /// Adds a SQL condition from text. <c>{0}</c>, <c>{1}</c>... bind the corresponding <paramref name="parameters"/>
+        /// and <c>{{</c>/<c>}}</c> are literal braces; without parameters the text is used verbatim (see
+        /// <see cref="RawSql"/>). Columns may be referenced unqualified or as <c>t0.column</c>. Never concatenate untrusted
+        /// values into <paramref name="sql"/>; prefer <see cref="WhereSql"/>.
         /// </summary>
         /// <param name="sql">Condition SQL. Must not be null.</param>
-        /// <param name="parameters">Placeholder values.</param>
+        /// <param name="parameters">Placeholder values; may be empty.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         ISqlQueryBuilder<T> WhereRaw(string sql, params object?[] parameters);

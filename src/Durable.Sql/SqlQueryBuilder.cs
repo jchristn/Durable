@@ -246,6 +246,14 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        public ISqlQueryBuilder<T> WhereSql(FormattableString condition)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            _Conditions.Add((translator, source) => "(" + RawSql.BindInterpolated(condition, translator.Builder, translator.Converter) + ")");
+            return this;
+        }
+
+        /// <inheritdoc />
         public ISqlQueryBuilder<T> WhereRaw(string sql, params object?[] parameters)
         {
             ArgumentNullException.ThrowIfNull(sql);

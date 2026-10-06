@@ -958,7 +958,7 @@ namespace Sample.BlogApp.SqlServer
                 ORDER BY TotalViews DESC";
 
             List<BlogStatistics> stats = new List<BlogStatistics>();
-            await foreach (BlogStatistics stat in authorRepo.FromSqlAsync<BlogStatistics>(joinSql))
+            await foreach (BlogStatistics stat in authorRepo.FromSqlRawAsync<BlogStatistics>(joinSql))
             {
                 stats.Add(stat);
             }
@@ -1007,7 +1007,7 @@ namespace Sample.BlogApp.SqlServer
             }
 
             Console.WriteLine("\n3. ExecuteSql for bulk operations:");
-            int affectedRows = await postRepo.ExecuteSqlAsync(
+            int affectedRows = await postRepo.ExecuteSqlRawAsync(
                 "UPDATE blog_posts SET excerpt = SUBSTRING(content, 1, 100) WHERE excerpt IS NULL OR excerpt = ''"
             );
             Console.WriteLine($"   Updated {affectedRows} posts with auto-generated excerpts");

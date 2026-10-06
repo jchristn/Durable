@@ -400,7 +400,7 @@ namespace Test.Shared
                 string file = Assert.Single(Directory.GetFiles(Path.Combine(directory, "Gen"), "*_CreateWidgets.cs"));
                 string code = await File.ReadAllTextAsync(file);
                 Assert.Contains("// Create table cli_gen_widgets", code);
-                Assert.Contains("context.ExecuteSql(", code);
+                Assert.Contains("context.ExecuteSqlRaw(", code);
                 Assert.Contains("public override void Down(MigrationContext context)", code);
                 Assert.Contains("RepositoryType." + RepositoryTypeField(), code);
 

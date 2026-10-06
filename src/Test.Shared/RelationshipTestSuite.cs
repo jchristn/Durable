@@ -43,7 +43,7 @@ namespace Test.Shared
         public async Task ReadManyAsyncStreamsResults()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] people = new[]
             {
@@ -70,7 +70,7 @@ namespace Test.Shared
         public async Task QueryExecuteAsyncEnumerableStreamsResults()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] people = new[]
             {

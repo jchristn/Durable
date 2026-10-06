@@ -68,113 +68,246 @@ namespace Durable.Sql
         #region Raw-SQL
 
         /// <summary>
-        /// Executes raw SQL and maps rows to entities by column name. Results are streamed.
+        /// Executes an interpolated SQL query and maps rows to entities by column name. Every interpolation hole becomes a
+        /// bound parameter (see <see cref="RawSql"/>), so values can never inject SQL; use <see cref="FromSqlRaw"/> when
+        /// the SQL text itself is dynamic. Results are streamed.
         /// </summary>
-        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="sql">Interpolated SQL, for example <c>$"SELECT * FROM people WHERE age &gt; {minAge}"</c>. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Values for @p0, @p1...; <see cref="SqlParameterValue"/> instances keep their names.</param>
         /// <returns>Entities.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        IEnumerable<T> FromSql(string sql, ITransaction? transaction = null, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        IEnumerable<T> FromSql(FormattableString sql, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes raw SQL and maps rows to <typeparamref name="TResult"/>: by column name for classes (matching
-        /// column names, property names, or names ignoring case and underscores), or the first column for scalar types
-        /// (including <see cref="string"/>). Class result types need a parameterless constructor.
+        /// Executes an interpolated SQL query and streams entities. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Entities.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        IAsyncEnumerable<T> FromSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes an interpolated SQL query and maps rows to <typeparamref name="TResult"/>: by column name for classes
+        /// (matching column names, property names, or names ignoring case and underscores), or the first column for scalar
+        /// types (including <see cref="string"/>). Class result types need a parameterless constructor. Every hole becomes a
+        /// bound parameter.
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
-        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Results, streamed.</returns>
-        IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
-
-        /// <summary>
-        /// Executes raw SQL that returns no rows.
-        /// </summary>
-        /// <param name="sql">SQL. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
-        /// <returns>Rows affected.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        int ExecuteSql(string sql, ITransaction? transaction = null, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes raw SQL and returns the first column of the first row converted to <typeparamref name="TResult"/>.
+        /// Executes an interpolated SQL query and streams <typeparamref name="TResult"/> rows (mapping as for
+        /// <see cref="FromSql{TResult}(FormattableString, ITransaction?)"/>).
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
-        /// <param name="sql">SQL. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
-        /// <returns>The value, or default when no row or null.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        TResult? ExecuteScalar<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
-
-        /// <summary>
-        /// Executes raw SQL and streams entities.
-        /// </summary>
-        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
+        /// <returns>Results.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes SQL text and maps rows to entities by column name. <c>{0}</c>, <c>{1}</c>... bind the corresponding
+        /// <paramref name="parameters"/> (see <see cref="RawSql"/>); without parameters the text is sent verbatim. Never
+        /// concatenate untrusted values into <paramref name="sql"/>. Results are streamed.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none. <see cref="SqlParameterValue"/> values keep their names.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
         /// <returns>Entities.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        IEnumerable<T> FromSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes raw SQL and streams <typeparamref name="TResult"/> rows.
+        /// Executes SQL text and streams entities. Placeholders as for <see cref="FromSqlRaw"/>.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Entities.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        IAsyncEnumerable<T> FromSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes SQL text and maps rows to <typeparamref name="TResult"/> (mapping as for
+        /// <see cref="FromSql{TResult}(FormattableString, ITransaction?)"/>, placeholders as for <see cref="FromSqlRaw"/>).
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
-        /// <returns>Results.</returns>
-        IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        /// <returns>Results, streamed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        IEnumerable<TResult> FromSqlRaw<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes raw SQL that returns no rows.
+        /// Executes SQL text and streams <typeparamref name="TResult"/> rows.
         /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
+        /// <returns>Results.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        IAsyncEnumerable<TResult> FromSqlRawAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes an interpolated SQL statement that returns no rows. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
         /// <returns>Rows affected.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        int ExecuteSql(FormattableString sql, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes raw SQL and returns the first column of the first row.
+        /// Executes an interpolated SQL statement that returns no rows. Every hole becomes a bound parameter.
         /// </summary>
-        /// <typeparam name="TResult">Result type.</typeparam>
-        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
+        /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        Task<int> ExecuteSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes SQL text that returns no rows (DDL, set-based DML). Placeholders as for <see cref="FromSqlRaw"/>;
+        /// without parameters the text is sent verbatim.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        int ExecuteSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes SQL text that returns no rows. Placeholders as for <see cref="FromSqlRaw"/>.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes an interpolated SQL query and returns the first column of the first row converted to
+        /// <typeparamref name="TResult"/>. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>The value, or default when there is no row or the value is null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        TResult? ExecuteScalar<TResult>(FormattableString sql, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes an interpolated SQL query and returns the first column of the first row. Every hole becomes a bound
+        /// parameter.
+        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
         /// <returns>The value, or default.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        Task<TResult?> ExecuteScalarAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        Task<TResult?> ExecuteScalarAsync<TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
-        /// Executes raw SQL returning several result sets; read them in order from the returned reader.
+        /// Executes SQL text and returns the first column of the first row converted to <typeparamref name="TResult"/>.
+        /// Placeholders as for <see cref="FromSqlRaw"/>.
         /// </summary>
-        /// <param name="sql">SQL with multiple SELECT statements. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
-        /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        SqlMultipleResultReader QueryMultiple(string sql, ITransaction? transaction = null, params object?[] parameters);
-
-        /// <summary>
-        /// Executes raw SQL returning several result sets.
-        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>The value, or default when there is no row or the value is null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        TResult? ExecuteScalarRaw<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes SQL text and returns the first column of the first row. Placeholders as for <see cref="FromSqlRaw"/>.
+        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Values for @p0, @p1....</param>
+        /// <returns>The value, or default.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        Task<TResult?> ExecuteScalarRawAsync<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes interpolated SQL returning several result sets; read them in order from the returned reader. Every hole
+        /// becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL with multiple SELECT statements. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
         /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
         /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
-        Task<SqlMultipleResultReader> QueryMultipleAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        SqlMultipleResultReader QueryMultiple(FormattableString sql, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes interpolated SQL returning several result sets. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        Task<SqlMultipleResultReader> QueryMultipleAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Executes SQL text returning several result sets. Placeholders as for <see cref="FromSqlRaw"/>.
+        /// </summary>
+        /// <param name="sql">SQL with multiple SELECT statements. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        SqlMultipleResultReader QueryMultipleRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes SQL text returning several result sets. Placeholders as for <see cref="FromSqlRaw"/>.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="FormatException">Thrown when a placeholder index has no value.</exception>
+        Task<SqlMultipleResultReader> QueryMultipleRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
 
         #endregion
 
@@ -184,45 +317,49 @@ namespace Durable.Sql
         /// Executes a stored procedure that returns no rows. Output parameters are populated after execution.
         /// </summary>
         /// <param name="procedureName">Procedure name. Must not be null.</param>
+        /// <param name="parameters">Named parameters; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Named parameters.</param>
         /// <returns>Rows affected as reported by the database.</returns>
         /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
         /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
-        int ExecuteProcedure(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
+        int ExecuteProcedure(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Executes a stored procedure that returns no rows. Output parameters are populated after execution.
+        /// </summary>
+        /// <param name="procedureName">Procedure name. Must not be null.</param>
+        /// <param name="parameters">Named parameters; null for none.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Rows affected.</returns>
+        /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+        /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
+        Task<int> ExecuteProcedureAsync(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Executes a stored procedure and maps its first result set to <typeparamref name="TResult"/>.
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="procedureName">Procedure name. Must not be null.</param>
+        /// <param name="parameters">Named parameters; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
         /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
-        List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
-
-        /// <summary>
-        /// Executes a stored procedure that returns no rows.
-        /// </summary>
-        /// <param name="procedureName">Procedure name. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Named parameters.</param>
-        /// <returns>Rows affected.</returns>
         /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
-        Task<int> ExecuteProcedureAsync(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
+        List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null);
 
         /// <summary>
-        /// Executes a stored procedure and maps its first result set.
+        /// Executes a stored procedure and maps its first result set to <typeparamref name="TResult"/>.
         /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="procedureName">Procedure name. Must not be null.</param>
+        /// <param name="parameters">Named parameters; null for none.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
-        Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
+        /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+        /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
+        Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default);
 
         #endregion
 

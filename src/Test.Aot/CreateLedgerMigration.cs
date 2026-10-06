@@ -11,13 +11,13 @@ namespace Test.Aot
 
         public override void Up(MigrationContext context)
         {
-            context.ExecuteSql("CREATE TABLE ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, entry TEXT NOT NULL)");
-            context.ExecuteSql("INSERT INTO ledger (entry) VALUES (@p0)", "opening");
+            context.ExecuteSqlRaw("CREATE TABLE ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, entry TEXT NOT NULL)");
+            context.ExecuteSqlRaw("INSERT INTO ledger (entry) VALUES ({0})", new object?[] { "opening" });
         }
 
         public override void Down(MigrationContext context)
         {
-            context.ExecuteSql("DROP TABLE ledger");
+            context.ExecuteSqlRaw("DROP TABLE ledger");
         }
     }
 }

@@ -84,8 +84,8 @@ namespace Test.Shared
                 SqlMigrator migrator = new SqlMigrator(factory, _Provider.Dialect, new SqlMigratorOptions { HistoryTableName = "life_history" });
                 Assert.Same(migrator, migrator.AddMigrations(new Migration[]
                 {
-                    new DelegateMigration("002_second", "second", ctx => ctx.ExecuteSql("UPDATE " + Q("products") + " SET " + Q("price") + " = 2")),
-                    new DelegateMigration("001_first", "first", ctx => ctx.ExecuteSql("UPDATE " + Q("products") + " SET " + Q("name") + " = 'migrated'"))
+                    new DelegateMigration("002_second", "second", ctx => ctx.ExecuteSqlRaw("UPDATE " + Q("products") + " SET " + Q("price") + " = 2")),
+                    new DelegateMigration("001_first", "first", ctx => ctx.ExecuteSqlRaw("UPDATE " + Q("products") + " SET " + Q("name") + " = 'migrated'"))
                 }));
                 Assert.Equal(new[] { "001_first", "002_second" }, migrator.Migrations.Select(m => m.Id).ToArray());
                 Assert.Throws<ArgumentException>(() => migrator.AddMigrations(new Migration[] { new DelegateMigration("001_first", null, ctx => { }) }));

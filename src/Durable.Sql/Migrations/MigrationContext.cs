@@ -66,56 +66,95 @@ namespace Durable.Sql
         #region Public-Methods
 
         /// <summary>
-        /// Executes a statement that returns no rows. Parameters are referenced by the dialect's positional names
-        /// (@p0, @p1, ...), as with <see cref="ISqlRepository{T}.ExecuteSql"/>, and are always bound, never inlined
-        /// (except in generated scripts).
+        /// Executes an interpolated statement that returns no rows. Every interpolation hole becomes a bound parameter
+        /// (inlined as a literal only in generated scripts); see <see cref="RawSql"/>.
         /// </summary>
-        /// <param name="sql">SQL. Must not be null or empty.</param>
-        /// <param name="parameters">Parameter values; may be empty.</param>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
         /// <returns>Rows affected; 0 while scripting.</returns>
-        /// <exception cref="ArgumentException">Thrown when sql is null or empty.</exception>
-        public int ExecuteSql(string sql, params object?[] parameters)
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the SQL is empty.</exception>
+        public int ExecuteSql(FormattableString sql)
         {
-            SqlStatement statement = Build(sql, parameters);
-            if (_Script != null)
-            {
-                MigrationScriptWriter.AppendStatement(_Script, Dialect, statement);
-                return 0;
-            }
-
-            return _Session.Execute(statement, "MIGRATION");
+            return Execute(BuildInterpolated(sql));
         }
 
         /// <summary>
-        /// Executes a statement that returns no rows. See <see cref="ExecuteSql"/> for parameter syntax.
+        /// Executes an interpolated statement that returns no rows. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Rows affected; 0 while scripting.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the SQL is empty.</exception>
+        public Task<int> ExecuteSqlAsync(FormattableString sql, CancellationToken token = default)
+        {
+            return ExecuteAsync(BuildInterpolated(sql), token);
+        }
+
+        /// <summary>
+        /// Executes SQL text that returns no rows. <c>{0}</c>, <c>{1}</c>... bind the corresponding
+        /// <paramref name="parameters"/> (see <see cref="RawSql"/>); without parameters the text is used verbatim.
         /// </summary>
         /// <param name="sql">SQL. Must not be null or empty.</param>
-        /// <param name="parameters">Parameter values; may be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
+        /// <returns>Rows affected; 0 while scripting.</returns>
+        /// <exception cref="ArgumentException">Thrown when sql is null or empty.</exception>
+        public int ExecuteSqlRaw(string sql, IEnumerable<object?>? parameters = null)
+        {
+            return Execute(Build(sql, parameters));
+        }
+
+        /// <summary>
+        /// Executes SQL text that returns no rows. Placeholders as for <see cref="ExecuteSqlRaw"/>.
+        /// </summary>
+        /// <param name="sql">SQL. Must not be null or empty.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Rows affected; 0 while scripting.</returns>
         /// <exception cref="ArgumentException">Thrown when sql is null or empty.</exception>
-        public Task<int> ExecuteSqlAsync(string sql, object?[]? parameters = null, CancellationToken token = default)
+        public Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, CancellationToken token = default)
         {
-            SqlStatement statement = Build(sql, parameters);
-            token.ThrowIfCancellationRequested();
-            if (_Script != null)
-            {
-                MigrationScriptWriter.AppendStatement(_Script, Dialect, statement);
-                return Task.FromResult(0);
-            }
-
-            return _Session.ExecuteAsync(statement, "MIGRATION", token);
+            return ExecuteAsync(Build(sql, parameters), token);
         }
 
         /// <summary>
-        /// Executes a query and returns the first column of the first row. See <see cref="ExecuteSql"/> for parameter syntax.
+        /// Executes an interpolated query and returns the first column of the first row. Every hole becomes a bound parameter.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <returns>The value, or null for no row or a database null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown while scripting.</exception>
+        public object? ExecuteScalar(FormattableString sql)
+        {
+            SqlStatement statement = BuildInterpolated(sql);
+            RequireNotScripting();
+            return _Session.Scalar(statement, "MIGRATION");
+        }
+
+        /// <summary>
+        /// Executes an interpolated query and returns the first column of the first row.
+        /// </summary>
+        /// <param name="sql">Interpolated SQL. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The value, or null for no row or a database null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown while scripting.</exception>
+        public Task<object?> ExecuteScalarAsync(FormattableString sql, CancellationToken token = default)
+        {
+            SqlStatement statement = BuildInterpolated(sql);
+            RequireNotScripting();
+            return _Session.ScalarAsync(statement, "MIGRATION", token);
+        }
+
+        /// <summary>
+        /// Executes a query and returns the first column of the first row. Placeholders as for <see cref="ExecuteSqlRaw"/>.
         /// </summary>
         /// <param name="sql">SQL. Must not be null or empty.</param>
-        /// <param name="parameters">Parameter values; may be empty.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <returns>The value, or null for no row or a database null.</returns>
         /// <exception cref="ArgumentException">Thrown when sql is null or empty.</exception>
         /// <exception cref="InvalidOperationException">Thrown while scripting.</exception>
-        public object? ExecuteScalar(string sql, params object?[] parameters)
+        public object? ExecuteScalarRaw(string sql, IEnumerable<object?>? parameters = null)
         {
             SqlStatement statement = Build(sql, parameters);
             RequireNotScripting();
@@ -123,15 +162,15 @@ namespace Durable.Sql
         }
 
         /// <summary>
-        /// Executes a query and returns the first column of the first row. See <see cref="ExecuteSql"/> for parameter syntax.
+        /// Executes a query and returns the first column of the first row. Placeholders as for <see cref="ExecuteSqlRaw"/>.
         /// </summary>
         /// <param name="sql">SQL. Must not be null or empty.</param>
-        /// <param name="parameters">Parameter values; may be null.</param>
+        /// <param name="parameters">Placeholder values; null for none.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The value, or null for no row or a database null.</returns>
         /// <exception cref="ArgumentException">Thrown when sql is null or empty.</exception>
         /// <exception cref="InvalidOperationException">Thrown while scripting.</exception>
-        public Task<object?> ExecuteScalarAsync(string sql, object?[]? parameters = null, CancellationToken token = default)
+        public Task<object?> ExecuteScalarRawAsync(string sql, IEnumerable<object?>? parameters = null, CancellationToken token = default)
         {
             SqlStatement statement = Build(sql, parameters);
             RequireNotScripting();
@@ -260,10 +299,40 @@ namespace Durable.Sql
 
         #region Private-Methods
 
-        private SqlStatement Build(string sql, object?[]? parameters)
+        private SqlStatement Build(string sql, IEnumerable<object?>? parameters)
         {
             if (string.IsNullOrEmpty(sql)) throw new ArgumentException("SQL cannot be null or empty.", nameof(sql));
-            return RawSql.Positional(sql, parameters, Dialect, Dialect.Converter);
+            return RawSql.ToStatement(sql, parameters, Dialect, Dialect.Converter);
+        }
+
+        private SqlStatement BuildInterpolated(FormattableString sql)
+        {
+            ArgumentNullException.ThrowIfNull(sql);
+            if (string.IsNullOrEmpty(sql.Format)) throw new ArgumentException("SQL cannot be empty.", nameof(sql));
+            return RawSql.ToStatement(sql, Dialect, Dialect.Converter);
+        }
+
+        private int Execute(SqlStatement statement)
+        {
+            if (_Script != null)
+            {
+                MigrationScriptWriter.AppendStatement(_Script, Dialect, statement);
+                return 0;
+            }
+
+            return _Session.Execute(statement, "MIGRATION");
+        }
+
+        private Task<int> ExecuteAsync(SqlStatement statement, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            if (_Script != null)
+            {
+                MigrationScriptWriter.AppendStatement(_Script, Dialect, statement);
+                return Task.FromResult(0);
+            }
+
+            return _Session.ExecuteAsync(statement, "MIGRATION", token);
         }
 
         private void RequireNotScripting()

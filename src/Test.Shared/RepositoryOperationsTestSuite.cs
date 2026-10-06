@@ -47,7 +47,7 @@ namespace Test.Shared
             ISqlRepository<Person> repository = await SeedAsync();
 
             List<Person> engineers = repository
-                .FromSql("SELECT * FROM people WHERE department = @p0", null, "Engineering")
+                .FromSqlRaw("SELECT * FROM people WHERE department = {0}", new object?[] { "Engineering" })
                 .ToList();
 
             Assert.Equal(3, engineers.Count);
@@ -65,8 +65,7 @@ namespace Test.Shared
             ISqlRepository<Person> repository = await SeedAsync();
 
             int streamed = 0;
-            await foreach (Person person in repository.FromSqlAsync(
-                "SELECT * FROM people WHERE age >= @p0", null, default, 40))
+            await foreach (Person person in repository.FromSqlRawAsync("SELECT * FROM people WHERE age >= {0}", new object?[] { 40 }))
             {
                 Assert.True(person.Age >= 40);
                 streamed++;
@@ -84,7 +83,7 @@ namespace Test.Shared
             ISqlRepository<Person> repository = await SeedAsync();
 
             List<Person> results = repository
-                .FromSql("SELECT * FROM people WHERE department = @p0", null, "NoSuchDepartment")
+                .FromSqlRaw("SELECT * FROM people WHERE department = {0}", new object?[] { "NoSuchDepartment" })
                 .ToList();
 
             Assert.Empty(results);
@@ -251,7 +250,7 @@ namespace Test.Shared
         private async Task<ISqlRepository<Person>> SeedAsync()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] people = new[]
             {

@@ -242,7 +242,7 @@ namespace Test.Shared
                             Assert.NotNull(byId);
                             break;
                         default:
-                            long scalar = await repository.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM people");
+                            long scalar = await repository.ExecuteScalarRawAsync<long>("SELECT COUNT(*) FROM people");
                             Assert.True(scalar >= 10);
                             break;
                     }

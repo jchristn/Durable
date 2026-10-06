@@ -89,7 +89,7 @@ namespace Test.Shared
             Assert.Equal(10, loaded.Counters["views"]);
             Assert.Equal(3, loaded.Counters["likes"]);
 
-            string? raw = await repository.ExecuteScalarAsync<string>("SELECT payload FROM rel_json_documents WHERE id = @p0", null, default, created.Id);
+            string? raw = await repository.ExecuteScalarRawAsync<string>("SELECT payload FROM rel_json_documents WHERE id = {0}", new object?[] { created.Id });
             Assert.NotNull(raw);
             Assert.Contains("explicit", raw);
             Assert.Contains("child", raw);

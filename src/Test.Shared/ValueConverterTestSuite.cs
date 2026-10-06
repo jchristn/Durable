@@ -59,9 +59,9 @@ namespace Test.Shared
             Assert.Equal(new[] { "red", "large", "sale" }, loaded.Tags.ToArray());
             Assert.Equal(RelPriority.High, loaded.Priority);
 
-            long cents = await repository.ExecuteScalarAsync<long>("SELECT price FROM rel_converted_items WHERE id = @p0", null, default, created.Id);
-            string? tags = await repository.ExecuteScalarAsync<string>("SELECT tags FROM rel_converted_items WHERE id = @p0", null, default, created.Id);
-            string? priority = await repository.ExecuteScalarAsync<string>("SELECT priority FROM rel_converted_items WHERE id = @p0", null, default, created.Id);
+            long cents = await repository.ExecuteScalarRawAsync<long>("SELECT price FROM rel_converted_items WHERE id = {0}", new object?[] { created.Id });
+            string? tags = await repository.ExecuteScalarRawAsync<string>("SELECT tags FROM rel_converted_items WHERE id = {0}", new object?[] { created.Id });
+            string? priority = await repository.ExecuteScalarRawAsync<string>("SELECT priority FROM rel_converted_items WHERE id = {0}", new object?[] { created.Id });
             Assert.Equal(1999L, cents);
             Assert.Equal("red,large,sale", tags);
             Assert.Equal("H", priority?.Trim());
@@ -156,7 +156,7 @@ namespace Test.Shared
 
             int fieldRows = await repository.UpdateFieldAsync(x => x.Name == "one", x => x.Priority, RelPriority.Low);
             Assert.Equal(1, fieldRows);
-            string? stored = await repository.ExecuteScalarAsync<string>("SELECT priority FROM rel_converted_items WHERE name = @p0", null, default, "one");
+            string? stored = await repository.ExecuteScalarRawAsync<string>("SELECT priority FROM rel_converted_items WHERE name = {0}", new object?[] { "one" });
             Assert.Equal("L", stored?.Trim());
 
             int batchRows = await repository.BatchUpdateAsync(x => x.Name == "two", x => new RelConvertedItem { Price = new Money(42), Priority = RelPriority.Medium });
@@ -164,7 +164,7 @@ namespace Test.Shared
             RelConvertedItem two = Assert.Single(await repository.Query().Where(x => x.Name == "two").ExecuteAsync());
             Assert.Equal(new Money(42), two.Price);
             Assert.Equal(RelPriority.Medium, two.Priority);
-            long cents = await repository.ExecuteScalarAsync<long>("SELECT price FROM rel_converted_items WHERE name = @p0", null, default, "two");
+            long cents = await repository.ExecuteScalarRawAsync<long>("SELECT price FROM rel_converted_items WHERE name = {0}", new object?[] { "two" });
             Assert.Equal(42L, cents);
         }
 

@@ -685,105 +685,141 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IEnumerable<T> FromSql(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IEnumerable<T> FromSql(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<T>(Converter));
+            return Executor.Query(Interpolated(sql), transaction, "RAW", ResultMapper.Create<T>(Converter));
         }
 
         /// <inheritdoc />
-        public IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IAsyncEnumerable<T> FromSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
+            return Executor.QueryAsync(Interpolated(sql), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
         }
 
         /// <inheritdoc />
-        public int ExecuteSql(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.ExecuteNonQuery(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW");
+            return Executor.Query(Interpolated(sql), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
         }
 
         /// <inheritdoc />
-        public TResult? ExecuteScalar<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            object? value = Executor.ExecuteScalar(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW");
-            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+            return Executor.QueryAsync(Interpolated(sql), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IEnumerable<T> FromSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
+            return Executor.Query(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<T>(Converter));
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IAsyncEnumerable<T> FromSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
+            return Executor.QueryAsync(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
         }
 
         /// <inheritdoc />
-        public Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IEnumerable<TResult> FromSqlRaw<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.ExecuteNonQueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", token);
+            return Executor.Query(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
         }
 
         /// <inheritdoc />
-        public async Task<TResult?> ExecuteScalarAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IAsyncEnumerable<TResult> FromSqlRawAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            object? value = await Executor.ExecuteScalarAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", token).ConfigureAwait(false);
-            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+            return Executor.QueryAsync(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
         }
 
         /// <inheritdoc />
-        public SqlMultipleResultReader QueryMultiple(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public int ExecuteSql(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
-            ConnectionLease lease = Executor.Lease(transaction);
-            try
-            {
-                return Executor.ExecuteMultiple(lease, statement, Converter);
-            }
-            catch
-            {
-                lease.Dispose();
-                throw;
-            }
+            return Executor.ExecuteNonQuery(Interpolated(sql), transaction, "RAW");
         }
 
         /// <inheritdoc />
-        public async Task<SqlMultipleResultReader> QueryMultipleAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public Task<int> ExecuteSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
-            ConnectionLease lease = await Executor.LeaseAsync(transaction, token).ConfigureAwait(false);
-            try
-            {
-                return await Executor.ExecuteMultipleAsync(lease, statement, Converter, token).ConfigureAwait(false);
-            }
-            catch
-            {
-                await lease.DisposeAsync().ConfigureAwait(false);
-                throw;
-            }
+            return Executor.ExecuteNonQueryAsync(Interpolated(sql), transaction, "RAW", token);
         }
 
         /// <inheritdoc />
-        public int ExecuteProcedure(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
+        public int ExecuteSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return Executor.ExecuteNonQuery(Raw(sql, parameters), transaction, "RAW");
+        }
+
+        /// <inheritdoc />
+        public Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return Executor.ExecuteNonQueryAsync(Raw(sql, parameters), transaction, "RAW", token);
+        }
+
+        /// <inheritdoc />
+        public TResult? ExecuteScalar<TResult>(FormattableString sql, ITransaction? transaction = null)
+        {
+            return ConvertScalar<TResult>(Executor.ExecuteScalar(Interpolated(sql), transaction, "RAW"));
+        }
+
+        /// <inheritdoc />
+        public async Task<TResult?> ExecuteScalarAsync<TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            SqlStatement statement = Interpolated(sql);
+            return ConvertScalar<TResult>(await Executor.ExecuteScalarAsync(statement, transaction, "RAW", token).ConfigureAwait(false));
+        }
+
+        /// <inheritdoc />
+        public TResult? ExecuteScalarRaw<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return ConvertScalar<TResult>(Executor.ExecuteScalar(Raw(sql, parameters), transaction, "RAW"));
+        }
+
+        /// <inheritdoc />
+        public async Task<TResult?> ExecuteScalarRawAsync<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            SqlStatement statement = Raw(sql, parameters);
+            return ConvertScalar<TResult>(await Executor.ExecuteScalarAsync(statement, transaction, "RAW", token).ConfigureAwait(false));
+        }
+
+        /// <inheritdoc />
+        public SqlMultipleResultReader QueryMultiple(FormattableString sql, ITransaction? transaction = null)
+        {
+            return QueryMultipleCore(Interpolated(sql), transaction);
+        }
+
+        /// <inheritdoc />
+        public Task<SqlMultipleResultReader> QueryMultipleAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return QueryMultipleCoreAsync(Interpolated(sql), transaction, token);
+        }
+
+        /// <inheritdoc />
+        public SqlMultipleResultReader QueryMultipleRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return QueryMultipleCore(Raw(sql, parameters), transaction);
+        }
+
+        /// <inheritdoc />
+        public Task<SqlMultipleResultReader> QueryMultipleRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return QueryMultipleCoreAsync(Raw(sql, parameters), transaction, token);
+        }
+
+        /// <inheritdoc />
+        public int ExecuteProcedure(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null)
         {
             return Executor.ExecuteNonQuery(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", CommandType.StoredProcedure);
         }
 
         /// <inheritdoc />
-        public List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
+        public Task<int> ExecuteProcedureAsync(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return Executor.ExecuteNonQueryAsync(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", token, CommandType.StoredProcedure);
+        }
+
+        /// <inheritdoc />
+        public List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -796,13 +832,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public Task<int> ExecuteProcedureAsync(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
-        {
-            return Executor.ExecuteNonQueryAsync(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", token, CommandType.StoredProcedure);
-        }
-
-        /// <inheritdoc />
-        public Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
+        public Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -1559,7 +1589,52 @@ namespace Durable.Sql
             return builder.Build();
         }
 
-        private SqlStatement ProcedureStatement(string procedureName, SqlParameterValue[] parameters)
+        private SqlStatement Interpolated(FormattableString sql)
+        {
+            ArgumentNullException.ThrowIfNull(sql);
+            return RawSql.ToStatement(sql, Dialect, Converter);
+        }
+
+        private SqlStatement Raw(string sql, IEnumerable<object?>? parameters)
+        {
+            ArgumentNullException.ThrowIfNull(sql);
+            return RawSql.ToStatement(sql, parameters, Dialect, Converter);
+        }
+
+        private TResult? ConvertScalar<TResult>(object? value)
+        {
+            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+        }
+
+        private SqlMultipleResultReader QueryMultipleCore(SqlStatement statement, ITransaction? transaction)
+        {
+            ConnectionLease lease = Executor.Lease(transaction);
+            try
+            {
+                return Executor.ExecuteMultiple(lease, statement, Converter);
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
+        }
+
+        private async Task<SqlMultipleResultReader> QueryMultipleCoreAsync(SqlStatement statement, ITransaction? transaction, CancellationToken token)
+        {
+            ConnectionLease lease = await Executor.LeaseAsync(transaction, token).ConfigureAwait(false);
+            try
+            {
+                return await Executor.ExecuteMultipleAsync(lease, statement, Converter, token).ConfigureAwait(false);
+            }
+            catch
+            {
+                await lease.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        private SqlStatement ProcedureStatement(string procedureName, IEnumerable<SqlParameterValue>? parameters)
         {
             if (string.IsNullOrWhiteSpace(procedureName)) throw new ArgumentNullException(nameof(procedureName));
             if (!Dialect.SupportsStoredProcedures)

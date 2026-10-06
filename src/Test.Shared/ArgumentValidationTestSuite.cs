@@ -64,7 +64,7 @@ namespace Test.Shared
         public async Task CountReturnsZeroWhenEmpty()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
             long count = await repository.CountAsync();
             Assert.Equal(0, count);
         }
@@ -191,7 +191,7 @@ namespace Test.Shared
         private async Task<ISqlRepository<Person>> SeedAsync()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] people = new[]
             {
