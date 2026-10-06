@@ -108,6 +108,13 @@ namespace Test.Shared
                         suites.Add(conformance);
                     foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new InMemoryConformanceTarget(RepositoryCapabilities.None), "Conformance.InMemoryMinimal", new List<string> { providerTag, "conformance", "inmemory" }))
                         suites.Add(conformance);
+
+                    // The LiteGraph backend (graph store over a temporary SQLite file), plus its own suite: edges,
+                    // traversal with LiteGraph's client, persistence, deterministic GUIDs, push-down, concurrency, settings.
+                    foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(new LiteGraphConformanceTarget(), "Conformance.LiteGraph", new List<string> { providerTag, "conformance", "litegraph" }))
+                        suites.Add(conformance);
+                    suites.Add(TouchstoneBridge.BuildSuite<LiteGraphBackendTestSuite>(
+                        "LiteGraph.Backend", "LiteGraph Backend (Edges / Traversal / Persistence / Push-Down) Tests", () => new LiteGraphBackendTestSuite(), new List<string> { providerTag, "litegraph" }));
                 }
 
                 // Backend-neutral RepositoryBase over the in-memory backend (no database; runs in every provider configuration).

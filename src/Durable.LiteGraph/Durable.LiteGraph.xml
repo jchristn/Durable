@@ -1,0 +1,1169 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.LiteGraph</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.LiteGraph.LiteGraphBackend">
+            <summary>
+            A LiteGraph <see cref="T:Durable.Query.IRepositoryBackend"/>: stores Durable entities in a LiteGraph property graph so they are
+            first-class graph data. Use it through <see cref="T:Durable.LiteGraph.LiteGraphRepository`1"/> (or any <see cref="T:Durable.Query.RepositoryBase`1"/>);
+            one backend serves every entity type of one graph, so includes, navigation predicates and transactions work across
+            repositories that share it.
+            <para>
+            Storage model: each row is one node in the configured tenant and graph, labelled with the entity's table name
+            (<see cref="P:Durable.EntityMetadata.TableName"/>) and named <c>table:key</c>. The node's data is a JSON object of the column
+            values keyed by column name, built from Durable's mapping (value converters store their provider value, JSON
+            columns their serialized text, enums their name or number with <see cref="F:Durable.Flags.Integer"/>), encoded losslessly
+            (see <see cref="T:Durable.LiteGraph.LiteGraphBackendSettings"/> and the README for the encoding). The node GUID is derived from the
+            graph, the table and the primary key (<see cref="M:Durable.LiteGraph.LiteGraphBackend.GetNodeGuid(System.Type,System.Object)"/>), so key lookups are lookups by GUID and LiteGraph's
+            unique node GUIDs enforce unique keys, including composite keys. Foreign keys are maintained as edges from the
+            dependent node to the principal node (<see cref="T:Durable.LiteGraph.LiteGraphRelationship"/>, <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.MaintainEdges"/>):
+            an edge exists exactly when the foreign key holds the key of an existing principal row; it is created on insert of
+            either side, moved when the foreign key changes and removed with either node. Many-to-many junction rows are nodes
+            with an edge to each side. Labels, tags and vectors added to these nodes outside Durable are kept across updates
+            (<see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.PreserveNodeSubordinates"/>). Do not change key values or data of Durable
+            nodes outside Durable.
+            </para>
+            <para>
+            Queries: candidates are read by deterministic GUID when the filter pins the key, otherwise by label, narrowed by an
+            exact data filter when part of the filter can be pushed down (<see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.PushDownDataFilters"/>);
+            the complete filter, ordering, paging, navigation members, collection predicates and aggregates are then evaluated
+            client-side with the C# semantics of <see cref="T:Durable.Query.QueryEvaluator`1"/> (null equals only null, ordinal strings,
+            stable ordering with nulls first, insertion order when unordered). Related rows for navigations are read once per
+            operation and indexed. Every candidate node is read before the first row is returned, so memory and time grow with
+            the candidates of a query, not its results. A client created by the backend reads each label scan in one
+            statement; for a client you supply, raise its repository's <c>SelectBatchSize</c> for the same consistency under
+            concurrent writes. <see cref="E:Durable.LiteGraph.LiteGraphBackend.QueryPlanned"/> and the configured logger report what was pushed down.
+            </para>
+            <para>
+            Writes: every write is applied as one LiteGraph graph transaction (node and edge operations together). Writes made
+            outside a transaction are serialized by a backend-wide lock, which also makes key generation and duplicate-key
+            checks atomic within the process. Transactions are interactive (see <see cref="T:Durable.LiteGraph.LiteGraphTransaction"/>): writes are
+            kept in the transaction, read back by it, and applied atomically at commit, which limits a transaction (including
+            the implicit one CreateMany, UpsertMany and UpdateMany run in) to
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.MaxOperationsPerTransaction"/> node and edge operations. Auto-increment keys come from a
+            per-type sequence that starts after the largest stored key (read once per process), never reuses a value within the
+            process and skips values already present in the graph. Several processes writing one graph cannot share the
+            sequence: a key generated concurrently by two processes is rejected by LiteGraph for the second writer (the write
+            fails; nothing is overwritten).
+            </para>
+            Thread safety: safe for concurrent use by any number of repositories and threads.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.Capabilities">
+            <summary>
+            Gets the optional features the backend supports: <see cref="F:Durable.RepositoryCapabilities.All"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.Client">
+            <summary>
+            Gets the LiteGraph client. Never null. Use it to traverse, search or analyze the graph with LiteGraph's own APIs;
+            writes to Durable nodes should go through Durable.
+            </summary>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed and owned the client.</exception>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.TenantGuid">
+            <summary>
+            Gets the tenant GUID holding the graph.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.GraphGuid">
+            <summary>
+            Gets the graph GUID holding the data.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.OwnsClient">
+            <summary>
+            Gets whether the backend created (and disposes) the client.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.MaintainEdges">
+            <summary>
+            Gets whether foreign keys are maintained as edges.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackend.JsonOptions">
+            <summary>
+            Gets the JSON options used to store JSON columns. Never null.
+            </summary>
+        </member>
+        <member name="E:Durable.LiteGraph.LiteGraphBackend.QueryPlanned">
+            <summary>
+            Raised (synchronously, on the calling thread) whenever the backend reads candidate nodes from LiteGraph,
+            describing what was pushed down. Handlers must be fast and must not call the backend.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.CreateAsync(Durable.LiteGraph.LiteGraphBackendSettings,System.Threading.CancellationToken)">
+            <summary>
+            Creates a backend: opens (or creates) the LiteGraph storage when the settings do not supply a client, then finds
+            or creates the tenant and graph.
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The backend. Dispose it when done.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the settings are invalid (see <see cref="M:Durable.LiteGraph.LiteGraphBackendSettings.Validate"/>).</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.Create(Durable.LiteGraph.LiteGraphBackendSettings)">
+            <summary>
+            Creates a backend synchronously (see <see cref="M:Durable.LiteGraph.LiteGraphBackend.CreateAsync(Durable.LiteGraph.LiteGraphBackendSettings,System.Threading.CancellationToken)"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <returns>The backend. Dispose it when done.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the settings are invalid.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.CreateRepository``1(Durable.RepositoryOptions)">
+            <summary>
+            Creates a repository over this backend.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>A new repository.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.Owns(Durable.ITransaction)">
+            <summary>
+            Determines whether a transaction was created by this backend.
+            </summary>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>True when the transaction belongs to this backend.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.GetNodeGuid(System.Type,System.Object)">
+            <summary>
+            Returns the deterministic node GUID of an entity row in this graph.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="id">Key: a scalar, or an object array with one value per key column for composite keys. Must not be null.</param>
+            <returns>The node GUID (the node exists only when the row does).</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the key does not match the entity's key columns.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.GetNodeGuid``1(System.Object)">
+            <summary>
+            Returns the deterministic node GUID of an entity row in this graph.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="id">Key: a scalar, or an object array with one value per key column for composite keys. Must not be null.</param>
+            <returns>The node GUID.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when id is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the key does not match the entity's key columns.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.GetEdgeGuid(Durable.LiteGraph.LiteGraphRelationship,System.Guid)">
+            <summary>
+            Returns the deterministic GUID of the edge a relationship maintains from a dependent node.
+            </summary>
+            <param name="relationship">Relationship. Must not be null.</param>
+            <param name="dependentNodeGuid">Dependent node GUID.</param>
+            <returns>The edge GUID (the edge exists only while the foreign key references an existing principal).</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when relationship is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.GetRelationships(System.Type)">
+            <summary>
+            Returns the relationships maintained as edges in which an entity type is the dependent or the principal.
+            Registers the type (and every type reachable from it) first.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The relationships ordered by identifier. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.ClearAsync(System.Type,System.Threading.CancellationToken)">
+            <summary>
+            Deletes every node of an entity type (including soft-deleted rows) and their edges, bypassing soft delete,
+            query filters and transactions. Auto-increment sequences are not reset.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of nodes deleted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.RebuildEdgesAsync(System.Collections.Generic.IEnumerable{System.Type},System.Threading.CancellationToken)">
+            <summary>
+            Recomputes the edges of every registered relationship from the stored foreign keys: creates missing edges and
+            deletes Durable edges that no longer correspond to a foreign key (for example after nodes were changed outside
+            Durable, after edges were disabled with <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.MaintainEdges"/>, or after a
+            relationship became known later). Not atomic; applied in graph transactions of at most
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.MaxOperationsPerTransaction"/> operations.
+            </summary>
+            <param name="entityTypes">Entity types to register before rebuilding (with every type reachable from them); null for none.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of edges created or deleted.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.QueryAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="function"/> is Count or Any.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when a row with the same primary key already exists.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when an assignment changes a primary key to one that already exists.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.BeginTransaction">
+            <summary>
+            Begins an interactive transaction (see <see cref="T:Durable.LiteGraph.LiteGraphTransaction"/>).
+            </summary>
+            <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.Dispose">
+            <summary>
+            Disposes the backend, and the client when the backend created it (which, in LiteGraph's in-memory mode, writes
+            the database to its file). A client supplied in the settings is not disposed.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackend.DisposeAsync">
+            <summary>
+            Disposes the backend asynchronously (see <see cref="M:Durable.LiteGraph.LiteGraphBackend.Dispose"/>).
+            </summary>
+            <returns>A task.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphBackendSettings">
+            <summary>
+            Settings for a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/>: where the graph lives (an existing <see cref="T:LiteGraph.LiteGraphClient"/>, a
+            SQLite file, or LiteGraph's in-memory SQLite mode), which tenant and graph hold the data (created when missing),
+            and how the backend behaves (edge maintenance, push-down, logging, transaction limits).
+            <para>
+            Exactly one location is required: <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Client"/>, or <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Filename"/> and/or <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.InMemory"/>.
+            A client passed in is never disposed by Durable and must already be initialized
+            (<see cref="M:LiteGraph.LiteGraphClient.InitializeRepository"/>); a client created from a filename is initialized and owned by
+            the backend. LiteGraph keeps vector index files in an <c>indexes</c> directory next to the database file.
+            </para>
+            Thread safety: not thread-safe; configure before creating the backend. The backend reads the settings once, when
+            it is created; later changes have no effect on it.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.Client">
+            <summary>
+            Gets or sets an existing LiteGraph client to store data in; null to create one from <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Filename"/> /
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.InMemory"/>. Default: null. The backend never disposes a client passed here.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.Filename">
+            <summary>
+            Gets or sets the SQLite database file the backend creates its own client on; null for none. With
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.InMemory"/>, the file is loaded at start (when it exists) and written back when the backend is
+            disposed (LiteGraph's in-memory mode). Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.InMemory">
+            <summary>
+            Gets or sets whether the backend's own client uses LiteGraph's in-memory SQLite mode. Without a
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Filename"/>, a private temporary file location is used and deleted on dispose, so the data is
+            ephemeral, and (unless <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.GraphGuid"/> is set) a new graph is created, because LiteGraph shares one
+            in-memory database per process (opening an existing file in this mode loads it into that shared database).
+            The mode uses SQLite shared-cache in-memory storage, whose locking is coarser than a file database's; prefer a
+            file for concurrent workloads. Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.TenantGuid">
+            <summary>
+            Gets or sets the tenant GUID; null to use the first tenant named <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.TenantName"/> (created when none
+            exists). A tenant with this GUID is created when missing. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.TenantName">
+            <summary>
+            Gets or sets the tenant name used to find or create the tenant when <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.TenantGuid"/> is null, and to
+            name a created tenant. Default: "Durable". Must not be null or empty.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when set to null or empty.</exception>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.GraphGuid">
+            <summary>
+            Gets or sets the graph GUID; null to use the first graph named <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.GraphName"/> in the tenant (created
+            when none exists). A graph with this GUID is created when missing. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.GraphName">
+            <summary>
+            Gets or sets the graph name used to find or create the graph when <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.GraphGuid"/> is null, and to name
+            a created graph. Default: "Durable". Must not be null or empty.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when set to null or empty.</exception>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.MaintainEdges">
+            <summary>
+            Gets or sets whether foreign keys are maintained as edges (see <see cref="T:Durable.LiteGraph.LiteGraphRelationship"/>). Default:
+            true. When false, no edges are written; queries, navigations and includes are unaffected (they always resolve
+            relationships from the stored foreign key values).
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.PushDownDataFilters">
+            <summary>
+            Gets or sets whether exact string and non-negative integer equality (and string <c>Contains</c> lists) on root
+            columns are pushed down to LiteGraph as data filters. Labels and primary keys are always pushed down. Default:
+            true. Push-down only narrows candidates; the full filter is always evaluated client-side.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.PreserveNodeSubordinates">
+            <summary>
+            Gets or sets whether labels, tags and vectors added to Durable nodes outside Durable (for example with the
+            LiteGraph dashboard) are kept when Durable updates the node. Costs one extra read per updated row. Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.Logger">
+            <summary>
+            Gets or sets the logger for push-down plans (debug level) and backend events; null for none. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.JsonOptions">
+            <summary>
+            Gets or sets the JSON options used to store JSON columns; null for camelCase, non-indented output (the same as
+            the SQL providers). Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.MaxOperationsPerTransaction">
+            <summary>
+            Gets or sets the maximum number of LiteGraph operations (node and edge writes) in one LiteGraph graph
+            transaction. A Durable transaction whose writes exceed it cannot commit atomically and fails at commit (this
+            includes the transaction <see cref="T:Durable.Query.RepositoryBase`1"/> opens for CreateMany, UpsertMany and
+            UpdateMany, so split very large batches: each inserted row costs one operation plus one per foreign key edge);
+            a single set-based update or delete outside a transaction that exceeds it is applied in several graph
+            transactions. Default: 10000.
+            Minimum: 1. Maximum: 10000 (LiteGraph's limit).
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is outside 1..10000.</exception>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphBackendSettings.TransactionTimeoutSeconds">
+            <summary>
+            Gets or sets the timeout of one LiteGraph graph transaction, in seconds. Default: 60. Minimum: 1. Maximum: 3600.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is outside 1..3600.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackendSettings.#ctor">
+            <summary>
+            Instantiates settings with defaults (no location; set <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Client"/>, <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.Filename"/> or
+            <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.InMemory"/>).
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackendSettings.ForClient(LiteGraph.LiteGraphClient,System.Nullable{System.Guid},System.Nullable{System.Guid})">
+            <summary>
+            Creates settings for an existing, initialized client. The backend does not dispose it.
+            </summary>
+            <param name="client">Client. Must not be null.</param>
+            <param name="tenantGuid">Tenant GUID; null to find or create the tenant named "Durable".</param>
+            <param name="graphGuid">Graph GUID; null to find or create the graph named "Durable".</param>
+            <returns>The settings.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when client is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackendSettings.ForFile(System.String)">
+            <summary>
+            Creates settings for a SQLite database file (created when missing).
+            </summary>
+            <param name="filename">Database file path. Must not be null or empty.</param>
+            <returns>The settings.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when filename is null or empty.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackendSettings.ForInMemory">
+            <summary>
+            Creates settings for an ephemeral in-memory graph (LiteGraph's in-memory SQLite mode, nothing kept after dispose).
+            </summary>
+            <returns>The settings.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphBackendSettings.Validate">
+            <summary>
+            Validates the settings.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when no location or more than one kind of location is configured.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphIdentity">
+            <summary>
+            Deterministic GUIDs for nodes and edges. A node GUID is derived from the graph GUID, the entity's table name and
+            the canonical text of its stored key values, so a key lookup is a lookup by node GUID and the store's unique node
+            GUIDs enforce unique primary keys. An edge GUID is derived from the graph GUID, the relationship and the dependent
+            node GUID, so each foreign key has at most one edge. GUIDs are the first 16 bytes of a SHA-256 hash with the RFC 9562
+            version 8 (custom) and variant bits set.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentity.Node(System.Guid,System.String,System.Object[])">
+            <summary>
+            Returns the node GUID of an entity row.
+            </summary>
+            <param name="graphGuid">Graph GUID.</param>
+            <param name="table">Entity table name. Must not be null.</param>
+            <param name="storedKey">Stored key values in key order. Must not be null; values must not be null.</param>
+            <returns>The GUID.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when a key value is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentity.Edge(System.Guid,System.String,System.Guid)">
+            <summary>
+            Returns the edge GUID of a relationship from a dependent node.
+            </summary>
+            <param name="graphGuid">Graph GUID.</param>
+            <param name="relationshipId">Relationship identifier. Must not be null.</param>
+            <param name="dependentNode">Dependent node GUID.</param>
+            <returns>The GUID.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentity.KeyText(System.Object)">
+            <summary>
+            Returns the canonical text of a stored key value: equal values (as <see cref="T:Durable.Query.QueryValueComparer"/>
+            compares keys of the same column) have equal text.
+            </summary>
+            <param name="value">Stored value. Must not be null.</param>
+            <returns>The text. Never null.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphIdentitySequence">
+            <summary>
+            Generates auto-increment values for one entity type, like a database identity: values are never reused within the
+            process, rolled-back transactions leave gaps, and an explicitly stored value moves the sequence past it. The
+            sequence starts after the largest key stored in the graph (read once per process).
+            Thread safety: lock-free and safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphIdentitySequence.Initialized">
+            <summary>
+            Gets whether the sequence was initialized from storage.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentitySequence.Initialize(System.Int64)">
+            <summary>
+            Marks the sequence initialized and moves it past the largest stored value.
+            </summary>
+            <param name="largestStored">Largest stored value (0 when none).</param>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentitySequence.Next">
+            <summary>
+            Returns the next value.
+            </summary>
+            <returns>The value; the first is 1 in an empty graph.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphIdentitySequence.Observe(System.Int64)">
+            <summary>
+            Records a stored value so later generated values are greater.
+            </summary>
+            <param name="value">Stored value.</param>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphJsonCodec">
+            <summary>
+            Encodes stored column values as JSON values in a node's data object and decodes them back, losslessly:
+            strings, characters, booleans and Guids as JSON strings/booleans; integers and decimals as JSON numbers (decimals
+            keep their scale); finite doubles and floats as round-trippable JSON numbers and non-finite ones as strings
+            (<c>NaN</c>, <c>Infinity</c>, <c>-Infinity</c>); <see cref="T:System.DateTime"/> and <see cref="T:System.DateTimeOffset"/> in the
+            round-trip "O" format (ticks and <see cref="T:System.DateTimeKind"/> or offset preserved); <see cref="T:System.TimeSpan"/> in the
+            constant "c" format; <see cref="T:System.DateOnly"/> as <c>yyyy-MM-dd</c>; <see cref="T:System.TimeOnly"/> as
+            <c>HH:mm:ss.fffffff</c>; byte arrays as base64. Decoding is driven by the column's stored type, so the encoding
+            stays readable by LiteGraph tools while values round-trip exactly.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphJsonCodec.Write(System.Text.Json.Utf8JsonWriter,System.Object)">
+            <summary>
+            Writes a stored value.
+            </summary>
+            <param name="writer">Writer. Must not be null.</param>
+            <param name="value">Stored value; may be null.</param>
+            <exception cref="T:System.NotSupportedException">Thrown when the value's type has no JSON encoding.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphJsonCodec.Read(System.Text.Json.JsonElement,System.Type)">
+            <summary>
+            Reads a stored value of a given stored type.
+            </summary>
+            <param name="element">JSON value.</param>
+            <param name="storedType">Stored type of the column (see <see cref="M:Durable.LiteGraph.LiteGraphValueConverter.StoredType(Durable.ColumnMetadata)"/>). Must not be null.</param>
+            <returns>The stored value, or null for JSON null.</returns>
+            <exception cref="T:System.FormatException">Thrown when the JSON value cannot be read as the stored type.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphPendingNode">
+            <summary>
+            The state a write scope (a transaction, or a single operation outside one) has given a node: its current row, or
+            null when deleted, and what the node was in storage before the scope first wrote it, so a commit can detect that
+            another writer changed it in the meantime.
+            Thread safety: not thread-safe; owned by one scope.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphPendingNode.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphPendingNode.Current">
+            <summary>
+            Gets or sets the node's row as written by the scope; null when the scope deleted it.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphPendingNode.ExistedBefore">
+            <summary>
+            Gets whether the node existed in storage when the scope first wrote it.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphPendingNode.BaseSignature">
+            <summary>
+            Gets the signature of the stored node when the scope first wrote it; null when it did not exist.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphPendingNode.#ctor(Durable.EntityMetadata,Durable.LiteGraph.LiteGraphRow,System.Boolean,System.String)">
+            <summary>
+            Instantiates a pending node.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="current">Row written; null for a delete.</param>
+            <param name="existedBefore">Whether the node existed in storage before the scope wrote it.</param>
+            <param name="baseSignature">Signature of the stored node before the scope wrote it; null when it did not exist.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphPlanner">
+            <summary>
+            Decides what part of a filter is pushed down to LiteGraph. Only conditions whose LiteGraph evaluation is exactly
+            implied by the C# semantics are pushed, and only from the top-level conjunction (so a pushed condition is necessary
+            for a row to match): equality on every primary key column (or a key <c>Contains</c> list for single-column keys)
+            becomes a lookup by deterministic node GUIDs; with data push-down enabled, ordinal string equality and string
+            <c>Contains</c> lists on root columns become ExpressionTree <c>Equals</c>/<c>In</c> data filters, and equality with
+            a non-negative integer becomes an <c>Equals</c> filter (integer lists become an <c>Or</c> of equalities). Strings
+            with control or surrogate characters, case-insensitive comparisons, negative numbers (whose culture-dependent
+            formatting LiteGraph would inline) and everything else stay client-side. The complete filter is always evaluated
+            client-side afterwards, so push-down only narrows the candidate nodes.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphPlanner.#ctor(Durable.LiteGraph.LiteGraphValueConverter,System.Guid,System.Boolean)">
+            <summary>
+            Instantiates a planner.
+            </summary>
+            <param name="values">Value converter. Must not be null.</param>
+            <param name="graphGuid">Graph GUID (for node GUIDs).</param>
+            <param name="pushDownData">Whether data filters are pushed down.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when values is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphPlanner.Plan(Durable.Query.QuerySource,Durable.Query.QueryNode)">
+            <summary>
+            Plans the read of a filter's candidate rows.
+            </summary>
+            <param name="source">Root source of the filter. Must not be null.</param>
+            <param name="filter">Filter; null selects every row.</param>
+            <returns>The request. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphPlanner.Equality(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Returns the data filter selecting rows whose column equals a stored value, when it can be pushed down exactly.
+            </summary>
+            <param name="column">Root column. Must not be null.</param>
+            <param name="stored">Stored value. Must not be null.</param>
+            <returns>The filter, or null when it cannot be pushed down.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphQueryEvaluator">
+            <summary>
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees against LiteGraph rows with the C# semantics of
+            <see cref="T:Durable.Query.QueryEvaluator`1"/>. Values are compared in their stored form (enum names, converter provider values,
+            JSON text): parameter values are converted with <see cref="M:Durable.LiteGraph.LiteGraphValueConverter.ToStored(Durable.ColumnMetadata,System.Object)"/>, exactly as a
+            database compares column values with converted parameters. Related rows (navigation members, collections,
+            many-to-many junctions) come from a <see cref="T:Durable.LiteGraph.LiteGraphRowSet"/> loaded for the operation, through hash indexes.
+            Thread safety: not thread-safe; create one per operation.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryEvaluator.#ctor(Durable.LiteGraph.LiteGraphValueConverter,Durable.LiteGraph.LiteGraphRowSet)">
+            <summary>
+            Instantiates an evaluator.
+            </summary>
+            <param name="values">Value converter. Must not be null.</param>
+            <param name="related">Rows of the related entity types the evaluated trees reference. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryEvaluator.GetValue(Durable.EntityMetadata,Durable.LiteGraph.LiteGraphRow,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryEvaluator.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryEvaluator.NormalizeValue(Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphQueryPlan">
+            <summary>
+            Describes what a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/> asked LiteGraph for when it read candidate nodes: raised through
+            <see cref="E:Durable.LiteGraph.LiteGraphBackend.QueryPlanned"/> and logged at debug level. Push-down only narrows the candidates; the
+            complete Durable filter is always evaluated client-side afterwards with C# semantics, so push-down never changes
+            results.
+            Thread safety: immutable.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.Operation">
+            <summary>
+            Gets the backend operation that read the nodes: <c>Query</c>, <c>Count</c>, <c>Aggregate</c>, <c>Replace</c>,
+            <c>Update</c>, <c>Delete</c>, <c>Related</c> (rows of a related entity for navigations) or <c>Dependents</c>
+            (rows referencing a new principal, for edge maintenance). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.EntityType">
+            <summary>
+            Gets the entity type read. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.Label">
+            <summary>
+            Gets the node label read (the entity's table name). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.Strategy">
+            <summary>
+            Gets how the nodes were read.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.NodeGuids">
+            <summary>
+            Gets the node GUIDs read for <see cref="F:Durable.LiteGraph.LiteGraphReadStrategy.KeyLookup"/>; empty otherwise. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.DataFilter">
+            <summary>
+            Gets the LiteGraph data filter pushed down with a <see cref="F:Durable.LiteGraph.LiteGraphReadStrategy.LabelScan"/>, in
+            ExpressionTree text form; null when nothing was pushed down.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphQueryPlan.InTransaction">
+            <summary>
+            Gets whether the read was made inside a transaction (whose own writes are merged into the results).
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryPlan.#ctor(System.String,System.Type,System.String,Durable.LiteGraph.LiteGraphReadStrategy,System.Collections.Generic.IReadOnlyList{System.Guid},System.String,System.Boolean)">
+            <summary>
+            Instantiates a plan description.
+            </summary>
+            <param name="operation">Operation. Must not be null.</param>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="label">Node label. Must not be null.</param>
+            <param name="strategy">Strategy.</param>
+            <param name="nodeGuids">Node GUIDs for a key lookup; null for none.</param>
+            <param name="dataFilter">Pushed-down data filter text; null for none.</param>
+            <param name="inTransaction">Whether the read was made inside a transaction.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when operation, entityType or label is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphQueryPlan.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphReadRequest">
+            <summary>
+            What to read from LiteGraph for one entity: nodes by GUID, or the nodes of the entity's label narrowed by an
+            optional data filter.
+            Thread safety: immutable once built.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphReadRequest.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphReadRequest.Guids">
+            <summary>
+            Gets the node GUIDs to read; null for a label scan.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphReadRequest.Filter">
+            <summary>
+            Gets the data filter for a label scan; null for none.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphReadRequest.Strategy">
+            <summary>
+            Gets the strategy.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphReadRequest.#ctor(Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{System.Guid},ExpressionTree.Expr)">
+            <summary>
+            Instantiates a request.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="guids">Node GUIDs; null for a label scan.</param>
+            <param name="filter">Data filter for a label scan; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphReadRequest.All(Durable.EntityMetadata)">
+            <summary>
+            Creates a request for every node of an entity.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The request.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphReadStrategy">
+            <summary>
+            How a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/> reads the candidate nodes of a query from LiteGraph.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteGraph.LiteGraphReadStrategy.KeyLookup">
+            <summary>
+            The filter pins every primary key column (equality, or a key <c>Contains</c> list for single-column keys), so
+            the nodes are read by their deterministic GUIDs.
+            </summary>
+        </member>
+        <member name="F:Durable.LiteGraph.LiteGraphReadStrategy.LabelScan">
+            <summary>
+            The nodes carrying the entity's label are read, narrowed by a LiteGraph data filter when part of the filter
+            can be pushed down exactly.
+            </summary>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRelatedTypes">
+            <summary>
+            Finds the entity types whose rows a query tree reads besides its root: the related entity of each navigation
+            member and collection predicate and the junction entity of each many-to-many navigation.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelatedTypes.Collect(Durable.Query.QueryNode,System.Collections.Generic.Dictionary{System.Type,Durable.EntityMetadata})">
+            <summary>
+            Adds the related entities a tree references.
+            </summary>
+            <param name="node">Tree; null is accepted.</param>
+            <param name="into">Set the entities are added to, by entity type. Must not be null.</param>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRelationship">
+            <summary>
+            A foreign key a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/> maintains as edges: for every dependent row whose foreign key column
+            holds the key of an existing principal row, there is exactly one edge from the dependent's node to the principal's
+            node, labelled <see cref="P:Durable.LiteGraph.LiteGraphRelationship.Label"/>, with a GUID derived from the relationship and the dependent node (see
+            <see cref="M:Durable.LiteGraph.LiteGraphBackend.GetEdgeGuid(Durable.LiteGraph.LiteGraphRelationship,System.Guid)"/>). Relationships come from <see cref="T:Durable.ForeignKeyAttribute"/>s and from
+            reference, inverse and many-to-many navigations whose principal side is the principal's single-column primary key;
+            a many-to-many junction entity is stored as nodes like any other entity, with one edge to each side.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRelationship.Id">
+            <summary>
+            Gets the stable identifier of the relationship: <c>dependentTable.column-&gt;principalTable</c>. Never null.
+            It is stored in each edge's data as <c>relationship</c>.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRelationship.Label">
+            <summary>
+            Gets the edge label and name: the dependent's reference navigation property name for the foreign key when one
+            exists, otherwise the foreign key property name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRelationship.Dependent">
+            <summary>
+            Gets the dependent (referencing) entity metadata; edges start at its nodes. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRelationship.ForeignKey">
+            <summary>
+            Gets the foreign key column of <see cref="P:Durable.LiteGraph.LiteGraphRelationship.Dependent"/>. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRelationship.Principal">
+            <summary>
+            Gets the principal (referenced) entity metadata; edges end at its nodes. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationship.#ctor(Durable.EntityMetadata,Durable.ColumnMetadata,Durable.EntityMetadata,System.String)">
+            <summary>
+            Instantiates a relationship.
+            </summary>
+            <param name="dependent">Dependent entity. Must not be null.</param>
+            <param name="foreignKey">Foreign key column of the dependent. Must not be null.</param>
+            <param name="principal">Principal entity with a single-column primary key. Must not be null.</param>
+            <param name="label">Edge label. Must not be null or empty.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when label is empty.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationship.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRelationshipRegistry">
+            <summary>
+            Discovers the foreign keys a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/> maintains as edges. Registering an entity type walks
+            every type reachable from it through foreign keys and navigations (both directions), so an inverse or many-to-many
+            navigation declared on the principal is known as soon as any related type is used. A foreign key qualifies when it
+            references the principal's single-column primary key.
+            Thread safety: safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationshipRegistry.Register(Durable.EntityMetadata)">
+            <summary>
+            Registers an entity type and every type reachable from it.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationshipRegistry.ForDependent(System.Type)">
+            <summary>
+            Returns the relationships in which an entity is the dependent (its foreign keys).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The relationships. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationshipRegistry.ForPrincipal(System.Type)">
+            <summary>
+            Returns the relationships in which an entity is the principal (foreign keys referencing it).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The relationships. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRelationshipRegistry.All">
+            <summary>
+            Returns every registered relationship.
+            </summary>
+            <returns>The relationships ordered by identifier. Never null.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRepository`1">
+            <summary>
+            A repository stored in a LiteGraph graph through a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/>: the complete
+            <see cref="T:Durable.IRepository`1"/> surface from <see cref="T:Durable.Query.RepositoryBase`1"/>, with each entity row stored as a node
+            labelled with the entity's table name and foreign keys maintained as edges. Repositories created over the same
+            backend share the graph, so includes, navigation predicates and transactions work across entity types. An ambient
+            <see cref="T:Durable.TransactionScope"/> is used only when its transaction was created by the same backend.
+            Thread safety: safe for concurrent use once configured (see <see cref="T:Durable.Query.RepositoryBase`1"/>).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRepository`1.Store">
+            <summary>
+            Gets the LiteGraph backend. Never null. The repository does not own or dispose it.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRepository`1.#ctor(Durable.LiteGraph.LiteGraphBackend,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository.
+            </summary>
+            <param name="backend">Backend. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRepository`1.AcceptsAmbientTransaction(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRow">
+            <summary>
+            One entity row as read from (or about to be written to) a LiteGraph node: the node GUID, the stored column values
+            by ordinal, the node's creation time (which orders rows in insertion order) and a signature of the stored node used
+            to detect concurrent changes at commit.
+            Thread safety: not thread-safe; rows are treated as immutable once created.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.Guid">
+            <summary>
+            Gets the node GUID.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.Values">
+            <summary>
+            Gets the stored values by column ordinal. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.CreatedUtc">
+            <summary>
+            Gets the node creation time (UTC); rows are read in this order unless a query orders them.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.Signature">
+            <summary>
+            Gets the signature of the stored node (last update time and data) when the row was read from storage; null for
+            rows not read from storage.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphRow.Subordinates">
+            <summary>
+            Gets or sets the stored node with its labels, tags and vectors, when they were loaded (so updates can carry them
+            over); null otherwise.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRow.#ctor(System.Guid,Durable.EntityMetadata,System.Object[],System.DateTime,System.String)">
+            <summary>
+            Instantiates a row.
+            </summary>
+            <param name="guid">Node GUID.</param>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="values">Stored values by ordinal. Must not be null.</param>
+            <param name="createdUtc">Node creation time.</param>
+            <param name="signature">Signature of the stored node; null when not read from storage.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata or values is null.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphRowSet">
+            <summary>
+            The rows of related entity types loaded once for an operation, so navigation members, collection predicates and
+            many-to-many junctions are resolved from one consistent read per type instead of one store round trip per row.
+            Lookups by column are served from hash indexes built on first use, with the key equality of
+            <see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>.
+            Thread safety: not thread-safe; create and use one per operation.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRowSet.Contains(System.Type)">
+            <summary>
+            Determines whether the rows of an entity type are loaded.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>True when loaded.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRowSet.Add(Durable.EntityMetadata,System.Collections.Generic.List{Durable.LiteGraph.LiteGraphRow})">
+            <summary>
+            Adds the rows of an entity type.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="rows">Every row of the entity (including soft-deleted rows). Must not be null.</param>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphRowSet.Find(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Returns the rows of an entity whose column equals a key.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="column">Column of the entity. Must not be null.</param>
+            <param name="key">Key in stored form. Must not be null.</param>
+            <returns>The matching rows. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity's rows were not loaded.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphSelection">
+            <summary>
+            The candidate rows read for an operation and the evaluator (with the related rows it needs) that filters, orders
+            and computes over them.
+            Thread safety: not thread-safe; one per operation.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphSelection.Candidates">
+            <summary>
+            Gets the candidate rows in storage order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphSelection.Evaluator">
+            <summary>
+            Gets the evaluator. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphSelection.#ctor(System.Collections.Generic.List{Durable.LiteGraph.LiteGraphRow},Durable.LiteGraph.LiteGraphQueryEvaluator)">
+            <summary>
+            Instantiates a selection.
+            </summary>
+            <param name="candidates">Candidate rows. Must not be null.</param>
+            <param name="evaluator">Evaluator. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphTableSchema">
+            <summary>
+            The node layout of one entity type: the node label (<see cref="P:Durable.EntityMetadata.TableName"/>), column ordinals in
+            <see cref="P:Durable.LiteGraph.LiteGraphRow.Values"/>, each column's stored type and the ordinals of the key columns. Cached per type.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTableSchema.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTableSchema.Label">
+            <summary>
+            Gets the node label. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTableSchema.StoredTypes">
+            <summary>
+            Gets the stored type of each column, by ordinal. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTableSchema.KeyOrdinals">
+            <summary>
+            Gets the ordinals of the key columns in key order. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTableSchema.For(Durable.EntityMetadata)">
+            <summary>
+            Gets the cached schema of an entity.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <returns>The schema. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTableSchema.Ordinal(Durable.ColumnMetadata)">
+            <summary>
+            Returns the ordinal of a column.
+            </summary>
+            <param name="column">Column of <see cref="P:Durable.LiteGraph.LiteGraphTableSchema.Metadata"/>. Must not be null.</param>
+            <returns>The ordinal.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the column does not belong to the entity.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTableSchema.KeyOf(System.Object[])">
+            <summary>
+            Extracts the key values of a row's values.
+            </summary>
+            <param name="values">Row values by ordinal. Must not be null.</param>
+            <returns>The key values in key order. Never null.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphTransaction">
+            <summary>
+            An interactive transaction over a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/>. LiteGraph's own graph transactions execute a
+            complete batch of operations atomically; this class bridges Durable's interactive model to it: writes made in the
+            transaction are kept in the transaction (reads in the transaction see them merged over the stored graph), and
+            <see cref="M:Durable.LiteGraph.LiteGraphTransaction.Commit"/> applies all of them as one LiteGraph graph transaction, so they become visible together or not
+            at all. Rolling back (or disposing without committing) discards them; nothing was written to the graph.
+            <para>
+            Isolation: reads see committed data plus the transaction's own writes (read committed). Writes are checked at
+            commit: if another writer changed or deleted a node this transaction wrote after the transaction first wrote it, or
+            created a node with a key this transaction inserted, the commit fails with <see cref="T:System.InvalidOperationException"/>
+            and the transaction is rolled back (first committer wins). The check and the commit are atomic among writers of the
+            same backend instance; writers in other processes are only caught by LiteGraph's unique node GUIDs. A transaction
+            whose writes need more than <see cref="P:Durable.LiteGraph.LiteGraphBackendSettings.MaxOperationsPerTransaction"/> graph operations
+            fails at commit.
+            </para>
+            Thread safety: safe for concurrent use; operations on one transaction are serialized.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTransaction.IsCompleted">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTransaction.Backend">
+            <summary>
+            Gets the backend that created the transaction. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphTransaction.PendingOperationCount">
+            <summary>
+            Gets the number of LiteGraph operations (node and edge writes) the transaction will apply at commit.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.Commit">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed, when another writer changed a written node, or when LiteGraph rejects the writes; the transaction is then rolled back.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.Rollback">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.CommitAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed, when another writer changed a written node, or when LiteGraph rejects the writes; the transaction is then rolled back.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.RollbackAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.Dispose">
+            <summary>
+            Rolls back the transaction when it has not completed.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphTransaction.DisposeAsync">
+            <summary>
+            Rolls back the transaction when it has not completed.
+            </summary>
+            <returns>A task.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphValueConverter">
+            <summary>
+            Converts between entity property values and the values a <see cref="T:Durable.LiteGraph.LiteGraphBackend"/> stores in node data, the
+            way a database driver would: per-property <see cref="T:Durable.IValueConverter"/>s store their provider value; JSON columns
+            store serialized text; enums store their name (or their numeric value with <see cref="F:Durable.Flags.Integer"/>); byte
+            arrays are copied; numbers are stored in the column's CLR type. Decimals keep full precision and
+            <see cref="T:System.DateTime"/> values keep their <see cref="T:System.DateTimeKind"/>. The stored form is also the form query values
+            are compared in.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphValueConverter.JsonOptions">
+            <summary>
+            Gets the JSON options used for JSON columns. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphValueConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates a converter.
+            </summary>
+            <param name="jsonOptions">JSON options. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when jsonOptions is null.</exception>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphValueConverter.StoredType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the CLR type a column's values have in stored form.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The stored type. Never null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphValueConverter.ToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a property (model) value to its stored value. Integral values for enum columns are converted to the
+            enum first, as SQL parameters are.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Model value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphValueConverter.ComputedToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a value computed by a query expression (already in the stored domain, or a plain CLR value) to the
+            stored representation of a column, applying a converter only to values of the converter's model type.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Computed value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphValueConverter.FromStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a stored value back to a property value.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="stored">Stored value; may be null.</param>
+            <returns>The property value, or null.</returns>
+        </member>
+        <member name="T:Durable.LiteGraph.LiteGraphWriteScope">
+            <summary>
+            The writes of a transaction, or of one operation outside a transaction: the nodes written so far (read back by
+            reads in the same scope, which is how a transaction reads its own writes) and the LiteGraph graph-transaction
+            operations that apply them, in order. An operation that fails is undone from the scope with
+            <see cref="M:Durable.LiteGraph.LiteGraphWriteScope.Checkpoint"/> and <see cref="M:Durable.LiteGraph.LiteGraphWriteScope.Restore"/>, so a transaction keeps only complete operations.
+            Thread safety: not thread-safe; the owner serializes access.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphWriteScope.Pending">
+            <summary>
+            Gets the nodes written by the scope, by node GUID. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphWriteScope.Operations">
+            <summary>
+            Gets the graph-transaction operations, in order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.LiteGraph.LiteGraphWriteScope.StoredExistence">
+            <summary>
+            Gets cached existence checks of stored nodes (GUID to exists). Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphWriteScope.Checkpoint">
+            <summary>
+            Records the state before an operation so it can be undone with <see cref="M:Durable.LiteGraph.LiteGraphWriteScope.Restore"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphWriteScope.Restore">
+            <summary>
+            Undoes everything recorded since the last <see cref="M:Durable.LiteGraph.LiteGraphWriteScope.Checkpoint"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphWriteScope.Write(Durable.EntityMetadata,System.Guid,Durable.LiteGraph.LiteGraphRow,Durable.LiteGraph.LiteGraphRow)">
+            <summary>
+            Records that the scope wrote a node.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="guid">Node GUID.</param>
+            <param name="current">Row now; null for a delete.</param>
+            <param name="stored">The node's row in storage before the scope first wrote it, when it existed; null otherwise.</param>
+        </member>
+        <member name="M:Durable.LiteGraph.LiteGraphWriteScope.Clear">
+            <summary>
+            Clears every write.
+            </summary>
+        </member>
+    </members>
+</doc>
