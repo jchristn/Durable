@@ -521,7 +521,7 @@ namespace Durable.Sql
                 throw new InvalidOperationException("No rows were affected during update for entity with key " + FormatKey(key) + ".");
 
             T? current = (await NewQuery(transaction).WhereKey(key).Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
-            T resolved = await ResolveConflictAsync(entity, current, key).ConfigureAwait(false);
+            T resolved = await ResolveConflictAsync(entity, current, key, token).ConfigureAwait(false);
             return await UpdateAsync(resolved, transaction, token).ConfigureAwait(false);
         }
 
@@ -1409,7 +1409,7 @@ namespace Durable.Sql
             return result;
         }
 
-        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key)
+        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key, CancellationToken token)
         {
             if (current == null)
                 throw new OptimisticConcurrencyException("Entity " + typeof(T).Name + " with key " + FormatKey(key) + " was deleted by another process.");
@@ -1418,9 +1418,13 @@ namespace Durable.Sql
             TryResolveConflictResult<T> outcome;
             try
             {
-                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
+                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy, token).ConfigureAwait(false);
             }
             catch (OptimisticConcurrencyException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
             {
                 throw;
             }

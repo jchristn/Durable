@@ -251,14 +251,20 @@
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1">
             <summary>
-            A concurrency conflict resolver that always chooses the incoming (client-side) entity as the winner.
-            This resolver implements a "client wins" strategy where the client's version always takes precedence over the current database version.
+            A concurrency conflict resolver that always chooses the incoming (client-side) entity as the winner: the caller's
+            entity is written over whatever another writer stored. Stateless and thread-safe.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy used by this resolver.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.ClientWins"/>.
+            This resolver ignores it and always lets the client win.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
@@ -268,107 +274,122 @@
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>The incoming entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>The incoming entity.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict by returning the incoming entity (client wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains the incoming entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the incoming entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict by returning the incoming entity (client wins).
-            This method always succeeds for the ClientWinsResolver.
+            Attempts to resolve a concurrency conflict by returning the incoming entity (client wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity (always the incoming entity).</param>
-            <returns>Always returns true, indicating successful conflict resolution.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">When this method returns, the incoming entity.</param>
+            <returns>Always true.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict by returning the incoming entity (client wins).
-            This method always succeeds for the ClientWinsResolver.
+            Asynchronously attempts to resolve a concurrency conflict by returning the incoming entity (client wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains a successful resolution result with the incoming entity.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is a successful resolution carrying the incoming entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1">
             <summary>
-            A concurrency conflict resolver that always chooses the current database entity as the winner.
-            This resolver implements a "database wins" strategy where the database's current version always takes precedence over the incoming client version.
+            A concurrency conflict resolver that always chooses the current stored entity as the winner: the caller's changes
+            are discarded and the stored row is kept. Stateless and thread-safe.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy used by this resolver.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.DatabaseWins"/>.
+            This resolver ignores it and always lets the stored entity win.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Resolves a concurrency conflict by returning the current database entity (database wins).
+            Resolves a concurrency conflict by returning the current stored entity (database wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>The current database entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>The current stored entity.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously resolves a concurrency conflict by returning the current database entity (database wins).
+            Asynchronously resolves a concurrency conflict by returning the current stored entity (database wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains the current database entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the current stored entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict by returning the current database entity (database wins).
-            This method always succeeds for the DatabaseWinsResolver.
+            Attempts to resolve a concurrency conflict by returning the current stored entity (database wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity (always the current database entity).</param>
-            <returns>Always returns true, indicating successful conflict resolution.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">When this method returns, the current stored entity.</param>
+            <returns>Always true.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict by returning the current database entity (database wins).
-            This method always succeeds for the DatabaseWinsResolver.
+            Asynchronously attempts to resolve a concurrency conflict by returning the current stored entity (database wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains a successful resolution result with the current database entity.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is a successful resolution carrying the current stored entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1">
             <summary>
             A default concurrency conflict resolver that delegates to specialized resolvers based on the conflict resolution strategy.
-            This resolver acts as a factory and dispatcher, routing conflict resolution to the appropriate strategy-specific resolver.
+            This resolver acts as a dispatcher, routing conflict resolution to the appropriate strategy-specific resolver
+            (<see cref="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1"/>, <see cref="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1"/>, <see cref="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1"/> or
+            <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/>). Repositories use <c>new DefaultConflictResolver&lt;T&gt;(ConflictResolutionStrategy.ThrowException)</c>
+            when no resolver is assigned. Thread-safe for resolution; changing <see cref="P:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.DefaultStrategy"/> while updates are running is not synchronized.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type with a parameterless constructor.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy to use when the strategy is set to Custom.
+            Gets or sets the strategy repositories pass to this resolver, which is also used when
+            <see cref="F:Durable.ConflictResolutionStrategy.Custom"/> is passed. Default: the constructor argument
+            (<see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/> unless specified).
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.#ctor(Durable.ConflictResolutionStrategy)">
@@ -386,8 +407,9 @@
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
             <returns>The resolved entity according to the specified strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the selected strategy is <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict by delegating to the appropriate strategy-specific resolver.
             </summary>
@@ -395,7 +417,10 @@
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task that represents the asynchronous operation. The task result contains the resolved entity according to the specified strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown (when awaited) if the selected strategy is <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
@@ -408,7 +433,7 @@
             <param name="resolvedEntity">When this method returns, contains the resolved entity if the resolution was successful.</param>
             <returns>True if the conflict was successfully resolved; otherwise, false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously attempts to resolve a concurrency conflict by delegating to the appropriate strategy-specific resolver.
             </summary>
@@ -416,204 +441,163 @@
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task that represents the asynchronous operation. The task result contains the conflict resolution result.</returns>
-        </member>
-        <member name="T:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1">
-            <summary>
-            An advanced concurrency conflict resolver that merges changes from different sources based on configurable conflict behavior.
-            Provides enhanced comparison capabilities including array and collection comparison.
-            </summary>
-            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
-        </member>
-        <member name="P:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.DefaultStrategy">
-            <summary>
-            Gets or sets the default strategy used for conflict resolution. Defaults to MergeChanges.
-            </summary>
-        </member>
-        <member name="T:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior">
-            <summary>
-            Defines the behavior when conflicts are detected between current and incoming changes.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.IncomingWins">
-            <summary>
-            The incoming value takes precedence in conflicts.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.CurrentWins">
-            <summary>
-            The current value takes precedence in conflicts.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.ThrowException">
-            <summary>
-            Throws an exception when conflicts are detected.
-            </summary>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.#ctor(Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver{`0}.ConflictBehavior,System.String[])">
-            <summary>
-            Initializes a new instance of the ImprovedMergeChangesResolver with specified conflict behavior and ignored properties.
-            </summary>
-            <param name="conflictBehavior">The behavior to use when conflicts are detected. Defaults to IncomingWins.</param>
-            <param name="ignoredProperties">Properties to ignore during merge operations.</param>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Resolves conflicts between current and incoming entities by merging changes based on the original entity state.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A merged entity with resolved conflicts</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters are null</exception>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Asynchronously resolves conflicts between current and incoming entities.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the merged entity with resolved conflicts</returns>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
-            <summary>
-            Attempts to resolve conflicts between entities without throwing exceptions.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <param name="resolvedEntity">The resolved entity if successful, null otherwise</param>
-            <returns>True if conflict resolution succeeded, false otherwise</returns>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Asynchronously attempts to resolve conflicts between entities without throwing exceptions.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the result of the conflict resolution attempt</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1">
             <summary>
-            A concurrency conflict resolver that merges changes from different sources.
-            When conflicts occur, incoming changes take precedence over current changes.
+            A concurrency conflict resolver that merges property by property against the original snapshot: a property only
+            the stored row changed keeps the stored value, a property only the caller changed takes the caller's value, and a
+            property both changed is decided by <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> (incoming wins by default). Arrays and
+            collections are compared element by element. Properties named in the constructor are never merged and keep the
+            stored value. Thread-safe: the resolver holds only immutable configuration.
             </summary>
-            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
+            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy used for conflict resolution. Defaults to MergeChanges.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.MergeChanges"/>.
+            This resolver ignores it and always merges.
+            </summary>
+        </member>
+        <member name="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior">
+            <summary>
+            Gets what happens to a property both sides changed. Default: <see cref="F:Durable.MergeConflictBehavior.IncomingWins"/>.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.#ctor(System.String[])">
             <summary>
-            Initializes a new instance of the MergeChangesResolver with specified properties to ignore during merge operations.
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> class in which the incoming value wins
+            when both sides changed a property.
             </summary>
-            <param name="ignoredProperties">Properties to ignore during merge operations</param>
+            <param name="ignoredProperties">Names of properties that are never merged (the stored value is kept). May be null or empty.</param>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.#ctor(Durable.MergeConflictBehavior,System.String[])">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> class with the given behavior for
+            properties both sides changed.
+            </summary>
+            <param name="conflictBehavior">What to do with a property both sides changed.</param>
+            <param name="ignoredProperties">Names of properties that are never merged (the stored value is kept). May be null or empty.</param>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Resolves conflicts between current and incoming entities by merging changes based on the original entity state.
-            When both current and incoming have changes to the same property, incoming changes take precedence.
+            Merges the current and incoming entities against the original snapshot.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A merged entity with resolved conflicts</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters are null</exception>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>A new merged entity.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters is null.</exception>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when both sides changed a property and <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> is <see cref="F:Durable.MergeConflictBehavior.ThrowException"/>.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously resolves conflicts between current and incoming entities.
+            Asynchronously merges the current and incoming entities against the original snapshot. The merge itself is
+            synchronous; the method exists for interface symmetry.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the merged entity with resolved conflicts</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the merged entity.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters is null.</exception>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when both sides changed a property and <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> is <see cref="F:Durable.MergeConflictBehavior.ThrowException"/>.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve conflicts between entities without throwing exceptions.
+            Attempts to merge the entities without throwing when the merge is not possible.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <param name="resolvedEntity">The resolved entity if successful, null otherwise</param>
-            <returns>True if conflict resolution succeeded, false otherwise</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">The merged entity when successful; otherwise null.</param>
+            <returns>True if the merge succeeded; otherwise false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve conflicts between entities without throwing exceptions.
+            Asynchronously attempts to merge the entities without throwing when the merge is not possible.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the result of the conflict resolution attempt</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result describes the merge attempt.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1">
             <summary>
-            A concurrency conflict resolver that throws exceptions when conflicts are detected.
-            This resolver never attempts to merge or resolve conflicts automatically.
+            A concurrency conflict resolver that never resolves a conflict: the resolve methods throw
+            <see cref="T:Durable.ConcurrencyConflictException"/> and the try methods report failure, so the repository surfaces an
+            <see cref="T:Durable.OptimisticConcurrencyException"/>. This is the behavior of the repository default
+            (<c>DefaultConflictResolver&lt;T&gt;</c> with <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>).
+            Stateless and thread-safe.
             </summary>
-            <typeparam name="T">The entity type that must be a reference type</typeparam>
+            <typeparam name="T">The entity type that must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy used for conflict resolution. Always set to ThrowException.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.
+            This resolver ignores it.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Throws a ConcurrencyConflictException when called, as this resolver does not attempt to resolve conflicts.
+            Always throws, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>Never returns normally, always throws an exception</returns>
-            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when conflicts are detected</exception>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>Never returns normally.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown; the exception carries the three entities.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Throws a ConcurrencyConflictException when called, as this resolver does not attempt to resolve conflicts.
+            Always fails, because this resolver does not resolve conflicts. The returned task is faulted.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>Never returns normally, always throws an exception</returns>
-            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when conflicts are detected</exception>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A faulted task.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when the task is awaited.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve conflicts but always returns false as this resolver does not resolve conflicts.
+            Always reports failure, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <param name="resolvedEntity">Always set to null</param>
-            <returns>Always returns false</returns>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">Always null.</param>
+            <returns>Always false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve conflicts but always returns a failure result.
+            Always reports failure, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>A task containing a failure result with Success set to false</returns>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result has <see cref="P:Durable.TryResolveConflictResult`1.Success"/> set to false.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConfigurationSettingResult">
             <summary>
@@ -1510,55 +1494,72 @@
         </member>
         <member name="T:Durable.IConcurrencyConflictResolver`1">
             <summary>
-            Provides methods for resolving conflicts that occur during concurrent entity operations.
+            Resolves an optimistic-concurrency conflict detected by an update: the row in storage no longer carries the
+            version the caller read. A repository calls <see cref="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)"/> (or
+            <see cref="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)"/>) with the current stored entity, the caller's entity and the
+            original snapshot; when resolution succeeds the resolved entity is written with the current version,
+            otherwise the repository throws <see cref="T:Durable.OptimisticConcurrencyException"/>.
+            Built-in implementations live in <c>Durable.ConcurrencyConflictResolvers</c>; repositories default to
+            <c>DefaultConflictResolver&lt;T&gt;</c> with <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.
+            Implementations should be stateless or thread-safe, because one resolver instance may serve concurrent updates.
             </summary>
             <typeparam name="T">The entity type for which conflicts are resolved.</typeparam>
         </member>
         <member name="P:Durable.IConcurrencyConflictResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy to use when resolving conflicts.
+            Gets or sets the strategy the repository passes to the resolve methods. Fixed-strategy resolvers
+            (client wins, database wins, merge, throw) ignore it; <c>DefaultConflictResolver&lt;T&gt;</c> uses it to pick the
+            strategy, and also when <see cref="F:Durable.ConflictResolutionStrategy.Custom"/> is passed.
             </summary>
         </member>
         <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
             Resolves a concurrency conflict between entities using the specified strategy.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
             <returns>The resolved entity after applying the conflict resolution strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the resolver cannot or will not resolve the conflict.</exception>
         </member>
-        <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict between entities using the specified strategy.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task representing the asynchronous operation, containing the resolved entity.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the resolver cannot or will not resolve the conflict.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict between entities using the specified strategy.
+            Attempts to resolve a concurrency conflict between entities using the specified strategy, without throwing
+            when resolution is not possible.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity if resolution was successful; otherwise, the default value.</param>
-            <returns>true if the conflict was successfully resolved; otherwise, false.</returns>
+            <param name="resolvedEntity">When this method returns true, the resolved entity; otherwise null.</param>
+            <returns>True if the conflict was successfully resolved; otherwise, false.</returns>
         </member>
-        <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict between entities using the specified strategy.
+            Asynchronously attempts to resolve a concurrency conflict between entities using the specified strategy,
+            without throwing when resolution is not possible.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
-            <returns>A task representing the asynchronous operation, containing the result of the conflict resolution attempt.</returns>
+            <param name="token">Cancellation token.</param>
+            <returns>A task containing the result of the conflict resolution attempt.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.IDefaultValueProvider">
             <summary>
@@ -2855,6 +2856,28 @@
             <param name="type">Type. Must not be null.</param>
             <returns>The default value, or null.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when type is null.</exception>
+        </member>
+        <member name="T:Durable.MergeConflictBehavior">
+            <summary>
+            What <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> does with a property that both the
+            incoming entity and the stored entity changed relative to the original snapshot.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.IncomingWins">
+            <summary>
+            The incoming (caller's) value wins. This is the default.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.CurrentWins">
+            <summary>
+            The current stored value wins.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.ThrowException">
+            <summary>
+            The merge fails with a <see cref="T:Durable.ConcurrencyConflictException"/> naming the property, so the repository
+            reports the conflict instead of choosing a value.
+            </summary>
         </member>
         <member name="T:Durable.NamingConvention">
             <summary>

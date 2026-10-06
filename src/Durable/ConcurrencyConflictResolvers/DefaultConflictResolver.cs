@@ -2,11 +2,15 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     using System;
     using System.Diagnostics.CodeAnalysis;
+    using System.Threading;
     using System.Threading.Tasks;
     
     /// <summary>
     /// A default concurrency conflict resolver that delegates to specialized resolvers based on the conflict resolution strategy.
-    /// This resolver acts as a factory and dispatcher, routing conflict resolution to the appropriate strategy-specific resolver.
+    /// This resolver acts as a dispatcher, routing conflict resolution to the appropriate strategy-specific resolver
+    /// (<see cref="ThrowExceptionResolver{T}"/>, <see cref="ClientWinsResolver{T}"/>, <see cref="DatabaseWinsResolver{T}"/> or
+    /// <see cref="MergeChangesResolver{T}"/>). Repositories use <c>new DefaultConflictResolver&lt;T&gt;(ConflictResolutionStrategy.ThrowException)</c>
+    /// when no resolver is assigned. Thread-safe for resolution; changing <see cref="DefaultStrategy"/> while updates are running is not synchronized.
     /// </summary>
     /// <typeparam name="T">The type of entity being resolved. Must be a reference type with a parameterless constructor.</typeparam>
     public class DefaultConflictResolver<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T> : IConcurrencyConflictResolver<T> where T : class, new()
@@ -14,7 +18,9 @@ namespace Durable.ConcurrencyConflictResolvers
         #region Public-Members
 
         /// <summary>
-        /// Gets or sets the default conflict resolution strategy to use when the strategy is set to Custom.
+        /// Gets or sets the strategy repositories pass to this resolver, which is also used when
+        /// <see cref="ConflictResolutionStrategy.Custom"/> is passed. Default: the constructor argument
+        /// (<see cref="ConflictResolutionStrategy.ThrowException"/> unless specified).
         /// </summary>
         public ConflictResolutionStrategy DefaultStrategy { get; set; }
 
@@ -56,6 +62,7 @@ namespace Durable.ConcurrencyConflictResolvers
         /// <param name="originalEntity">The original entity state used as baseline for the update.</param>
         /// <param name="strategy">The conflict resolution strategy to apply.</param>
         /// <returns>The resolved entity according to the specified strategy.</returns>
+        /// <exception cref="ConcurrencyConflictException">Thrown when the selected strategy is <see cref="ConflictResolutionStrategy.ThrowException"/>.</exception>
         public T ResolveConflict(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
         {
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
@@ -69,11 +76,14 @@ namespace Durable.ConcurrencyConflictResolvers
         /// <param name="incomingEntity">The incoming entity from the client.</param>
         /// <param name="originalEntity">The original entity state used as baseline for the update.</param>
         /// <param name="strategy">The conflict resolution strategy to apply.</param>
+        /// <param name="token">Cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains the resolved entity according to the specified strategy.</returns>
-        public Task<T> ResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        /// <exception cref="ConcurrencyConflictException">Thrown (when awaited) if the selected strategy is <see cref="ConflictResolutionStrategy.ThrowException"/>.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        public Task<T> ResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy, CancellationToken token = default)
         {
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
-            return resolver.ResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);
+            return resolver.ResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy, token);
         }
         
         /// <summary>
@@ -98,11 +108,13 @@ namespace Durable.ConcurrencyConflictResolvers
         /// <param name="incomingEntity">The incoming entity from the client.</param>
         /// <param name="originalEntity">The original entity state used as baseline for the update.</param>
         /// <param name="strategy">The conflict resolution strategy to apply.</param>
+        /// <param name="token">Cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains the conflict resolution result.</returns>
-        public Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy)
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        public Task<TryResolveConflictResult<T>> TryResolveConflictAsync(T currentEntity, T incomingEntity, T originalEntity, ConflictResolutionStrategy strategy, CancellationToken token = default)
         {
             IConcurrencyConflictResolver<T> resolver = GetResolver(strategy);
-            return resolver.TryResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy);
+            return resolver.TryResolveConflictAsync(currentEntity, incomingEntity, originalEntity, strategy, token);
         }
 
         #endregion
