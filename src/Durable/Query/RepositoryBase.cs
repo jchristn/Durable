@@ -909,11 +909,8 @@ namespace Durable.Query
                         false,
                         version.PropertyType)));
                     break;
-                case VersionColumnType.Timestamp:
-                    assignments.Add(new FieldAssignment(version, new ValueNode(DateTime.UtcNow, version, version.PropertyType)));
-                    break;
-                case VersionColumnType.Guid:
-                    assignments.Add(new FieldAssignment(version, new ValueNode(Guid.NewGuid(), version, version.PropertyType)));
+                default:
+                    assignments.Add(new FieldAssignment(version, new ValueNode(Metadata.VersionInfo.CreateSetBasedVersion(), version, version.PropertyType)));
                     break;
             }
         }

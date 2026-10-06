@@ -6407,95 +6407,134 @@
         </member>
         <member name="T:Durable.VersionColumnAttribute">
             <summary>
-            Attribute to mark a property as a version column for concurrency control
+            Marks a property as the optimistic-concurrency version column: updates only succeed when the stored value still
+            equals the value the caller read, and every write replaces it (see <see cref="T:Durable.VersionColumnType"/>). At most one
+            property per entity may carry this attribute. Thread safety: immutable.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnAttribute.Type">
             <summary>
-            Gets the type of version column
+            Gets the declared version type, or null when it is inferred from the property type: integer types use
+            <see cref="F:Durable.VersionColumnType.Integer"/>, <see cref="T:System.DateTime"/> uses <see cref="F:Durable.VersionColumnType.Timestamp"/>,
+            <see cref="T:System.Guid"/> uses <see cref="F:Durable.VersionColumnType.Guid"/> and <c>byte[]</c> uses
+            <see cref="F:Durable.VersionColumnType.BinaryCounter"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.VersionColumnAttribute.#ctor">
+            <summary>
+            Marks a version column whose type is inferred from the property type (see <see cref="P:Durable.VersionColumnAttribute.Type"/>).
             </summary>
         </member>
         <member name="M:Durable.VersionColumnAttribute.#ctor(Durable.VersionColumnType)">
             <summary>
-            Initializes a new instance of the VersionColumnAttribute class
+            Marks a version column of the given type. The property type must match it (validated when the entity's
+            metadata is built).
             </summary>
-            <param name="type">The type of version column</param>
+            <param name="type">The version type.</param>
         </member>
         <member name="T:Durable.VersionColumnInfo">
             <summary>
-            Contains information about a version column property
+            The resolved version column of an entity (<see cref="P:Durable.EntityMetadata.VersionInfo"/>): its column, property,
+            effective <see cref="T:Durable.VersionColumnType"/>, and how new values are produced.
+            Thread safety: immutable; safe to share.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.ColumnName">
             <summary>
-            Gets or sets the database column name
+            Gets the database column name. Never null.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.Property">
             <summary>
-            Gets or sets the property information
+            Gets the mapped property. Never null.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.Type">
             <summary>
-            Gets or sets the version column type
+            Gets the effective version type (declared, or inferred from the property type).
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.PropertyType">
             <summary>
-            Gets or sets the property type
+            Gets the property type. Never null.
             </summary>
+        </member>
+        <member name="M:Durable.VersionColumnInfo.#ctor(System.String,System.Reflection.PropertyInfo,System.Nullable{Durable.VersionColumnType})">
+            <summary>
+            Instantiates the version column description, validating that the property type suits the version type.
+            </summary>
+            <param name="columnName">Column name. Must not be null.</param>
+            <param name="property">Property. Must not be null.</param>
+            <param name="declaredType">Declared version type, or null to infer it from the property type.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnName or property is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the type cannot be inferred or does not suit the property type.</exception>
         </member>
         <member name="M:Durable.VersionColumnInfo.GetValue(System.Object)">
             <summary>
-            Gets the version value from the specified entity
+            Gets the version value from the specified entity.
             </summary>
-            <param name="entity">The entity to get the version from</param>
-            <returns>The version value</returns>
+            <param name="entity">The entity; null returns null.</param>
+            <returns>The version value; may be null.</returns>
         </member>
         <member name="M:Durable.VersionColumnInfo.SetValue(System.Object,System.Object)">
             <summary>
-            Sets the version value on the specified entity
+            Sets the version value on the specified entity.
             </summary>
-            <param name="entity">The entity to set the version on</param>
-            <param name="value">The version value to set</param>
+            <param name="entity">The entity; null does nothing.</param>
+            <param name="value">The version value.</param>
         </member>
         <member name="M:Durable.VersionColumnInfo.IncrementVersion(System.Object)">
             <summary>
-            Increments the version value based on the version column type
+            Returns the version value that replaces <paramref name="currentVersion"/> on an entity update.
             </summary>
-            <param name="currentVersion">The current version value</param>
-            <returns>The incremented version value</returns>
+            <param name="currentVersion">The current value; null yields <see cref="M:Durable.VersionColumnInfo.GetDefaultVersion"/>.</param>
+            <returns>The next value. Never null.</returns>
         </member>
         <member name="M:Durable.VersionColumnInfo.GetDefaultVersion">
             <summary>
-            Gets the default version value based on the version column type
+            Returns the version value of a newly created row: 1 for integers, the current UTC time, a new GUID, or the
+            8-byte counter value 1.
             </summary>
-            <returns>The default version value</returns>
+            <returns>The initial value. Never null.</returns>
+        </member>
+        <member name="M:Durable.VersionColumnInfo.CreateSetBasedVersion">
+            <summary>
+            Returns the value a set-based update (UpdateField, BatchUpdate) writes to every affected row, for types that
+            are not incremented in the database: the current UTC time, a new GUID, or an 8-byte counter value derived from
+            the current UTC ticks (larger than any per-row increment of a counter that started at 1).
+            </summary>
+            <returns>The value. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown for <see cref="F:Durable.VersionColumnType.Integer"/>, which set-based updates increment in the database.</exception>
         </member>
         <member name="T:Durable.VersionColumnType">
             <summary>
-            Specifies the type of version column for concurrency control
+            How a <see cref="T:Durable.VersionColumnAttribute"/> column's value changes on each update. Durable generates every new
+            value itself (client side); no version type relies on a database-generated value such as SQL Server's
+            <c>rowversion</c>.
             </summary>
         </member>
-        <member name="F:Durable.VersionColumnType.RowVersion">
+        <member name="F:Durable.VersionColumnType.BinaryCounter">
             <summary>
-            Binary row version (typically used with SQL Server ROWVERSION)
+            An 8-byte big-endian counter stored in a <c>byte[]</c> property (a binary/blob column). New rows start at
+            1 and each entity update increments it; set-based updates (UpdateField, BatchUpdate) assign a fresh value derived
+            from the current UTC time so held copies become stale. This is not SQL Server's server-generated
+            <c>rowversion</c>/<c>timestamp</c> type: map it to an ordinary binary column.
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Timestamp">
             <summary>
-            Timestamp-based versioning using DateTime
+            The UTC time of the last write, in a <see cref="T:System.DateTime"/> property.
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Integer">
             <summary>
-            Integer-based versioning (incremental counter)
+            An integer counter in an <c>int</c>, <c>long</c>, <c>short</c> or <c>byte</c> property: new rows start at 1
+            and every update adds 1 (set-based updates increment in the database).
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Guid">
             <summary>
-            GUID-based versioning using unique identifiers
+            A new <see cref="T:System.Guid"/> on every write, in a <c>Guid</c> property.
             </summary>
         </member>
     </members>

@@ -76,6 +76,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<SoftDeleteTestSuite>("SoftDelete", "Soft Delete Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<WriteFeaturesTestSuite>("WriteFeatures", "Write Feature (CreateMany / Bulk / Upsert / Batch) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConcurrencyResolutionTestSuite>("ConcurrencyResolution", "Concurrency Resolution Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<VersionColumnTestSuite>("VersionColumn", "Version Column (Inferred Type / BinaryCounter / Set-Based Bumps) Tests", providerTag, BeforeEach));
 
                 suites.Add(SharedSuite<SetOperationTestSuite>("SetOperations", "Set Operation Tests", providerTag, BeforeEach));
 

@@ -1505,11 +1505,8 @@ namespace Durable.Sql
                 case VersionColumnType.Integer:
                     assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.ColumnSql(source, version) + " + 1");
                     break;
-                case VersionColumnType.Timestamp:
-                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(DateTime.UtcNow, version));
-                    break;
-                case VersionColumnType.Guid:
-                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(Guid.NewGuid(), version));
+                default:
+                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(Metadata.VersionInfo.CreateSetBasedVersion(), version));
                     break;
             }
         }
