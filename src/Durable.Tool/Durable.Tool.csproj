@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+		<RollForward>Major</RollForward>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<ApplicationIcon>logo.ico</ApplicationIcon>
+		<PackAsTool>true</PackAsTool>
+		<ToolCommandName>durable</ToolCommandName>
+		<!-- The referenced Durable projects copy their checked-in XML documentation to the output; skip the duplicate
+		     generated copies so the tool package (a publish of this project) has one file per path. -->
+		<PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+		<PackageId>Durable.Tool</PackageId>
+		<Title>Durable.Tool</Title>
+		<Version>0.5.0</Version>
+		<Authors>jchristn,joshclopton</Authors>
+		<Description>The durable command-line tool for the Durable ORM: apply, roll back and script migrations, scaffold migrations from schema differences, diff and sync schemas, and reverse-engineer entity classes from SQLite, PostgreSQL, MySQL and SQL Server databases.</Description>
+		<Copyright>(c)2025 Durable Community</Copyright>
+		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
+		<PackageIcon>logo.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql;migrations;cli;tool</PackageTags>
+		<PackageReleaseNotes>Initial release of the durable command-line tool: migrate, rollback, status, script, migrations add, schema diff, schema sync and scaffold.</PackageReleaseNotes>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+		<IncludeSymbols>True</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Content Include="logo.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="..\..\assets\logo.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\LICENSE.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\README.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable\Durable.csproj" />
+		<ProjectReference Include="..\Durable.Sql\Durable.Sql.csproj" />
+		<ProjectReference Include="..\Durable.Sqlite\Durable.Sqlite.csproj" />
+		<ProjectReference Include="..\Durable.Postgres\Durable.Postgres.csproj" />
+		<ProjectReference Include="..\Durable.MySql\Durable.MySql.csproj" />
+		<ProjectReference Include="..\Durable.SqlServer\Durable.SqlServer.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -41,6 +41,12 @@ namespace Durable.Sql
         /// </summary>
         public int Ordinal { get; }
 
+        /// <summary>
+        /// Gets whether the database generates the column value on insert (identity / auto-increment / serial, or a SQLite
+        /// INTEGER PRIMARY KEY row id alias). False when the dialect does not report it.
+        /// </summary>
+        public bool IsAutoIncrement { get; }
+
         #endregion
 
         #region Constructors-and-Factories
@@ -54,10 +60,11 @@ namespace Durable.Sql
         /// <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
         /// <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
         /// <param name="ordinal">Zero-based position. Minimum: 0.</param>
+        /// <param name="isAutoIncrement">Whether the database generates the value on insert. Default: false.</param>
         /// <exception cref="ArgumentException">Thrown when name is null or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown when dataType is null.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
-        public ColumnSchema(string name, string dataType, bool isNullable, int? maxLength, bool isPrimaryKey, int ordinal)
+        public ColumnSchema(string name, string dataType, bool isNullable, int? maxLength, bool isPrimaryKey, int ordinal, bool isAutoIncrement = false)
         {
             if (string.IsNullOrEmpty(name)) throw new ArgumentException("Column name cannot be null or empty.", nameof(name));
             if (ordinal < 0) throw new ArgumentOutOfRangeException(nameof(ordinal), "Ordinal cannot be negative.");
@@ -67,6 +74,7 @@ namespace Durable.Sql
             MaxLength = maxLength;
             IsPrimaryKey = isPrimaryKey;
             Ordinal = ordinal;
+            IsAutoIncrement = isAutoIncrement;
         }
 
         #endregion

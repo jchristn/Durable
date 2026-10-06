@@ -155,6 +155,9 @@
         <member name="M:Durable.SqlServer.SqlServerDialect.ColumnSchemaQuery(System.String)">
             <inheritdoc />
         </member>
+        <member name="M:Durable.SqlServer.SqlServerDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.SqlServer.SqlServerDialect.IndexSchemaQuery(System.String)">
             <inheritdoc />
         </member>
