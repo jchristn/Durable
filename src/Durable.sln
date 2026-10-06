@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.InMemory", "Durable
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.Tool", "Durable.Tool\Durable.Tool.csproj", "{CE97C561-1799-4936-B8AE-AFA952EC8B88}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Durable.LiteDb", "Durable.LiteDb\Durable.LiteDb.csproj", "{B6679313-22C5-4622-B356-6154C9675D63}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -271,6 +273,18 @@ Global
 		{CE97C561-1799-4936-B8AE-AFA952EC8B88}.Release|x64.Build.0 = Release|Any CPU
 		{CE97C561-1799-4936-B8AE-AFA952EC8B88}.Release|x86.ActiveCfg = Release|Any CPU
 		{CE97C561-1799-4936-B8AE-AFA952EC8B88}.Release|x86.Build.0 = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|x64.Build.0 = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Debug|x86.Build.0 = Debug|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|x64.ActiveCfg = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|x64.Build.0 = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|x86.ActiveCfg = Release|Any CPU
+		{B6679313-22C5-4622-B356-6154C9675D63}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
