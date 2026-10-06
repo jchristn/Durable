@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
@@ -49,7 +50,7 @@ namespace Durable.Conformance
         /// <param name="options">Repository options (for example <see cref="RepositoryOptions.StringMatching"/>); null uses the backend's defaults.</param>
         /// <returns>A new repository. Never null.</returns>
         /// <exception cref="NotSupportedException">Thrown when the backend cannot serve the entity type or the options.</exception>
-        IRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new();
+        IRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new();
 
         /// <summary>
         /// Drops and recreates (or clears) the storage of the given entity types so that each one exists and is empty.

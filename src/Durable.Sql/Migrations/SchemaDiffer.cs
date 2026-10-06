@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using Durable;
@@ -34,10 +35,30 @@ namespace Durable.Sql
         /// <exception cref="ArgumentNullException">Thrown when dialect, entityTypes or liveTables is null.</exception>
         /// <exception cref="ArgumentException">Thrown when two entity types map the same table.</exception>
         /// <exception cref="InvalidOperationException">Thrown when an entity has no primary key or no mapped columns.</exception>
+        [RequiresUnreferencedCode("Entity types passed as Type values cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, use the overload taking EntityMetadata values created with EntityMetadata.For<T>().")]
         public static SchemaDiff Compare(ISqlDialect dialect, IEnumerable<Type> entityTypes, IReadOnlyDictionary<string, TableSchema> liveTables, SchemaSyncOptions? options = null)
         {
-            ArgumentNullException.ThrowIfNull(dialect);
             ArgumentNullException.ThrowIfNull(entityTypes);
+            return Compare(dialect, SchemaSynchronizer.ToMetadata(entityTypes), liveTables, options);
+        }
+
+        /// <summary>
+        /// Compares entities with the live tables. Trimming and Native AOT safe: create the metadata with
+        /// <c>EntityMetadata.For&lt;T&gt;()</c>.
+        /// </summary>
+        /// <param name="dialect">Dialect. Must not be null.</param>
+        /// <param name="entities">Entity metadata. Must not be null; must not contain two entities mapping the same table.</param>
+        /// <param name="liveTables">Existing tables keyed by table name (case-insensitive lookup); a missing key means the
+        /// table does not exist. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <returns>The diff.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when dialect, entities or liveTables is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when two entities map the same table.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when an entity has no primary key or no mapped columns.</exception>
+        public static SchemaDiff Compare(ISqlDialect dialect, IEnumerable<EntityMetadata> entities, IReadOnlyDictionary<string, TableSchema> liveTables, SchemaSyncOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(dialect);
+            ArgumentNullException.ThrowIfNull(entities);
             ArgumentNullException.ThrowIfNull(liveTables);
             options ??= new SchemaSyncOptions();
 
@@ -47,13 +68,12 @@ namespace Durable.Sql
             List<MigrationOperation> operations = new List<MigrationOperation>();
             List<SchemaDifference> differences = new List<SchemaDifference>();
             HashSet<string> tables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (Type type in entityTypes.Distinct())
+            foreach (EntityMetadata metadata in entities.Distinct())
             {
-                EntityMetadata metadata = EntityMetadata.For(type);
-                if (metadata.KeyColumns.Count == 0) throw new InvalidOperationException("Entity " + type.Name + " has no primary key.");
-                if (metadata.Columns.Count == 0) throw new InvalidOperationException("Entity " + type.Name + " has no mapped columns.");
+                if (metadata.KeyColumns.Count == 0) throw new InvalidOperationException("Entity " + metadata.EntityType.Name + " has no primary key.");
+                if (metadata.Columns.Count == 0) throw new InvalidOperationException("Entity " + metadata.EntityType.Name + " has no mapped columns.");
                 if (!tables.Add(metadata.TableName))
-                    throw new ArgumentException("More than one entity type maps table '" + metadata.TableName + "'.", nameof(entityTypes));
+                    throw new ArgumentException("More than one entity type maps table '" + metadata.TableName + "'.", nameof(entities));
 
                 IReadOnlyList<IndexSchema> expectedIndexes = GetExpectedIndexes(metadata);
                 if (!live.TryGetValue(metadata.TableName, out TableSchema? table))
@@ -176,7 +196,7 @@ namespace Durable.Sql
 
             if (!found && options.UseClrDefaultsForNotNullColumns && column.Converter == null && !column.IsJson && IsClrDefaultable(column.ClrType))
             {
-                value = Activator.CreateInstance(column.ClrType);
+                value = MemberAccessorFactory.GetDefaultValue(column.ClrType);
                 if (column.ClrType.IsEnum && column.EnumAsString && !Enum.IsDefined(column.ClrType, value!)) return null;
                 found = true;
             }

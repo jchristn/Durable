@@ -4,6 +4,8 @@ namespace Durable.Sql
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
+    using System.Runtime.CompilerServices;
     using System.Threading;
     using Durable;
 
@@ -14,6 +16,9 @@ namespace Durable.Sql
     /// <see cref="DataTypeConverter"/> converts cheaply are converted inline with identical rules; JSON, converter-backed
     /// and other mismatched columns go through the <see cref="IDataTypeConverter"/>. If a provider returns an unexpected
     /// value type at runtime, the materializer switches to the converter path for every column.
+    /// Under Native AOT (<see cref="RuntimeFeature.IsDynamicCodeSupported"/> is false) nothing is compiled: rows are read
+    /// with the cached constructor and property setters of <see cref="EntityMetadata"/> (ahead-of-time generated invoke
+    /// stubs) and the same converter rules, which avoids the much slower expression interpreter.
     /// Thread safety: instances are thread-safe; the cache is concurrent.
     /// </summary>
     public sealed class RowMaterializer
@@ -177,12 +182,14 @@ namespace Durable.Sql
 
         internal object Materialize(DbDataReader reader, IDataTypeConverter converter, bool inline)
         {
+            if (!RuntimeFeature.IsDynamicCodeSupported) return MaterializeWithAccessors(reader, converter);
+
             int index = inline ? 1 : 0;
             Func<DbDataReader, IDataTypeConverter, object>? compiled = _ObjectReaders[index];
             if (compiled == null)
             {
                 Delegate built = Metadata.EntityType.IsValueType
-                    ? RowReaderCompiler.Compile(Metadata, _Bindings, _FieldTypes, inline, typeof(object))
+                    ? CompileReader(inline, typeof(object))
                     : GetTypedReader(inline);
                 Interlocked.CompareExchange(ref _ObjectReaders[index], (Func<DbDataReader, IDataTypeConverter, object>)built, null);
                 compiled = _ObjectReaders[index]!;
@@ -193,6 +200,7 @@ namespace Durable.Sql
 
         internal Func<DbDataReader, IDataTypeConverter, T> GetTypedReader<T>(bool inline)
         {
+            if (!RuntimeFeature.IsDynamicCodeSupported) return (reader, converter) => (T)MaterializeWithAccessors(reader, converter);
             return (Func<DbDataReader, IDataTypeConverter, T>)GetTypedReader(inline);
         }
 
@@ -225,10 +233,13 @@ namespace Durable.Sql
 
         private Delegate GetTypedReader(bool inline)
         {
+            if (!RuntimeFeature.IsDynamicCodeSupported)
+                return new Func<DbDataReader, IDataTypeConverter, object>(MaterializeWithAccessors);
+
             int index = inline ? 1 : 0;
             Delegate? compiled = _TypedReaders[index];
             if (compiled != null) return compiled;
-            Delegate built = RowReaderCompiler.Compile(Metadata, _Bindings, _FieldTypes, inline, Metadata.EntityType);
+            Delegate built = CompileReader(inline, Metadata.EntityType);
             return Interlocked.CompareExchange(ref _TypedReaders[index], built, null) ?? built;
         }
 
@@ -284,6 +295,21 @@ namespace Durable.Sql
             }
 
             return new RowMaterializer(metadata, names, fieldTypes, bindings.ToArray());
+        }
+
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Every caller returns earlier when RuntimeFeature.IsDynamicCodeSupported is false (Native AOT), and this method re-checks it, so expression compilation only runs where dynamic code is supported.")]
+        private Delegate CompileReader(bool inline, Type resultType)
+        {
+            if (!RuntimeFeature.IsDynamicCodeSupported)
+                throw new InvalidOperationException("Compiled row readers require dynamic code support.");
+            return RowReaderCompiler.Compile(Metadata, _Bindings, _FieldTypes, inline, resultType);
+        }
+
+        private object MaterializeWithAccessors(DbDataReader reader, IDataTypeConverter converter)
+        {
+            object instance = Metadata.CreateInstance();
+            MaterializeWithConverter(reader, instance, converter);
+            return instance;
         }
 
         private void MaterializeWithConverter(DbDataReader reader, object instance, IDataTypeConverter converter)

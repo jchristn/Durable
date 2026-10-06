@@ -1,6 +1,7 @@
 namespace Durable.LiteDb
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using Durable;
     using Durable.Query;
     using LiteDB;
@@ -20,7 +21,7 @@ namespace Durable.LiteDb
     /// Thread safety: safe for concurrent use once configured (see <see cref="RepositoryBase{T}"/>).
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class LiteDbRepository<T> : RepositoryBase<T> where T : class, new()
+    public class LiteDbRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : RepositoryBase<T> where T : class, new()
     {
         #region Public-Members
 

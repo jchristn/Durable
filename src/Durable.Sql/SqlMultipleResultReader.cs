@@ -3,6 +3,7 @@ namespace Durable.Sql
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
@@ -56,7 +57,7 @@ namespace Durable.Sql
         /// <returns>The rows. Never null.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no result sets remain.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when disposed.</exception>
-        public List<TResult> Read<TResult>()
+        public List<TResult> Read<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>()
         {
             ThrowIfUnavailable();
             List<TResult> rows = new List<TResult>();
@@ -73,7 +74,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>The rows. Never null.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no result sets remain.</exception>
-        public async Task<List<TResult>> ReadAsync<TResult>(CancellationToken token = default)
+        public async Task<List<TResult>> ReadAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(CancellationToken token = default)
         {
             ThrowIfUnavailable();
             List<TResult> rows = new List<TResult>();

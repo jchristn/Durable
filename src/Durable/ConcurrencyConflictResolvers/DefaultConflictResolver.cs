@@ -1,6 +1,7 @@
 namespace Durable.ConcurrencyConflictResolvers
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks;
     
     /// <summary>
@@ -8,7 +9,7 @@ namespace Durable.ConcurrencyConflictResolvers
     /// This resolver acts as a factory and dispatcher, routing conflict resolution to the appropriate strategy-specific resolver.
     /// </summary>
     /// <typeparam name="T">The type of entity being resolved. Must be a reference type with a parameterless constructor.</typeparam>
-    public class DefaultConflictResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
+    public class DefaultConflictResolver<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members
 

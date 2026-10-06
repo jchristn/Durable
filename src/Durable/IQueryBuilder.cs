@@ -2,6 +2,7 @@ namespace Durable
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -13,7 +14,7 @@ namespace Durable
     /// Thread safety: a query builder is not thread-safe; build and execute it on one flow.
     /// </summary>
     /// <typeparam name="T">Entity or result type.</typeparam>
-    public interface IQueryBuilder<T> where T : class, new()
+    public interface IQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> where T : class, new()
     {
         /// <summary>
         /// Adds a predicate; multiple calls are combined with AND.
@@ -91,7 +92,7 @@ namespace Durable
         /// <param name="selector">Projection. Must not be null.</param>
         /// <returns>A builder producing <typeparamref name="TResult"/>.</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
-        IQueryBuilder<TResult> Select<TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new();
+        IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new();
 
         /// <summary>
         /// Eagerly loads a navigation property. Related rows are loaded with separate queries keyed by the root results,

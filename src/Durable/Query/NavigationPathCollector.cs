@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
     using Durable;
 
@@ -11,7 +12,8 @@ namespace Durable.Query
     /// <c>x.Books.Count</c> reads <c>Books</c>), so they can be loaded with includes before the lambda runs.
     /// Thread safety: not thread-safe; create one per analysis.
     /// </summary>
-    internal sealed class NavigationPathCollector : ExpressionVisitor
+    /// <typeparam name="T">Entity type whose parameters are analyzed.</typeparam>
+    internal sealed class NavigationPathCollector<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ExpressionVisitor
     {
         #region Public-Members
 
@@ -24,7 +26,6 @@ namespace Durable.Query
 
         #region Private-Members
 
-        private readonly Type _EntityType;
         private readonly HashSet<string> _Seen = new HashSet<string>(StringComparer.Ordinal);
 
         #endregion
@@ -34,11 +35,8 @@ namespace Durable.Query
         /// <summary>
         /// Instantiates a collector.
         /// </summary>
-        /// <param name="entityType">Entity type whose parameters are analyzed. Must not be null.</param>
-        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
-        public NavigationPathCollector(Type entityType)
+        public NavigationPathCollector()
         {
-            _EntityType = entityType ?? throw new ArgumentNullException(nameof(entityType));
         }
 
         #endregion
@@ -48,13 +46,12 @@ namespace Durable.Query
         /// <summary>
         /// Collects the navigation paths of several lambdas.
         /// </summary>
-        /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="lambdas">Lambdas. Must not be null.</param>
         /// <returns>The paths. Never null.</returns>
-        public static List<LambdaExpression> Collect(Type entityType, IEnumerable<LambdaExpression> lambdas)
+        public static List<LambdaExpression> Collect(IEnumerable<LambdaExpression> lambdas)
         {
             ArgumentNullException.ThrowIfNull(lambdas);
-            NavigationPathCollector collector = new NavigationPathCollector(entityType);
+            NavigationPathCollector<T> collector = new NavigationPathCollector<T>();
             foreach (LambdaExpression lambda in lambdas) collector.Visit(lambda);
             return collector.Paths;
         }
@@ -74,9 +71,9 @@ namespace Durable.Query
                 current = member.Expression;
             }
 
-            if (current is ParameterExpression parameter && parameter.Type == _EntityType)
+            if (current is ParameterExpression parameter && parameter.Type == typeof(T))
             {
-                EntityMetadata owner = EntityMetadata.For(_EntityType);
+                EntityMetadata owner = EntityMetadata.For<T>();
                 MemberExpression? deepest = null;
                 List<string> names = new List<string>();
                 foreach (MemberExpression link in chain)
@@ -90,7 +87,7 @@ namespace Durable.Query
                 }
 
                 if (deepest != null && _Seen.Add(string.Join(".", names)))
-                    Paths.Add(Expression.Lambda(deepest, parameter));
+                    Paths.Add(Expression.Lambda<Func<T, object?>>(Expression.Convert(deepest, typeof(object)), parameter));
             }
 
             return base.VisitMember(node);

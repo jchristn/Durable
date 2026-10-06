@@ -95,7 +95,7 @@ namespace Durable.Query
             if (_Last.Navigation.RelatedType != previousType)
                 throw new InvalidOperationException("ThenInclude expects the previous include's entity type " + _Last.Navigation.RelatedType.Name + " but received " + previousType.Name + ".");
 
-            EntityMetadata owner = EntityMetadata.For(previousType);
+            EntityMetadata owner = EntityMetadata.For(_Last.Navigation.RelatedType);
             IncludeNode node = _Last;
             foreach (string name in NavigationPath(navigationProperty.Body))
             {

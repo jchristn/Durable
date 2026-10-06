@@ -3,6 +3,7 @@ namespace Durable
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Reflection;
 
     /// <summary>
@@ -32,16 +33,22 @@ namespace Durable
         /// <summary>
         /// Gets the entity type that declares the navigation.
         /// </summary>
+        [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]
         public Type OwnerType { get; }
 
         /// <summary>
         /// Gets the related entity type (the element type for collections).
+        /// Trimming and Native AOT: this type is discovered from the navigation property's type, which trimming cannot
+        /// follow. Keep it by using it as a repository or query type argument, by referencing it from
+        /// <see cref="ForeignKeyAttribute"/>, or by calling <c>EntityMetadata.For&lt;TRelated&gt;()</c> at startup.
         /// </summary>
+        [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]
         public Type RelatedType { get; }
 
         /// <summary>
         /// Gets the junction entity type for many-to-many navigations; null otherwise.
         /// </summary>
+        [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]
         public Type? JunctionType { get; }
 
         /// <summary>
@@ -88,7 +95,7 @@ namespace Durable
 
         #region Constructors-and-Factories
 
-        internal NavigationMetadata(PropertyInfo property, NavigationKind kind, Type ownerType, Type relatedType, string foreignKeyPropertyName, Type? junctionType, string? junctionRemotePropertyName)
+        internal NavigationMetadata(PropertyInfo property, NavigationKind kind, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type ownerType, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type relatedType, string foreignKeyPropertyName, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type? junctionType, string? junctionRemotePropertyName)
         {
             Property = property;
             Kind = kind;
@@ -184,6 +191,12 @@ namespace Durable
         private ColumnMetadata RequireColumn(EntityMetadata entity, string propertyName)
         {
             ColumnMetadata? column = entity.FindColumnByProperty(propertyName);
+            if (column == null && entity.Columns.Count == 0)
+                throw new InvalidOperationException(
+                    "Navigation '" + OwnerType.Name + "." + Name + "' targets " + entity.EntityType.FullName + ", which has no mapped properties. " +
+                    "If the application is trimmed or published with Native AOT, the type's properties were removed because it is only reached " +
+                    "through a navigation property: reference it as a repository or query type argument, from [ForeignKey(typeof(" + entity.EntityType.Name + "), ...)], " +
+                    "or call EntityMetadata.For<" + entity.EntityType.Name + ">() at startup.");
             if (column == null)
                 throw new InvalidOperationException(
                     "Navigation '" + OwnerType.Name + "." + Name + "' refers to property '" + propertyName +

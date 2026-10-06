@@ -4,6 +4,7 @@ namespace Durable.Sql
     using System.Collections.Generic;
     using System.Data.Common;
     using System.Diagnostics;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Reflection;
@@ -57,6 +58,10 @@ namespace Durable.Sql
         #endregion
 
         #region Private-Members
+
+        private const string _EntityTypesMessage =
+            "Entity types passed as Type values cannot be analyzed by trimming, so their public properties may be removed. " +
+            "Under trimming or Native AOT, use the overload taking EntityMetadata values created with EntityMetadata.For<T>().";
 
         private readonly List<Migration> _Migrations = new List<Migration>();
         private readonly int _MaxIdLength = 150;
@@ -140,6 +145,7 @@ namespace Durable.Sql
         /// <returns>This migrator.</returns>
         /// <exception cref="ArgumentNullException">Thrown when assembly is null.</exception>
         /// <exception cref="ArgumentException">Thrown when an identifier is invalid or duplicated.</exception>
+        [RequiresUnreferencedCode("Discovers Migration subclasses by reflection over the assembly; trimming removes migration classes that are not otherwise referenced. Under trimming or Native AOT, register migrations with AddMigration(new MyMigration()).")]
         public SqlMigrator AddMigrationsFromAssembly(Assembly assembly, Func<Type, bool>? filter = null)
         {
             ArgumentNullException.ThrowIfNull(assembly);
@@ -455,12 +461,26 @@ namespace Durable.Sql
         /// <param name="options">Options; null uses defaults.</param>
         /// <returns>The diff.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
         public SchemaDiff DiffSchema(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null)
         {
-            ArgumentNullException.ThrowIfNull(entityTypes);
-            List<Type> types = entityTypes.ToList();
+            return DiffSchema(SchemaSynchronizer.ToMetadata(entityTypes), options);
+        }
+
+        /// <summary>
+        /// Compares entities with the live schema without changing anything. Trimming and Native AOT safe: create the
+        /// metadata with <c>EntityMetadata.For&lt;T&gt;()</c>.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <returns>The diff.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public SchemaDiff DiffSchema(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
+            List<EntityMetadata> list = entities.ToList();
             using MigrationSession session = MigrationSession.Open(CreateExecutor());
-            return SchemaSynchronizer.Diff(session, types, options ?? new SchemaSyncOptions());
+            return SchemaSynchronizer.Diff(session, list, options ?? new SchemaSyncOptions());
         }
 
         /// <summary>
@@ -471,14 +491,28 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>The diff.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
-        public async Task<SchemaDiff> DiffSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
+        public Task<SchemaDiff> DiffSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(entityTypes);
-            List<Type> types = entityTypes.ToList();
+            return DiffSchemaAsync(SchemaSynchronizer.ToMetadata(entityTypes), options, token);
+        }
+
+        /// <summary>
+        /// Compares entities with the live schema without changing anything. Trimming and Native AOT safe.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The diff.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public async Task<SchemaDiff> DiffSchemaAsync(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
+            List<EntityMetadata> list = entities.ToList();
             MigrationSession session = await MigrationSession.OpenAsync(CreateExecutor(), token).ConfigureAwait(false);
             await using (session.ConfigureAwait(false))
             {
-                return await SchemaSynchronizer.DiffAsync(session, types, options ?? new SchemaSyncOptions(), token).ConfigureAwait(false);
+                return await SchemaSynchronizer.DiffAsync(session, list, options ?? new SchemaSyncOptions(), token).ConfigureAwait(false);
             }
         }
 
@@ -490,10 +524,23 @@ namespace Durable.Sql
         /// <param name="options">Options; null uses defaults.</param>
         /// <returns>The script.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
         public string GenerateSyncScript(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null)
         {
+            return GenerateSyncScript(SchemaSynchronizer.ToMetadata(entityTypes), options);
+        }
+
+        /// <summary>
+        /// Renders the schema diff for entities as a SQL script. Nothing is executed. Trimming and Native AOT safe.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <returns>The script.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public string GenerateSyncScript(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null)
+        {
             options ??= new SchemaSyncOptions();
-            return DiffSchema(entityTypes, options).ToScript(options.AllowDestructive);
+            return DiffSchema(entities, options).ToScript(options.AllowDestructive);
         }
 
         /// <summary>
@@ -504,10 +551,24 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>The script.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
-        public async Task<string> GenerateSyncScriptAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
+        public Task<string> GenerateSyncScriptAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
+        {
+            return GenerateSyncScriptAsync(SchemaSynchronizer.ToMetadata(entityTypes), options, token);
+        }
+
+        /// <summary>
+        /// Renders the schema diff for entities as a SQL script. Nothing is executed. Trimming and Native AOT safe.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The script.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public async Task<string> GenerateSyncScriptAsync(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null, CancellationToken token = default)
         {
             options ??= new SchemaSyncOptions();
-            SchemaDiff diff = await DiffSchemaAsync(entityTypes, options, token).ConfigureAwait(false);
+            SchemaDiff diff = await DiffSchemaAsync(entities, options, token).ConfigureAwait(false);
             return diff.ToScript(options.AllowDestructive);
         }
 
@@ -523,11 +584,28 @@ namespace Durable.Sql
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
         /// <exception cref="MigrationException">Thrown when applying an operation fails.</exception>
         /// <exception cref="TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
         public SchemaSyncResult SyncSchema(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null)
         {
-            ArgumentNullException.ThrowIfNull(entityTypes);
+            return SyncSchema(SchemaSynchronizer.ToMetadata(entityTypes), options);
+        }
+
+        /// <summary>
+        /// Synchronizes the tables of entities with their mappings under the migration lock. See
+        /// <see cref="SyncSchema(IEnumerable{Type}, SchemaSyncOptions?)"/>. Trimming and Native AOT safe: create the metadata
+        /// with <c>EntityMetadata.For&lt;T&gt;()</c>.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults (additive only).</param>
+        /// <returns>The result.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        /// <exception cref="MigrationException">Thrown when applying an operation fails.</exception>
+        /// <exception cref="TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        public SchemaSyncResult SyncSchema(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
             options ??= new SchemaSyncOptions();
-            List<Type> types = entityTypes.ToList();
+            List<EntityMetadata> list = entities.ToList();
             bool transactional = options.UseTransaction && Dialect.SupportsTransactionalDdl;
             List<MigrationOperation> applied = new List<MigrationOperation>();
             using MigrationSession session = MigrationSession.Open(CreateExecutor());
@@ -535,7 +613,7 @@ namespace Durable.Sql
             try
             {
                 if (transactional) session.Begin();
-                SchemaDiff diff = SchemaSynchronizer.Diff(session, types, options);
+                SchemaDiff diff = SchemaSynchronizer.Diff(session, list, options);
                 try
                 {
                     SchemaSyncResult result = SchemaSynchronizer.Apply(session, diff, options, applied);
@@ -566,11 +644,28 @@ namespace Durable.Sql
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
         /// <exception cref="MigrationException">Thrown when applying an operation fails.</exception>
         /// <exception cref="TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
-        public async Task<SchemaSyncResult> SyncSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
+        [RequiresUnreferencedCode(_EntityTypesMessage)]
+        public Task<SchemaSyncResult> SyncSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(entityTypes);
+            return SyncSchemaAsync(SchemaSynchronizer.ToMetadata(entityTypes), options, token);
+        }
+
+        /// <summary>
+        /// Synchronizes the tables of entities with their mappings under the migration lock. See
+        /// <see cref="SyncSchema(IEnumerable{Type}, SchemaSyncOptions?)"/>. Trimming and Native AOT safe.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults (additive only).</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The result.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        /// <exception cref="MigrationException">Thrown when applying an operation fails.</exception>
+        /// <exception cref="TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        public async Task<SchemaSyncResult> SyncSchemaAsync(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
             options ??= new SchemaSyncOptions();
-            List<Type> types = entityTypes.ToList();
+            List<EntityMetadata> list = entities.ToList();
             bool transactional = options.UseTransaction && Dialect.SupportsTransactionalDdl;
             List<MigrationOperation> applied = new List<MigrationOperation>();
             MigrationSession session = await MigrationSession.OpenAsync(CreateExecutor(), token).ConfigureAwait(false);
@@ -580,7 +675,7 @@ namespace Durable.Sql
                 try
                 {
                     if (transactional) await session.BeginAsync(token).ConfigureAwait(false);
-                    SchemaDiff diff = await SchemaSynchronizer.DiffAsync(session, types, options, token).ConfigureAwait(false);
+                    SchemaDiff diff = await SchemaSynchronizer.DiffAsync(session, list, options, token).ConfigureAwait(false);
                     try
                     {
                         SchemaSyncResult result = await SchemaSynchronizer.ApplyAsync(session, diff, options, applied, token).ConfigureAwait(false);

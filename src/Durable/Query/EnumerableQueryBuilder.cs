@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Runtime.CompilerServices;
@@ -20,7 +21,7 @@ namespace Durable.Query
     /// Thread safety: not thread-safe; build and execute on one flow.
     /// </summary>
     /// <typeparam name="T">Result type.</typeparam>
-    public class EnumerableQueryBuilder<T> : IQueryBuilder<T> where T : class, new()
+    public class EnumerableQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IQueryBuilder<T> where T : class, new()
     {
         #region Public-Members
 
@@ -147,7 +148,7 @@ namespace Durable.Query
 
         /// <inheritdoc />
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public IQueryBuilder<TResult> Select<TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
+        public IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
         {
             throw NotSupported("Select");
         }

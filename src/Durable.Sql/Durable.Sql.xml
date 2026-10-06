@@ -216,14 +216,18 @@
         </member>
         <member name="P:Durable.Sql.DataTypeConverter.JsonOptions">
             <summary>
-            Gets the JSON options used for JSON columns. Default: camelCase property names, compact output.
+            Gets the JSON options used for JSON columns. Default: camelCase property names, compact output, reflection-based
+            metadata. Under trimming or Native AOT, construct the converter with options whose
+            <see cref="P:System.Text.Json.JsonSerializerOptions.TypeInfoResolver"/> is a source-generated context (see <see cref="T:Durable.DurableJson"/>).
             </summary>
         </member>
         <member name="M:Durable.Sql.DataTypeConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
             <summary>
             Instantiates the converter.
             </summary>
-            <param name="jsonOptions">JSON options for JSON columns; null uses the defaults.</param>
+            <param name="jsonOptions">JSON options for JSON columns; null uses the defaults. Under trimming or Native AOT pass
+            options with a source-generated <see cref="P:System.Text.Json.JsonSerializerOptions.TypeInfoResolver"/>, for example
+            <c>DurableJson.CreateOptions(MyJsonContext.Default)</c>.</param>
         </member>
         <member name="M:Durable.Sql.DataTypeConverter.ConvertToDatabase(System.Object,Durable.ColumnMetadata)">
             <inheritdoc />
@@ -2369,6 +2373,26 @@
             <returns>The result.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when options or entityTypes is null.</exception>
         </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchema(Durable.EntityMetadata[])">
+            <summary>
+            Brings the tables of the given entities up to date with additive operations using default
+            <see cref="T:Durable.Sql.SchemaSyncOptions"/>. Trimming and Native AOT safe: create the metadata with
+            <c>EntityMetadata.For&lt;T&gt;()</c>.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchema(Durable.Sql.SchemaSyncOptions,Durable.EntityMetadata[])">
+            <summary>
+            Brings the tables of the given entities up to date. Runs inside the migration's transaction (the
+            <see cref="P:Durable.Sql.SchemaSyncOptions.UseTransaction"/> option does not apply). Trimming and Native AOT safe.
+            </summary>
+            <param name="options">Options. Must not be null.</param>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when options or entities is null.</exception>
+        </member>
         <member name="M:Durable.Sql.MigrationContext.EnsureSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
             <summary>
             Brings the tables of the given entity types up to date. Runs inside the migration's transaction.
@@ -2378,6 +2402,17 @@
             <param name="token">Cancellation token.</param>
             <returns>The result.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.EnsureSchemaAsync(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Brings the tables of the given entities up to date. Runs inside the migration's transaction. Trimming and
+            Native AOT safe: create the metadata with <c>EntityMetadata.For&lt;T&gt;()</c>.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.MigrationContext.ReadTable(System.String)">
             <summary>
@@ -2678,6 +2713,21 @@
             <returns>The diff.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when dialect, entityTypes or liveTables is null.</exception>
             <exception cref="T:System.ArgumentException">Thrown when two entity types map the same table.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when an entity has no primary key or no mapped columns.</exception>
+        </member>
+        <member name="M:Durable.Sql.SchemaDiffer.Compare(Durable.Sql.ISqlDialect,System.Collections.Generic.IEnumerable{Durable.EntityMetadata},System.Collections.Generic.IReadOnlyDictionary{System.String,Durable.Sql.TableSchema},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Compares entities with the live tables. Trimming and Native AOT safe: create the metadata with
+            <c>EntityMetadata.For&lt;T&gt;()</c>.
+            </summary>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="entities">Entity metadata. Must not be null; must not contain two entities mapping the same table.</param>
+            <param name="liveTables">Existing tables keyed by table name (case-insensitive lookup); a missing key means the
+            table does not exist. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when dialect, entities or liveTables is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when two entities map the same table.</exception>
             <exception cref="T:System.InvalidOperationException">Thrown when an entity has no primary key or no mapped columns.</exception>
         </member>
         <member name="M:Durable.Sql.SchemaDiffer.GetExpectedIndexes(Durable.EntityMetadata)">
@@ -3113,6 +3163,16 @@
             <returns>The diff.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
+        <member name="M:Durable.Sql.SqlMigrator.DiffSchema(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Compares entities with the live schema without changing anything. Trimming and Native AOT safe: create the
+            metadata with <c>EntityMetadata.For&lt;T&gt;()</c>.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
+        </member>
         <member name="M:Durable.Sql.SqlMigrator.DiffSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
             <summary>
             Compares entity types with the live schema without changing anything.
@@ -3122,6 +3182,16 @@
             <param name="token">Cancellation token.</param>
             <returns>The diff.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.DiffSchemaAsync(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Compares entities with the live schema without changing anything. Trimming and Native AOT safe.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The diff.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScript(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
             <summary>
@@ -3133,6 +3203,15 @@
             <returns>The script.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScript(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Renders the schema diff for entities as a SQL script. Nothing is executed. Trimming and Native AOT safe.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
+        </member>
         <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScriptAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
             <summary>
             Renders the schema diff for entity types as a SQL script. Nothing is executed.
@@ -3142,6 +3221,16 @@
             <param name="token">Cancellation token.</param>
             <returns>The script.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.GenerateSyncScriptAsync(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Renders the schema diff for entities as a SQL script. Nothing is executed. Trimming and Native AOT safe.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The script.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)">
             <summary>
@@ -3157,6 +3246,19 @@
             <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
             <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
         </member>
+        <member name="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions)">
+            <summary>
+            Synchronizes the tables of entities with their mappings under the migration lock. See
+            <see cref="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)"/>. Trimming and Native AOT safe: create the metadata
+            with <c>EntityMetadata.For&lt;T&gt;()</c>.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
         <member name="M:Durable.Sql.SqlMigrator.SyncSchemaAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
             <summary>
             Synchronizes the tables of entity types with their mappings under the migration lock. See
@@ -3167,6 +3269,19 @@
             <param name="token">Cancellation token.</param>
             <returns>The result.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
+        </member>
+        <member name="M:Durable.Sql.SqlMigrator.SyncSchemaAsync(System.Collections.Generic.IEnumerable{Durable.EntityMetadata},Durable.Sql.SchemaSyncOptions,System.Threading.CancellationToken)">
+            <summary>
+            Synchronizes the tables of entities with their mappings under the migration lock. See
+            <see cref="M:Durable.Sql.SqlMigrator.SyncSchema(System.Collections.Generic.IEnumerable{System.Type},Durable.Sql.SchemaSyncOptions)"/>. Trimming and Native AOT safe.
+            </summary>
+            <param name="entities">Entity metadata. Must not be null.</param>
+            <param name="options">Options; null uses defaults (additive only).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
             <exception cref="T:Durable.Sql.MigrationException">Thrown when applying an operation fails.</exception>
             <exception cref="T:System.TimeoutException">Thrown when the migration lock cannot be acquired in time.</exception>
         </member>
@@ -3353,6 +3468,9 @@
             <see cref="T:Durable.Sql.DataTypeConverter"/> converts cheaply are converted inline with identical rules; JSON, converter-backed
             and other mismatched columns go through the <see cref="T:Durable.Sql.IDataTypeConverter"/>. If a provider returns an unexpected
             value type at runtime, the materializer switches to the converter path for every column.
+            Under Native AOT (<see cref="P:System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported"/> is false) nothing is compiled: rows are read
+            with the cached constructor and property setters of <see cref="T:Durable.EntityMetadata"/> (ahead-of-time generated invoke
+            stubs) and the same converter rules, which avoids the much slower expression interpreter.
             Thread safety: instances are thread-safe; the cache is concurrent.
             </summary>
         </member>
@@ -3421,6 +3539,8 @@
             every bound column with the reader's typed getters. Internal to <see cref="T:Durable.Sql.RowMaterializer"/>.
             When the converter is a stock <see cref="T:Durable.Sql.DataTypeConverter"/> (its read conversion is not overridden), cheap
             conversions are inlined with exactly the converter's semantics; everything else calls the converter.
+            Only used when <see cref="P:System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported"/> is true; under
+            Native AOT, <see cref="T:Durable.Sql.RowMaterializer"/> reads rows with cached reflection accessors instead.
             Thread safety: stateless apart from a concurrent cache; safe for concurrent use.
             </summary>
         </member>

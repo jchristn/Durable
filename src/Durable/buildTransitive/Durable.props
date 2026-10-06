@@ -1,0 +1,12 @@
+<Project>
+
+	<!--
+		Durable reads C# nullable annotations (NullabilityInfoContext) to decide whether a reference-type column is
+		nullable. Trimmed and Native AOT applications disable NullabilityInfoContext and strip the nullable metadata by
+		default, which would make every reference-type column nullable. Keep it enabled unless the application opts out.
+	-->
+	<PropertyGroup>
+		<NullabilityInfoContextSupport Condition="'$(NullabilityInfoContextSupport)' == ''">true</NullabilityInfoContextSupport>
+	</PropertyGroup>
+
+</Project>

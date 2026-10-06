@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using Durable;
 
     /// <summary>
@@ -18,7 +19,7 @@ namespace Durable.Sql
         /// <param name="converter">Converter. Must not be null.</param>
         /// <returns>The mapper.</returns>
         /// <exception cref="ArgumentNullException">Thrown when converter is null.</exception>
-        public static Func<DbDataReader, TResult> Create<TResult>(IDataTypeConverter converter)
+        public static Func<DbDataReader, TResult> Create<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(IDataTypeConverter converter)
         {
             ArgumentNullException.ThrowIfNull(converter);
             Type type = typeof(TResult);

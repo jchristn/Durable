@@ -3,6 +3,7 @@ namespace Durable.Query
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -57,6 +58,13 @@ namespace Durable.Query
         /// Instantiates a normalizer.
         /// </summary>
         /// <param name="defaultStringMatching">Mode for string comparisons without an explicit <see cref="StringComparison"/>.</param>
+        /// <remarks>
+        /// Native AOT: C# treats decimal operators as predefined, so a decimal comparison or arithmetic in a LINQ lambda is
+        /// lowered to an Expression factory call without the operator method, and System.Linq.Expressions then finds
+        /// <c>op_GreaterThan</c> (and friends) by reflection. The dependency below keeps decimal's operator methods in
+        /// Native AOT applications so such predicates can be built.
+        /// </remarks>
+        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicMethods, typeof(decimal))]
         public QueryNormalizer(StringMatchMode defaultStringMatching = StringMatchMode.Database)
         {
             DefaultStringMatching = defaultStringMatching;
@@ -531,6 +539,7 @@ namespace Durable.Query
             return new CollectionNode(operation, navigation, ownerKey, related, condition, type);
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "The expression is an entity-typed navigation access: its type is the query's root entity type (annotated on the query builder) or a navigation target, which applications keep as documented for Native AOT (see NavigationMetadata.RelatedType); a target whose members were removed is reported by NavigationMetadata with an explicit error.")]
         private bool TryGetReferenceNavigation(Expression expression, out NavigationMetadata? navigation, out Expression? owner)
         {
             navigation = null;
@@ -544,6 +553,7 @@ namespace Durable.Query
             return true;
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "The expression is an entity-typed navigation access: its type is the query's root entity type (annotated on the query builder) or a navigation target, which applications keep as documented for Native AOT (see NavigationMetadata.RelatedType); a target whose members were removed is reported by NavigationMetadata with an explicit error.")]
         private bool TryGetCollectionNavigation(Expression expression, out NavigationMetadata? navigation, out Expression? owner)
         {
             navigation = null;

@@ -3,6 +3,7 @@ namespace Durable.MySql
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using MySqlConnector;
@@ -17,7 +18,7 @@ namespace Durable.MySql
     /// Thread safety: safe for concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class MySqlRepository<T> : SqlRepository<T> where T : class, new()
+    public class MySqlRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : SqlRepository<T> where T : class, new()
     {
         #region Constructors-and-Factories
 

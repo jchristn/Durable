@@ -3,6 +3,7 @@ namespace Durable.SqlServer
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.SqlClient;
@@ -15,7 +16,7 @@ namespace Durable.SqlServer
     /// Thread safety: safe for concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlServerRepository<T> : SqlRepository<T> where T : class, new()
+    public class SqlServerRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : SqlRepository<T> where T : class, new()
     {
         #region Constructors-and-Factories
 

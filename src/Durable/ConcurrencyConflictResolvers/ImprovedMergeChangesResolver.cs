@@ -2,6 +2,7 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Reflection;
     using System.Threading.Tasks;
     
@@ -10,7 +11,7 @@ namespace Durable.ConcurrencyConflictResolvers
     /// Provides enhanced comparison capabilities including array and collection comparison.
     /// </summary>
     /// <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
-    public class ImprovedMergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
+    public class ImprovedMergeChangesResolver<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members
 

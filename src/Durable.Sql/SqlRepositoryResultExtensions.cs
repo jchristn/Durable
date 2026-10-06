@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading;
@@ -25,7 +26,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>A durable result containing the created entity and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static IDurableResult<T> CreateWithQuery<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
+        public static IDurableResult<T> CreateWithQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -51,7 +52,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with a durable result containing the created entity and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static async Task<IDurableResult<T>> CreateWithQueryAsync<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<IDurableResult<T>> CreateWithQueryAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -74,7 +75,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>A durable result containing the entities and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
-        public static IDurableResult<T> ReadManyWithQuery<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null) where T : class, new()
+        public static IDurableResult<T> ReadManyWithQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
 
@@ -99,7 +100,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with a durable result containing the entities and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
-        public static async Task<IDurableResult<T>> ReadManyWithQueryAsync<T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<IDurableResult<T>> ReadManyWithQueryAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
 
@@ -126,7 +127,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>A durable result containing the updated entity and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static IDurableResult<T> UpdateWithQuery<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
+        public static IDurableResult<T> UpdateWithQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -152,7 +153,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with a durable result containing the updated entity and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static async Task<IDurableResult<T>> UpdateWithQueryAsync<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<IDurableResult<T>> UpdateWithQueryAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -175,7 +176,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>A durable result containing the deletion result and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static IDurableResult<bool> DeleteWithQuery<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
+        public static IDurableResult<bool> DeleteWithQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -201,7 +202,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with a durable result containing the deletion result and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static async Task<IDurableResult<bool>> DeleteWithQueryAsync<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<IDurableResult<bool>> DeleteWithQueryAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -224,7 +225,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>A durable result containing the number of deleted entities and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or predicate is null.</exception>
-        public static IDurableResult<int> DeleteManyWithQuery<T>(this IRepository<T> repository, Expression<Func<T, bool>> predicate, ITransaction? transaction = null) where T : class, new()
+        public static IDurableResult<int> DeleteManyWithQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Expression<Func<T, bool>> predicate, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
@@ -250,7 +251,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation with a durable result containing the number of deleted entities and the executed SQL query.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or predicate is null.</exception>
-        public static async Task<IDurableResult<int>> DeleteManyWithQueryAsync<T>(this IRepository<T> repository, Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<IDurableResult<int>> DeleteManyWithQueryAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
@@ -273,7 +274,7 @@ namespace Durable.Sql
         /// <param name="transaction">Optional transaction to use for the operation.</param>
         /// <returns>Either T or IDurableResult&lt;T&gt; depending on configuration.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static object CreateAuto<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
+        public static object CreateAuto<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -295,7 +296,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>Either Task&lt;T&gt; or Task&lt;IDurableResult&lt;T&gt;&gt; depending on configuration.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static async Task<object> CreateAutoAsync<T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
+        public static async Task<object> CreateAutoAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (entity == null) throw new ArgumentNullException(nameof(entity));
@@ -306,7 +307,7 @@ namespace Durable.Sql
                 return await repository.CreateAsync(entity, transaction, token).ConfigureAwait(false);
         }
 
-        private static bool ShouldIncludeQuery<T>(IRepository<T> repository) where T : class, new()
+        private static bool ShouldIncludeQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository) where T : class, new()
         {
             bool? instanceLevelSetting = null;
             if (repository is ISqlTrackingConfiguration config)
@@ -318,7 +319,7 @@ namespace Durable.Sql
             return effectiveSettingResult.EffectiveSetting;
         }
 
-        private static void EnableSqlCaptureTemporarily<T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()
+        private static void EnableSqlCaptureTemporarily<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()
         {
             using (SqlCaptureScope.Begin())
             {
@@ -326,7 +327,7 @@ namespace Durable.Sql
             }
         }
 
-        private static async Task<TResult> EnableSqlCaptureTemporarilyAsync<T, TResult>(IRepository<T> repository, Func<Task<TResult>> operation) where T : class, new()
+        private static async Task<TResult> EnableSqlCaptureTemporarilyAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TResult>(IRepository<T> repository, Func<Task<TResult>> operation) where T : class, new()
         {
             using (SqlCaptureScope.Begin())
             {
@@ -334,7 +335,7 @@ namespace Durable.Sql
             }
         }
 
-        private static string? GetCapturedSql<T>(IRepository<T> repository) where T : class, new()
+        private static string? GetCapturedSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository) where T : class, new()
         {
             return repository is ISqlCapture sqlCapture ? sqlCapture.LastExecutedSql : null;
         }

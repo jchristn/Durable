@@ -3,6 +3,7 @@ namespace Durable
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -17,6 +18,7 @@ namespace Durable
         /// <summary>
         /// Gets the type of the junction entity that connects the two entities in the many-to-many relationship.
         /// </summary>
+        [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]
         public Type JunctionEntityType { get; }
         
         /// <summary>
@@ -36,7 +38,7 @@ namespace Durable
         /// <param name="thisEntityForeignKeyProperty">The foreign key property name for this entity in the junction table.</param>
         /// <param name="relatedEntityForeignKeyProperty">The foreign key property name for the related entity in the junction table.</param>
         public ManyToManyNavigationPropertyAttribute(
-            Type junctionEntityType, 
+            [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type junctionEntityType,
             string thisEntityForeignKeyProperty, 
             string relatedEntityForeignKeyProperty)
         {

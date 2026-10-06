@@ -3,6 +3,7 @@ namespace Durable.Sqlite
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace Durable.Sqlite
     /// Thread safety: safe for concurrent use (SQLite itself serializes writers).
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqliteRepository<T> : SqlRepository<T> where T : class, new()
+    public class SqliteRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : SqlRepository<T> where T : class, new()
     {
         #region Constructors-and-Factories
 

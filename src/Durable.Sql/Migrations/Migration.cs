@@ -1,6 +1,7 @@
 namespace Durable.Sql
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using System.Reflection;
     using System.Threading;
     using System.Threading.Tasks;
@@ -15,6 +16,7 @@ namespace Durable.Sql
     /// </para>
     /// Thread safety: implementations should be stateless; one instance may be used by several migrators.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public abstract class Migration
     {
         #region Public-Members

@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Text;
     using System.Threading;
@@ -16,16 +17,23 @@ namespace Durable.Sql
     {
         #region Public-Methods
 
-        internal static SchemaDiff Diff(MigrationSession session, IReadOnlyList<Type> entityTypes, SchemaSyncOptions options)
+        internal static SchemaDiff Diff(MigrationSession session, IReadOnlyList<EntityMetadata> entities, SchemaSyncOptions options)
         {
-            Dictionary<string, TableSchema> live = DatabaseSchemaReader.ReadTables(session, TableNames(entityTypes));
-            return SchemaDiffer.Compare(session.Dialect, entityTypes, live, options);
+            Dictionary<string, TableSchema> live = DatabaseSchemaReader.ReadTables(session, TableNames(entities));
+            return SchemaDiffer.Compare(session.Dialect, entities, live, options);
         }
 
-        internal static async Task<SchemaDiff> DiffAsync(MigrationSession session, IReadOnlyList<Type> entityTypes, SchemaSyncOptions options, CancellationToken token)
+        internal static async Task<SchemaDiff> DiffAsync(MigrationSession session, IReadOnlyList<EntityMetadata> entities, SchemaSyncOptions options, CancellationToken token)
         {
-            Dictionary<string, TableSchema> live = await DatabaseSchemaReader.ReadTablesAsync(session, TableNames(entityTypes), token).ConfigureAwait(false);
-            return SchemaDiffer.Compare(session.Dialect, entityTypes, live, options);
+            Dictionary<string, TableSchema> live = await DatabaseSchemaReader.ReadTablesAsync(session, TableNames(entities), token).ConfigureAwait(false);
+            return SchemaDiffer.Compare(session.Dialect, entities, live, options);
+        }
+
+        [RequiresUnreferencedCode("Entity types passed as Type values cannot be analyzed by trimming; callers carry the same requirement.")]
+        internal static List<EntityMetadata> ToMetadata(IEnumerable<Type> entityTypes)
+        {
+            ArgumentNullException.ThrowIfNull(entityTypes);
+            return entityTypes.Select(t => EntityMetadata.For(t)).ToList();
         }
 
         internal static SchemaSyncResult Apply(MigrationSession session, SchemaDiff diff, SchemaSyncOptions options, List<MigrationOperation> applied)
@@ -95,9 +103,9 @@ namespace Durable.Sql
 
         #region Private-Methods
 
-        private static List<string> TableNames(IReadOnlyList<Type> entityTypes)
+        private static List<string> TableNames(IReadOnlyList<EntityMetadata> entities)
         {
-            return entityTypes.Select(t => EntityMetadata.For(t).TableName).ToList();
+            return entities.Select(m => m.TableName).ToList();
         }
 
         #endregion

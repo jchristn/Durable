@@ -2,6 +2,7 @@ namespace Durable.ConcurrencyConflictResolvers
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Reflection;
     using System.Threading.Tasks;
@@ -11,7 +12,7 @@ namespace Durable.ConcurrencyConflictResolvers
     /// When conflicts occur, incoming changes take precedence over current changes.
     /// </summary>
     /// <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
-    public class MergeChangesResolver<T> : IConcurrencyConflictResolver<T> where T : class, new()
+    public class MergeChangesResolver<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T> : IConcurrencyConflictResolver<T> where T : class, new()
     {
         #region Public-Members
 

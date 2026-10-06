@@ -1,6 +1,7 @@
 namespace Durable
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
     /// Applies a custom <see cref="IValueConverter"/> to a single mapped property.
@@ -12,6 +13,7 @@ namespace Durable
         /// <summary>
         /// Gets the converter type. Implements <see cref="IValueConverter"/> and has a public parameterless constructor.
         /// </summary>
+        [DynamicallyAccessedMembers(MemberAccessorFactory.ConstructorMemberTypes)]
         public Type ConverterType { get; }
 
         /// <summary>
@@ -20,7 +22,7 @@ namespace Durable
         /// <param name="converterType">Type implementing <see cref="IValueConverter"/> with a public parameterless constructor.</param>
         /// <exception cref="ArgumentNullException">Thrown when converterType is null.</exception>
         /// <exception cref="ArgumentException">Thrown when converterType does not implement <see cref="IValueConverter"/>.</exception>
-        public ValueConverterAttribute(Type converterType)
+        public ValueConverterAttribute([DynamicallyAccessedMembers(MemberAccessorFactory.ConstructorMemberTypes)] Type converterType)
         {
             ArgumentNullException.ThrowIfNull(converterType);
             if (!typeof(IValueConverter).IsAssignableFrom(converterType))

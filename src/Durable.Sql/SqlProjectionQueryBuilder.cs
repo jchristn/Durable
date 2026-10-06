@@ -3,6 +3,7 @@ namespace Durable.Sql
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -22,7 +23,7 @@ namespace Durable.Sql
     /// </summary>
     /// <typeparam name="TSource">Source entity type.</typeparam>
     /// <typeparam name="TResult">Projected type.</typeparam>
-    public class SqlProjectionQueryBuilder<TSource, TResult> : ISqlQueryBuilder<TResult>
+    public class SqlProjectionQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TSource, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult> : ISqlQueryBuilder<TResult>
         where TSource : class, new()
         where TResult : class, new()
     {
@@ -311,7 +312,7 @@ namespace Durable.Sql
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public ISqlQueryBuilder<TOther> Select<TOther>(Expression<Func<TResult, TOther>> selector) where TOther : class, new() => throw NotSupported("Select");
+        public ISqlQueryBuilder<TOther> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<TResult, TOther>> selector) where TOther : class, new() => throw NotSupported("Select");
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
@@ -335,11 +336,11 @@ namespace Durable.Sql
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public ISqlQueryBuilder<TResult> WhereIn<TKey, TOther>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new() => throw NotSupported("WhereIn");
+        public ISqlQueryBuilder<TResult> WhereIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new() => throw NotSupported("WhereIn");
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public ISqlQueryBuilder<TResult> WhereNotIn<TKey, TOther>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new() => throw NotSupported("WhereNotIn");
+        public ISqlQueryBuilder<TResult> WhereNotIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<TResult, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new() => throw NotSupported("WhereNotIn");
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
@@ -351,11 +352,11 @@ namespace Durable.Sql
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public ISqlQueryBuilder<TResult> WhereExists<TOther>(IQueryBuilder<TOther> subquery, Expression<Func<TResult, TOther, bool>>? correlation = null) where TOther : class, new() => throw NotSupported("WhereExists");
+        public ISqlQueryBuilder<TResult> WhereExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<TResult, TOther, bool>>? correlation = null) where TOther : class, new() => throw NotSupported("WhereExists");
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
-        public ISqlQueryBuilder<TResult> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery, Expression<Func<TResult, TOther, bool>>? correlation = null) where TOther : class, new() => throw NotSupported("WhereNotExists");
+        public ISqlQueryBuilder<TResult> WhereNotExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<TResult, TOther, bool>>? correlation = null) where TOther : class, new() => throw NotSupported("WhereNotExists");
 
         /// <summary>Not supported on projections.</summary>
         /// <exception cref="NotSupportedException">Always thrown.</exception>
@@ -416,7 +417,7 @@ namespace Durable.Sql
 
         IQueryBuilder<TResult> IQueryBuilder<TResult>.ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty) => ThenInclude(navigationProperty);
 
-        IQueryBuilder<TOther> IQueryBuilder<TResult>.Select<TOther>(Expression<Func<TResult, TOther>> selector) => Select(selector);
+        IQueryBuilder<TOther> IQueryBuilder<TResult>.Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<TResult, TOther>> selector) => Select(selector);
 
         #endregion
 

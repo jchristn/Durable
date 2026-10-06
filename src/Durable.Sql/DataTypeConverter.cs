@@ -20,7 +20,9 @@ namespace Durable.Sql
         #region Public-Members
 
         /// <summary>
-        /// Gets the JSON options used for JSON columns. Default: camelCase property names, compact output.
+        /// Gets the JSON options used for JSON columns. Default: camelCase property names, compact output, reflection-based
+        /// metadata. Under trimming or Native AOT, construct the converter with options whose
+        /// <see cref="JsonSerializerOptions.TypeInfoResolver"/> is a source-generated context (see <see cref="DurableJson"/>).
         /// </summary>
         public JsonSerializerOptions JsonOptions { get; }
 
@@ -43,7 +45,9 @@ namespace Durable.Sql
         /// <summary>
         /// Instantiates the converter.
         /// </summary>
-        /// <param name="jsonOptions">JSON options for JSON columns; null uses the defaults.</param>
+        /// <param name="jsonOptions">JSON options for JSON columns; null uses the defaults. Under trimming or Native AOT pass
+        /// options with a source-generated <see cref="JsonSerializerOptions.TypeInfoResolver"/>, for example
+        /// <c>DurableJson.CreateOptions(MyJsonContext.Default)</c>.</param>
         public DataTypeConverter(JsonSerializerOptions? jsonOptions = null)
         {
             JsonOptions = jsonOptions ?? _DefaultJsonOptions;
@@ -78,7 +82,7 @@ namespace Durable.Sql
             {
                 if (value is string alreadyJson && column != null && (column.Flags & Flags.Json) == Flags.Json && column.ClrType == typeof(string))
                     return alreadyJson;
-                return JsonSerializer.Serialize(value, type, JsonOptions);
+                return DurableJson.Serialize(value, type, JsonOptions);
             }
 
             return ToDatabaseCore(value, type, column);
@@ -116,10 +120,10 @@ namespace Durable.Sql
             if ((column != null && column.IsJson) || !EntityMetadata.IsScalarType(underlying))
             {
                 if (value is string json)
-                    return string.IsNullOrEmpty(json) ? DefaultOf(targetType) : JsonSerializer.Deserialize(json, underlying, JsonOptions);
+                    return string.IsNullOrEmpty(json) ? DefaultOf(targetType) : DurableJson.Deserialize(json, underlying, JsonOptions);
                 if (value is byte[] jsonBytes)
-                    return JsonSerializer.Deserialize(jsonBytes, underlying, JsonOptions);
-                return JsonSerializer.Deserialize(value.ToString()!, underlying, JsonOptions);
+                    return DurableJson.Deserialize(jsonBytes, underlying, JsonOptions);
+                return DurableJson.Deserialize(value.ToString()!, underlying, JsonOptions);
             }
 
             return FromDatabaseCore(value, valueType, underlying, column);
@@ -227,7 +231,7 @@ namespace Durable.Sql
         private static object? DefaultOf(Type targetType)
         {
             if (!targetType.IsValueType || Nullable.GetUnderlyingType(targetType) != null) return null;
-            return _Defaults.GetOrAdd(targetType, t => Activator.CreateInstance(t)!);
+            return _Defaults.GetOrAdd(targetType, t => MemberAccessorFactory.GetDefaultValue(t)!);
         }
 
         private static bool ToBoolean(object value)

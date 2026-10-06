@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Simulates package consumption: the Durable package applies these defaults through buildTransitive. -->
+	<Import Project="..\Durable\buildTransitive\Durable.props" />
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<IsPackable>false</IsPackable>
+		<InvariantGlobalization>true</InvariantGlobalization>
+
+		<!-- Native AOT end-to-end check: `dotnet publish src/Test.Aot -c Release -r <rid> -f <tfm>`, then run the binary.
+		     PublishAot also makes `dotnet run` disable dynamic code; use `dotnet run -p:PublishAot=false` for a plain JIT run. -->
+		<PublishAot>true</PublishAot>
+
+		<!-- Report every trim/AOT warning individually, including those inside Durable assemblies, and fail on them. -->
+		<TrimmerSingleWarn>false</TrimmerSingleWarn>
+		<WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2060;IL2062;IL2067;IL2070;IL2072;IL2075;IL2077;IL2080;IL2087;IL2090;IL2091;IL2111;IL3050;IL3051</WarningsAsErrors>
+
+		<!-- IL2104/IL3053 are the per-assembly summaries ILC emits for assemblies compiled in single-warn mode. Only LiteDB
+		     is (see LiteDbSingleWarn below): LiteDB is not trim-annotated and warns in BsonMapper / type-name binding code that
+		     Durable.LiteDb never calls (it works with BsonDocument and BsonExpression only). Every other assembly reports
+		     its warnings individually and fails the build. -->
+		<NoWarn>$(NoWarn);CS1591;IL2104;IL3053</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable.Sqlite\Durable.Sqlite.csproj" />
+		<ProjectReference Include="..\Durable.InMemory\Durable.InMemory.csproj" />
+	</ItemGroup>
+
+	<!-- LiteDB runs under Native AOT on .NET 8 too, but the .NET 8 ILC cannot collapse LiteDB's IL3050 warnings into a
+	     per-assembly summary, which would fail this warnings-as-errors build; the LiteDB scenario runs on .NET 9+. -->
+	<ItemGroup Condition="'$(TargetFramework)' != 'net8.0'">
+		<ProjectReference Include="..\Durable.LiteDb\Durable.LiteDb.csproj" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+		<Compile Remove="LiteDbScenario.cs" />
+	</ItemGroup>
+
+	<Target Name="LiteDbSingleWarn" BeforeTargets="WriteIlcRspFileForCompilation">
+		<ItemGroup>
+			<ManagedAssemblyToLink Condition="'%(Filename)' == 'LiteDB'">
+				<TrimmerSingleWarn>true</TrimmerSingleWarn>
+			</ManagedAssemblyToLink>
+		</ItemGroup>
+	</Target>
+
+</Project>
