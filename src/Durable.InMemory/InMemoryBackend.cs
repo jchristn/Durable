@@ -186,11 +186,7 @@ namespace Durable.InMemory
             token.ThrowIfCancellationRequested();
             InMemoryDatabaseState state = ReadState(model.Transaction);
             List<InMemoryRow> rows = Select(state, model, true);
-            InMemoryQueryEvaluator evaluator = new InMemoryQueryEvaluator(state, _Values);
-            List<object?> values = new List<object?>(rows.Count);
-            foreach (InMemoryRow row in rows) values.Add(evaluator.Bind(model.Source, row).Visit(operand));
-
-            object? result = QueryAggregates.Compute(function, values, QueryValueComparer.Ordinal);
+            object? result = new InMemoryQueryEvaluator(state, _Values).Aggregate(model.Source, rows, function, operand);
             if (result != null && operand is ColumnNode column && (function == AggregateFunction.Min || function == AggregateFunction.Max))
                 result = _Values.FromStored(column.Column, result);
             return Task.FromResult(result);
@@ -458,41 +454,9 @@ namespace Durable.InMemory
         {
             InMemoryTable table = state.Table(model.Metadata);
             InMemoryQueryEvaluator evaluator = new InMemoryQueryEvaluator(state, _Values);
-            List<InMemoryRow> rows = model.Filter == null
-                ? table.Rows.ToList()
-                : table.Rows.Where(row => evaluator.Bind(model.Source, row).Test(model.Filter)).ToList();
-            if (!includeOrderingAndPaging) return rows;
-
-            if (model.Orderings.Count > 0)
-            {
-                Dictionary<InMemoryRow, object?[]> keys = new Dictionary<InMemoryRow, object?[]>(ReferenceEqualityComparer.Instance);
-                foreach (InMemoryRow row in rows)
-                {
-                    evaluator.Bind(model.Source, row);
-                    object?[] values = new object?[model.Orderings.Count];
-                    for (int i = 0; i < values.Length; i++) values[i] = evaluator.Visit(model.Orderings[i].Key);
-                    keys[row] = values;
-                }
-
-                IOrderedEnumerable<InMemoryRow>? ordered = null;
-                for (int i = 0; i < model.Orderings.Count; i++)
-                {
-                    int index = i;
-                    bool descending = model.Orderings[i].Descending;
-                    Func<InMemoryRow, object?> selector = row => keys[row][index];
-                    if (ordered == null)
-                        ordered = descending ? rows.OrderByDescending(selector, QueryValueComparer.Ordinal) : rows.OrderBy(selector, QueryValueComparer.Ordinal);
-                    else
-                        ordered = descending ? ordered.ThenByDescending(selector, QueryValueComparer.Ordinal) : ordered.ThenBy(selector, QueryValueComparer.Ordinal);
-                }
-
-                rows = ordered!.ToList();
-            }
-
-            IEnumerable<InMemoryRow> paged = rows;
-            if (model.Skip.HasValue) paged = paged.Skip(model.Skip.Value);
-            if (model.Take.HasValue) paged = paged.Take(model.Take.Value);
-            return paged is List<InMemoryRow> list ? list : paged.ToList();
+            return includeOrderingAndPaging
+                ? evaluator.Apply(model, table.Rows)
+                : evaluator.Filter(model.Source, model.Filter, table.Rows);
         }
 
         private object?[] ToStoredValues(EntityMetadata metadata, object entity)

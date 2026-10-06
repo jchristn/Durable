@@ -4538,6 +4538,231 @@
             <param name="descending">Whether the order is descending.</param>
             <returns>The ordering.</returns>
         </member>
+        <member name="T:Durable.Query.QueryEvaluator`1">
+            <summary>
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees client-side against a backend's own row representation, with C# semantics,
+            and applies a <see cref="T:Durable.Query.QueryModel"/> (filter, ordering, paging) to a sequence of rows. Non-SQL backends use it for
+            everything they cannot push down to their store: residual predicates, navigation members, collection predicates,
+            computed values, ordering and grouping aggregates. The in-memory backend evaluates every query with it.
+            <para>
+            Semantics: <c>null == null</c> is true; a comparison or string match involving null is false (so its negation is
+            true); arithmetic and functions on null yield null; <c>!list.Contains(x)</c> is true for a null item when the list
+            has no null. String comparisons follow the node's <see cref="T:Durable.StringMatchMode"/>: <see cref="F:Durable.StringMatchMode.Database"/>
+            and <see cref="F:Durable.StringMatchMode.Ordinal"/> are ordinal, <see cref="F:Durable.StringMatchMode.IgnoreCase"/> is
+            <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>. Values are compared in the form <see cref="M:Durable.Query.QueryEvaluator`1.GetValue(Durable.EntityMetadata,`0,Durable.ColumnMetadata)"/> returns, and
+            client-side parameter values are first converted to that form with <see cref="M:Durable.Query.QueryEvaluator`1.NormalizeValue(Durable.ColumnMetadata,System.Object)"/>, exactly as a
+            database compares column values with converted parameters. Navigation members look up the related row by key;
+            collection Any/All/Count look up related rows (through the junction entity for many-to-many) and exclude
+            soft-deleted related rows, as the SQL engine does. Functions follow SQL where C# would throw: Substring clamps
+            out-of-range arguments, Replace with an empty search string returns the input, and Math.Round rounds midpoints away
+            from zero (SQL ROUND). Ordering (<see cref="M:Durable.Query.QueryEvaluator`1.Sort(Durable.Query.QuerySource,System.Collections.Generic.IReadOnlyList{Durable.Query.QueryOrdering},System.Collections.Generic.IEnumerable{`0})"/>) is stable, nulls first, ordinal for strings.
+            </para>
+            <para>
+            Using it from a backend: subclass it for your row type and implement <see cref="M:Durable.Query.QueryEvaluator`1.GetValue(Durable.EntityMetadata,`0,Durable.ColumnMetadata)"/> (read a column of a
+            row) and <see cref="M:Durable.Query.QueryEvaluator`1.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)"/> (rows of an entity whose column equals a key; used for navigations and junction
+            entities). Override <see cref="M:Durable.Query.QueryEvaluator`1.NormalizeValue(Durable.ColumnMetadata,System.Object)"/> when stored values differ from model values (enum names,
+            converter provider values, JSON text, ...). Then, per operation, create an evaluator and either call
+            <see cref="M:Durable.Query.QueryEvaluator`1.Apply(Durable.Query.QueryModel,System.Collections.Generic.IEnumerable{`0})"/> / <see cref="M:Durable.Query.QueryEvaluator`1.Filter(Durable.Query.QuerySource,Durable.Query.QueryNode,System.Collections.Generic.IEnumerable{`0})"/> / <see cref="M:Durable.Query.QueryEvaluator`1.Sort(Durable.Query.QuerySource,System.Collections.Generic.IReadOnlyList{Durable.Query.QueryOrdering},System.Collections.Generic.IEnumerable{`0})"/> / <see cref="M:Durable.Query.QueryEvaluator`1.Aggregate(Durable.Query.QuerySource,System.Collections.Generic.IEnumerable{`0},Durable.Query.AggregateFunction,Durable.Query.QueryNode)"/> over candidate rows, or
+            <see cref="M:Durable.Query.QueryEvaluator`1.Bind(Durable.Query.QuerySource,`0)"/> the query's <see cref="T:Durable.Query.QuerySource"/> to a row and call <see cref="M:Durable.Query.QueryEvaluator`1.Test(Durable.Query.QueryNode)"/> (conditions) or
+            <see cref="M:Durable.Query.QueryNodeVisitor`1.Visit(Durable.Query.QueryNode)"/> (values). For grouping aggregates, set <see cref="P:Durable.Query.QueryEvaluator`1.GroupSource"/> and
+            <see cref="P:Durable.Query.QueryEvaluator`1.GroupRows"/> to the group being evaluated.
+            </para>
+            Thread safety: not thread-safe (it holds the current row bindings); create one per evaluation. Subclasses must
+            only read storage that does not change during the evaluation (for example a snapshot).
+            </summary>
+            <typeparam name="TRow">The backend's row (document, record, node) type.</typeparam>
+        </member>
+        <member name="P:Durable.Query.QueryEvaluator`1.GroupRows">
+            <summary>
+            Gets or sets the rows of the current group, for <see cref="T:Durable.Query.AggregateNode"/>s; null outside grouping.
+            Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.Query.QueryEvaluator`1.GroupSource">
+            <summary>
+            Gets or sets the source the group rows are bound to while an aggregate is evaluated; null outside grouping.
+            Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.#ctor">
+            <summary>
+            Instantiates an evaluator with no bindings.
+            </summary>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Bind(Durable.Query.QuerySource,`0)">
+            <summary>
+            Binds a source to a row, so <see cref="T:Durable.Query.ColumnNode"/>s of that source read the row.
+            </summary>
+            <param name="source">Source. Must not be null.</param>
+            <param name="row">Row. Must not be null.</param>
+            <returns>This evaluator, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Test(Durable.Query.QueryNode)">
+            <summary>
+            Evaluates a node as a condition against the bound rows; anything other than true (including null) is false.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The truth value.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when node is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when a referenced source is not bound.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Filter(Durable.Query.QuerySource,Durable.Query.QueryNode,System.Collections.Generic.IEnumerable{`0})">
+            <summary>
+            Returns the rows that satisfy a filter, in their original order.
+            </summary>
+            <param name="source">Source the filter's columns refer to. Must not be null.</param>
+            <param name="filter">Filter; null keeps every row.</param>
+            <param name="rows">Candidate rows. Must not be null.</param>
+            <returns>A new list of the matching rows. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when source or rows is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Sort(Durable.Query.QuerySource,System.Collections.Generic.IReadOnlyList{Durable.Query.QueryOrdering},System.Collections.Generic.IEnumerable{`0})">
+            <summary>
+            Orders rows by orderings: stable (ties keep their input order), nulls first, ordinal for strings
+            (<see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>). Each key is evaluated once per row.
+            </summary>
+            <param name="source">Source the ordering keys refer to. Must not be null.</param>
+            <param name="orderings">Orderings, primary first. Must not be null; empty keeps the input order.</param>
+            <param name="rows">Rows. Must not be null.</param>
+            <returns>A new list of the ordered rows. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Apply(Durable.Query.QueryModel,System.Collections.Generic.IEnumerable{`0})">
+            <summary>
+            Applies a query model to rows: <see cref="P:Durable.Query.QueryModel.Filter"/>, then <see cref="P:Durable.Query.QueryModel.Orderings"/>
+            (see <see cref="M:Durable.Query.QueryEvaluator`1.Sort(Durable.Query.QuerySource,System.Collections.Generic.IReadOnlyList{Durable.Query.QueryOrdering},System.Collections.Generic.IEnumerable{`0})"/>), then <see cref="P:Durable.Query.QueryModel.Skip"/> and <see cref="P:Durable.Query.QueryModel.Take"/>. The model's
+            transaction and <see cref="P:Durable.Query.QueryModel.Distinct"/> are not considered (rows of one entity are distinct by key).
+            </summary>
+            <param name="model">Query model. Must not be null.</param>
+            <param name="rows">Candidate rows of the model's entity. Must not be null.</param>
+            <returns>A new list of the resulting rows. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.Aggregate(Durable.Query.QuerySource,System.Collections.Generic.IEnumerable{`0},Durable.Query.AggregateFunction,Durable.Query.QueryNode)">
+            <summary>
+            Computes an aggregate of an operand over rows with SQL semantics (see <see cref="T:Durable.Query.QueryAggregates"/>): nulls are
+            ignored and an aggregate over no non-null values is null. The result is in the evaluator's value form (for Min
+            and Max of a column, the stored form; convert it back to the model type when needed).
+            </summary>
+            <param name="source">Source the operand refers to. Must not be null.</param>
+            <param name="rows">Rows. Must not be null.</param>
+            <param name="function">Sum, Average, Min or Max.</param>
+            <param name="operand">Operand. Must not be null.</param>
+            <returns>The aggregate, or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="function"/> is Count or Any.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.IsSoftDeleted(Durable.EntityMetadata,`0)">
+            <summary>
+            Returns whether a row is soft-deleted: its <see cref="P:Durable.EntityMetadata.SoftDeleteColumn"/> is true (bool
+            columns) or not null (other columns). Always false for entities without a soft-delete column.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="row">Row of that entity. Must not be null.</param>
+            <returns>True when the soft-delete marker is set.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitColumn(Durable.Query.ColumnNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitValue(Durable.Query.ValueNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitComparison(Durable.Query.ComparisonNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitLogical(Durable.Query.LogicalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitNot(Durable.Query.NotNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitIn(Durable.Query.InNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitStringTest(Durable.Query.StringTestNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitNegate(Durable.Query.NegateNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitConcat(Durable.Query.ConcatNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitConditional(Durable.Query.ConditionalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitFunction(Durable.Query.FunctionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitCollection(Durable.Query.CollectionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.VisitAggregate(Durable.Query.AggregateNode)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when <see cref="P:Durable.Query.QueryEvaluator`1.GroupRows"/> or <see cref="P:Durable.Query.QueryEvaluator`1.GroupSource"/> is not set.</exception>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.GetValue(Durable.EntityMetadata,`0,Durable.ColumnMetadata)">
+            <summary>
+            Reads a column of a row, in the evaluator's comparable value form: the form values are compared, ordered and
+            computed in. It must match what <see cref="M:Durable.Query.QueryEvaluator`1.NormalizeValue(Durable.ColumnMetadata,System.Object)"/> returns for parameter values of the same column
+            (for example both stored enum names, or both enum values). Null means the column is null.
+            </summary>
+            <param name="metadata">Entity the row belongs to. Never null.</param>
+            <param name="row">Row. Never null.</param>
+            <param name="column">Column of <paramref name="metadata"/>. Never null.</param>
+            <returns>The value, or null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Returns the rows of an entity whose column equals a key, including soft-deleted rows (the evaluator excludes
+            them). Used to resolve navigation members (the related row by its key), collections (related rows by foreign
+            key) and many-to-many junction rows. Equality should be ordinal, as <see cref="P:Durable.Query.QueryValueComparer.Ordinal"/>.
+            </summary>
+            <param name="metadata">Entity whose rows are searched. Never null.</param>
+            <param name="column">Column of <paramref name="metadata"/> to match. Never null.</param>
+            <param name="key">Key in the evaluator's value form. Never null.</param>
+            <returns>The matching rows (possibly empty). Must not be null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.NormalizeValue(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a client-side value bound to a column (a <see cref="T:Durable.Query.ValueNode"/> with a column, or an
+            <see cref="T:Durable.Query.InNode"/> list item) to the form <see cref="M:Durable.Query.QueryEvaluator`1.GetValue(Durable.EntityMetadata,`0,Durable.ColumnMetadata)"/> returns for that column. The default returns
+            the value unchanged; override it when the backend stores converted values (enum names or numbers,
+            <see cref="T:Durable.IValueConverter"/> provider values, JSON text, ...).
+            </summary>
+            <param name="column">Column the value is compared with. Never null.</param>
+            <param name="value">Model value; may be null.</param>
+            <returns>The comparable value, or null.</returns>
+        </member>
+        <member name="M:Durable.Query.QueryEvaluator`1.RelatedRows(Durable.NavigationMetadata,Durable.EntityMetadata,System.Object)">
+            <summary>
+            Returns the non-soft-deleted rows related to an owner key through a navigation: for many-to-many, through the
+            junction entity; otherwise the rows of <paramref name="related"/> whose remote column equals the key. The
+            default is built on <see cref="M:Durable.Query.QueryEvaluator`1.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)"/> and <see cref="M:Durable.Query.QueryEvaluator`1.IsSoftDeleted(Durable.EntityMetadata,`0)"/>; override it when the backend can
+            resolve relationships more directly (for example graph edges).
+            </summary>
+            <param name="navigation">Navigation. Never null.</param>
+            <param name="related">Related entity. Never null.</param>
+            <param name="key">Owner key in the evaluator's value form. Never null.</param>
+            <returns>A new list of the related rows. Never null.</returns>
+        </member>
         <member name="T:Durable.Query.QueryFunction">
             <summary>
             Scalar functions recognized by <see cref="T:Durable.Query.QueryNormalizer"/> in LINQ expressions; each backend translates them (SQL dialects via <c>ISqlDialect.TranslateFunction</c>).

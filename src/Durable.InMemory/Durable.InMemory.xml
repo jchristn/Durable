@@ -189,28 +189,12 @@
         </member>
         <member name="T:Durable.InMemory.InMemoryQueryEvaluator">
             <summary>
-            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees against stored rows of an <see cref="T:Durable.InMemory.InMemoryDatabaseState"/> with C#
-            semantics: <c>null == null</c> is true, a comparison or string match involving null is false (so its negation is
-            true), arithmetic and functions on null yield null, <c>!list.Contains(x)</c> is true for a null item when the list
-            has no null. String comparisons follow the node's <see cref="T:Durable.StringMatchMode"/>: <see cref="F:Durable.StringMatchMode.Database"/>
-            and <see cref="F:Durable.StringMatchMode.Ordinal"/> are ordinal, <see cref="F:Durable.StringMatchMode.IgnoreCase"/> is
-            <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>. Values are compared in their stored form (enum names, converter
-            provider values, JSON text), exactly as a database compares column values with converted parameters.
-            Navigation members look up the related row by key; collection Any/All/Count look up related rows (through the
-            junction table for many-to-many) and exclude soft-deleted related rows, as the SQL engine does. Functions follow SQL
-            where C# would throw: Substring clamps out-of-range arguments, Replace with an empty search string returns the input,
-            and Math.Round rounds midpoints away from zero (SQL ROUND).
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees against stored rows of an <see cref="T:Durable.InMemory.InMemoryDatabaseState"/> with the C#
+            semantics of <see cref="T:Durable.Query.QueryEvaluator`1"/>. Values are compared in their stored form (enum names, converter
+            provider values, JSON text): parameter values are converted with <see cref="M:Durable.InMemory.InMemoryValueConverter.ToStored(Durable.ColumnMetadata,System.Object)"/>,
+            exactly as a database compares column values with converted parameters. Related rows are looked up by primary key
+            when the navigation targets the key, otherwise by scanning the related table.
             Thread safety: not thread-safe; create one per operation. The state it reads is immutable.
-            </summary>
-        </member>
-        <member name="P:Durable.InMemory.InMemoryQueryEvaluator.GroupRows">
-            <summary>
-            Gets or sets the rows of the current group, for <see cref="T:Durable.Query.AggregateNode"/>s; null outside grouping.
-            </summary>
-        </member>
-        <member name="P:Durable.InMemory.InMemoryQueryEvaluator.GroupSource">
-            <summary>
-            Gets or sets the source the group rows are bound to; null outside grouping.
             </summary>
         </member>
         <member name="M:Durable.InMemory.InMemoryQueryEvaluator.#ctor(Durable.InMemory.InMemoryDatabaseState,Durable.InMemory.InMemoryValueConverter)">
@@ -221,81 +205,13 @@
             <param name="values">Value converter. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
         </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.Bind(Durable.Query.QuerySource,Durable.InMemory.InMemoryRow)">
-            <summary>
-            Binds a source to a row.
-            </summary>
-            <param name="source">Source. Must not be null.</param>
-            <param name="row">Row. Must not be null.</param>
-            <returns>This evaluator.</returns>
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.Test(Durable.Query.QueryNode)">
-            <summary>
-            Evaluates a node as a condition; anything other than true (including null) is false.
-            </summary>
-            <param name="node">Node. Must not be null.</param>
-            <returns>The truth value.</returns>
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.IsSoftDeleted(Durable.EntityMetadata,Durable.InMemory.InMemoryRow)">
-            <summary>
-            Returns whether a stored row is soft-deleted.
-            </summary>
-            <param name="metadata">Entity metadata. Must not be null.</param>
-            <param name="row">Row. Must not be null.</param>
-            <returns>True when the soft-delete marker is set.</returns>
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitColumn(Durable.Query.ColumnNode)">
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.GetValue(Durable.EntityMetadata,Durable.InMemory.InMemoryRow,Durable.ColumnMetadata)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitValue(Durable.Query.ValueNode)">
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitComparison(Durable.Query.ComparisonNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitLogical(Durable.Query.LogicalNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNot(Durable.Query.NotNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNullCheck(Durable.Query.NullCheckNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitIn(Durable.Query.InNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitStringMatch(Durable.Query.StringMatchNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitStringTest(Durable.Query.StringTestNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitArithmetic(Durable.Query.ArithmeticNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNegate(Durable.Query.NegateNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitConcat(Durable.Query.ConcatNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitCoalesce(Durable.Query.CoalesceNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitConditional(Durable.Query.ConditionalNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitFunction(Durable.Query.FunctionNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitCollection(Durable.Query.CollectionNode)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.VisitAggregate(Durable.Query.AggregateNode)">
+        <member name="M:Durable.InMemory.InMemoryQueryEvaluator.NormalizeValue(Durable.ColumnMetadata,System.Object)">
             <inheritdoc />
         </member>
         <member name="T:Durable.InMemory.InMemoryRepository`1">
