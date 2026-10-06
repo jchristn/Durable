@@ -10,7 +10,7 @@
 		<DocumentationFile>Durable.Sql.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Sql</Title>
-		<Version>0.4.0</Version>
+		<Version>0.5.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Shared SQL engine for Durable ORM providers (dialect abstraction, LINQ-to-SQL translation, materialization, includes). Referenced by Durable.Sqlite, Durable.Postgres, Durable.MySql and Durable.SqlServer.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>

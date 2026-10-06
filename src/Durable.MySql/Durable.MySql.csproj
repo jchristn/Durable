@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.MySql.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.MySql</Title>
-		<Version>0.4.0</Version>
+		<Version>0.5.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>MySQL provider for the Durable ORM (MySqlConnector): dialect, connection factory, repository and MySqlBulkCopy bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>

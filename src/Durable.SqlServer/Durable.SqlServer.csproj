@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.SqlServer.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.SqlServer</Title>
-		<Version>0.4.0</Version>
+		<Version>0.5.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>SQL Server provider for the Durable ORM (Microsoft.Data.SqlClient): dialect, connection factory, repository and SqlBulkCopy bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
