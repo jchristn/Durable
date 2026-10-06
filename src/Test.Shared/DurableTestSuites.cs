@@ -90,6 +90,8 @@ namespace Test.Shared
                     "QueryNormalizer", "Query Normalizer (Neutral Query Model) Tests", () => new QueryNormalizerTestSuite(), new List<string> { providerTag, "neutral" }));
                 suites.Add(TouchstoneBridge.BuildSuite<QueryEvaluatorTestSuite>(
                     "QueryEvaluator", "Query Evaluator (Client-Side Node Evaluation) Tests", () => new QueryEvaluatorTestSuite(), new List<string> { providerTag, "neutral" }));
+                suites.Add(TouchstoneBridge.BuildSuite<PublicApiConventionsTestSuite>(
+                    "PublicApiConventions", "Public API Conventions (Tokens / Async Suffix / Sync-Async Pairs / Tuples / Out-Ref) Tests", () => new PublicApiConventionsTestSuite(), new List<string> { providerTag, "neutral" }));
                 suites.Add(TouchstoneBridge.BuildSuite<ProviderSettingsTestSuite>(
                     "ProviderSettings", "Provider Settings / Connection Factory Mapping Tests", () => new ProviderSettingsTestSuite(), new List<string> { providerTag, "neutral" }));
 
