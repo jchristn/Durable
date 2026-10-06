@@ -10,7 +10,7 @@ namespace Durable.Sql
     /// by column name with <see cref="RowMaterializer"/>.
     /// Thread safety: returned mappers are not thread-safe (they cache the materializer on first use); create one per command.
     /// </summary>
-    public static class ResultMapper
+    internal static class ResultMapper
     {
         /// <summary>
         /// Creates a mapper for <typeparamref name="TResult"/>.

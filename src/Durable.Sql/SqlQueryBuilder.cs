@@ -19,7 +19,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe; build and execute on one flow.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlQueryBuilder<T> where T : class, new()
+    internal class SqlQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlQueryBuilder<T> where T : class, new()
     {
         #region Public-Members
 

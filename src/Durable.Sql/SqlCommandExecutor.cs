@@ -18,7 +18,7 @@ namespace Durable.Sql
     /// interceptors, logging, tracing and SQL capture around every command.
     /// Thread safety: safe for concurrent use; each call uses its own command.
     /// </summary>
-    public sealed class SqlCommandExecutor
+    internal sealed class SqlCommandExecutor
     {
         #region Public-Members
 

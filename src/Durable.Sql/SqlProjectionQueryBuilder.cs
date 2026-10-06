@@ -23,7 +23,7 @@ namespace Durable.Sql
     /// </summary>
     /// <typeparam name="TSource">Source entity type.</typeparam>
     /// <typeparam name="TResult">Projected type.</typeparam>
-    public class SqlProjectionQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TSource, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult> : ISqlQueryBuilder<TResult>
+    internal class SqlProjectionQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TSource, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult> : ISqlQueryBuilder<TResult>
         where TSource : class, new()
         where TResult : class, new()
     {

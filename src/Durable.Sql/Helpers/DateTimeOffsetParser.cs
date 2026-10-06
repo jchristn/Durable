@@ -9,7 +9,7 @@ namespace Durable.Sql.Helpers
     /// while preserving timezone offset information and microsecond precision where available.
     /// Unlike DateTime, DateTimeOffset can preserve the original timezone offset from the input string.
     /// </summary>
-    public class DateTimeOffsetParser
+    internal class DateTimeOffsetParser
     {
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 

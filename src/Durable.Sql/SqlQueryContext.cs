@@ -6,7 +6,7 @@ namespace Durable.Sql
     /// The execution services a query builder needs: command executor, converter and dialect.
     /// Thread safety: immutable; safe to share.
     /// </summary>
-    public sealed class SqlQueryContext
+    internal sealed class SqlQueryContext
     {
         /// <summary>
         /// Gets the command executor. Never null.

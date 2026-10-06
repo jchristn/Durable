@@ -51,10 +51,7 @@ namespace Durable.Sql
         /// </summary>
         public IDataTypeConverter Converter { get; }
 
-        /// <summary>
-        /// Gets the command executor. Never null.
-        /// </summary>
-        public SqlCommandExecutor Executor { get; }
+        internal SqlCommandExecutor Executor { get; }
 
         /// <inheritdoc />
         public IReadOnlyList<Expression<Func<T, bool>>> QueryFilters => _QueryFilters;
@@ -1078,6 +1075,21 @@ namespace Durable.Sql
         protected object DatabaseValue(T entity, ColumnMetadata column)
         {
             return Converter.ConvertToDatabase(column.GetValue(entity), column);
+        }
+
+        /// <summary>
+        /// Creates a command for a statement on a lease, with the statement's parameters bound, the lease's transaction
+        /// attached and the configured command timeout applied. Used by provider bulk-insert paths.
+        /// </summary>
+        /// <param name="lease">Lease. Must not be null.</param>
+        /// <param name="statement">Statement. Must not be null.</param>
+        /// <returns>The command; the caller disposes it.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when lease or statement is null.</exception>
+        protected DbCommand CreateCommand(ConnectionLease lease, SqlStatement statement)
+        {
+            ArgumentNullException.ThrowIfNull(lease);
+            ArgumentNullException.ThrowIfNull(statement);
+            return Executor.CreateCommand(lease, statement);
         }
 
         /// <summary>

@@ -8,7 +8,7 @@ namespace Durable.Sql.Helpers
     /// A comprehensive DateTime parser that handles various database and standard datetime formats
     /// while preserving microsecond precision where available.
     /// </summary>
-    public class DateTimeParser
+    internal class DateTimeParser
     {
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 

@@ -5322,11 +5322,6 @@
             Gets the converter in use (the options' converter, or the dialect's). Never null.
             </summary>
         </member>
-        <member name="P:Durable.Sql.SqlRepository`1.Executor">
-            <summary>
-            Gets the command executor. Never null.
-            </summary>
-        </member>
         <member name="P:Durable.Sql.SqlRepository`1.QueryFilters">
             <inheritdoc />
         </member>
@@ -5652,6 +5647,16 @@
             <param name="entity">Entity. Must not be null.</param>
             <param name="column">Column. Must not be null.</param>
             <returns>The database value (never null; <see cref="F:System.DBNull.Value"/> for null).</returns>
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.CreateCommand(Durable.Sql.ConnectionLease,Durable.Sql.SqlStatement)">
+            <summary>
+            Creates a command for a statement on a lease, with the statement's parameters bound, the lease's transaction
+            attached and the configured command timeout applied. Used by provider bulk-insert paths.
+            </summary>
+            <param name="lease">Lease. Must not be null.</param>
+            <param name="statement">Statement. Must not be null.</param>
+            <returns>The command; the caller disposes it.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lease or statement is null.</exception>
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.Dispose(System.Boolean)">
             <summary>

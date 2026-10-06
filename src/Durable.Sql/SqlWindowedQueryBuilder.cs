@@ -17,7 +17,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IWindowedQueryBuilder<T> where T : class, new()
+    internal class SqlWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IWindowedQueryBuilder<T> where T : class, new()
     {
         #region Private-Members
 

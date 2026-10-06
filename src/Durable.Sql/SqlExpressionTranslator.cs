@@ -19,7 +19,7 @@ namespace Durable.Sql
     /// <see cref="StringMatchMode"/> through <see cref="ISqlDialect.OrdinalCollation"/>.
     /// Thread safety: not thread-safe; create one per statement.
     /// </summary>
-    public class SqlExpressionTranslator : QueryNodeVisitor<string>
+    internal class SqlExpressionTranslator : QueryNodeVisitor<string>
     {
         #region Public-Members
 

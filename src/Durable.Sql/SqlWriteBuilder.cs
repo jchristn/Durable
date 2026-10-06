@@ -8,7 +8,7 @@ namespace Durable.Sql
     /// Shared helpers that render write statements.
     /// Thread safety: stateless.
     /// </summary>
-    public static class SqlWriteBuilder
+    internal static class SqlWriteBuilder
     {
         /// <summary>
         /// Appends a DELETE for the given conditions, or an UPDATE setting the soft-delete marker when the entity has one.

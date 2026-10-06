@@ -162,7 +162,7 @@ namespace Durable.Sqlite
             }
 
             builder.Append(")");
-            DbCommand command = Executor.CreateCommand(lease, builder.Build());
+            DbCommand command = CreateCommand(lease, builder.Build());
             command.Prepare();
             return command;
         }

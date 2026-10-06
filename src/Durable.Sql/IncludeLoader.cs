@@ -16,7 +16,7 @@ namespace Durable.Sql
     /// table for many-to-many. Root paging is unaffected and there is no cartesian explosion. Soft-deleted related rows are excluded.
     /// Thread safety: not thread-safe; create per query execution.
     /// </summary>
-    public sealed class IncludeLoader
+    internal sealed class IncludeLoader
     {
         #region Private-Members
 

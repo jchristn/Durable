@@ -21,7 +21,7 @@ namespace Durable.Sql
     /// stubs) and the same converter rules, which avoids the much slower expression interpreter.
     /// Thread safety: instances are thread-safe; the cache is concurrent.
     /// </summary>
-    public sealed class RowMaterializer
+    internal sealed class RowMaterializer
     {
         #region Public-Members
 
