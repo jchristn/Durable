@@ -1,6 +1,7 @@
 namespace Durable.InMemory
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using Durable;
     using Durable.Query;
 
@@ -12,7 +13,7 @@ namespace Durable.InMemory
     /// Thread safety: safe for concurrent use once configured (see <see cref="RepositoryBase{T}"/>).
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class InMemoryRepository<T> : RepositoryBase<T> where T : class, new()
+    public class InMemoryRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : RepositoryBase<T> where T : class, new()
     {
         #region Public-Members
 

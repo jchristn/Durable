@@ -3,6 +3,7 @@ namespace Durable.LiteDb
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Runtime.CompilerServices;
@@ -205,7 +206,7 @@ namespace Durable.LiteDb
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
         /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB (see <see cref="LiteDbRepository{T}"/>).</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
-        public LiteDbRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new()
+        public LiteDbRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
             return new LiteDbRepository<T>(this, options);
         }
@@ -229,7 +230,7 @@ namespace Durable.LiteDb
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
-        public void EnsureIndexes(Type entityType)
+        public void EnsureIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ThrowIfDisposed();
@@ -244,7 +245,7 @@ namespace Durable.LiteDb
         /// <returns>Copies of the documents. Never null.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
-        public IReadOnlyList<BsonDocument> GetStoredDocuments(Type entityType)
+        public IReadOnlyList<BsonDocument> GetStoredDocuments([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ThrowIfDisposed();

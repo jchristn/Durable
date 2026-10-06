@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading.Tasks;
@@ -40,7 +41,7 @@ namespace Durable.Conformance
             return fixture.CheckAsync(predicate, expected, Token);
         }
 
-        protected async Task<List<T>> ExecuteAsync<T>(IQueryBuilder<T> query, string context) where T : class, new()
+        protected async Task<List<T>> ExecuteAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IQueryBuilder<T> query, string context) where T : class, new()
         {
             try
             {

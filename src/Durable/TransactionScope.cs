@@ -1,6 +1,7 @@
 namespace Durable
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -81,7 +82,7 @@ namespace Durable
         /// <param name="repository">Repository. Must not be null.</param>
         /// <returns>The new scope.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
-        public static TransactionScope Create<T>(IRepository<T> repository) where T : class, new()
+        public static TransactionScope Create<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository) where T : class, new()
         {
             ArgumentNullException.ThrowIfNull(repository);
             ITransaction transaction = repository.BeginTransaction();
@@ -98,7 +99,7 @@ namespace Durable
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task returning the new scope.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository is null.</exception>
-        public static Task<TransactionScope> CreateAsync<T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
+        public static Task<TransactionScope> CreateAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository, CancellationToken token = default) where T : class, new()
         {
             ArgumentNullException.ThrowIfNull(repository);
 
@@ -164,7 +165,7 @@ namespace Durable
 
         #region Private-Methods
 
-        private async Task<TransactionScope> StartAsync<T>(IRepository<T> repository, CancellationToken token) where T : class, new()
+        private async Task<TransactionScope> StartAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository, CancellationToken token) where T : class, new()
         {
             try
             {

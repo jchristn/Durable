@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -40,7 +41,7 @@ namespace Durable.Query
     /// <see cref="IncludeChunkSize"/>) should be set before concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class RepositoryBase<T> : IRepository<T> where T : class, new()
+    public class RepositoryBase<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IRepository<T> where T : class, new()
     {
         #region Public-Members
 

@@ -4,6 +4,7 @@ namespace Durable.Sql
     using System.Collections.Generic;
     using System.Data;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -23,7 +24,7 @@ namespace Durable.Sql
     /// <see cref="CaptureSql"/>) should be set before concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public abstract class SqlRepository<T> : ISqlRepository<T> where T : class, new()
+    public abstract class SqlRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlRepository<T> where T : class, new()
     {
         #region Public-Members
 
@@ -722,7 +723,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
         {
             ArgumentNullException.ThrowIfNull(sql);
             return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
@@ -751,7 +752,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
         {
             ArgumentNullException.ThrowIfNull(sql);
             return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
@@ -813,7 +814,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
+        public List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -832,7 +833,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
+        public Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -863,7 +864,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public void InitializeTable(Type entityType, ITransaction? transaction = null)
+        public void InitializeTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             EntityMetadata metadata = EntityMetadata.For(entityType);
@@ -886,7 +887,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public async Task InitializeTableAsync(Type entityType, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task InitializeTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             EntityMetadata metadata = EntityMetadata.For(entityType);
@@ -910,6 +911,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         public void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityTypes);
@@ -917,6 +919,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         public async Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entityTypes);
@@ -924,7 +927,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public bool ValidateTable(Type entityType, out List<string> errors, out List<string> warnings)
+        public bool ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors, out List<string> warnings)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             warnings = new List<string>();
@@ -946,6 +949,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         public bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings)
         {
             ArgumentNullException.ThrowIfNull(entityTypes);
@@ -962,7 +966,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public void CreateIndexes(Type entityType, ITransaction? transaction = null)
+        public void CreateIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             EntityMetadata metadata = EntityMetadata.For(entityType);
@@ -971,7 +975,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public async Task CreateIndexesAsync(Type entityType, ITransaction? transaction = null, CancellationToken token = default)
+        public async Task CreateIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             EntityMetadata metadata = EntityMetadata.For(entityType);
@@ -995,14 +999,14 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public List<string> GetIndexes(Type entityType)
+        public List<string> GetIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             return GetIndexNames(EntityMetadata.For(entityType).TableName, null);
         }
 
         /// <inheritdoc />
-        public Task<List<string>> GetIndexesAsync(Type entityType, CancellationToken token = default)
+        public Task<List<string>> GetIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             return GetIndexNamesAsync(EntityMetadata.For(entityType).TableName, null, token);

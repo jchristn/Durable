@@ -103,8 +103,11 @@ namespace Durable.Query
         /// <returns>The ordering.</returns>
         public static QueryOrdering OrderBy(QuerySource source, ColumnMetadata column, bool descending)
         {
-            ParameterExpression parameter = Expression.Parameter(source.Metadata.EntityType, "x");
-            LambdaExpression selector = Expression.Lambda(Expression.Property(parameter, column.Property), parameter);
+            // The selector only documents the ordering (the key is the column node); a Func<object, object> lambda avoids
+            // constructing a delegate type at run time, which Native AOT cannot do for arbitrary value types.
+            ParameterExpression parameter = Expression.Parameter(typeof(object), "x");
+            Expression property = Expression.Property(Expression.Convert(parameter, source.Metadata.EntityType), column.Property);
+            LambdaExpression selector = Expression.Lambda<Func<object, object?>>(Expression.Convert(property, typeof(object)), parameter);
             return new QueryOrdering(new ColumnNode(source, column), selector, descending);
         }
 

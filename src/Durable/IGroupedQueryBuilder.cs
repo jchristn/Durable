@@ -2,6 +2,7 @@ namespace Durable
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading;
@@ -13,7 +14,7 @@ namespace Durable
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
     /// <typeparam name="TKey">Group key type.</typeparam>
-    public interface IGroupedQueryBuilder<T, TKey> where T : class, new()
+    public interface IGroupedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TKey> where T : class, new()
     {
         /// <summary>
         /// Filters groups, for example <c>g =&gt; g.Count() &gt; 2 &amp;&amp; g.Sum(x =&gt; x.Salary) &gt; 1000</c>.
@@ -33,7 +34,7 @@ namespace Durable
         /// <returns>A query producing one <typeparamref name="TResult"/> per group.</returns>
         /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         /// <exception cref="NotSupportedException">Thrown when the projection uses members other than the key and aggregates.</exception>
-        IQueryBuilder<TResult> Select<TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new();
+        IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new();
 
         /// <summary>
         /// Executes the query and returns groups with their member entities.

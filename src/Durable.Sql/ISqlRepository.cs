@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
@@ -14,7 +15,7 @@ namespace Durable.Sql
     /// Thread safety: safe for concurrent use; see <see cref="IRepository{T}"/>.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public interface ISqlRepository<T> : IRepository<T>, ISqlCapture, ISqlTrackingConfiguration where T : class, new()
+    public interface ISqlRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IRepository<T>, ISqlCapture, ISqlTrackingConfiguration where T : class, new()
     {
         #region Configuration
 
@@ -86,7 +87,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Results, streamed.</returns>
-        IEnumerable<TResult> FromSql<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
+        IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
 
         /// <summary>
         /// Executes raw SQL that returns no rows.
@@ -126,7 +127,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Results.</returns>
-        IAsyncEnumerable<TResult> FromSqlAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
+        IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         /// <summary>
         /// Executes raw SQL that returns no rows.
@@ -191,7 +192,7 @@ namespace Durable.Sql
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
         /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
-        List<TResult> FromProcedure<TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
+        List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
 
         /// <summary>
         /// Executes a stored procedure that returns no rows.
@@ -212,7 +213,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Results, buffered.</returns>
-        Task<List<TResult>> FromProcedureAsync<TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
+        Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
 
         #endregion
 
@@ -248,7 +249,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when the mapping is invalid or the existing table lacks mapped columns.</exception>
-        void InitializeTable(Type entityType, ITransaction? transaction = null);
+        void InitializeTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null);
 
         /// <summary>
         /// Creates the table for an entity type if it does not exist, then validates it.
@@ -257,13 +258,14 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
-        Task InitializeTableAsync(Type entityType, ITransaction? transaction = null, CancellationToken token = default);
+        Task InitializeTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Initializes tables for several entity types in order.
         /// </summary>
         /// <param name="entityTypes">Entity types. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null);
 
         /// <summary>
@@ -273,6 +275,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
@@ -283,7 +286,7 @@ namespace Durable.Sql
         /// <param name="errors">Errors. Never null.</param>
         /// <param name="warnings">Warnings. Never null.</param>
         /// <returns>True when there are no errors.</returns>
-        bool ValidateTable(Type entityType, out List<string> errors, out List<string> warnings);
+        bool ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors, out List<string> warnings);
 
         /// <summary>
         /// Validates several entity mappings.
@@ -292,6 +295,7 @@ namespace Durable.Sql
         /// <param name="errors">Errors. Never null.</param>
         /// <param name="warnings">Warnings. Never null.</param>
         /// <returns>True when there are no errors.</returns>
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings);
 
         /// <summary>
@@ -299,7 +303,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
-        void CreateIndexes(Type entityType, ITransaction? transaction = null);
+        void CreateIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null);
 
         /// <summary>
         /// Creates declared indexes that do not exist yet.
@@ -308,7 +312,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
-        Task CreateIndexesAsync(Type entityType, ITransaction? transaction = null, CancellationToken token = default);
+        Task CreateIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Drops an index on this repository's table.
@@ -331,7 +335,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <returns>Index names. Never null.</returns>
-        List<string> GetIndexes(Type entityType);
+        List<string> GetIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType);
 
         /// <summary>
         /// Lists index names on an entity's table.
@@ -339,7 +343,7 @@ namespace Durable.Sql
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Index names. Never null.</returns>
-        Task<List<string>> GetIndexesAsync(Type entityType, CancellationToken token = default);
+        Task<List<string>> GetIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default);
 
         /// <summary>
         /// Creates the configured database when it does not exist (for SQLite, creates the file).

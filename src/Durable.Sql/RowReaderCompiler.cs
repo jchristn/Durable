@@ -4,6 +4,7 @@ namespace Durable.Sql
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -15,6 +16,8 @@ namespace Durable.Sql
     /// every bound column with the reader's typed getters. Internal to <see cref="RowMaterializer"/>.
     /// When the converter is a stock <see cref="DataTypeConverter"/> (its read conversion is not overridden), cheap
     /// conversions are inlined with exactly the converter's semantics; everything else calls the converter.
+    /// Only used when <see cref="System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported"/> is true; under
+    /// Native AOT, <see cref="RowMaterializer"/> reads rows with cached reflection accessors instead.
     /// Thread safety: stateless apart from a concurrent cache; safe for concurrent use.
     /// </summary>
     internal static class RowReaderCompiler
@@ -23,7 +26,7 @@ namespace Durable.Sql
         private static readonly MethodInfo _GetFieldValue = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetFieldValue))!;
         private static readonly MethodInfo _IsDbNull = typeof(DbDataReader).GetMethod(nameof(DbDataReader.IsDBNull), new[] { typeof(int) })!;
         private static readonly MethodInfo _GetValue = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue), new[] { typeof(int) })!;
-        private static readonly MethodInfo _GetFieldType = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetFieldType), new[] { typeof(int) })!;
+        private static readonly MethodInfo _GetFieldType = GetFieldTypeMethod();
         private static readonly MethodInfo _GetString = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetString), new[] { typeof(int) })!;
         private static readonly MethodInfo _ConvertFromDatabase = typeof(IDataTypeConverter).GetMethod(nameof(IDataTypeConverter.ConvertFromDatabase))!;
         private static readonly MethodInfo _CreateInstance = typeof(EntityMetadata).GetMethod(nameof(EntityMetadata.CreateInstance))!;
@@ -37,17 +40,17 @@ namespace Durable.Sql
 
         private static readonly Dictionary<Type, MethodInfo> _TypedGetters = new Dictionary<Type, MethodInfo>
         {
-            { typeof(bool), Getter(nameof(DbDataReader.GetBoolean)) },
-            { typeof(byte), Getter(nameof(DbDataReader.GetByte)) },
-            { typeof(short), Getter(nameof(DbDataReader.GetInt16)) },
-            { typeof(int), Getter(nameof(DbDataReader.GetInt32)) },
-            { typeof(long), Getter(nameof(DbDataReader.GetInt64)) },
-            { typeof(float), Getter(nameof(DbDataReader.GetFloat)) },
-            { typeof(double), Getter(nameof(DbDataReader.GetDouble)) },
-            { typeof(decimal), Getter(nameof(DbDataReader.GetDecimal)) },
-            { typeof(DateTime), Getter(nameof(DbDataReader.GetDateTime)) },
-            { typeof(Guid), Getter(nameof(DbDataReader.GetGuid)) },
-            { typeof(string), Getter(nameof(DbDataReader.GetString)) }
+            { typeof(bool), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetBoolean), new[] { typeof(int) })! },
+            { typeof(byte), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetByte), new[] { typeof(int) })! },
+            { typeof(short), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetInt16), new[] { typeof(int) })! },
+            { typeof(int), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetInt32), new[] { typeof(int) })! },
+            { typeof(long), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetInt64), new[] { typeof(int) })! },
+            { typeof(float), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetFloat), new[] { typeof(int) })! },
+            { typeof(double), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDouble), new[] { typeof(int) })! },
+            { typeof(decimal), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDecimal), new[] { typeof(int) })! },
+            { typeof(DateTime), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDateTime), new[] { typeof(int) })! },
+            { typeof(Guid), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetGuid), new[] { typeof(int) })! },
+            { typeof(string), typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetString), new[] { typeof(int) })! }
         };
 
         /// <summary>
@@ -71,6 +74,7 @@ namespace Durable.Sql
         /// <param name="inline">Whether converter conversions may be inlined.</param>
         /// <param name="resultType">Delegate return type: the entity type or <see cref="object"/>.</param>
         /// <returns>A <c>Func&lt;DbDataReader, IDataTypeConverter, TResult&gt;</c>.</returns>
+        [RequiresDynamicCode("Compiles expression trees with generic instantiations chosen at run time; RowMaterializer only calls this when RuntimeFeature.IsDynamicCodeSupported is true and otherwise materializes rows with cached reflection accessors.")]
         internal static Delegate Compile(EntityMetadata metadata, RowBinding[] bindings, Type?[] fieldTypes, bool inline, Type resultType)
         {
             Type entityType = metadata.EntityType;
@@ -103,11 +107,13 @@ namespace Durable.Sql
             return Expression.Lambda(delegateType, block, reader, converter).Compile();
         }
 
-        private static MethodInfo Getter(string name)
+        [UnconditionalSuppressMessage("Trimming", "IL2111", Justification = "GetFieldType is only called from compiled readers to compare the driver type with a Type constant; the returned Type is never used for reflection, so its DynamicallyAccessedMembers requirement does not apply.")]
+        private static MethodInfo GetFieldTypeMethod()
         {
-            return typeof(DbDataReader).GetMethod(name, new[] { typeof(int) })!;
+            return typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetFieldType), new[] { typeof(int) })!;
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Detects whether a converter overrides FromDatabaseCore. Both methods are called virtually, so trimming keeps them and their metadata; if a lookup still finds nothing the method returns false, which only disables the inlining optimization.")]
         private static bool IsStockReadPath(Type type)
         {
             MethodInfo? core = type.GetMethod(
@@ -132,17 +138,20 @@ namespace Durable.Sql
         {
             Type type = metadata.EntityType;
             if (type.IsValueType) return Expression.Default(type);
-            ConstructorInfo? ctor = type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+            ConstructorInfo? ctor = type.GetConstructor(Type.EmptyTypes)
+                ?? type.GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
             if (ctor != null) return Expression.New(ctor);
             return Expression.Convert(Expression.Call(Expression.Constant(metadata), _CreateInstance), type);
         }
 
+        [RequiresDynamicCode("Compiles expression trees with generic instantiations chosen at run time; RowMaterializer only calls this when RuntimeFeature.IsDynamicCodeSupported is true and otherwise materializes rows with cached reflection accessors.")]
         private static Expression TypedGet(ParameterExpression reader, Type fieldType, Expression ordinal)
         {
             if (_TypedGetters.TryGetValue(fieldType, out MethodInfo? getter)) return Expression.Call(reader, getter, ordinal);
             return Expression.Call(reader, _GetFieldValue.MakeGenericMethod(fieldType), ordinal);
         }
 
+        [RequiresDynamicCode("Compiles expression trees with generic instantiations chosen at run time; RowMaterializer only calls this when RuntimeFeature.IsDynamicCodeSupported is true and otherwise materializes rows with cached reflection accessors.")]
         private static Expression ReadValue(ParameterExpression reader, ParameterExpression converter, RowBinding binding, Type? fieldType, bool inline)
         {
             ColumnMetadata column = binding.Column;
@@ -180,6 +189,7 @@ namespace Durable.Sql
         }
 
         // Each case reproduces DataTypeConverter.ConvertFromDatabase for a non-null value of the given driver type.
+        [RequiresDynamicCode("Compiles expression trees with generic instantiations chosen at run time; RowMaterializer only calls this when RuntimeFeature.IsDynamicCodeSupported is true and otherwise materializes rows with cached reflection accessors.")]
         private static Expression? InlineConversion(ParameterExpression reader, Type target, Type fieldType, Expression ordinal)
         {
             if (target.IsEnum)

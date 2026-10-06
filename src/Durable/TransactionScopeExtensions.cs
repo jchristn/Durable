@@ -1,6 +1,7 @@
 namespace Durable
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace Durable
         /// <param name="repository">The repository to create a transaction scope for.</param>
         /// <param name="action">The action to execute within the transaction scope.</param>
         /// <exception cref="ArgumentNullException">Thrown when repository or action is null.</exception>
-        public static void ExecuteInTransactionScope<T>(this IRepository<T> repository, Action action) where T : class, new()
+        public static void ExecuteInTransactionScope<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Action action) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (action == null) throw new ArgumentNullException(nameof(action));
@@ -43,7 +44,7 @@ namespace Durable
         /// <param name="func">The function to execute within the transaction scope.</param>
         /// <returns>The result of the function execution.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or func is null.</exception>
-        public static TResult ExecuteInTransactionScope<T, TResult>(this IRepository<T> repository, Func<TResult> func) where T : class, new()
+        public static TResult ExecuteInTransactionScope<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TResult>(this IRepository<T> repository, Func<TResult> func) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
@@ -71,7 +72,7 @@ namespace Durable
         /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or func is null.</exception>
-        public static async Task ExecuteInTransactionScopeAsync<T>(this IRepository<T> repository, Func<Task> func, CancellationToken token = default) where T : class, new()
+        public static async Task ExecuteInTransactionScopeAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, Func<Task> func, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
@@ -99,7 +100,7 @@ namespace Durable
         /// <param name="token">A cancellation token that can be used to cancel the operation.</param>
         /// <returns>A task that represents the asynchronous operation containing the result.</returns>
         /// <exception cref="ArgumentNullException">Thrown when repository or func is null.</exception>
-        public static async Task<TResult> ExecuteInTransactionScopeAsync<T, TResult>(this IRepository<T> repository, Func<Task<TResult>> func, CancellationToken token = default) where T : class, new()
+        public static async Task<TResult> ExecuteInTransactionScopeAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TResult>(this IRepository<T> repository, Func<Task<TResult>> func, CancellationToken token = default) where T : class, new()
         {
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));

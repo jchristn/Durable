@@ -947,6 +947,70 @@
             The shared activity source. Activities are only created when a listener is attached.
             </summary>
         </member>
+        <member name="T:Durable.DurableJson">
+            <summary>
+            JSON serialization for JSON columns (collections, complex objects and <see cref="F:Durable.Flags.Json"/> properties), shared by
+            every backend. Values are serialized through the <see cref="T:System.Text.Json.Serialization.Metadata.JsonTypeInfo"/> that the options' resolver supplies, so
+            the same code serves both runtimes:
+            <list type="bullet">
+            <item>On the JIT (reflection enabled), options without a <see cref="P:System.Text.Json.JsonSerializerOptions.TypeInfoResolver"/> use the
+            reflection-based resolver, exactly like <see cref="T:System.Text.Json.JsonSerializer"/>'s <see cref="T:System.Type"/>-based overloads.</item>
+            <item>Under trimming or Native AOT, reflection-based serialization is disabled; supply options whose
+            <see cref="P:System.Text.Json.JsonSerializerOptions.TypeInfoResolver"/> is a source-generated <see cref="T:System.Text.Json.Serialization.JsonSerializerContext"/> that
+            declares <c>[JsonSerializable(typeof(X))]</c> for every JSON column type (see <see cref="M:Durable.DurableJson.CreateOptions(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver)"/>).</item>
+            </list>
+            Thread safety: all members are thread-safe; options become read-only on first use.
+            </summary>
+        </member>
+        <member name="M:Durable.DurableJson.CreateOptions(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver)">
+            <summary>
+            Creates options with Durable's JSON column defaults (camelCase property names, compact output) and, optionally,
+            a type-info resolver such as a source-generated <see cref="T:System.Text.Json.Serialization.JsonSerializerContext"/>. Pass the result to a
+            backend: <c>new SqliteDataTypeConverter(options)</c> via <c>SqlRepositoryOptions.DataTypeConverter</c> (or the
+            dialect constructor), <c>new InMemoryBackend(capabilities, options)</c>, or <c>new LiteDbBackend(settings, options)</c>.
+            For on-disk JSON identical to the JIT default, declare the context with
+            <c>[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]</c>.
+            </summary>
+            <param name="resolver">Type-info resolver (for example <c>MyJsonContext.Default</c>); null keeps the default
+            (reflection on the JIT; unavailable under Native AOT).</param>
+            <returns>New, still mutable options.</returns>
+        </member>
+        <member name="M:Durable.DurableJson.Serialize(System.Object,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Serializes a value as JSON text.
+            </summary>
+            <param name="value">Value; may be null (serialized as <c>null</c>).</param>
+            <param name="type">Type whose contract is used. Must not be null.</param>
+            <param name="options">Options. Must not be null.</param>
+            <returns>The JSON text.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when type or options is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when no JSON metadata is available for the type (for example under
+            Native AOT without a resolver that declares it).</exception>
+        </member>
+        <member name="M:Durable.DurableJson.Deserialize(System.String,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Deserializes JSON text.
+            </summary>
+            <param name="json">JSON text. Must not be null.</param>
+            <param name="type">Target type. Must not be null.</param>
+            <param name="options">Options. Must not be null.</param>
+            <returns>The value; may be null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.Text.Json.JsonException">Thrown when the JSON is invalid for the type.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when no JSON metadata is available for the type.</exception>
+        </member>
+        <member name="M:Durable.DurableJson.Deserialize(System.ReadOnlySpan{System.Byte},System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Deserializes UTF-8 JSON.
+            </summary>
+            <param name="utf8Json">UTF-8 encoded JSON.</param>
+            <param name="type">Target type. Must not be null.</param>
+            <param name="options">Options. Must not be null.</param>
+            <returns>The value; may be null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when type or options is null.</exception>
+            <exception cref="T:System.Text.Json.JsonException">Thrown when the JSON is invalid for the type.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when no JSON metadata is available for the type.</exception>
+        </member>
         <member name="T:Durable.DurableMapping">
             <summary>
             Global mapping conventions used when an entity is not fully described by attributes.
@@ -1028,6 +1092,14 @@
             Thread safety: <see cref="M:Durable.EntityMetadata.For(System.Type)"/> is thread-safe; instances are immutable and safe to share.
             </summary>
         </member>
+        <member name="F:Durable.EntityMetadata.RequiredMemberTypes">
+            <summary>
+            The members Durable reads on an entity or projection type: public properties (and, through them, their
+            attributes and accessors) plus the parameterless constructor. Annotate every generic parameter or
+            <see cref="T:System.Type"/> value that flows into <see cref="M:Durable.EntityMetadata.For(System.Type)"/> with
+            <c>[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]</c> so trimming and Native AOT keep them.
+            </summary>
+        </member>
         <member name="P:Durable.EntityMetadata.EntityType">
             <summary>
             Gets the described CLR type. Never null.
@@ -1101,6 +1173,11 @@
             <returns>The metadata.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when type is null.</exception>
             <exception cref="T:System.InvalidOperationException">Thrown when the mapping is invalid.</exception>
+            <remarks>
+            Trimming and Native AOT: the annotation keeps the members Durable reads on <paramref name="type"/>. Calling
+            <c>EntityMetadata.For&lt;T&gt;()</c> (or this overload with <c>typeof(T)</c>) at startup is also the way to keep an
+            entity that is reached only through a navigation property (see <see cref="P:Durable.NavigationMetadata.RelatedType"/>).
+            </remarks>
         </member>
         <member name="M:Durable.EntityMetadata.For``1">
             <summary>
@@ -2720,13 +2797,24 @@
         </member>
         <member name="T:Durable.MemberAccessorFactory">
             <summary>
-            Builds compiled property accessors and constructors so hot paths avoid reflection.
+            Builds fast property accessors and constructors so hot paths avoid late-bound reflection.
+            When dynamic code is supported (JIT), accessors are compiled expression trees. Under Native AOT
+            (<see cref="P:System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported"/> is false), where compiled expressions would run on the
+            expression interpreter, accessors use <see cref="T:System.Reflection.MethodInvoker"/>/<see cref="T:System.Reflection.ConstructorInvoker"/>, which call
+            the ahead-of-time generated invoke stubs directly.
             Thread safety: all members are stateless and thread-safe.
+            </summary>
+        </member>
+        <member name="F:Durable.MemberAccessorFactory.ConstructorMemberTypes">
+            <summary>
+            The members <see cref="M:Durable.MemberAccessorFactory.CreateConstructor(System.Type)"/> needs on a type: its public parameterless constructor and its
+            non-public constructors. Use it to annotate <see cref="T:System.Type"/> parameters and generic parameters that flow into
+            <see cref="M:Durable.MemberAccessorFactory.CreateConstructor(System.Type)"/> so trimming and Native AOT keep the constructor.
             </summary>
         </member>
         <member name="M:Durable.MemberAccessorFactory.CreateGetter(System.Reflection.PropertyInfo)">
             <summary>
-            Creates a compiled getter for a property.
+            Creates a fast getter for a property.
             </summary>
             <param name="property">Property with a public getter. Must not be null.</param>
             <returns>A delegate taking the declaring instance (as object) and returning the boxed value.</returns>
@@ -2734,7 +2822,7 @@
         </member>
         <member name="M:Durable.MemberAccessorFactory.CreateSetter(System.Reflection.PropertyInfo)">
             <summary>
-            Creates a compiled setter for a property. Null assigned to a non-nullable value type assigns the type's default.
+            Creates a fast setter for a property. Null assigned to a non-nullable value type assigns the type's default.
             </summary>
             <param name="property">Property. Must not be null.</param>
             <returns>A delegate taking the declaring instance and the boxed value. A no-op when the property has no setter.</returns>
@@ -2742,7 +2830,7 @@
         </member>
         <member name="M:Durable.MemberAccessorFactory.CreateConstructor(System.Type)">
             <summary>
-            Creates a compiled parameterless constructor delegate.
+            Creates a fast parameterless constructor delegate.
             </summary>
             <param name="type">Type with a public or non-public parameterless constructor. Must not be null.</param>
             <returns>A factory delegate.</returns>
@@ -2751,11 +2839,22 @@
         </member>
         <member name="M:Durable.MemberAccessorFactory.CreateListFactory(System.Type)">
             <summary>
-            Creates a compiled factory that builds an empty <see cref="T:System.Collections.Generic.List`1"/> for the element type.
+            Creates a factory that builds an empty <see cref="T:System.Collections.Generic.List`1"/> for the element type.
             </summary>
-            <param name="elementType">Element type. Must not be null.</param>
+            <param name="elementType">Element type. Must not be null. Under Native AOT it must be a reference type
+            (collection navigations always target entity classes).</param>
             <returns>A factory delegate returning an <see cref="T:System.Collections.IList"/>.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when elementType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown under Native AOT when elementType is a value type.</exception>
+        </member>
+        <member name="M:Durable.MemberAccessorFactory.GetDefaultValue(System.Type)">
+            <summary>
+            Returns the default value of a type: null for reference types and nullable value types, otherwise the boxed
+            all-zero value. Never runs a constructor.
+            </summary>
+            <param name="type">Type. Must not be null.</param>
+            <returns>The default value, or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when type is null.</exception>
         </member>
         <member name="T:Durable.NamingConvention">
             <summary>
@@ -2827,6 +2926,9 @@
         <member name="P:Durable.NavigationMetadata.RelatedType">
             <summary>
             Gets the related entity type (the element type for collections).
+            Trimming and Native AOT: this type is discovered from the navigation property's type, which trimming cannot
+            follow. Keep it by using it as a repository or query type argument, by referencing it from
+            <see cref="T:Durable.ForeignKeyAttribute"/>, or by calling <c>EntityMetadata.For&lt;TRelated&gt;()</c> at startup.
             </summary>
         </member>
         <member name="P:Durable.NavigationMetadata.JunctionType">
@@ -4080,35 +4182,33 @@
         <member name="M:Durable.Query.NavigationMemberNode.Accept``1(Durable.Query.QueryNodeVisitor{``0})">
             <inheritdoc />
         </member>
-        <member name="T:Durable.Query.NavigationPathCollector">
+        <member name="T:Durable.Query.NavigationPathCollector`1">
             <summary>
             Finds the navigation paths a client-evaluated lambda reads from an entity parameter (for example
             <c>x.Owner.Name</c> reads <c>Owner</c>, <c>x.Author.Company.Name</c> reads <c>Author.Company</c>, and
             <c>x.Books.Count</c> reads <c>Books</c>), so they can be loaded with includes before the lambda runs.
             Thread safety: not thread-safe; create one per analysis.
             </summary>
+            <typeparam name="T">Entity type whose parameters are analyzed.</typeparam>
         </member>
-        <member name="P:Durable.Query.NavigationPathCollector.Paths">
+        <member name="P:Durable.Query.NavigationPathCollector`1.Paths">
             <summary>
             Gets the collected paths as navigation-access lambdas over the entity parameter. Never null.
             </summary>
         </member>
-        <member name="M:Durable.Query.NavigationPathCollector.#ctor(System.Type)">
+        <member name="M:Durable.Query.NavigationPathCollector`1.#ctor">
             <summary>
             Instantiates a collector.
             </summary>
-            <param name="entityType">Entity type whose parameters are analyzed. Must not be null.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
-        <member name="M:Durable.Query.NavigationPathCollector.Collect(System.Type,System.Collections.Generic.IEnumerable{System.Linq.Expressions.LambdaExpression})">
+        <member name="M:Durable.Query.NavigationPathCollector`1.Collect(System.Collections.Generic.IEnumerable{System.Linq.Expressions.LambdaExpression})">
             <summary>
             Collects the navigation paths of several lambdas.
             </summary>
-            <param name="entityType">Entity type. Must not be null.</param>
             <param name="lambdas">Lambdas. Must not be null.</param>
             <returns>The paths. Never null.</returns>
         </member>
-        <member name="M:Durable.Query.NavigationPathCollector.VisitMember(System.Linq.Expressions.MemberExpression)">
+        <member name="M:Durable.Query.NavigationPathCollector`1.VisitMember(System.Linq.Expressions.MemberExpression)">
             <inheritdoc />
         </member>
         <member name="T:Durable.Query.NegateNode">
@@ -5231,6 +5331,12 @@
             Instantiates a normalizer.
             </summary>
             <param name="defaultStringMatching">Mode for string comparisons without an explicit <see cref="T:System.StringComparison"/>.</param>
+            <remarks>
+            Native AOT: C# treats decimal operators as predefined, so a decimal comparison or arithmetic in a LINQ lambda is
+            lowered to an Expression factory call without the operator method, and System.Linq.Expressions then finds
+            <c>op_GreaterThan</c> (and friends) by reflection. The dependency below keeps decimal's operator methods in
+            Native AOT applications so such predicates can be built.
+            </remarks>
         </member>
         <member name="M:Durable.Query.QueryNormalizer.Bind(System.Linq.Expressions.ParameterExpression,Durable.Query.QuerySource)">
             <summary>

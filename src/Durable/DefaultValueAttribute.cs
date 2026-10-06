@@ -1,6 +1,7 @@
 namespace Durable
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
     /// Attribute to specify a default value for a property when creating new entities.
@@ -22,6 +23,7 @@ namespace Durable
         /// <summary>
         /// Gets the custom provider type for generating default values (if applicable)
         /// </summary>
+        [DynamicallyAccessedMembers(MemberAccessorFactory.ConstructorMemberTypes)]
         public Type? ProviderType { get; }
 
         /// <summary>
@@ -57,7 +59,7 @@ namespace Durable
         /// </summary>
         /// <param name="providerType">The type implementing IDefaultValueProvider to generate default values</param>
         /// <param name="onlyIfNull">If true, only apply default when property is null/default. Default is true.</param>
-        public DefaultValueAttribute(Type providerType, bool onlyIfNull = true)
+        public DefaultValueAttribute([DynamicallyAccessedMembers(MemberAccessorFactory.ConstructorMemberTypes)] Type providerType, bool onlyIfNull = true)
         {
             if (providerType == null)
                 throw new ArgumentNullException(nameof(providerType));

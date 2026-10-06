@@ -5,6 +5,7 @@
 #              conformance kit) on Linux, Windows and macOS, for net8.0 and net10.0.
 # - adapters:  the same suites through the xUnit and NUnit adapters (dotnet test, both frameworks).
 # - databases: PostgreSQL, MySQL and SQL Server in disposable docker containers (--docker), both frameworks.
+# - aot:       publishes src/Test.Aot with Native AOT (trim/AOT warnings are errors) and runs the native binary.
 
 name: CI
 
@@ -121,3 +122,30 @@ jobs:
           name: results-${{ matrix.provider }}-${{ matrix.framework }}
           path: test-results.json
           if-no-files-found: ignore
+
+  aot:
+    name: Native AOT (linux-x64, ${{ matrix.framework }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net8.0, net10.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      # Native AOT needs clang (preinstalled on ubuntu-latest) and, for .NET 8, the zlib headers (not preinstalled).
+      - name: Native toolchain
+        run: |
+          clang --version
+          dpkg -s zlib1g-dev > /dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y zlib1g-dev)
+      # Trim/AOT warnings (including those inside the Durable assemblies) are errors in Test.Aot.
+      - name: Publish Test.Aot
+        run: dotnet publish src/Test.Aot/Test.Aot.csproj -c Release -r linux-x64 -f ${{ matrix.framework }} -o aot-out
+      - name: Run Test.Aot
+        run: ./aot-out/Test.Aot

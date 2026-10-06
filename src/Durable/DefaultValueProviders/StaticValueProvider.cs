@@ -37,7 +37,7 @@ namespace Durable.DefaultValueProviders
             // Check if value is the default for its type
             if (propertyType.IsValueType)
             {
-                object defaultValue = Activator.CreateInstance(propertyType)!;
+                object defaultValue = MemberAccessorFactory.GetDefaultValue(propertyType)!;
                 return currentValue.Equals(defaultValue);
             }
 

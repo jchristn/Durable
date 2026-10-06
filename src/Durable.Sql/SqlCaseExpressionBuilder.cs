@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
     using System.Text;
 
@@ -11,7 +12,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlCaseExpressionBuilder<T> : ICaseExpressionBuilder<T> where T : class, new()
+    public class SqlCaseExpressionBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ICaseExpressionBuilder<T> where T : class, new()
     {
         #region Private-Members
 

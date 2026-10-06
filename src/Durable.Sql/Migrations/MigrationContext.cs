@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Text;
     using System.Threading;
@@ -145,6 +146,7 @@ namespace Durable.Sql
         /// <param name="entityTypes">Entity types. Must not be null.</param>
         /// <returns>The result.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        [RequiresUnreferencedCode("Entity types passed as Type values cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, use the overload taking EntityMetadata values created with EntityMetadata.For<T>().")]
         public SchemaSyncResult EnsureSchema(params Type[] entityTypes)
         {
             return EnsureSchema(new SchemaSyncOptions(), entityTypes);
@@ -158,12 +160,40 @@ namespace Durable.Sql
         /// <param name="entityTypes">Entity types. Must not be null.</param>
         /// <returns>The result.</returns>
         /// <exception cref="ArgumentNullException">Thrown when options or entityTypes is null.</exception>
+        [RequiresUnreferencedCode("Entity types passed as Type values cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, use the overload taking EntityMetadata values created with EntityMetadata.For<T>().")]
         public SchemaSyncResult EnsureSchema(SchemaSyncOptions options, params Type[] entityTypes)
         {
-            ArgumentNullException.ThrowIfNull(options);
             ArgumentNullException.ThrowIfNull(entityTypes);
-            List<Type> types = entityTypes.ToList();
-            SchemaDiff diff = SchemaSynchronizer.Diff(_Session, types, options);
+            return EnsureSchema(options, SchemaSynchronizer.ToMetadata(entityTypes).ToArray());
+        }
+
+        /// <summary>
+        /// Brings the tables of the given entities up to date with additive operations using default
+        /// <see cref="SchemaSyncOptions"/>. Trimming and Native AOT safe: create the metadata with
+        /// <c>EntityMetadata.For&lt;T&gt;()</c>.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <returns>The result.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public SchemaSyncResult EnsureSchema(params EntityMetadata[] entities)
+        {
+            return EnsureSchema(new SchemaSyncOptions(), entities);
+        }
+
+        /// <summary>
+        /// Brings the tables of the given entities up to date. Runs inside the migration's transaction (the
+        /// <see cref="SchemaSyncOptions.UseTransaction"/> option does not apply). Trimming and Native AOT safe.
+        /// </summary>
+        /// <param name="options">Options. Must not be null.</param>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <returns>The result.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when options or entities is null.</exception>
+        public SchemaSyncResult EnsureSchema(SchemaSyncOptions options, params EntityMetadata[] entities)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            ArgumentNullException.ThrowIfNull(entities);
+            List<EntityMetadata> list = entities.ToList();
+            SchemaDiff diff = SchemaSynchronizer.Diff(_Session, list, options);
             if (_Script != null) return SchemaSynchronizer.Script(diff, options, _Script);
             return SchemaSynchronizer.Apply(_Session, diff, options, new List<MigrationOperation>());
         }
@@ -176,12 +206,27 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>The result.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
-        public async Task<SchemaSyncResult> EnsureSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
+        [RequiresUnreferencedCode("Entity types passed as Type values cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, use the overload taking EntityMetadata values created with EntityMetadata.For<T>().")]
+        public Task<SchemaSyncResult> EnsureSchemaAsync(IEnumerable<Type> entityTypes, SchemaSyncOptions? options = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(entityTypes);
+            return EnsureSchemaAsync(SchemaSynchronizer.ToMetadata(entityTypes), options, token);
+        }
+
+        /// <summary>
+        /// Brings the tables of the given entities up to date. Runs inside the migration's transaction. Trimming and
+        /// Native AOT safe: create the metadata with <c>EntityMetadata.For&lt;T&gt;()</c>.
+        /// </summary>
+        /// <param name="entities">Entity metadata. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults (additive only).</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The result.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
+        public async Task<SchemaSyncResult> EnsureSchemaAsync(IEnumerable<EntityMetadata> entities, SchemaSyncOptions? options = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entities);
             options ??= new SchemaSyncOptions();
-            List<Type> types = entityTypes.ToList();
-            SchemaDiff diff = await SchemaSynchronizer.DiffAsync(_Session, types, options, token).ConfigureAwait(false);
+            List<EntityMetadata> list = entities.ToList();
+            SchemaDiff diff = await SchemaSynchronizer.DiffAsync(_Session, list, options, token).ConfigureAwait(false);
             if (_Script != null) return SchemaSynchronizer.Script(diff, options, _Script);
             return await SchemaSynchronizer.ApplyAsync(_Session, diff, options, new List<MigrationOperation>(), token).ConfigureAwait(false);
         }

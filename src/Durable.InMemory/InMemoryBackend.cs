@@ -3,6 +3,7 @@ namespace Durable.InMemory
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Text.Json;
@@ -109,7 +110,7 @@ namespace Durable.InMemory
         /// <returns>A new repository.</returns>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
         /// <exception cref="NotSupportedException">Thrown when the entity needs a capability this backend does not advertise.</exception>
-        public InMemoryRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new()
+        public InMemoryRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
             return new InMemoryRepository<T>(this, options);
         }
@@ -143,7 +144,7 @@ namespace Durable.InMemory
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <returns>The rows in insertion order. Never null.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
-        public IReadOnlyList<IReadOnlyDictionary<string, object?>> GetStoredRows(Type entityType)
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> GetStoredRows([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             EntityMetadata metadata = EntityMetadata.For(entityType);

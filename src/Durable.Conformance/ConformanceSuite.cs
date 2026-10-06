@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable;
@@ -93,7 +94,7 @@ namespace Durable.Conformance
         /// <typeparam name="T">Entity type.</typeparam>
         /// <param name="options">Options; null for defaults.</param>
         /// <returns>The repository.</returns>
-        protected IRepository<T> Repository<T>(RepositoryOptions? options = null) where T : class, new()
+        protected IRepository<T> Repository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
             IRepository<T> repository = Target.CreateRepository<T>(options);
             if (repository == null) throw new InvalidOperationException("Target " + Target.Name + " returned a null repository for " + typeof(T).Name + ".");

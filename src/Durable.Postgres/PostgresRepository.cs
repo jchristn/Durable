@@ -2,6 +2,7 @@ namespace Durable.Postgres
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading;
     using System.Threading.Tasks;
     using Npgsql;
@@ -16,7 +17,7 @@ namespace Durable.Postgres
     /// Thread safety: safe for concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class PostgresRepository<T> : SqlRepository<T> where T : class, new()
+    public class PostgresRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : SqlRepository<T> where T : class, new()
     {
         #region Constructors-and-Factories
 

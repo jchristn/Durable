@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using Durable;
 
     /// <summary>
@@ -11,7 +12,7 @@ namespace Durable.Query
     /// Thread safety: immutable; safe for concurrent use.
     /// </summary>
     /// <typeparam name="T">Compared type.</typeparam>
-    internal sealed class MappedValueEqualityComparer<T> : IEqualityComparer<T>
+    internal sealed class MappedValueEqualityComparer<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IEqualityComparer<T>
     {
         #region Private-Members
 

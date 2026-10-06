@@ -58,7 +58,7 @@ namespace Durable.Query
             if (Nullable.GetUnderlyingType(inner.Type) != null)
             {
                 if (node.Member.Name == "Value")
-                    return Expression.Condition(Expression.Property(inner, "HasValue"), updated, Expression.Default(node.Type));
+                    return Expression.Condition(Expression.NotEqual(inner, Expression.Constant(null, inner.Type)), updated, Expression.Default(node.Type));
                 return updated;
             }
 

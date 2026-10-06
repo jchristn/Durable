@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -11,7 +12,7 @@ namespace Durable.Sql
     /// Provides methods for building windowed queries with window functions.
     /// </summary>
     /// <typeparam name="T">The entity type being queried.</typeparam>
-    public interface IWindowedQueryBuilder<T> where T : class, new()
+    public interface IWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> where T : class, new()
     {
         // Window function configuration
         /// <summary>

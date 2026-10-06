@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Reflection;
     using System.Runtime.ExceptionServices;
@@ -98,7 +99,7 @@ namespace Durable.Conformance
         /// <exception cref="ArgumentNullException">Thrown when an argument is null or empty.</exception>
         /// <exception cref="ArgumentException">Thrown when suiteType is not a usable suite class.</exception>
         public static TestSuiteDescriptor BuildSuite(
-            Type suiteType,
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] Type suiteType,
             string suiteId,
             string displayName,
             IConformanceTarget target,

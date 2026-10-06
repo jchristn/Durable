@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
@@ -17,6 +18,7 @@
         /// <summary>
         /// Gets the type of the entity that this foreign key references.
         /// </summary>
+        [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]
         public Type ReferencedType { get; }
         /// <summary>
         /// Gets the name of the property in the referenced entity that this foreign key points to.
@@ -28,7 +30,7 @@
         /// </summary>
         /// <param name="referencedType">The type of the entity that this foreign key references.</param>
         /// <param name="referencedProperty">The name of the property in the referenced entity that this foreign key points to.</param>
-        public ForeignKeyAttribute(Type referencedType, string referencedProperty)
+        public ForeignKeyAttribute([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type referencedType, string referencedProperty)
         {
             ReferencedType = referencedType;
             ReferencedProperty = referencedProperty;

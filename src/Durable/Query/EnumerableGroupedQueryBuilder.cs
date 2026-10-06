@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Runtime.CompilerServices;
@@ -19,7 +20,7 @@ namespace Durable.Query
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
     /// <typeparam name="TKey">Group key type.</typeparam>
-    public class EnumerableGroupedQueryBuilder<T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
+    public class EnumerableGroupedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
     {
         #region Public-Members
 
@@ -83,7 +84,7 @@ namespace Durable.Query
         }
 
         /// <inheritdoc />
-        public IQueryBuilder<TResult> Select<TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new()
+        public IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new()
         {
             ArgumentNullException.ThrowIfNull(selector);
             bool hasBindings;

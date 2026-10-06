@@ -2,6 +2,7 @@ namespace Durable.Query
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Runtime.CompilerServices;
@@ -26,7 +27,7 @@ namespace Durable.Query
     /// Thread safety: not thread-safe; build and execute on one flow.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class QueryBuilder<T> : IQueryBuilder<T> where T : class, new()
+    public class QueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IQueryBuilder<T> where T : class, new()
     {
         #region Public-Members
 
@@ -166,7 +167,7 @@ namespace Durable.Query
 
         /// <inheritdoc />
         /// <exception cref="NotSupportedException">Thrown when the backend lacks <see cref="RepositoryCapabilities.Projection"/> or the selector is not an object initializer.</exception>
-        public virtual IQueryBuilder<TResult> Select<TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
+        public virtual IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
         {
             ArgumentNullException.ThrowIfNull(selector);
             QueryCapabilityValidator.Require(Repository.Capabilities, RepositoryCapabilities.Projection, "Select");
@@ -175,7 +176,7 @@ namespace Durable.Query
             else if (selector.Body is NewExpression newExpression && newExpression.Arguments.Count == 0) hasBindings = false;
             else throw new NotSupportedException("Select must use an object initializer, for example x => new Summary { Name = x.Name }.");
 
-            List<LambdaExpression> navigations = NavigationPathCollector.Collect(typeof(T), new LambdaExpression[] { selector });
+            List<LambdaExpression> navigations = NavigationPathCollector<T>.Collect(new LambdaExpression[] { selector });
             RequireNavigationLoading(navigations);
             Func<T, TResult> project = NullSafeExpressionRewriter.Compile(selector);
             return new EnumerableQueryBuilder<TResult>(
@@ -214,11 +215,11 @@ namespace Durable.Query
             ArgumentNullException.ThrowIfNull(keySelector);
             QueryCapabilityValidator.Require(Repository.Capabilities, RepositoryCapabilities.Grouping, "GroupBy");
             return new EnumerableGroupedQueryBuilder<T, TKey>(
-                async (orderingAndPaging, lambdas, token) => await LoadRowsAsync(orderingAndPaging, NavigationPathCollector.Collect(typeof(T), lambdas), token).ConfigureAwait(false),
+                async (orderingAndPaging, lambdas, token) => await LoadRowsAsync(orderingAndPaging, NavigationPathCollector<T>.Collect(lambdas), token).ConfigureAwait(false),
                 keySelector,
                 Repository.Capabilities,
                 () => Repository.DescribeQuery(BuildModel(false)),
-                lambda => RequireNavigationLoading(NavigationPathCollector.Collect(typeof(T), new[] { lambda })));
+                lambda => RequireNavigationLoading(NavigationPathCollector<T>.Collect(new[] { lambda })));
         }
 
         /// <inheritdoc />

@@ -1,6 +1,7 @@
 namespace Durable.Sql
 {
     using System;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
 
     /// <summary>
@@ -8,7 +9,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public interface ICaseExpressionBuilder<T> where T : class, new()
+    public interface ICaseExpressionBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> where T : class, new()
     {
         /// <summary>
         /// Adds a WHEN branch.

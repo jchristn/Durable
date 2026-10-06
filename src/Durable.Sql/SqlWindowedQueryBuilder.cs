@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -16,7 +17,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlWindowedQueryBuilder<T> : IWindowedQueryBuilder<T> where T : class, new()
+    public class SqlWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IWindowedQueryBuilder<T> where T : class, new()
     {
         #region Private-Members
 

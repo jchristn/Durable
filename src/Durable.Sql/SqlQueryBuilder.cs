@@ -3,6 +3,7 @@ namespace Durable.Sql
     using System;
     using System.Collections.Generic;
     using System.Data.Common;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -18,7 +19,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe; build and execute on one flow.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlQueryBuilder<T> : ISqlQueryBuilder<T> where T : class, new()
+    public class SqlQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlQueryBuilder<T> where T : class, new()
     {
         #region Public-Members
 
@@ -171,7 +172,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public ISqlQueryBuilder<TResult> Select<TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
+        public ISqlQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<T, TResult>> selector) where TResult : class, new()
         {
             ArgumentNullException.ThrowIfNull(selector);
             return new SqlProjectionQueryBuilder<T, TResult>(this, selector);
@@ -209,13 +210,13 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public ISqlQueryBuilder<T> WhereIn<TKey, TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new()
+        public ISqlQueryBuilder<T> WhereIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new()
         {
             return AddInSubquery(keySelector, subquery, subqueryKey, false);
         }
 
         /// <inheritdoc />
-        public ISqlQueryBuilder<T> WhereNotIn<TKey, TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new()
+        public ISqlQueryBuilder<T> WhereNotIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new()
         {
             return AddInSubquery(keySelector, subquery, subqueryKey, true);
         }
@@ -233,13 +234,13 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public ISqlQueryBuilder<T> WhereExists<TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new()
+        public ISqlQueryBuilder<T> WhereExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new()
         {
             return AddExists(subquery, correlation, false);
         }
 
         /// <inheritdoc />
-        public ISqlQueryBuilder<T> WhereNotExists<TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new()
+        public ISqlQueryBuilder<T> WhereNotExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new()
         {
             return AddExists(subquery, correlation, true);
         }
@@ -538,7 +539,7 @@ namespace Durable.Sql
 
         IQueryBuilder<T> IQueryBuilder<T>.ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty) => ThenInclude(navigationProperty);
 
-        IQueryBuilder<TResult> IQueryBuilder<T>.Select<TResult>(Expression<Func<T, TResult>> selector) => Select(selector);
+        IQueryBuilder<TResult> IQueryBuilder<T>.Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<T, TResult>> selector) => Select(selector);
 
         #endregion
 
@@ -692,7 +693,7 @@ namespace Durable.Sql
             }
         }
 
-        private ISqlQueryBuilder<T> AddInSubquery<TKey, TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey, bool negate) where TOther : class, new()
+        private ISqlQueryBuilder<T> AddInSubquery<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey, bool negate) where TOther : class, new()
         {
             ArgumentNullException.ThrowIfNull(keySelector);
             ArgumentNullException.ThrowIfNull(subquery);
@@ -731,7 +732,7 @@ namespace Durable.Sql
             return this;
         }
 
-        private ISqlQueryBuilder<T> AddExists<TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation, bool negate) where TOther : class, new()
+        private ISqlQueryBuilder<T> AddExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation, bool negate) where TOther : class, new()
         {
             ArgumentNullException.ThrowIfNull(subquery);
             if (subquery is not SqlQueryBuilder<TOther> inner)

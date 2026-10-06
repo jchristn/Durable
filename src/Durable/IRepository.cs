@@ -2,6 +2,7 @@ namespace Durable
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq.Expressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -18,7 +19,7 @@ namespace Durable
     /// (<see cref="AddQueryFilter"/>, <see cref="ClearQueryFilters"/>) must not be called concurrently with operations.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public interface IRepository<T> : IDisposable where T : class, new()
+    public interface IRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IDisposable where T : class, new()
     {
         #region Configuration
 

@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
@@ -347,7 +348,7 @@ namespace Durable.Conformance
                 "Target '" + Target.Name + "' " + (expected ? "supports" : "does not support") + " " + flag + " but the repository " + (actual ? "reports" : "does not report") + " it.");
         }
 
-        private async Task AssertEntityShapeRejectedAsync<T>(RepositoryCapabilities flag, Action<IRepository<T>> create, Action<IRepository<T>> use, string useDescription) where T : class, new()
+        private async Task AssertEntityShapeRejectedAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryCapabilities flag, Action<IRepository<T>> create, Action<IRepository<T>> use, string useDescription) where T : class, new()
         {
             IRepository<T> repository;
             try

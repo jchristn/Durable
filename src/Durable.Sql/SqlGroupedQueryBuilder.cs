@@ -2,6 +2,7 @@ namespace Durable.Sql
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.Linq;
     using System.Linq.Expressions;
@@ -18,7 +19,7 @@ namespace Durable.Sql
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
     /// <typeparam name="TKey">Group key type.</typeparam>
-    public class SqlGroupedQueryBuilder<T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
+    public class SqlGroupedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
     {
         #region Private-Members
 
@@ -50,7 +51,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IQueryBuilder<TResult> Select<TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new()
+        public IQueryBuilder<TResult> Select<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(Expression<Func<IGrouping<TKey, T>, TResult>> selector) where TResult : class, new()
         {
             ArgumentNullException.ThrowIfNull(selector);
             return new SqlProjectionQueryBuilder<T, TResult>(_Source, selector, _Grouping);

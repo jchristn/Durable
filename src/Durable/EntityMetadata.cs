@@ -4,6 +4,7 @@ namespace Durable
     using System.Collections;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Reflection;
 
@@ -17,8 +18,18 @@ namespace Durable
         #region Public-Members
 
         /// <summary>
+        /// The members Durable reads on an entity or projection type: public properties (and, through them, their
+        /// attributes and accessors) plus the parameterless constructor. Annotate every generic parameter or
+        /// <see cref="Type"/> value that flows into <see cref="For(Type)"/> with
+        /// <c>[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]</c> so trimming and Native AOT keep them.
+        /// </summary>
+        public const DynamicallyAccessedMemberTypes RequiredMemberTypes =
+            DynamicallyAccessedMemberTypes.PublicProperties | MemberAccessorFactory.ConstructorMemberTypes;
+
+        /// <summary>
         /// Gets the described CLR type. Never null.
         /// </summary>
+        [DynamicallyAccessedMembers(RequiredMemberTypes)]
         public Type EntityType { get; }
 
         /// <summary>
@@ -85,6 +96,9 @@ namespace Durable
 
         #region Private-Members
 
+        private static readonly bool _NullabilitySupported =
+            !AppContext.TryGetSwitch("System.Reflection.NullabilityInfoContext.IsSupported", out bool nullabilitySupported) || nullabilitySupported;
+
         private static readonly ConcurrentDictionary<Type, Lazy<EntityMetadata>> _Cache = new ConcurrentDictionary<Type, Lazy<EntityMetadata>>();
 
         private readonly Dictionary<string, ColumnMetadata> _ByColumnName;
@@ -97,23 +111,32 @@ namespace Durable
 
         #region Constructors-and-Factories
 
-        private EntityMetadata(Type type)
+        private EntityMetadata([DynamicallyAccessedMembers(RequiredMemberTypes)] Type type)
         {
             EntityType = type;
-            _Constructor = MemberAccessorFactory.CreateConstructor(type);
+
+            // Native AOT has no metadata tokens; its reflection returns properties in declaration order already.
+            PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.GetIndexParameters().Length == 0)
+                .OrderBy(p => p.HasMetadataToken() ? p.MetadataToken : 0)
+                .ToArray();
+
+            try
+            {
+                _Constructor = MemberAccessorFactory.CreateConstructor(type);
+            }
+            catch (InvalidOperationException ex) when (properties.Length == 0)
+            {
+                throw new InvalidOperationException(TrimmedTypeMessage(type), ex);
+            }
 
             EntityAttribute? entityAttribute = type.GetCustomAttribute<EntityAttribute>();
             HasEntityAttribute = entityAttribute != null;
             TableName = entityAttribute?.Name ?? DurableMapping.ApplyNamingConvention(type.Name);
 
-            PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.GetIndexParameters().Length == 0)
-                .OrderBy(p => p.MetadataToken)
-                .ToArray();
-
             IsConventionMapped = !properties.Any(p => p.GetCustomAttribute<PropertyAttribute>() != null);
 
-            NullabilityInfoContext nullability = new NullabilityInfoContext();
+            NullabilityInfoContext? nullability = _NullabilitySupported ? new NullabilityInfoContext() : null;
             List<ColumnMetadata> columns = new List<ColumnMetadata>();
             List<NavigationMetadata> navigations = new List<NavigationMetadata>();
 
@@ -197,11 +220,17 @@ namespace Durable
         /// <returns>The metadata.</returns>
         /// <exception cref="ArgumentNullException">Thrown when type is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when the mapping is invalid.</exception>
-        public static EntityMetadata For(Type type)
+        /// <remarks>
+        /// Trimming and Native AOT: the annotation keeps the members Durable reads on <paramref name="type"/>. Calling
+        /// <c>EntityMetadata.For&lt;T&gt;()</c> (or this overload with <c>typeof(T)</c>) at startup is also the way to keep an
+        /// entity that is reached only through a navigation property (see <see cref="NavigationMetadata.RelatedType"/>).
+        /// </remarks>
+        public static EntityMetadata For([DynamicallyAccessedMembers(RequiredMemberTypes)] Type type)
         {
             ArgumentNullException.ThrowIfNull(type);
-            Lazy<EntityMetadata> lazy = _Cache.GetOrAdd(type, t => new Lazy<EntityMetadata>(() => new EntityMetadata(t), System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
-            return lazy.Value;
+            if (_Cache.TryGetValue(type, out Lazy<EntityMetadata>? existing)) return existing.Value;
+            Lazy<EntityMetadata> created = new Lazy<EntityMetadata>(() => new EntityMetadata(type), System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+            return _Cache.GetOrAdd(type, created).Value;
         }
 
         /// <summary>
@@ -210,7 +239,7 @@ namespace Durable
         /// <typeparam name="T">Entity or projection type.</typeparam>
         /// <returns>The metadata.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the mapping is invalid.</exception>
-        public static EntityMetadata For<T>()
+        public static EntityMetadata For<[DynamicallyAccessedMembers(RequiredMemberTypes)] T>()
         {
             return For(typeof(T));
         }
@@ -382,7 +411,8 @@ namespace Durable
 
         #region Private-Methods
 
-        private static NavigationMetadata? BuildNavigation(Type owner, PropertyInfo property)
+        [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "A navigation target type is read from the navigation property's type, which trimming cannot follow. Targets stay intact when the application references them through an annotated path (a repository or query type argument, [ForeignKey(typeof(X))] / [ManyToManyNavigationProperty(typeof(J))], or EntityMetadata.For<X>()), as documented for Native AOT; NavigationMetadata reports a target whose members were removed with an explicit error instead of failing silently.")]
+        private static NavigationMetadata? BuildNavigation([DynamicallyAccessedMembers(RequiredMemberTypes)] Type owner, PropertyInfo property)
         {
             NavigationPropertyAttribute? reference = property.GetCustomAttribute<NavigationPropertyAttribute>();
             if (reference != null)
@@ -399,6 +429,7 @@ namespace Durable
             return null;
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Last-resort lookup for custom collection types that are neither arrays nor single-argument generics. Trimming keeps an implemented interface whenever the interface type is used, and IEnumerable<T> is always used by the framework, so the IEnumerable<T> implementation this looks for is never removed.")]
         private static Type GetElementType(Type owner, PropertyInfo property)
         {
             Type type = property.PropertyType;
@@ -414,7 +445,7 @@ namespace Durable
             throw new InvalidOperationException("Collection navigation " + owner.Name + "." + property.Name + " must be a generic collection type such as List<T>.");
         }
 
-        private static ColumnMetadata? BuildColumn(Type owner, PropertyInfo property, NullabilityInfoContext nullability, bool conventionMapped)
+        private static ColumnMetadata? BuildColumn(Type owner, PropertyInfo property, NullabilityInfoContext? nullability, bool conventionMapped)
         {
             PropertyAttribute? attribute = property.GetCustomAttribute<PropertyAttribute>();
             ValueConverterAttribute? converterAttribute = property.GetCustomAttribute<ValueConverterAttribute>();
@@ -459,6 +490,12 @@ namespace Durable
             if (property.PropertyType.IsValueType)
             {
                 isNullable = Nullable.GetUnderlyingType(property.PropertyType) != null;
+            }
+            else if (nullability == null)
+            {
+                // NullabilityInfoContext is disabled (trimmed or Native AOT application that opted out): nullable reference
+                // type annotations are unavailable, so reference-type columns are treated as nullable.
+                isNullable = true;
             }
             else
             {
@@ -551,6 +588,14 @@ namespace Durable
             }
 
             return provider == null ? null : new DefaultValueProviderInfo(attribute, provider);
+        }
+
+        private static string TrimmedTypeMessage(Type type)
+        {
+            return "Type " + type.FullName + " has no parameterless constructor and no public properties. If the application is trimmed or " +
+                "published with Native AOT, its members were removed because it is only reached through a path trimming cannot follow " +
+                "(typically a navigation property): reference it as a repository or query type argument, from [ForeignKey(typeof(" + type.Name +
+                "), ...)], or call EntityMetadata.For<" + type.Name + ">() at startup.";
         }
 
         private static string Normalize(string name)
