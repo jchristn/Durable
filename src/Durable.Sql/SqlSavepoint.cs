@@ -64,13 +64,6 @@ namespace Durable.Sql
             return ExecuteAsync(_Dialect.RollbackToSavepointSql(Name), token);
         }
 
-        /// <summary>
-        /// Does nothing; savepoints end with their transaction.
-        /// </summary>
-        public void Dispose()
-        {
-        }
-
         #endregion
 
         #region Private-Methods

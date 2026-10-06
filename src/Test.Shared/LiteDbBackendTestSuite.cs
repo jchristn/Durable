@@ -633,7 +633,7 @@ namespace Test.Shared
             await Assert.ThrowsAsync<InvalidOperationException>(() => committed.CommitAsync());
             Assert.Throws<InvalidOperationException>(() => notes.Create(new LiteDbNote { Title = "late" }, committed));
 
-            using (TransactionScope scope = TransactionScope.Create(notes))
+            using (AmbientTransactionScope scope = AmbientTransactionScope.Create(notes))
             {
                 await notes.CreateAsync(new LiteDbNote { Title = "ambient" });
                 Assert.Equal(1L, await notes.CountAsync(x => x.Title == "ambient"));

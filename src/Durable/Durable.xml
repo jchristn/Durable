@@ -4,6 +4,175 @@
         <name>Durable</name>
     </assembly>
     <members>
+        <member name="T:Durable.AmbientTransactionScope">
+            <summary>
+            Durable's ambient transaction scope. While a scope is current, repository calls made without an explicit
+            transaction on the same async flow use <see cref="P:Durable.AmbientTransactionScope.Transaction"/> (when the repository can use that transaction,
+            for example a SQL repository of the same provider). Disposing a scope that was not completed rolls back; prefer
+            <c>await using</c> so the rollback runs asynchronously. Nested scopes created for the same transaction share it and
+            only the outermost scope commits.
+            <para>
+            This is not <c>System.Transactions.TransactionScope</c> and Durable does not participate in System.Transactions:
+            it never reads <c>Transaction.Current</c> or enlists connections. (An ADO.NET driver configured to auto-enlist may
+            still enlist connections Durable opens inside a System.Transactions scope; that is driver behavior.)
+            </para>
+            Thread safety: a scope flows with the async execution context and must not be shared across concurrent flows.
+            </summary>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.Current">
+            <summary>
+            Gets the scope current on this async flow, or null. Completed or disposed scopes are skipped.
+            </summary>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.Transaction">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when accessed before an asynchronous scope finished starting its transaction.</exception>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.IsCompleted">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Create(Durable.ITransaction)">
+            <summary>
+            Creates a scope around an existing transaction. If the current scope already uses the same transaction,
+            a nested, non-owning scope is created.
+            </summary>
+            <param name="transaction">Transaction. Must not be null.</param>
+            <returns>The new scope, which is now current.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Create``1(Durable.IRepository{``0})">
+            <summary>
+            Begins a transaction on the repository and makes a new owning scope current.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="repository">Repository. Must not be null.</param>
+            <returns>The new scope.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.CreateAsync``1(Durable.IRepository{``0},System.Threading.CancellationToken)">
+            <summary>
+            Begins a transaction asynchronously and makes a new owning scope current on the caller's async flow.
+            The scope becomes current immediately (before the returned task completes), so code that awaits this method
+            observes it via <see cref="P:Durable.AmbientTransactionScope.Current"/>.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="repository">Repository. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task returning the new scope.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Complete">
+            <inheritdoc />
+            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.CompleteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Dispose">
+            <summary>
+            Disposes the scope, rolling back an owned transaction that was not completed, and restores the parent scope.
+            Rollback failures caused by a transaction that already ended are ignored. Prefer <see cref="M:Durable.AmbientTransactionScope.DisposeAsync"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.DisposeAsync">
+            <summary>
+            Disposes the scope asynchronously, rolling back an owned transaction that was not completed with
+            <see cref="M:Durable.ITransaction.RollbackAsync(System.Threading.CancellationToken)"/>, and restores the parent scope. The scope stops being
+            <see cref="P:Durable.AmbientTransactionScope.Current"/> before the returned task completes.
+            </summary>
+            <returns>A task that completes when the transaction has been rolled back (if needed) and disposed.</returns>
+        </member>
+        <member name="T:Durable.AmbientTransactionScopeExtensions">
+            <summary>
+            Runs a delegate inside an <see cref="T:Durable.AmbientTransactionScope"/>: the scope commits when the delegate returns and
+            rolls back when it throws. The async forms dispose the scope asynchronously. Stateless and thread-safe.
+            </summary>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.IRepository{``0},System.Action)">
+            <summary>
+            Executes an action within a transaction scope for the specified repository.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="action">The action to execute within the transaction scope.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or action is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``2(Durable.IRepository{``0},System.Func{``1})">
+            <summary>
+            Executes a function within a transaction scope for the specified repository and returns the result.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The function to execute within the transaction scope.</param>
+            <returns>The result of the function execution.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task within a transaction scope for the specified repository.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``2(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task{``1}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task function within a transaction scope for the specified repository and returns the result.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope(Durable.ITransaction,System.Action)">
+            <summary>
+            Executes an action within a transaction scope for the specified transaction.
+            </summary>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="action">The action to execute within the transaction scope.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or action is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.ITransaction,System.Func{``0})">
+            <summary>
+            Executes a function within a transaction scope for the specified transaction and returns the result.
+            </summary>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The function to execute within the transaction scope.</param>
+            <returns>The result of the function execution.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync(Durable.ITransaction,System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task within a transaction scope for the specified transaction.
+            </summary>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.ITransaction,System.Func{System.Threading.Tasks.Task{``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task function within a transaction scope for the specified transaction and returns the result.
+            </summary>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
         <member name="T:Durable.AsyncDurableResult`1">
             <summary>
             Represents an asynchronous durable result containing a query and its corresponding async enumerable result.
@@ -1997,7 +2166,7 @@
             <summary>
             Backend-neutral repository for an entity type.
             Every method accepting an <see cref="T:Durable.ITransaction"/> runs inside that transaction when supplied; when null, the
-            ambient <see cref="P:Durable.TransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
+            ambient <see cref="P:Durable.AmbientTransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
             Key arguments (<c>id</c>) are a scalar for single-column keys, or an <see cref="T:System.Object"/> array with one value
             per key column (in key order) for composite keys.
             Query filters registered with <see cref="M:Durable.IRepository`1.AddQueryFilter(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})"/> and soft-delete filtering apply to all predicate-based
@@ -2611,7 +2780,9 @@
         </member>
         <member name="T:Durable.ITransactionScope">
             <summary>
-            Represents a transaction scope that manages the lifecycle of a transaction.
+            A scope that owns or shares a transaction: completing it commits (when it owns the transaction) and disposing it
+            without completing rolls back. Dispose with <c>await using</c> so the rollback is asynchronous.
+            See <see cref="T:Durable.AmbientTransactionScope"/>.
             </summary>
         </member>
         <member name="P:Durable.ITransactionScope.Transaction">
@@ -5455,7 +5626,7 @@
             Observable behavior matches the SQL repositories: return values, exception types and messages, key handling
             (a scalar id, or an <see cref="T:System.Object"/> array for composite keys), generated-key write-back, optimistic
             concurrency with <see cref="P:Durable.Query.RepositoryBase`1.ConflictResolver"/>, version bumps on set-based updates, soft delete, query filters,
-            upsert and transactions (explicit, or the ambient <see cref="P:Durable.TransactionScope.Current"/>).
+            upsert and transactions (explicit, or the ambient <see cref="P:Durable.AmbientTransactionScope.Current"/>).
             <para>
             Capabilities: entities with composite keys require <see cref="F:Durable.RepositoryCapabilities.CompositeKeys"/> and entities
             with a version column require <see cref="F:Durable.RepositoryCapabilities.OptimisticConcurrency"/> (checked by the
@@ -5718,7 +5889,7 @@
         <member name="M:Durable.Query.RepositoryBase`1.ResolveTransaction(Durable.ITransaction)">
             <summary>
             Resolves the transaction an operation runs in: the explicit transaction, otherwise the ambient
-            <see cref="P:Durable.TransactionScope.Current"/> transaction when it is not completed and <see cref="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)"/>
+            <see cref="P:Durable.AmbientTransactionScope.Current"/> transaction when it is not completed and <see cref="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)"/>
             accepts it, otherwise null.
             </summary>
             <param name="transaction">Explicit transaction; may be null.</param>
@@ -6304,158 +6475,6 @@
         </member>
         <member name="F:Durable.StringMatchMode.IgnoreCase">
             <summary>Case-insensitive but accent-sensitive comparison, like C# <c>StringComparison.OrdinalIgnoreCase</c>: both sides are lower-cased and then compared ordinally. SQLite's built-in lower() folds ASCII letters only.</summary>
-        </member>
-        <member name="T:Durable.TransactionScope">
-            <summary>
-            An ambient transaction scope. While a scope is current, repository calls made without an explicit transaction
-            on the same async flow use <see cref="P:Durable.TransactionScope.Transaction"/>. Disposing a scope that was not completed rolls back.
-            Nested scopes created for the same transaction share it and only the outermost scope commits.
-            Thread safety: a scope flows with the async execution context and must not be shared across concurrent flows.
-            </summary>
-        </member>
-        <member name="P:Durable.TransactionScope.Current">
-            <summary>
-            Gets the scope current on this async flow, or null. Completed or disposed scopes are skipped.
-            </summary>
-        </member>
-        <member name="P:Durable.TransactionScope.Transaction">
-            <inheritdoc />
-            <exception cref="T:System.InvalidOperationException">Thrown when accessed before an asynchronous scope finished starting its transaction.</exception>
-        </member>
-        <member name="P:Durable.TransactionScope.IsCompleted">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.TransactionScope.Create(Durable.ITransaction)">
-            <summary>
-            Creates a scope around an existing transaction. If the current scope already uses the same transaction,
-            a nested, non-owning scope is created.
-            </summary>
-            <param name="transaction">Transaction. Must not be null.</param>
-            <returns>The new scope, which is now current.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Create``1(Durable.IRepository{``0})">
-            <summary>
-            Begins a transaction on the repository and makes a new owning scope current.
-            </summary>
-            <typeparam name="T">Entity type.</typeparam>
-            <param name="repository">Repository. Must not be null.</param>
-            <returns>The new scope.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.CreateAsync``1(Durable.IRepository{``0},System.Threading.CancellationToken)">
-            <summary>
-            Begins a transaction asynchronously and makes a new owning scope current on the caller's async flow.
-            The scope becomes current immediately (before the returned task completes), so code that awaits this method
-            observes it via <see cref="P:Durable.TransactionScope.Current"/>.
-            </summary>
-            <typeparam name="T">Entity type.</typeparam>
-            <param name="repository">Repository. Must not be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>A task returning the new scope.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Complete">
-            <inheritdoc />
-            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
-            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.CompleteAsync(System.Threading.CancellationToken)">
-            <inheritdoc />
-            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
-            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Dispose">
-            <summary>
-            Disposes the scope, rolling back an owned transaction that was not completed, and restores the parent scope.
-            </summary>
-        </member>
-        <member name="T:Durable.TransactionScopeExtensions">
-            <summary>
-            Extension methods for executing operations within transaction scopes.
-            </summary>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.IRepository{``0},System.Action)">
-            <summary>
-            Executes an action within a transaction scope for the specified repository.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="action">The action to execute within the transaction scope.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or action is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``2(Durable.IRepository{``0},System.Func{``1})">
-            <summary>
-            Executes a function within a transaction scope for the specified repository and returns the result.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The function to execute within the transaction scope.</param>
-            <returns>The result of the function execution.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task within a transaction scope for the specified repository.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``2(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task{``1}},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task function within a transaction scope for the specified repository and returns the result.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation containing the result.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope(Durable.ITransaction,System.Action)">
-            <summary>
-            Executes an action within a transaction scope for the specified transaction.
-            </summary>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="action">The action to execute within the transaction scope.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or action is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.ITransaction,System.Func{``0})">
-            <summary>
-            Executes a function within a transaction scope for the specified transaction and returns the result.
-            </summary>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The function to execute within the transaction scope.</param>
-            <returns>The result of the function execution.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync(Durable.ITransaction,System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task within a transaction scope for the specified transaction.
-            </summary>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.ITransaction,System.Func{System.Threading.Tasks.Task{``0}},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task function within a transaction scope for the specified transaction and returns the result.
-            </summary>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation containing the result.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
         </member>
         <member name="T:Durable.TryResolveConflictResult`1">
             <summary>

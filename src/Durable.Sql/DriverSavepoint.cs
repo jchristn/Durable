@@ -41,8 +41,5 @@ namespace Durable.Sql
             return _Transaction.RollbackAsync(Name, token);
         }
 
-        public void Dispose()
-        {
-        }
     }
 }

@@ -18,7 +18,7 @@ namespace Durable.Query
     /// Observable behavior matches the SQL repositories: return values, exception types and messages, key handling
     /// (a scalar id, or an <see cref="object"/> array for composite keys), generated-key write-back, optimistic
     /// concurrency with <see cref="ConflictResolver"/>, version bumps on set-based updates, soft delete, query filters,
-    /// upsert and transactions (explicit, or the ambient <see cref="TransactionScope.Current"/>).
+    /// upsert and transactions (explicit, or the ambient <see cref="AmbientTransactionScope.Current"/>).
     /// <para>
     /// Capabilities: entities with composite keys require <see cref="RepositoryCapabilities.CompositeKeys"/> and entities
     /// with a version column require <see cref="RepositoryCapabilities.OptimisticConcurrency"/> (checked by the
@@ -649,7 +649,7 @@ namespace Durable.Query
 
         /// <summary>
         /// Resolves the transaction an operation runs in: the explicit transaction, otherwise the ambient
-        /// <see cref="TransactionScope.Current"/> transaction when it is not completed and <see cref="AcceptsAmbientTransaction"/>
+        /// <see cref="AmbientTransactionScope.Current"/> transaction when it is not completed and <see cref="AcceptsAmbientTransaction"/>
         /// accepts it, otherwise null.
         /// </summary>
         /// <param name="transaction">Explicit transaction; may be null.</param>
@@ -657,7 +657,7 @@ namespace Durable.Query
         protected internal virtual ITransaction? ResolveTransaction(ITransaction? transaction)
         {
             if (transaction != null) return transaction;
-            TransactionScope? scope = TransactionScope.Current;
+            AmbientTransactionScope? scope = AmbientTransactionScope.Current;
             if (scope == null) return null;
             ITransaction ambient;
             try

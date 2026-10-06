@@ -58,7 +58,7 @@ namespace Test.Shared
 
                 // Transactions and infrastructure: ambient scopes, savepoints, external transactions, connection
                 // factories, diagnostics (interceptors / tracing / logging / capture), raw SQL and procedures.
-                suites.Add(SharedSuite<TransactionScopeTestSuite>("TransactionScope", "Transaction Scope Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<AmbientTransactionScopeTestSuite>("AmbientTransactionScope", "Ambient Transaction Scope Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<SavepointAndInteropTestSuite>("SavepointInterop", "Savepoint / External Transaction Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConnectionFactoryTestSuite>("ConnectionFactory", "Connection Factory Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<DiagnosticsTestSuite>("Diagnostics", "Diagnostics (Interceptor / Tracing / Logging / Capture) Tests", providerTag, BeforeEach));

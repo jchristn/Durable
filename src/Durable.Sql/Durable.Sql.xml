@@ -629,7 +629,10 @@
         </member>
         <member name="T:Durable.Sql.ISavepoint">
             <summary>
-            A savepoint within an <see cref="T:Durable.Sql.ISqlTransaction"/>. Disposing an unreleased savepoint does nothing; roll back explicitly.
+            A savepoint within an <see cref="T:Durable.Sql.ISqlTransaction"/>. A savepoint is not a resource: it is not disposable and ends
+            with its transaction. Call <see cref="M:Durable.Sql.ISavepoint.Rollback"/> (or <see cref="M:Durable.Sql.ISavepoint.RollbackAsync(System.Threading.CancellationToken)"/>) to undo the work done after it,
+            or <see cref="M:Durable.Sql.ISavepoint.Release"/> (or <see cref="M:Durable.Sql.ISavepoint.ReleaseAsync(System.Threading.CancellationToken)"/>) to keep it; doing neither keeps the work, which then
+            commits or rolls back with the transaction.
             Thread safety: not thread-safe.
             </summary>
         </member>
@@ -642,25 +645,31 @@
             <summary>
             Releases the savepoint, keeping its changes. A no-op on databases without a release statement.
             </summary>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the transaction ended).</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.Rollback">
             <summary>
-            Rolls back changes made after the savepoint.
+            Rolls back changes made after the savepoint. The transaction stays active.
             </summary>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the savepoint was released).</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.ReleaseAsync(System.Threading.CancellationToken)">
             <summary>
-            Releases the savepoint, keeping its changes.
+            Releases the savepoint, keeping its changes. A no-op on databases without a release statement.
             </summary>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the transaction ended).</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.RollbackAsync(System.Threading.CancellationToken)">
             <summary>
-            Rolls back changes made after the savepoint.
+            Rolls back changes made after the savepoint. The transaction stays active.
             </summary>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the savepoint was released).</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.Sql.ISqlCapture">
             <summary>
@@ -3807,7 +3816,7 @@
         <member name="T:Durable.Sql.SqlCommandExecutor">
             <summary>
             Executes statements for a repository: resolves the connection (explicit transaction, ambient
-            <see cref="T:Durable.TransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
+            <see cref="T:Durable.AmbientTransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
             interceptors, logging, tracing and SQL capture around every command.
             Thread safety: safe for concurrent use; each call uses its own command.
             </summary>
@@ -3847,7 +3856,7 @@
         </member>
         <member name="M:Durable.Sql.SqlCommandExecutor.ResolveTransaction(Durable.ITransaction)">
             <summary>
-            Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="T:Durable.TransactionScope"/>, else null.
+            Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="T:Durable.AmbientTransactionScope"/>, else null.
             </summary>
             <param name="transaction">Explicit transaction; may be null.</param>
             <returns>The SQL transaction, or null.</returns>
@@ -5701,11 +5710,6 @@
         </member>
         <member name="M:Durable.Sql.SqlSavepoint.RollbackAsync(System.Threading.CancellationToken)">
             <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlSavepoint.Dispose">
-            <summary>
-            Does nothing; savepoints end with their transaction.
-            </summary>
         </member>
         <member name="T:Durable.Sql.SqlStatement">
             <summary>

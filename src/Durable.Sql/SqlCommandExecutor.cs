@@ -14,7 +14,7 @@ namespace Durable.Sql
 
     /// <summary>
     /// Executes statements for a repository: resolves the connection (explicit transaction, ambient
-    /// <see cref="TransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
+    /// <see cref="AmbientTransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
     /// interceptors, logging, tracing and SQL capture around every command.
     /// Thread safety: safe for concurrent use; each call uses its own command.
     /// </summary>
@@ -81,7 +81,7 @@ namespace Durable.Sql
         #region Public-Methods
 
         /// <summary>
-        /// Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="TransactionScope"/>, else null.
+        /// Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="AmbientTransactionScope"/>, else null.
         /// </summary>
         /// <param name="transaction">Explicit transaction; may be null.</param>
         /// <returns>The SQL transaction, or null.</returns>
@@ -99,7 +99,7 @@ namespace Durable.Sql
                 return sqlTransaction;
             }
 
-            TransactionScope? scope = TransactionScope.Current;
+            AmbientTransactionScope? scope = AmbientTransactionScope.Current;
             if (scope != null && scope.Transaction is ISqlTransaction ambient && !ambient.IsCompleted && ConnectionType.IsInstanceOfType(ambient.Connection))
                 return ambient;
             return null;

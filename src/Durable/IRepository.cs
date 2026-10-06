@@ -10,7 +10,7 @@ namespace Durable
     /// <summary>
     /// Backend-neutral repository for an entity type.
     /// Every method accepting an <see cref="ITransaction"/> runs inside that transaction when supplied; when null, the
-    /// ambient <see cref="TransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
+    /// ambient <see cref="AmbientTransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
     /// Key arguments (<c>id</c>) are a scalar for single-column keys, or an <see cref="object"/> array with one value
     /// per key column (in key order) for composite keys.
     /// Query filters registered with <see cref="AddQueryFilter"/> and soft-delete filtering apply to all predicate-based
