@@ -3,6 +3,7 @@ namespace Durable.LiteGraph
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using Durable;
 
@@ -195,7 +196,7 @@ namespace Durable.LiteGraph
             return principal.KeyColumns.Count == 1 && ReferenceEquals(principal.KeyColumns[0], column);
         }
 
-        private static EntityMetadata? TryMetadata(Type type)
+        private static EntityMetadata? TryMetadata([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type type)
         {
             try
             {

@@ -10,6 +10,7 @@ namespace Test.Shared
     using Durable;
     using Durable.InMemory;
     using Durable.LiteDb;
+    using Durable.Query;
     using LiteDB;
     using Xunit;
 
@@ -42,7 +43,7 @@ namespace Test.Shared
             try
             {
                 int firstId;
-                using (LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.ForFile(path)))
+                using (LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForFile(path)))
                 {
                     Assert.True(backend.OwnsDatabase);
                     LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
@@ -51,7 +52,7 @@ namespace Test.Shared
                     firstId = first.Id;
                 }
 
-                using (LiteDbBackend reopened = new LiteDbBackend(LiteDbRepositorySettings.ForFile(path)))
+                using (LiteDbBackend reopened = LiteDbBackend.Create(LiteDbRepositorySettings.ForFile(path)))
                 {
                     Assert.True(reopened.HasOrdinalCollation);
                     LiteDbRepository<LiteDbNote> notes = reopened.CreateRepository<LiteDbNote>();
@@ -90,9 +91,9 @@ namespace Test.Shared
             string path = TempFile();
             try
             {
-                LiteDbRepositorySettings settings = new LiteDbRepositorySettings(path) { ConnectionType = LiteDbConnectionType.Shared };
-                using LiteDbBackend first = new LiteDbBackend(settings);
-                using LiteDbBackend second = new LiteDbBackend(settings);
+                LiteDbRepositorySettings settings = new LiteDbRepositorySettings { Filename = path, ConnectionType = LiteDbConnectionType.Shared };
+                using LiteDbBackend first = LiteDbBackend.Create(settings);
+                using LiteDbBackend second = LiteDbBackend.Create(settings);
                 LiteDbRepository<LiteDbNote> a = first.CreateRepository<LiteDbNote>();
                 LiteDbRepository<LiteDbNote> b = second.CreateRepository<LiteDbNote>();
 
@@ -134,12 +135,12 @@ namespace Test.Shared
         [Fact]
         public async Task SharedDatabaseAcrossRepositories()
         {
-            using LiteDatabase database = new LiteDatabase(LiteDbRepositorySettings.InMemory().ToConnectionString());
-            LiteDbRepository<LiteDbOwner> owners = new LiteDbRepository<LiteDbOwner>(database);
-            LiteDbRepository<LiteDbNote> notes = new LiteDbRepository<LiteDbNote>(database);
-            Assert.NotSame(owners.Store, notes.Store);
-            Assert.Same(owners.Store.Database, notes.Store.Database);
-            Assert.False(owners.Store.OwnsDatabase);
+            using LiteDatabase database = new LiteDatabase(LiteDbRepositorySettings.ForInMemory().ToConnectionString());
+            LiteDbRepository<LiteDbOwner> owners = LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(database)).CreateRepository<LiteDbOwner>();
+            LiteDbRepository<LiteDbNote> notes = new LiteDbRepository<LiteDbNote>(LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(database)));
+            Assert.NotSame(owners.Backend, notes.Backend);
+            Assert.Same(owners.Backend.Database, notes.Backend.Database);
+            Assert.False(owners.Backend.OwnsDatabase);
 
             LiteDbOwner ada = owners.Create(new LiteDbOwner { Name = "Ada" });
             owners.Create(new LiteDbOwner { Name = "Grace" });
@@ -153,12 +154,12 @@ namespace Test.Shared
             Assert.Equal(new[] { "by ada" }, notes.ReadMany(x => x.Owner!.Name == "Ada").Select(n => n.Title).ToArray());
             Assert.Equal(new[] { "Ada" }, owners.ReadMany(x => x.Notes.Any()).Select(o => o.Name).ToArray());
 
-            LiteDbBackend other = new LiteDbBackend(database);
+            LiteDbBackend other = LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(database));
             Assert.Equal(2L, other.CreateRepository<LiteDbNote>().Count());
 
             using (ITransaction transaction = owners.BeginTransaction())
             {
-                Assert.True(notes.Store.Owns(transaction));
+                Assert.True(notes.Backend.Owns(transaction));
                 LiteDbOwner rolled = owners.Create(new LiteDbOwner { Name = "Rolled" }, transaction);
                 notes.Create(new LiteDbNote { Title = "rolled", OwnerId = rolled.Id }, transaction);
                 Assert.Equal(1L, other.CreateRepository<LiteDbNote>().Count(x => x.Title == "rolled", transaction));
@@ -177,10 +178,12 @@ namespace Test.Shared
         [Fact]
         public async Task SimpleFiltersArePushedDown()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory()) { ExplainQueries = true };
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
+            backend.ExplainQueries = true;
             List<LiteDbQueryPlan> observed = new List<LiteDbQueryPlan>();
-            backend.QueryPlanned = plan =>
+            backend.QueryPlanned += (sender, plan) =>
             {
+                Assert.Same(backend, sender);
                 lock (observed) observed.Add(plan);
             };
             LiteDbRepository<LiteDbOwner> owners = backend.CreateRepository<LiteDbOwner>();
@@ -262,9 +265,9 @@ namespace Test.Shared
         [Fact]
         public async Task ResultsMatchTheInMemoryBackend()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbNote> lite = backend.CreateRepository<LiteDbNote>();
-            InMemoryRepository<LiteDbNote> reference = new InMemoryBackend().CreateRepository<LiteDbNote>();
+            InMemoryRepository<LiteDbNote> reference = InMemoryBackend.Create().CreateRepository<LiteDbNote>();
             DateTime local = new DateTime(_Base.Ticks, DateTimeKind.Local);
             DateTime unspecified = new DateTime(_Base.Ticks, DateTimeKind.Unspecified);
             for (int i = 0; i < 12; i++)
@@ -316,7 +319,7 @@ namespace Test.Shared
         [Fact]
         public async Task ValuesRoundTripExactly()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbPrecisionItem> items = backend.CreateRepository<LiteDbPrecisionItem>();
             DateTime when = new DateTime(2023, 12, 31, 23, 59, 59, DateTimeKind.Local).AddTicks(9999999);
             DateTimeOffset moment = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.FromMinutes(330)).AddTicks(7777);
@@ -401,7 +404,7 @@ namespace Test.Shared
             AssertSingleCode(items, x => x.Code == "A", "A", backend);
             AssertSingleCode(items, x => x.Small < 0, "a", backend);
 
-            BsonDocument document = backend.GetStoredDocuments(typeof(LiteDbPrecisionItem)).Single(d => d["_id"].AsString == "a");
+            BsonDocument document = backend.GetStoredRows(typeof(LiteDbPrecisionItem)).Single(d => d["_id"].AsString == "a");
             Assert.True(document["amount"].IsDecimal);
             Assert.Equal("Pending", document["status"].AsString);
             Assert.Equal(1L, document["status_number"].AsInt64);
@@ -414,7 +417,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConcurrentCreatesGetUniqueKeys()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
             const int Writers = 8;
             const int PerWriter = 50;
@@ -444,7 +447,7 @@ namespace Test.Shared
         [Fact]
         public async Task OptimisticConcurrencyLosesNoUpdates()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbVersionedCounter> counters = backend.CreateRepository<LiteDbVersionedCounter>();
             LiteDbVersionedCounter counter = counters.Create(new LiteDbVersionedCounter { Counter = 0 });
             const int Workers = 6;
@@ -489,14 +492,32 @@ namespace Test.Shared
             Assert.Equal(TimeSpan.FromMinutes(1), settings.Timeout);
             Assert.Throws<ArgumentNullException>(() => settings.Filename = null!);
             Assert.Throws<ArgumentException>(() => settings.Filename = " ");
-            Assert.Throws<ArgumentException>(() => new LiteDbRepositorySettings(string.Empty));
+            Assert.Throws<ArgumentException>(() => LiteDbRepositorySettings.ForFile(string.Empty));
             Assert.Throws<ArgumentException>(() => settings.Password = string.Empty);
             Assert.Throws<ArgumentOutOfRangeException>(() => settings.Timeout = TimeSpan.FromMilliseconds(10));
             Assert.Throws<ArgumentOutOfRangeException>(() => settings.Timeout = TimeSpan.FromHours(2));
             Assert.Throws<ArgumentOutOfRangeException>(() => settings.InitialSizeBytes = -1);
             Assert.Throws<ArgumentOutOfRangeException>(() => settings.ConnectionType = (LiteDbConnectionType)7);
-            Assert.Throws<ArgumentNullException>(() => new LiteDbBackend((LiteDbRepositorySettings)null!));
-            Assert.Throws<ArgumentNullException>(() => new LiteDbBackend((LiteDatabase)null!));
+            Assert.Throws<ArgumentNullException>(() => LiteDbRepositorySettings.ForDatabase(null!));
+            Assert.True(LiteDbRepositorySettings.ForInMemory().IsInMemory);
+            using (LiteDbBackend defaults = LiteDbBackend.Create())
+            {
+                Assert.True(defaults.OwnsDatabase);
+                Assert.True(defaults.HasOrdinalCollation);
+            }
+
+            using (LiteDatabase existing = new LiteDatabase(new MemoryStream()))
+            {
+                LiteDbRepositorySettings wrapping = LiteDbRepositorySettings.ForDatabase(existing);
+                Assert.False(wrapping.IsInMemory);
+                wrapping.Validate();
+                wrapping.Password = "secret";
+                Assert.Throws<ArgumentException>(() => wrapping.Validate());
+                Assert.Throws<ArgumentException>(() => LiteDbBackend.Create(wrapping));
+                wrapping.Password = null;
+                wrapping.Filename = "other.db";
+                Assert.Throws<ArgumentException>(() => wrapping.Validate());
+            }
 
             LiteDbRepositorySettings file = LiteDbRepositorySettings.ForFile("data.db");
             file.Password = "secret";
@@ -512,7 +533,7 @@ namespace Test.Shared
             Assert.Equal(System.Globalization.CompareOptions.Ordinal, connection.Collation.SortOptions);
             Assert.False(file.IsInMemory);
 
-            using LiteDbBackend backend = new LiteDbBackend(new LiteDbRepositorySettings { Timeout = TimeSpan.FromSeconds(5) });
+            using LiteDbBackend backend = LiteDbBackend.Create(new LiteDbRepositorySettings { Timeout = TimeSpan.FromSeconds(5) });
             Assert.Equal(TimeSpan.FromSeconds(5), backend.Database.Timeout);
             Assert.True(backend.HasOrdinalCollation);
         }
@@ -525,7 +546,7 @@ namespace Test.Shared
         public void NonOrdinalCollationStaysCorrect()
         {
             using LiteDatabase database = new LiteDatabase(new MemoryStream());
-            LiteDbBackend backend = new LiteDbBackend(database);
+            LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(database));
             Assert.False(backend.HasOrdinalCollation);
             LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
             notes.Create(new LiteDbNote { Title = "Alpha", Amount = 1 });
@@ -548,7 +569,7 @@ namespace Test.Shared
         [Fact]
         public void DisposalSemantics()
         {
-            LiteDbBackend owned = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            LiteDbBackend owned = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDatabase ownedDatabase = owned.Database;
             LiteDbRepository<LiteDbNote> first = owned.CreateRepository<LiteDbNote>();
             first.Create(new LiteDbNote { Title = "kept" });
@@ -561,16 +582,68 @@ namespace Test.Shared
             Assert.Throws<ObjectDisposedException>(() => owned.CreateRepository<LiteDbNote>());
             Assert.ThrowsAny<Exception>(() => ownedDatabase.GetCollection("ldb_notes").Count());
 
-            using LiteDatabase shared = new LiteDatabase(LiteDbRepositorySettings.InMemory().ToConnectionString());
-            LiteDbBackend borrowing = new LiteDbBackend(shared);
+            using LiteDatabase shared = new LiteDatabase(LiteDbRepositorySettings.ForInMemory().ToConnectionString());
+            LiteDbBackend borrowing = LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(shared));
             Assert.False(borrowing.OwnsDatabase);
             borrowing.CreateRepository<LiteDbNote>().Create(new LiteDbNote { Title = "survives" });
             borrowing.Dispose();
             Assert.Equal(1, shared.GetCollection("ldb_notes").Count());
 
-            LiteDbRepository<LiteDbNote> direct = new LiteDbRepository<LiteDbNote>(shared);
+            LiteDbRepository<LiteDbNote> direct = new LiteDbRepository<LiteDbNote>(LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(shared)));
             direct.Dispose();
-            Assert.Equal(1L, new LiteDbRepository<LiteDbNote>(shared).Count());
+            Assert.Equal(1L, LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(shared)).CreateRepository<LiteDbNote>().Count());
+        }
+
+        /// <summary>
+        /// The members every non-SQL backend shares: async factory with default settings, typed async transactions,
+        /// Clear/ClearAsync of everything or one type (resetting sequences), stored-row diagnostics, async index creation
+        /// and async disposal.
+        /// </summary>
+        [Fact]
+        public async Task BackendConventionMembers()
+        {
+            LiteDbBackend backend = await LiteDbBackend.CreateAsync();
+            Assert.True(backend.OwnsDatabase);
+            LiteDbRepository<LiteDbOwner> owners = backend.CreateRepository<LiteDbOwner>();
+            LiteDbRepository<LiteDbNote> notes = new LiteDbRepository<LiteDbNote>(backend);
+            Assert.Same(backend, owners.Backend);
+            Assert.Same(backend, ((RepositoryBase<LiteDbNote>)notes).Backend);
+            await backend.EnsureIndexesAsync(typeof(LiteDbNote));
+
+            await using (LiteDbTransaction transaction = await backend.BeginTransactionAsync())
+            {
+                Assert.True(backend.Owns(transaction));
+                Assert.Same(backend, transaction.Backend);
+                await owners.CreateAsync(new LiteDbOwner { Name = "rolled back" }, transaction);
+            }
+
+            Assert.Equal(0L, owners.Count());
+            LiteDbOwner first = owners.Create(new LiteDbOwner { Name = "first" });
+            owners.Create(new LiteDbOwner { Name = "second" });
+            notes.Create(new LiteDbNote { Title = "note" });
+            Assert.Equal(2, (await backend.GetStoredRowsAsync(typeof(LiteDbOwner))).Count);
+            Assert.Equal(2, backend.Clear(typeof(LiteDbOwner)));
+            Assert.Equal(0, await backend.ClearAsync(typeof(LiteDbOwner)));
+            Assert.Equal(1L, notes.Count());
+            Assert.Equal(1, owners.Create(new LiteDbOwner { Name = "after clear" }).Id);
+
+            await backend.ClearAsync();
+            Assert.Equal(0L, notes.Count());
+            Assert.Equal(0L, owners.Count());
+            notes.Create(new LiteDbNote { Title = "again" });
+            backend.Clear();
+            Assert.Empty(backend.GetStoredRows(typeof(LiteDbNote)));
+
+            using CancellationTokenSource canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => backend.ClearAsync(canceled.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LiteDbBackend.CreateAsync(null, canceled.Token));
+
+            await backend.DisposeAsync();
+            await backend.DisposeAsync();
+            Assert.Throws<ObjectDisposedException>(() => owners.Count());
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => backend.BeginTransactionAsync());
+            Assert.Throws<ObjectDisposedException>(() => backend.Clear());
         }
 
         /// <summary>
@@ -580,7 +653,7 @@ namespace Test.Shared
         [Fact]
         public async Task TransactionsSpanAwaitsAndThreads()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
             LiteDbRepository<LiteDbOwner> owners = backend.CreateRepository<LiteDbOwner>();
 
@@ -650,7 +723,7 @@ namespace Test.Shared
         [Fact]
         public async Task FailedOperationsRollBack()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
             string tooLongForIndex = new string('x', 2000);
 
@@ -686,7 +759,7 @@ namespace Test.Shared
         [Fact]
         public void UnsupportedMappingsAreRejected()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             Assert.Throws<NotSupportedException>(() => backend.CreateRepository<LiteDbInvalidName>());
             Assert.Throws<NotSupportedException>(() => backend.CreateRepository<LiteDbGuidIdentity>());
         }
@@ -698,7 +771,7 @@ namespace Test.Shared
         [Fact]
         public void SynchronousMembersDoNotDeadlock()
         {
-            using LiteDbBackend backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            using LiteDbBackend backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
             LiteDbRepository<LiteDbNote> notes = backend.CreateRepository<LiteDbNote>();
             SynchronizationContext? previous = SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(new NonPumpingSynchronizationContext());

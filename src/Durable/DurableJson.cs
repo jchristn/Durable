@@ -25,7 +25,7 @@ namespace Durable
         /// Creates options with Durable's JSON column defaults (camelCase property names, compact output) and, optionally,
         /// a type-info resolver such as a source-generated <see cref="JsonSerializerContext"/>. Pass the result to a
         /// backend: <c>new SqliteDataTypeConverter(options)</c> via <c>SqlRepositoryOptions.DataTypeConverter</c> (or the
-        /// dialect constructor), <c>new InMemoryBackend(capabilities, options)</c>, or <c>new LiteDbBackend(settings, options)</c>.
+        /// dialect constructor), the <c>JsonOptions</c> of <c>InMemoryRepositorySettings</c>, <c>LiteDbRepositorySettings</c> or <c>LiteGraphRepositorySettings</c>.
         /// For on-disk JSON identical to the JIT default, declare the context with
         /// <c>[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]</c>.
         /// </summary>

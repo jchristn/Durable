@@ -47,14 +47,19 @@ namespace Durable.InMemory
     /// Each operation outside a transaction is atomic and immediately committed.
     /// </para>
     /// <para>
-    /// Capabilities: the constructor accepts a <see cref="RepositoryCapabilities"/> mask (default
-    /// <see cref="RepositoryCapabilities.All"/>) so tests can simulate a limited backend; repositories then reject the
-    /// masked features with <see cref="NotSupportedException"/>.
+    /// Capabilities: <see cref="InMemoryRepositorySettings.Capabilities"/> (default <see cref="RepositoryCapabilities.All"/>)
+    /// lets tests simulate a limited backend; repositories then reject the masked features with
+    /// <see cref="NotSupportedException"/>.
+    /// </para>
+    /// <para>
+    /// Lifetime: create a backend with <see cref="Create"/> or <see cref="CreateAsync"/>, share it across repositories,
+    /// and dispose it when done; disposing discards the data, and later operations throw
+    /// <see cref="ObjectDisposedException"/>. Repositories never dispose the backend.
     /// </para>
     /// Thread safety: safe for concurrent use by any number of repositories and threads. Reads never take locks; writes
     /// outside transactions are serialized by a short internal lock.
     /// </summary>
-    public sealed class InMemoryBackend : IRepositoryBackend
+    public sealed class InMemoryBackend : IRepositoryBackend, IDisposable, IAsyncDisposable
     {
         #region Public-Members
 
@@ -82,6 +87,7 @@ namespace Durable.InMemory
         private readonly InMemoryValueConverter _Values;
         private volatile InMemoryDatabaseState _Committed = InMemoryDatabaseState.Empty;
         private long _Sequence;
+        private int _Disposed;
 
         #endregion
 
@@ -92,10 +98,43 @@ namespace Durable.InMemory
         /// </summary>
         /// <param name="capabilities">Capabilities to advertise. Default: <see cref="RepositoryCapabilities.All"/>.</param>
         /// <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
+        [Obsolete("Use InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = ..., JsonOptions = ... }). This constructor will be removed in 0.6.0.")]
         public InMemoryBackend(RepositoryCapabilities capabilities = RepositoryCapabilities.All, JsonSerializerOptions? jsonOptions = null)
+            : this(new InMemoryRepositorySettings { Capabilities = capabilities, JsonOptions = jsonOptions })
         {
-            Capabilities = capabilities;
-            _Values = new InMemoryValueConverter(jsonOptions ?? _DefaultJsonOptions);
+        }
+
+        private InMemoryBackend(InMemoryRepositorySettings settings)
+        {
+            Capabilities = settings.Capabilities;
+            _Values = new InMemoryValueConverter(settings.JsonOptions ?? _DefaultJsonOptions);
+        }
+
+        /// <summary>
+        /// Creates an empty in-memory backend.
+        /// </summary>
+        /// <param name="settings">Settings; null uses <see cref="InMemoryRepositorySettings.ForInMemory"/> (all capabilities, default JSON options).</param>
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="InMemoryRepositorySettings.Validate"/>).</exception>
+        public static InMemoryBackend Create(InMemoryRepositorySettings? settings = null)
+        {
+            settings ??= InMemoryRepositorySettings.ForInMemory();
+            settings.Validate();
+            return new InMemoryBackend(settings);
+        }
+
+        /// <summary>
+        /// Creates an empty in-memory backend. Completes synchronously; present so every backend has the same factories.
+        /// </summary>
+        /// <param name="settings">Settings; null uses <see cref="InMemoryRepositorySettings.ForInMemory"/>.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="InMemoryRepositorySettings.Validate"/>).</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public static Task<InMemoryBackend> CreateAsync(InMemoryRepositorySettings? settings = null, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(Create(settings));
         }
 
         #endregion
@@ -110,8 +149,10 @@ namespace Durable.InMemory
         /// <returns>A new repository.</returns>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
         /// <exception cref="NotSupportedException">Thrown when the entity needs a capability this backend does not advertise.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public InMemoryRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
+            ThrowIfDisposed();
             return new InMemoryRepository<T>(this, options);
         }
 
@@ -126,15 +167,86 @@ namespace Durable.InMemory
         }
 
         /// <summary>
-        /// Removes every row of every table and resets the auto-increment sequences. Open transactions keep their snapshots.
+        /// Removes every row of every table and resets the auto-increment sequences, bypassing soft delete, query filters
+        /// and transactions. Open transactions keep their snapshots.
         /// </summary>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public void Clear()
         {
+            ThrowIfDisposed();
             lock (_CommitLock)
             {
                 _Committed = InMemoryDatabaseState.Empty;
                 _Identities.Clear();
             }
+        }
+
+        /// <summary>
+        /// Removes every row of every table and resets the auto-increment sequences (see <see cref="Clear()"/>). Completes
+        /// synchronously.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A completed task.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task ClearAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            Clear();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Removes every row of one entity type (including soft-deleted rows), bypassing soft delete, query filters and
+        /// transactions, and resets its auto-increment sequence.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <returns>The number of rows removed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        public int Clear([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            ThrowIfDisposed();
+            EntityMetadata metadata = EntityMetadata.For(entityType);
+            lock (_CommitLock)
+            {
+                int count = _Committed.Table(metadata).Count;
+                _Committed = _Committed.With(InMemoryTable.Empty(metadata));
+                _Identities.TryRemove(metadata.EntityType, out InMemoryIdentitySequence? _);
+                return count;
+            }
+        }
+
+        /// <summary>
+        /// Removes every row of one entity type and resets its auto-increment sequence (see <see cref="Clear(Type)"/>).
+        /// Completes synchronously.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The number of rows removed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<int> ClearAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(Clear(entityType));
+        }
+
+        /// <summary>
+        /// Returns the committed rows of an entity as stored (see <see cref="GetStoredRows"/>). Completes synchronously.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The rows in insertion order. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GetStoredRowsAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(GetStoredRows(entityType));
         }
 
         /// <summary>
@@ -144,9 +256,11 @@ namespace Durable.InMemory
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <returns>The rows in insertion order. Never null.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public IReadOnlyList<IReadOnlyDictionary<string, object?>> GetStoredRows([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
+            ThrowIfDisposed();
             EntityMetadata metadata = EntityMetadata.For(entityType);
             List<IReadOnlyDictionary<string, object?>> rows = new List<IReadOnlyDictionary<string, object?>>();
             foreach (InMemoryRow row in _Committed.Table(metadata).Rows)
@@ -341,23 +455,61 @@ namespace Durable.InMemory
             return Task.FromResult(count);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Begins a snapshot-isolation transaction (see <see cref="InMemoryTransaction"/>).
+        /// </summary>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
         /// <exception cref="NotSupportedException">Thrown when <see cref="Capabilities"/> lacks <see cref="RepositoryCapabilities.Transactions"/>.</exception>
-        public Task<ITransaction> BeginTransactionAsync(CancellationToken token)
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        public InMemoryTransaction BeginTransaction()
         {
-            token.ThrowIfCancellationRequested();
-            return Task.FromResult<ITransaction>(BeginTransaction());
+            ThrowIfDisposed();
+            QueryCapabilityValidator.Require(Capabilities, RepositoryCapabilities.Transactions, "BeginTransaction");
+            return new InMemoryTransaction(this, _Committed);
         }
 
         /// <summary>
-        /// Begins a snapshot-isolation transaction.
+        /// Begins a snapshot-isolation transaction (see <see cref="InMemoryTransaction"/>). Completes synchronously.
         /// </summary>
-        /// <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
         /// <exception cref="NotSupportedException">Thrown when <see cref="Capabilities"/> lacks <see cref="RepositoryCapabilities.Transactions"/>.</exception>
-        public InMemoryTransaction BeginTransaction()
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<InMemoryTransaction> BeginTransactionAsync(CancellationToken token = default)
         {
-            QueryCapabilityValidator.Require(Capabilities, RepositoryCapabilities.Transactions, "BeginTransaction");
-            return new InMemoryTransaction(this, _Committed);
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(BeginTransaction());
+        }
+
+        /// <inheritdoc />
+        async Task<ITransaction> IRepositoryBackend.BeginTransactionAsync(CancellationToken token)
+        {
+            return await BeginTransactionAsync(token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Disposes the backend and discards its data. Later operations, including those of repositories over the backend,
+        /// throw <see cref="ObjectDisposedException"/>. Safe to call more than once.
+        /// </summary>
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _Disposed, 1) == 1) return;
+            lock (_CommitLock)
+            {
+                _Committed = InMemoryDatabaseState.Empty;
+                _Identities.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Disposes the backend and discards its data (see <see cref="Dispose"/>). Completes synchronously.
+        /// </summary>
+        /// <returns>A completed task.</returns>
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
         }
 
         #endregion
@@ -366,6 +518,7 @@ namespace Durable.InMemory
 
         internal void Commit(InMemoryTransaction transaction)
         {
+            ThrowIfDisposed();
             lock (transaction.SyncRoot)
             {
                 transaction.ThrowIfCompleted();
@@ -406,8 +559,14 @@ namespace Durable.InMemory
             }
         }
 
+        private void ThrowIfDisposed()
+        {
+            if (Volatile.Read(ref _Disposed) == 1) throw new ObjectDisposedException(nameof(InMemoryBackend));
+        }
+
         private InMemoryTransaction? ResolveTransaction(ITransaction? transaction)
         {
+            ThrowIfDisposed();
             if (transaction == null) return null;
             if (transaction is not InMemoryTransaction inMemory || !ReferenceEquals(inMemory.Backend, this))
                 throw new ArgumentException("The transaction was not created by this in-memory backend.", nameof(transaction));

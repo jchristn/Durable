@@ -8,11 +8,11 @@ namespace Durable.LiteDb
     /// LiteDB as <c>BsonExpression</c> predicates (where LiteDB can use indexes), whether anything was evaluated client-side
     /// afterwards, and whether paging or counting ran inside LiteDB. Pushed predicates are always necessary conditions of the
     /// query, so client-side evaluation can only remove documents; when <see cref="Exact"/> is true the pushed predicates are
-    /// the whole filter. Observe plans with <see cref="LiteDbBackend.LastQueryPlan"/>, <see cref="LiteDbBackend.QueryPlanned"/>
+    /// the whole filter. Observe plans with <see cref="LiteDbBackend.QueryPlanned"/>, <see cref="LiteDbBackend.LastQueryPlan"/>
     /// or the backend's logger (Debug level).
     /// Thread safety: immutable; safe for concurrent use.
     /// </summary>
-    public sealed class LiteDbQueryPlan
+    public sealed class LiteDbQueryPlan : EventArgs
     {
         #region Public-Members
 
@@ -20,6 +20,11 @@ namespace Durable.LiteDb
         /// Gets the operation: Query, Count, Aggregate, Replace, Update or Delete. Never null.
         /// </summary>
         public string Operation { get; }
+
+        /// <summary>
+        /// Gets the entity type read or written. Never null.
+        /// </summary>
+        public Type EntityType { get; }
 
         /// <summary>
         /// Gets the LiteDB collection. Never null.
@@ -72,6 +77,7 @@ namespace Durable.LiteDb
         /// Instantiates a plan.
         /// </summary>
         /// <param name="operation">Operation. Must not be null.</param>
+        /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="collection">Collection. Must not be null.</param>
         /// <param name="pushedPredicates">Pushed predicates. Must not be null.</param>
         /// <param name="parameters">Parameters as JSON; may be null.</param>
@@ -80,10 +86,11 @@ namespace Durable.LiteDb
         /// <param name="pagingPushedDown">Whether paging or counting ran in LiteDB.</param>
         /// <param name="documentsRead">Documents returned by LiteDB, or -1.</param>
         /// <param name="liteDbExplain">LiteDB plan JSON; may be null.</param>
-        /// <exception cref="ArgumentNullException">Thrown when operation, collection or pushedPredicates is null.</exception>
-        public LiteDbQueryPlan(string operation, string collection, IReadOnlyList<string> pushedPredicates, string? parameters, bool exact, string? clientSide, bool pagingPushedDown, long documentsRead, string? liteDbExplain)
+        /// <exception cref="ArgumentNullException">Thrown when operation, entityType, collection or pushedPredicates is null.</exception>
+        public LiteDbQueryPlan(string operation, Type entityType, string collection, IReadOnlyList<string> pushedPredicates, string? parameters, bool exact, string? clientSide, bool pagingPushedDown, long documentsRead, string? liteDbExplain)
         {
             Operation = operation ?? throw new ArgumentNullException(nameof(operation));
+            EntityType = entityType ?? throw new ArgumentNullException(nameof(entityType));
             Collection = collection ?? throw new ArgumentNullException(nameof(collection));
             PushedPredicates = pushedPredicates ?? throw new ArgumentNullException(nameof(pushedPredicates));
             Parameters = parameters;

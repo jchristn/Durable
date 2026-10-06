@@ -26,7 +26,7 @@ namespace Test.Shared
         [Fact]
         public async Task CommitPublishesAndRollbackDiscards()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
 
             using (ITransaction committed = repository.BeginTransaction())
             {
@@ -55,7 +55,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadsInsideSeeOwnWritesAndOutsideSeeCommittedOnly()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             RelTenantNote existing = await repository.CreateAsync(new RelTenantNote { Title = "existing", Amount = 1 });
 
             await using ITransaction transaction = await repository.BeginTransactionAsync();
@@ -83,7 +83,7 @@ namespace Test.Shared
         [Fact]
         public async Task TransactionsReadTheirSnapshot()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             await repository.CreateAsync(new RelTenantNote { Title = "before" });
             using ITransaction transaction = repository.BeginTransaction();
             await repository.CreateAsync(new RelTenantNote { Title = "after" });
@@ -98,7 +98,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConflictingCommitsFail()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             RelTenantNote a = await repository.CreateAsync(new RelTenantNote { Title = "a" });
             RelTenantNote b = await repository.CreateAsync(new RelTenantNote { Title = "b" });
 
@@ -131,7 +131,7 @@ namespace Test.Shared
             right.Commit();
             Assert.Equal(new[] { 1, 2 }, repository.Query().OrderBy(x => x.Id).Execute().Select(x => x.Amount).ToArray());
 
-            InMemoryRepository<RelUpsertItem> keyed = new InMemoryBackend().CreateRepository<RelUpsertItem>();
+            InMemoryRepository<RelUpsertItem> keyed = InMemoryBackend.Create().CreateRepository<RelUpsertItem>();
             ITransaction one = keyed.BeginTransaction();
             ITransaction two = keyed.BeginTransaction();
             keyed.Create(new RelUpsertItem { Code = "K", Name = "one" }, one);
@@ -147,7 +147,7 @@ namespace Test.Shared
         [Fact]
         public async Task InvalidTransactionUseIsRejected()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelTenantNote> repository = backend.CreateRepository<RelTenantNote>();
             ITransaction transaction = repository.BeginTransaction();
             transaction.Commit();
@@ -156,7 +156,7 @@ namespace Test.Shared
             await Assert.ThrowsAsync<InvalidOperationException>(() => repository.CreateAsync(new RelTenantNote(), transaction));
             Assert.Throws<InvalidOperationException>(() => repository.Count(null, transaction));
 
-            ITransaction foreign = new InMemoryBackend().BeginTransaction();
+            ITransaction foreign = InMemoryBackend.Create().BeginTransaction();
             Assert.Throws<ArgumentException>(() => repository.Create(new RelTenantNote(), foreign));
             Assert.False(backend.Owns(foreign));
             Assert.True(backend.Owns(backend.BeginTransaction()));
@@ -169,7 +169,7 @@ namespace Test.Shared
         [Fact]
         public async Task AmbientScopesAreHonored()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelTenantNote> repository = backend.CreateRepository<RelTenantNote>();
 
             using (TransactionScope scope = TransactionScope.Create(repository))
@@ -187,7 +187,7 @@ namespace Test.Shared
 
             Assert.Equal(new[] { "scoped" }, repository.ReadAll().Select(x => x.Title).ToArray());
 
-            InMemoryRepository<RelTenantNote> other = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> other = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             using (TransactionScope foreign = TransactionScope.Create(other))
             {
                 repository.Create(new RelTenantNote { Title = "outside foreign scope" });
@@ -203,7 +203,7 @@ namespace Test.Shared
         [Fact]
         public async Task MultiRowOperationsAreAtomic()
         {
-            InMemoryRepository<RelUpsertItem> repository = new InMemoryBackend().CreateRepository<RelUpsertItem>();
+            InMemoryRepository<RelUpsertItem> repository = InMemoryBackend.Create().CreateRepository<RelUpsertItem>();
             await repository.CreateAsync(new RelUpsertItem { Code = "B", Name = "existing", Quantity = 1 });
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => repository.CreateManyAsync(new[]
@@ -227,7 +227,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConcurrentWritersAreSafe()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             List<Task> writers = new List<Task>();
             for (int w = 0; w < 8; w++)
             {
@@ -263,7 +263,7 @@ namespace Test.Shared
             SynchronizationContext.SetSynchronizationContext(context);
             try
             {
-                RepositoryBase<RelTenantNote> yielding = new RepositoryBase<RelTenantNote>(new YieldingBackend(new InMemoryBackend()));
+                RepositoryBase<RelTenantNote> yielding = new RepositoryBase<RelTenantNote>(new YieldingBackend(InMemoryBackend.Create()));
                 yielding.Create(new RelTenantNote { Title = "y", Amount = 3 });
                 Assert.Equal(1, yielding.Count());
                 Assert.Equal("y", yielding.ReadAll().Single().Title);
@@ -277,7 +277,7 @@ namespace Test.Shared
                 Assert.Equal("z", yielding.Query().Execute().Single().Title);
                 Assert.Same(context, SynchronizationContext.Current);
 
-                InMemoryRepository<RelTenantNote> direct = new InMemoryBackend().CreateRepository<RelTenantNote>();
+                InMemoryRepository<RelTenantNote> direct = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
                 int thread = Environment.CurrentManagedThreadId;
                 direct.Create(new RelTenantNote { Title = "d" });
                 Assert.Single(direct.ReadMany(x => x.Title == "d"));

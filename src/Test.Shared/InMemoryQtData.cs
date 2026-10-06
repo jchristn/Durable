@@ -63,7 +63,7 @@ namespace Test.Shared
 
         private InMemoryQtData(RepositoryCapabilities capabilities, RepositoryOptions? options)
         {
-            Backend = new InMemoryBackend(capabilities);
+            Backend = InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = capabilities });
             Items = Backend.CreateRepository<QtItem>(options);
             Owners = Backend.CreateRepository<QtOwner>(options);
         }

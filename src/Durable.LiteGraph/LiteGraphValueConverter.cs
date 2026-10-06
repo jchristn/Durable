@@ -74,7 +74,7 @@ namespace Durable.LiteGraph
             if (column.IsJson)
             {
                 if (value is string text && (column.ClrType == typeof(string) || !column.ClrType.IsInstanceOfType(value))) return text;
-                return JsonSerializer.Serialize(value, value.GetType(), JsonOptions);
+                return DurableJson.Serialize(value, value.GetType(), JsonOptions);
             }
 
             if (column.IsEnum)
@@ -123,7 +123,7 @@ namespace Durable.LiteGraph
             {
                 if (column.ClrType == typeof(string)) return stored as string ?? Convert.ToString(stored, CultureInfo.InvariantCulture);
                 string json = stored as string ?? Convert.ToString(stored, CultureInfo.InvariantCulture) ?? string.Empty;
-                return json.Length == 0 ? null : JsonSerializer.Deserialize(json, column.ClrType, JsonOptions);
+                return json.Length == 0 ? null : DurableJson.Deserialize(json, column.ClrType, JsonOptions);
             }
 
             if (column.IsEnum)

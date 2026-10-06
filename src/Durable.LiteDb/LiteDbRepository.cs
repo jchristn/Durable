@@ -4,14 +4,14 @@ namespace Durable.LiteDb
     using System.Diagnostics.CodeAnalysis;
     using Durable;
     using Durable.Query;
-    using LiteDB;
 
     /// <summary>
     /// A repository stored in LiteDB: the complete <see cref="IRepository{T}"/> surface from <see cref="RepositoryBase{T}"/>
-    /// over a <see cref="LiteDbBackend"/>. Repositories created over the same backend (or the same
-    /// <see cref="LiteDatabase"/>) share data, so includes, navigation predicates and transactions work across entity types.
-    /// An ambient <see cref="TransactionScope"/> is used only when its transaction was created over the same database.
-    /// Creating a repository validates the entity's LiteDB mapping and creates its indexes.
+    /// over a <see cref="LiteDbBackend"/>. Repositories created over the same backend (or over backends wrapping the same
+    /// <see cref="LiteDB.LiteDatabase"/>) share data, so includes, navigation predicates and transactions work across
+    /// entity types. An ambient <see cref="TransactionScope"/> is used only when its transaction was created over the same
+    /// database. Creating a repository validates the entity's LiteDB mapping and creates its indexes. The repository never
+    /// disposes the backend.
     /// <para>
     /// Entities that cannot be stored (reported with <see cref="NotSupportedException"/> by the constructor): a table name
     /// that is not a LiteDB collection name (letters, digits, '_' and '$', not starting with a digit or '$'), two columns
@@ -28,16 +28,17 @@ namespace Durable.LiteDb
         /// <summary>
         /// Gets the LiteDB backend. Never null. The repository does not own or dispose it.
         /// </summary>
-        public LiteDbBackend Store { get; }
+        public new LiteDbBackend Backend { get; }
 
         #endregion
 
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Instantiates a repository over a backend shared with other repositories.
+        /// Instantiates a repository over a backend shared with other repositories. Equivalent to
+        /// <see cref="LiteDbBackend.CreateRepository{T}"/>.
         /// </summary>
-        /// <param name="backend">Backend. Must not be null.</param>
+        /// <param name="backend">Backend. Must not be null. Not disposed by the repository.</param>
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when backend is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
@@ -45,22 +46,8 @@ namespace Durable.LiteDb
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public LiteDbRepository(LiteDbBackend backend, RepositoryOptions? options = null) : base(backend, options)
         {
-            Store = backend;
-            Store.EnsureIndexes(typeof(T));
-        }
-
-        /// <summary>
-        /// Instantiates a repository over an existing LiteDB database, which it does not dispose. Prefer one
-        /// <see cref="LiteDbBackend"/> shared by all repositories; repositories created over the same database with this
-        /// constructor still share data and transactions.
-        /// </summary>
-        /// <param name="database">Database. Must not be null.</param>
-        /// <param name="options">Options; null uses defaults.</param>
-        /// <exception cref="ArgumentNullException">Thrown when database is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
-        /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
-        public LiteDbRepository(LiteDatabase database, RepositoryOptions? options = null) : this(new LiteDbBackend(database), options)
-        {
+            Backend = backend;
+            Backend.EnsureIndexes(typeof(T));
         }
 
         #endregion
@@ -70,7 +57,7 @@ namespace Durable.LiteDb
         /// <inheritdoc />
         protected override bool AcceptsAmbientTransaction(ITransaction transaction)
         {
-            return Store.Owns(transaction);
+            return Backend.Owns(transaction);
         }
 
         #endregion

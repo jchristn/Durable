@@ -17,7 +17,7 @@ namespace Durable.LiteGraph
     /// created a node with a key this transaction inserted, the commit fails with <see cref="InvalidOperationException"/>
     /// and the transaction is rolled back (first committer wins). The check and the commit are atomic among writers of the
     /// same backend instance; writers in other processes are only caught by LiteGraph's unique node GUIDs. A transaction
-    /// whose writes need more than <see cref="LiteGraphBackendSettings.MaxOperationsPerTransaction"/> graph operations
+    /// whose writes need more than <see cref="LiteGraphRepositorySettings.MaxOperationsPerTransaction"/> graph operations
     /// fails at commit.
     /// </para>
     /// Thread safety: safe for concurrent use; operations on one transaction are serialized.

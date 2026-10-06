@@ -25,7 +25,7 @@ namespace Test.Shared
         [Fact]
         public async Task CreateAssignsKeysAndReadsReturnCopies()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelTenantNote> repository = backend.CreateRepository<RelTenantNote>();
 
             RelTenantNote first = repository.Create(new RelTenantNote { TenantId = 1, Title = "one", Amount = 10 });
@@ -47,7 +47,7 @@ namespace Test.Shared
         [Fact]
         public async Task CreateReplacesExplicitAutoIncrementValue()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             RelTenantNote created = await repository.CreateAsync(new RelTenantNote { Id = 999, Title = "x" });
             Assert.Equal(1, created.Id);
             Assert.Null(await repository.ReadByIdAsync(999));
@@ -60,7 +60,7 @@ namespace Test.Shared
         [Fact]
         public async Task StoredDataIsCopiedNotReferenced()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<Author> authors = backend.CreateRepository<Author>();
             InMemoryRepository<Book> books = backend.CreateRepository<Book>();
 
@@ -92,7 +92,7 @@ namespace Test.Shared
         [Fact]
         public async Task CreateManyWritesBackKeysInOrder()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             List<RelTenantNote> created = (await repository.CreateManyAsync(Enumerable.Range(0, 5).Select(i => new RelTenantNote { Title = "n" + i }).ToList())).ToList();
             Assert.Equal(new[] { 1, 2, 3, 4, 5 }, created.Select(c => c.Id).ToArray());
             Assert.Equal(new[] { "n0", "n1", "n2", "n3", "n4" }, repository.Query().OrderBy(x => x.Id).Execute().Select(x => x.Title).ToArray());
@@ -109,7 +109,7 @@ namespace Test.Shared
         [Fact]
         public async Task DuplicatePrimaryKeyThrows()
         {
-            InMemoryRepository<RelUpsertItem> repository = new InMemoryBackend().CreateRepository<RelUpsertItem>();
+            InMemoryRepository<RelUpsertItem> repository = InMemoryBackend.Create().CreateRepository<RelUpsertItem>();
             await repository.CreateAsync(new RelUpsertItem { Code = "A", Name = "first" });
             await Assert.ThrowsAsync<InvalidOperationException>(() => repository.CreateAsync(new RelUpsertItem { Code = "A", Name = "second" }));
             Assert.Equal("first", (await repository.ReadByIdAsync("A"))!.Name);
@@ -124,7 +124,7 @@ namespace Test.Shared
         [Fact]
         public async Task ReadSemanticsMatchSqlRepositories()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             await repository.CreateManyAsync(new[]
             {
                 new RelTenantNote { TenantId = 1, Title = "a", Amount = 1 },
@@ -163,7 +163,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpdateAndUpdateMany()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             RelTenantNote note = await repository.CreateAsync(new RelTenantNote { TenantId = 1, Title = "before", Amount = 1 });
             note.Title = "after";
             Assert.Same(note, repository.Update(note));
@@ -186,7 +186,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpdateFieldAndBatchUpdate()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             await repository.CreateManyAsync(new[]
             {
                 new RelTenantNote { TenantId = 1, Title = "a", Amount = 1 },
@@ -215,7 +215,7 @@ namespace Test.Shared
         [Fact]
         public async Task DeleteVariants()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             List<RelTenantNote> notes = (await repository.CreateManyAsync(Enumerable.Range(1, 6).Select(i => new RelTenantNote { TenantId = i % 2, Amount = i }).ToList())).ToList();
 
             Assert.True(repository.Delete(notes[0]));
@@ -236,7 +236,7 @@ namespace Test.Shared
         [Fact]
         public async Task SoftDeleteMarksRowsAndHidesThem()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelSoftNote> repository = backend.CreateRepository<RelSoftNote>();
             List<RelSoftNote> created = (await repository.CreateManyAsync(Enumerable.Range(0, 6).Select(i => new RelSoftNote { ParentId = 1, Text = "n" + i }).ToList())).ToList();
 
@@ -272,7 +272,7 @@ namespace Test.Shared
         [Fact]
         public async Task QueryFiltersApplyToPredicateOperations()
         {
-            InMemoryRepository<RelTenantNote> repository = new InMemoryBackend().CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelTenantNote> repository = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
             await repository.CreateManyAsync(new[]
             {
                 new RelTenantNote { TenantId = 1, Title = "t1a", Amount = 1 },
@@ -308,7 +308,7 @@ namespace Test.Shared
         [Fact]
         public async Task CompositeKeys()
         {
-            InMemoryRepository<RelCompositeItem> repository = new InMemoryBackend().CreateRepository<RelCompositeItem>();
+            InMemoryRepository<RelCompositeItem> repository = InMemoryBackend.Create().CreateRepository<RelCompositeItem>();
             await repository.CreateAsync(new RelCompositeItem { TenantId = 1, Sku = "A", Name = "one", Quantity = 1 });
             await repository.CreateAsync(new RelCompositeItem { TenantId = 2, Sku = "A", Name = "two", Quantity = 2 });
             await Assert.ThrowsAsync<InvalidOperationException>(() => repository.CreateAsync(new RelCompositeItem { TenantId = 1, Sku = "A" }));
@@ -334,7 +334,7 @@ namespace Test.Shared
         [Fact]
         public async Task ValueConvertersRoundTripAndApplyToPredicates()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelConvertedItem> repository = backend.CreateRepository<RelConvertedItem>();
             await repository.CreateAsync(new RelConvertedItem { Name = "cheap", Price = new Money(150), Tags = new List<string> { "a", "b" }, Priority = RelPriority.Low });
             await repository.CreateAsync(new RelConvertedItem { Name = "dear", Price = new Money(99999), Tags = new List<string> { "c" }, Priority = RelPriority.High });
@@ -365,7 +365,7 @@ namespace Test.Shared
         [Fact]
         public async Task JsonColumnsRoundTrip()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelJsonDocument> repository = backend.CreateRepository<RelJsonDocument>();
             RelJsonDocument document = await repository.CreateAsync(new RelJsonDocument
             {
@@ -411,7 +411,7 @@ namespace Test.Shared
         [Fact]
         public async Task UpsertInsertsOrUpdates()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelUpsertItem> repository = backend.CreateRepository<RelUpsertItem>();
             await repository.UpsertAsync(new RelUpsertItem { Code = "A", Name = "first", Quantity = 1 });
             RelUpsertItem replaced = repository.Upsert(new RelUpsertItem { Code = "A", Name = "second", Quantity = 2 });
@@ -446,7 +446,7 @@ namespace Test.Shared
         [Fact]
         public async Task OptimisticConcurrencyDetectsStaleUpdates()
         {
-            InMemoryRepository<RelVersionedItem> repository = new InMemoryBackend().CreateRepository<RelVersionedItem>();
+            InMemoryRepository<RelVersionedItem> repository = InMemoryBackend.Create().CreateRepository<RelVersionedItem>();
             RelVersionedItem item = await repository.CreateAsync(new RelVersionedItem { Name = "a", Salary = 10m });
             Assert.Equal(1, item.Version);
 
@@ -483,7 +483,7 @@ namespace Test.Shared
         [Fact]
         public async Task ConflictResolversDecideTheOutcome()
         {
-            InMemoryRepository<RelVersionedItem> repository = new InMemoryBackend().CreateRepository<RelVersionedItem>();
+            InMemoryRepository<RelVersionedItem> repository = InMemoryBackend.Create().CreateRepository<RelVersionedItem>();
             RelVersionedItem item = await repository.CreateAsync(new RelVersionedItem { Name = "a", Salary = 10m });
             RelVersionedItem stale = (await repository.ReadByIdAsync(item.Id))!;
             RelVersionedItem winner = (await repository.ReadByIdAsync(item.Id))!;
@@ -542,7 +542,7 @@ namespace Test.Shared
         [Fact]
         public async Task DisposedRepositoryRejectsOperations()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelTenantNote> repository = backend.CreateRepository<RelTenantNote>();
             await repository.CreateAsync(new RelTenantNote { Title = "kept" });
             repository.Dispose();
@@ -550,6 +550,67 @@ namespace Test.Shared
             await Assert.ThrowsAsync<ObjectDisposedException>(() => repository.CreateAsync(new RelTenantNote()));
             Assert.Equal(1, backend.CreateRepository<RelTenantNote>().Count());
             Assert.Throws<ArgumentNullException>(() => new InMemoryRepository<RelTenantNote>(null!));
+        }
+
+        /// <summary>
+        /// The members every non-SQL backend shares: settings with validation, factories with default settings, the typed
+        /// Backend property, typed async transactions, Clear/ClearAsync of everything or one type (resetting sequences),
+        /// stored-row diagnostics, and disposal (sync and async) after which every operation throws.
+        /// </summary>
+        [Fact]
+        public async Task BackendConventionMembers()
+        {
+            InMemoryRepositorySettings settings = InMemoryRepositorySettings.ForInMemory();
+            Assert.True(settings.IsInMemory);
+            Assert.Equal(RepositoryCapabilities.All, settings.Capabilities);
+            Assert.Null(settings.JsonOptions);
+            settings.Validate();
+            Assert.Throws<ArgumentException>(() => InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = (RepositoryCapabilities)(1 << 30) }));
+            Assert.Equal(RepositoryCapabilities.None, InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = RepositoryCapabilities.None }).Capabilities);
+
+            InMemoryBackend backend = await InMemoryBackend.CreateAsync();
+            InMemoryRepository<RelTenantNote> notes = backend.CreateRepository<RelTenantNote>();
+            InMemoryRepository<RelUpsertItem> items = new InMemoryRepository<RelUpsertItem>(backend);
+            Assert.Same(backend, notes.Backend);
+            Assert.Same(backend, ((Durable.Query.RepositoryBase<RelTenantNote>)notes).Backend);
+#pragma warning disable CS0618
+            Assert.Same(backend, notes.Store);
+#pragma warning restore CS0618
+
+            await using (InMemoryTransaction transaction = await backend.BeginTransactionAsync())
+            {
+                Assert.True(backend.Owns(transaction));
+                await notes.CreateAsync(new RelTenantNote { Title = "rolled back" }, transaction);
+            }
+
+            Assert.Equal(0L, notes.Count());
+            notes.Create(new RelTenantNote { Title = "a" });
+            notes.Create(new RelTenantNote { Title = "b" });
+            items.Create(new RelUpsertItem { Code = "x", Name = "kept" });
+            Assert.Equal(2, (await backend.GetStoredRowsAsync(typeof(RelTenantNote))).Count);
+            Assert.Equal(2, backend.Clear(typeof(RelTenantNote)));
+            Assert.Equal(0, await backend.ClearAsync(typeof(RelTenantNote)));
+            Assert.Equal(1L, items.Count());
+            Assert.Equal(1, notes.Create(new RelTenantNote { Title = "after clear" }).Id);
+
+            await backend.ClearAsync();
+            Assert.Equal(0L, items.Count());
+            Assert.Equal(1, notes.Create(new RelTenantNote { Title = "again" }).Id);
+            backend.Clear();
+            Assert.Empty(backend.GetStoredRows(typeof(RelTenantNote)));
+
+            using System.Threading.CancellationTokenSource canceled = new System.Threading.CancellationTokenSource();
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => backend.ClearAsync(canceled.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => InMemoryBackend.CreateAsync(null, canceled.Token));
+
+            await backend.DisposeAsync();
+            backend.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => notes.Count());
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => notes.CreateAsync(new RelTenantNote { Title = "late" }));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => backend.BeginTransactionAsync());
+            Assert.Throws<ObjectDisposedException>(() => backend.CreateRepository<RelTenantNote>());
+            Assert.Throws<ObjectDisposedException>(() => backend.Clear());
         }
 
         #endregion

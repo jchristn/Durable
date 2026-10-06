@@ -41,7 +41,7 @@ namespace Test.Shared
         /// <param name="capabilities">Capabilities the backend advertises. Default: all.</param>
         public InMemoryConformanceTarget(RepositoryCapabilities capabilities = RepositoryCapabilities.All)
         {
-            _Backend = new InMemoryBackend(capabilities);
+            _Backend = InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = capabilities });
         }
 
         #endregion

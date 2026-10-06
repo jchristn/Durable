@@ -66,10 +66,16 @@ namespace Durable.LiteDb
     /// return completed tasks (like the in-memory backend); operations inside a transaction are queued to the transaction
     /// thread and complete asynchronously. Query results are read completely before the first entity is returned.
     /// </para>
+    /// <para>
+    /// Lifetime: create a backend with <see cref="Create"/> or <see cref="CreateAsync"/>, share it across repositories,
+    /// and dispose it when done. It disposes the database only when it opened it (<see cref="OwnsDatabase"/>); a database
+    /// passed in with <see cref="LiteDbRepositorySettings.Database"/> is never disposed. Repositories never dispose the
+    /// backend.
+    /// </para>
     /// Thread safety: safe for concurrent use by any number of repositories and threads; LiteDB serializes writers per
     /// collection and never blocks readers.
     /// </summary>
-    public sealed class LiteDbBackend : IRepositoryBackend, IDisposable
+    public sealed class LiteDbBackend : IRepositoryBackend, IDisposable, IAsyncDisposable
     {
         #region Public-Members
 
@@ -115,12 +121,11 @@ namespace Durable.LiteDb
         public LiteDbQueryPlan? LastQueryPlan => _LastQueryPlan;
 
         /// <summary>
-        /// Gets or sets a callback invoked with the plan of every read and write, on the thread that executed it (inside a
-        /// transaction, the transaction thread); null for none. The callback must be thread-safe, must not throw and must
-        /// not use this backend.
-        /// Default: null.
+        /// Raised with the plan of every read and write, synchronously on the thread that executed it (inside a
+        /// transaction, the transaction thread); the sender is the backend. Handlers must be thread-safe and fast and must
+        /// not call the backend; an exception thrown by a handler is logged (Warning) and otherwise ignored.
         /// </summary>
-        public Action<LiteDbQueryPlan>? QueryPlanned { get; set; }
+        public event EventHandler<LiteDbQueryPlan>? QueryPlanned;
 
         #endregion
 
@@ -144,53 +149,63 @@ namespace Durable.LiteDb
 
         #region Constructors-and-Factories
 
-        /// <summary>
-        /// Opens (or creates) a LiteDB database from settings. The backend owns the database and disposes it.
-        /// </summary>
-        /// <param name="settings">Settings. Must not be null.</param>
-        /// <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
-        /// <param name="logger">Logger for query plans (Debug) and index maintenance problems (Warning); null for none.</param>
-        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
-        /// <exception cref="LiteException">Thrown when LiteDB cannot open the database (for example a wrong password or a file locked by another process).</exception>
-        public LiteDbBackend(LiteDbRepositorySettings settings, JsonSerializerOptions? jsonOptions = null, ILogger? logger = null)
-            : this(Open(settings), true, jsonOptions, logger)
+        private LiteDbBackend(LiteDatabase database, bool ownsDatabase, LiteDbRepositorySettings settings)
         {
-            if (!settings.ReadOnly || settings.IsInMemory)
+            Database = database;
+            OwnsDatabase = ownsDatabase;
+            _Values = new LiteDbValueConverter(settings.JsonOptions ?? _DefaultJsonOptions);
+            _Logger = settings.Logger;
+            _Collation = database.Collation;
+            HasOrdinalCollation = _Collation.SortOptions == CompareOptions.Ordinal;
+        }
+
+        /// <summary>
+        /// Creates a backend: wraps <see cref="LiteDbRepositorySettings.Database"/> when set (not owned, never disposed),
+        /// otherwise opens (or creates) the database selected by <see cref="LiteDbRepositorySettings.Filename"/> (owned and
+        /// disposed by the backend).
+        /// </summary>
+        /// <param name="settings">Settings; null uses <see cref="LiteDbRepositorySettings.ForInMemory"/>.</param>
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteDbRepositorySettings.Validate"/>).</exception>
+        /// <exception cref="LiteException">Thrown when LiteDB cannot open the database (for example a wrong password or a file locked by another process).</exception>
+        public static LiteDbBackend Create(LiteDbRepositorySettings? settings = null)
+        {
+            settings ??= LiteDbRepositorySettings.ForInMemory();
+            settings.Validate();
+            if (settings.Database != null) return new LiteDbBackend(settings.Database, false, settings);
+
+            LiteDatabase database = new LiteDatabase(settings.ToConnectionString());
+            try
             {
-                try
+                if (!settings.ReadOnly || settings.IsInMemory)
                 {
                     TimeSpan timeout = TimeSpan.FromSeconds(Math.Floor(settings.Timeout.TotalSeconds));
-                    if (Database.Timeout != timeout) Database.Timeout = timeout;
+                    if (database.Timeout != timeout) database.Timeout = timeout;
                 }
-                catch (Exception)
-                {
-                    Database.Dispose();
-                    throw;
-                }
+
+                return new LiteDbBackend(database, true, settings);
+            }
+            catch (Exception)
+            {
+                database.Dispose();
+                throw;
             }
         }
 
         /// <summary>
-        /// Wraps an existing LiteDB database. The backend does not dispose it; dispose it yourself after the backend and its
-        /// repositories are no longer used.
+        /// Creates a backend (see <see cref="Create"/>). LiteDB opens databases synchronously, so this completes
+        /// synchronously; present so every backend has the same factories.
         /// </summary>
-        /// <param name="database">Database. Must not be null.</param>
-        /// <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
-        /// <param name="logger">Logger for query plans (Debug) and index maintenance problems (Warning); null for none.</param>
-        /// <exception cref="ArgumentNullException">Thrown when database is null.</exception>
-        public LiteDbBackend(LiteDatabase database, JsonSerializerOptions? jsonOptions = null, ILogger? logger = null)
-            : this(database ?? throw new ArgumentNullException(nameof(database)), false, jsonOptions, logger)
+        /// <param name="settings">Settings; null uses <see cref="LiteDbRepositorySettings.ForInMemory"/>.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteDbRepositorySettings.Validate"/>).</exception>
+        /// <exception cref="LiteException">Thrown when LiteDB cannot open the database.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public static Task<LiteDbBackend> CreateAsync(LiteDbRepositorySettings? settings = null, CancellationToken token = default)
         {
-        }
-
-        private LiteDbBackend(LiteDatabase database, bool ownsDatabase, JsonSerializerOptions? jsonOptions, ILogger? logger)
-        {
-            Database = database;
-            OwnsDatabase = ownsDatabase;
-            _Values = new LiteDbValueConverter(jsonOptions ?? _DefaultJsonOptions);
-            _Logger = logger;
-            _Collation = database.Collation;
-            HasOrdinalCollation = _Collation.SortOptions == CompareOptions.Ordinal;
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(Create(settings));
         }
 
         #endregion
@@ -208,6 +223,7 @@ namespace Durable.LiteDb
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public LiteDbRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
+            ThrowIfDisposed();
             return new LiteDbRepository<T>(this, options);
         }
 
@@ -238,6 +254,24 @@ namespace Durable.LiteDb
         }
 
         /// <summary>
+        /// Creates the LiteDB indexes of an entity if they do not exist yet (see <see cref="EnsureIndexes(Type)"/>). LiteDB is
+        /// synchronous, so this completes synchronously.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A completed task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task EnsureIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            EnsureIndexes(entityType);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
         /// Returns the stored documents of an entity, in primary key order, for diagnostics and tests that check the stored
         /// representation. Soft-deleted documents are included.
         /// </summary>
@@ -245,7 +279,7 @@ namespace Durable.LiteDb
         /// <returns>Copies of the documents. Never null.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
-        public IReadOnlyList<BsonDocument> GetStoredDocuments([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
+        public IReadOnlyList<BsonDocument> GetStoredRows([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ThrowIfDisposed();
@@ -256,7 +290,24 @@ namespace Durable.LiteDb
         }
 
         /// <summary>
-        /// Drops every user collection of the database (all data and indexes). Must not be called while a transaction is open.
+        /// Returns the stored documents of an entity (see <see cref="GetStoredRows"/>). LiteDB is synchronous, so this
+        /// completes synchronously.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Copies of the documents in primary key order. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<IReadOnlyList<BsonDocument>> GetStoredRowsAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(GetStoredRows(entityType));
+        }
+
+        /// <summary>
+        /// Drops every collection of the database (all data, indexes and auto-increment sequences), bypassing soft delete,
+        /// query filters and transactions. Must not be called while a transaction is open.
         /// </summary>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         public void Clear()
@@ -264,6 +315,60 @@ namespace Durable.LiteDb
             ThrowIfDisposed();
             foreach (string name in Database.GetCollectionNames().ToList()) Database.DropCollection(name);
             _Ensured.Clear();
+        }
+
+        /// <summary>
+        /// Drops every collection of the database (see <see cref="Clear()"/>). LiteDB is synchronous, so this completes
+        /// synchronously.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A completed task.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task ClearAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            Clear();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Removes every document of one entity type (including soft-deleted rows) by dropping its collection, which also
+        /// drops its indexes (recreated by the next repository or insert) and resets its auto-increment sequence. Bypasses
+        /// soft delete, query filters and transactions; must not be called while a transaction is open.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <returns>The number of documents removed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        public int Clear([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            ThrowIfDisposed();
+            LiteDbCollectionSchema schema = LiteDbCollectionSchema.For(EntityMetadata.For(entityType));
+            if (!Database.CollectionExists(schema.CollectionName)) return 0;
+            int count = Database.GetCollection(schema.CollectionName).Count();
+            Database.DropCollection(schema.CollectionName);
+            _Ensured.TryRemove(schema.CollectionName, out bool _);
+            return count;
+        }
+
+        /// <summary>
+        /// Removes every document of one entity type (see <see cref="Clear(Type)"/>). LiteDB is synchronous, so this
+        /// completes synchronously.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The number of documents removed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the entity cannot be stored in LiteDB.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<int> ClearAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(Clear(entityType));
         }
 
         /// <inheritdoc />
@@ -398,17 +503,11 @@ namespace Durable.LiteDb
             }, token);
         }
 
-        /// <inheritdoc />
-        public async Task<ITransaction> BeginTransactionAsync(CancellationToken token)
-        {
-            ThrowIfDisposed();
-            return await LiteDbTransaction.BeginAsync(this, Database, token).ConfigureAwait(false);
-        }
-
         /// <summary>
-        /// Begins a transaction (see <see cref="LiteDbTransaction"/>).
+        /// Begins a transaction (see <see cref="LiteDbTransaction"/>). Blocks the calling thread until the transaction
+        /// thread has begun the LiteDB transaction; prefer <see cref="BeginTransactionAsync"/> in asynchronous code.
         /// </summary>
-        /// <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
         /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
         /// <exception cref="LiteException">Thrown when LiteDB cannot begin a transaction (for example 100 are already open).</exception>
         public LiteDbTransaction BeginTransaction()
@@ -418,13 +517,43 @@ namespace Durable.LiteDb
         }
 
         /// <summary>
+        /// Begins a transaction (see <see cref="LiteDbTransaction"/>).
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        /// <exception cref="LiteException">Thrown when LiteDB cannot begin a transaction (for example 100 are already open).</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<LiteDbTransaction> BeginTransactionAsync(CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+            return LiteDbTransaction.BeginAsync(this, Database, token);
+        }
+
+        /// <inheritdoc />
+        async Task<ITransaction> IRepositoryBackend.BeginTransactionAsync(CancellationToken token)
+        {
+            return await BeginTransactionAsync(token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Disposes the backend and, when <see cref="OwnsDatabase"/> is true, the database. Repositories over the backend can
-        /// no longer be used.
+        /// no longer be used; their operations throw <see cref="ObjectDisposedException"/>. Safe to call more than once.
         /// </summary>
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _Disposed, 1) == 1) return;
             if (OwnsDatabase) Database.Dispose();
+        }
+
+        /// <summary>
+        /// Disposes the backend (see <see cref="Dispose"/>). LiteDB closes synchronously, so this completes synchronously.
+        /// </summary>
+        /// <returns>A completed task.</returns>
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
         }
 
         #endregion
@@ -450,12 +579,6 @@ namespace Durable.LiteDb
             }
 
             if (complete) _Ensured[schema.CollectionName] = true;
-        }
-
-        private static LiteDatabase Open(LiteDbRepositorySettings settings)
-        {
-            ArgumentNullException.ThrowIfNull(settings);
-            return new LiteDatabase(settings.ToConnectionString());
         }
 
         private async IAsyncEnumerable<object> StreamAsync(QueryModel model, CancellationToken queryToken, [EnumeratorCancellation] CancellationToken enumerationToken = default)
@@ -716,9 +839,21 @@ namespace Durable.LiteDb
 
         private void Record(string operation, LiteDbCollectionSchema schema, LiteDbPushdown pushdown, string? clientSide, bool pagingPushedDown, long read, string? explain)
         {
-            LiteDbQueryPlan plan = new LiteDbQueryPlan(operation, schema.CollectionName, pushdown.Predicates.ToList(), pushdown.ParametersJson(), pushdown.Exact, clientSide, pagingPushedDown, read, explain);
+            LiteDbQueryPlan plan = new LiteDbQueryPlan(operation, schema.Metadata.EntityType, schema.CollectionName, pushdown.Predicates.ToList(), pushdown.ParametersJson(), pushdown.Exact, clientSide, pagingPushedDown, read, explain);
             _LastQueryPlan = plan;
-            QueryPlanned?.Invoke(plan);
+            EventHandler<LiteDbQueryPlan>? handlers = QueryPlanned;
+            if (handlers != null)
+            {
+                try
+                {
+                    handlers(this, plan);
+                }
+                catch (Exception e)
+                {
+                    _Logger?.LogWarning(e, "A LiteDB QueryPlanned handler threw: {Message}", e.Message);
+                }
+            }
+
             if (_Logger != null && _Logger.IsEnabled(LogLevel.Debug)) _Logger.LogDebug("LiteDB {Plan}", plan.ToString());
         }
 

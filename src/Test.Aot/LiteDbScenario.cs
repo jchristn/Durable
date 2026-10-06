@@ -11,15 +11,16 @@ namespace Test.Aot
     {
         public static async Task RunAsync(CheckRunner runner)
         {
-            using LiteDbBackend backend = new LiteDbBackend(
-                new LiteDbRepositorySettings(LiteDbRepositorySettings.InMemoryFilename),
-                DurableJson.CreateOptions(AotJsonContext.Default));
-            using LiteDbRepository<Author> authors = new LiteDbRepository<Author>(backend);
-            using LiteDbRepository<Book> books = new LiteDbRepository<Book>(backend);
-            using LiteDbRepository<Review> reviews = new LiteDbRepository<Review>(backend);
-            using LiteDbRepository<Category> categories = new LiteDbRepository<Category>(backend);
-            using LiteDbRepository<AuthorCategory> links = new LiteDbRepository<AuthorCategory>(backend);
-            using LiteDbRepository<Shelf> shelves = new LiteDbRepository<Shelf>(backend);
+            await using LiteDbBackend backend = await LiteDbBackend.CreateAsync(new LiteDbRepositorySettings
+            {
+                JsonOptions = DurableJson.CreateOptions(AotJsonContext.Default)
+            }).ConfigureAwait(false);
+            using LiteDbRepository<Author> authors = backend.CreateRepository<Author>();
+            using LiteDbRepository<Book> books = backend.CreateRepository<Book>();
+            using LiteDbRepository<Review> reviews = backend.CreateRepository<Review>();
+            using LiteDbRepository<Category> categories = backend.CreateRepository<Category>();
+            using LiteDbRepository<AuthorCategory> links = backend.CreateRepository<AuthorCategory>();
+            using LiteDbRepository<Shelf> shelves = backend.CreateRepository<Shelf>();
 
             await RepositoryScenario.RunAsync(runner, new RepositorySet("litedb", authors, books, reviews, categories, links, shelves)).ConfigureAwait(false);
         }

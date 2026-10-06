@@ -82,7 +82,7 @@ namespace Test.Shared
         [Fact]
         public async Task WriteCapabilitiesAreChecked()
         {
-            InMemoryBackend none = new InMemoryBackend(RepositoryCapabilities.None);
+            InMemoryBackend none = InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = RepositoryCapabilities.None });
             Assert.Equal(RepositoryCapabilities.None, none.Capabilities);
             NotSupportedException composite = Assert.Throws<NotSupportedException>(() => none.CreateRepository<RelCompositeItem>());
             Assert.Contains("CompositeKeys", composite.Message);
@@ -110,7 +110,7 @@ namespace Test.Shared
         [Fact]
         public async Task RequiredFeaturesWorkWithoutOptionalCapabilities()
         {
-            InMemoryBackend backend = new InMemoryBackend(RepositoryCapabilities.None);
+            InMemoryBackend backend = InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = RepositoryCapabilities.None });
             InMemoryRepository<RelSoftNote> notes = backend.CreateRepository<RelSoftNote>();
             await notes.CreateManyAsync(Enumerable.Range(0, 5).Select(i => new RelSoftNote { ParentId = i % 2, Text = "n" + i }).ToList());
             notes.AddQueryFilter(x => x.ParentId == 0);

@@ -73,7 +73,7 @@ namespace Test.Shared
         {
             string directory = Path.Combine(Path.GetTempPath(), "durable-litegraph-conformance-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
-            LiteGraphBackend backend = LiteGraphBackend.Create(LiteGraphBackendSettings.ForFile(Path.Combine(directory, "conformance.db")));
+            LiteGraphBackend backend = LiteGraphBackend.Create(LiteGraphRepositorySettings.ForFile(Path.Combine(directory, "conformance.db")));
             AppDomain.CurrentDomain.ProcessExit += (sender, args) =>
             {
                 backend.Dispose();

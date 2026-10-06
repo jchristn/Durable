@@ -66,7 +66,7 @@ namespace Test.Shared
 
         private InMemoryLibraryData(RepositoryCapabilities capabilities)
         {
-            Backend = new InMemoryBackend(capabilities);
+            Backend = InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = capabilities });
             Companies = Backend.CreateRepository<Company>();
             Authors = Backend.CreateRepository<Author>();
             Books = Backend.CreateRepository<Book>();

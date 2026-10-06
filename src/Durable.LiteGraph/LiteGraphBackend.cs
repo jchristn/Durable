@@ -3,6 +3,7 @@ namespace Durable.LiteGraph
     using System;
     using System.Buffers;
     using System.Collections.Generic;
+    using System.Diagnostics.CodeAnalysis;
     using System.Globalization;
     using System.IO;
     using System.Linq;
@@ -27,19 +28,19 @@ namespace Durable.LiteGraph
     /// (<see cref="EntityMetadata.TableName"/>) and named <c>table:key</c>. The node's data is a JSON object of the column
     /// values keyed by column name, built from Durable's mapping (value converters store their provider value, JSON
     /// columns their serialized text, enums their name or number with <see cref="Flags.Integer"/>), encoded losslessly
-    /// (see <see cref="LiteGraphBackendSettings"/> and the README for the encoding). The node GUID is derived from the
+    /// (see <see cref="LiteGraphRepositorySettings"/> and the README for the encoding). The node GUID is derived from the
     /// graph, the table and the primary key (<see cref="GetNodeGuid"/>), so key lookups are lookups by GUID and LiteGraph's
     /// unique node GUIDs enforce unique keys, including composite keys. Foreign keys are maintained as edges from the
-    /// dependent node to the principal node (<see cref="LiteGraphRelationship"/>, <see cref="LiteGraphBackendSettings.MaintainEdges"/>):
+    /// dependent node to the principal node (<see cref="LiteGraphRelationship"/>, <see cref="LiteGraphRepositorySettings.MaintainEdges"/>):
     /// an edge exists exactly when the foreign key holds the key of an existing principal row; it is created on insert of
     /// either side, moved when the foreign key changes and removed with either node. Many-to-many junction rows are nodes
     /// with an edge to each side. Labels, tags and vectors added to these nodes outside Durable are kept across updates
-    /// (<see cref="LiteGraphBackendSettings.PreserveNodeSubordinates"/>). Do not change key values or data of Durable
+    /// (<see cref="LiteGraphRepositorySettings.PreserveNodeSubordinates"/>). Do not change key values or data of Durable
     /// nodes outside Durable.
     /// </para>
     /// <para>
     /// Queries: candidates are read by deterministic GUID when the filter pins the key, otherwise by label, narrowed by an
-    /// exact data filter when part of the filter can be pushed down (<see cref="LiteGraphBackendSettings.PushDownDataFilters"/>);
+    /// exact data filter when part of the filter can be pushed down (<see cref="LiteGraphRepositorySettings.PushDownDataFilters"/>);
     /// the complete filter, ordering, paging, navigation members, collection predicates and aggregates are then evaluated
     /// client-side with the C# semantics of <see cref="QueryEvaluator{TRow}"/> (null equals only null, ordinal strings,
     /// stable ordering with nulls first, insertion order when unordered). Related rows for navigations are read once per
@@ -54,7 +55,7 @@ namespace Durable.LiteGraph
     /// checks atomic within the process. Transactions are interactive (see <see cref="LiteGraphTransaction"/>): writes are
     /// kept in the transaction, read back by it, and applied atomically at commit, which limits a transaction (including
     /// the implicit one CreateMany, UpsertMany and UpdateMany run in) to
-    /// <see cref="LiteGraphBackendSettings.MaxOperationsPerTransaction"/> node and edge operations. Auto-increment keys come from a
+    /// <see cref="LiteGraphRepositorySettings.MaxOperationsPerTransaction"/> node and edge operations. Auto-increment keys come from a
     /// per-type sequence that starts after the largest stored key (read once per process), never reuses a value within the
     /// process and skips values already present in the graph. Several processes writing one graph cannot share the
     /// sequence: a key generated concurrently by two processes is rejected by LiteGraph for the second writer (the write
@@ -111,8 +112,15 @@ namespace Durable.LiteGraph
         public JsonSerializerOptions JsonOptions => _Values.JsonOptions;
 
         /// <summary>
-        /// Raised (synchronously, on the calling thread) whenever the backend reads candidate nodes from LiteGraph,
-        /// describing what was pushed down. Handlers must be fast and must not call the backend.
+        /// Gets the plan of the most recent read of candidate nodes by any thread, or null before the first one. Use it in
+        /// single-threaded diagnostics and tests; use <see cref="QueryPlanned"/> to observe every plan.
+        /// </summary>
+        public LiteGraphQueryPlan? LastQueryPlan => _LastQueryPlan;
+
+        /// <summary>
+        /// Raised whenever the backend reads candidate nodes from LiteGraph, describing what was pushed down, synchronously
+        /// on the thread that executed the read; the sender is the backend. Handlers must be thread-safe and fast and must
+        /// not call the backend; an exception thrown by a handler is logged (Warning) and otherwise ignored.
         /// </summary>
         public event EventHandler<LiteGraphQueryPlan>? QueryPlanned;
 
@@ -139,6 +147,7 @@ namespace Durable.LiteGraph
         private readonly int _MaxOperations;
         private readonly int _TimeoutSeconds;
         private readonly int _ReadChunkSize = 500;
+        private volatile LiteGraphQueryPlan? _LastQueryPlan;
         private long _LastCreatedTicks;
         private int _Disposed;
 
@@ -146,7 +155,7 @@ namespace Durable.LiteGraph
 
         #region Constructors-and-Factories
 
-        private LiteGraphBackend(LiteGraphBackendSettings settings, LiteGraphClient client, bool ownsClient, string? temporaryDirectory, Guid tenantGuid, Guid graphGuid)
+        private LiteGraphBackend(LiteGraphRepositorySettings settings, LiteGraphClient client, bool ownsClient, string? temporaryDirectory, Guid tenantGuid, Guid graphGuid)
         {
             _Client = client;
             OwnsClient = ownsClient;
@@ -156,24 +165,25 @@ namespace Durable.LiteGraph
             MaintainEdges = settings.MaintainEdges;
             _PreserveSubordinates = settings.PreserveNodeSubordinates;
             _MaxOperations = settings.MaxOperationsPerTransaction;
-            _TimeoutSeconds = settings.TransactionTimeoutSeconds;
+            _TimeoutSeconds = (int)Math.Floor(settings.TransactionTimeout.TotalSeconds);
             _Logger = settings.Logger;
             _Values = new LiteGraphValueConverter(settings.JsonOptions ?? _DefaultJsonOptions);
             _Planner = new LiteGraphPlanner(_Values, graphGuid, settings.PushDownDataFilters);
         }
 
         /// <summary>
-        /// Creates a backend: opens (or creates) the LiteGraph storage when the settings do not supply a client, then finds
-        /// or creates the tenant and graph.
+        /// Creates a backend: wraps <see cref="LiteGraphRepositorySettings.Client"/> when set (not owned, never disposed),
+        /// otherwise creates and initializes its own client on <see cref="LiteGraphRepositorySettings.Filename"/> or an
+        /// ephemeral in-memory database (owned and disposed by the backend); then finds or creates the tenant and graph.
         /// </summary>
-        /// <param name="settings">Settings. Must not be null.</param>
+        /// <param name="settings">Settings; null uses <see cref="LiteGraphRepositorySettings.ForInMemory"/>.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <returns>The backend. Dispose it when done.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
-        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteGraphBackendSettings.Validate"/>).</exception>
-        public static async Task<LiteGraphBackend> CreateAsync(LiteGraphBackendSettings settings, CancellationToken token = default)
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteGraphRepositorySettings.Validate"/>).</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public static async Task<LiteGraphBackend> CreateAsync(LiteGraphRepositorySettings? settings = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(settings);
+            settings ??= LiteGraphRepositorySettings.ForInMemory();
             settings.Validate();
             token.ThrowIfCancellationRequested();
 
@@ -200,7 +210,7 @@ namespace Durable.LiteGraph
 
                 // One page per scan: LiteGraph pages label scans with OFFSET, so a single page makes every scan one
                 // statement (a consistent snapshot) instead of pages that shift under concurrent writes.
-                SqliteGraphRepository repository = new SqliteGraphRepository(filename, settings.InMemory) { SelectBatchSize = int.MaxValue };
+                SqliteGraphRepository repository = new SqliteGraphRepository(filename, settings.IsInMemory || settings.LoadIntoMemory) { SelectBatchSize = int.MaxValue };
                 client = new LiteGraphClient(repository, new LoggingSettings { Enable = false }, null, null);
             }
 
@@ -209,7 +219,7 @@ namespace Durable.LiteGraph
                 if (owns) await client.InitializeRepositoryAsync(token).ConfigureAwait(false);
                 Guid tenant = await ResolveTenantAsync(client, settings, token).ConfigureAwait(false);
                 Guid? requestedGraph = settings.GraphGuid;
-                if (requestedGraph == null && settings.InMemory && string.IsNullOrEmpty(settings.Filename)) requestedGraph = Guid.NewGuid();
+                if (requestedGraph == null && settings.IsInMemory) requestedGraph = Guid.NewGuid();
                 Guid graph = await ResolveGraphAsync(client, tenant, requestedGraph, settings.GraphName, token).ConfigureAwait(false);
                 return new LiteGraphBackend(settings, client, owns, temporary, tenant, graph);
             }
@@ -226,15 +236,15 @@ namespace Durable.LiteGraph
         }
 
         /// <summary>
-        /// Creates a backend synchronously (see <see cref="CreateAsync"/>).
+        /// Creates a backend (see <see cref="CreateAsync"/>). Blocks the calling thread while LiteGraph initializes its
+        /// storage; prefer <see cref="CreateAsync"/> in asynchronous code.
         /// </summary>
-        /// <param name="settings">Settings. Must not be null.</param>
-        /// <returns>The backend. Dispose it when done.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
-        /// <exception cref="ArgumentException">Thrown when the settings are invalid.</exception>
-        public static LiteGraphBackend Create(LiteGraphBackendSettings settings)
+        /// <param name="settings">Settings; null uses <see cref="LiteGraphRepositorySettings.ForInMemory"/>.</param>
+        /// <returns>The backend. Never null. Dispose it when done.</returns>
+        /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteGraphRepositorySettings.Validate"/>).</exception>
+        public static LiteGraphBackend Create(LiteGraphRepositorySettings? settings = null)
         {
-            ArgumentNullException.ThrowIfNull(settings);
+            settings ??= LiteGraphRepositorySettings.ForInMemory();
             settings.Validate();
             return Task.Run(() => CreateAsync(settings, CancellationToken.None)).GetAwaiter().GetResult();
         }
@@ -251,7 +261,7 @@ namespace Durable.LiteGraph
         /// <returns>A new repository.</returns>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
-        public LiteGraphRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new()
+        public LiteGraphRepository<T> CreateRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(RepositoryOptions? options = null) where T : class, new()
         {
             ThrowIfDisposed();
             return new LiteGraphRepository<T>(this, options);
@@ -275,7 +285,7 @@ namespace Durable.LiteGraph
         /// <returns>The node GUID (the node exists only when the row does).</returns>
         /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
         /// <exception cref="ArgumentException">Thrown when the key does not match the entity's key columns.</exception>
-        public Guid GetNodeGuid(Type entityType, object id)
+        public Guid GetNodeGuid([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, object id)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ArgumentNullException.ThrowIfNull(id);
@@ -299,7 +309,7 @@ namespace Durable.LiteGraph
         /// <returns>The node GUID.</returns>
         /// <exception cref="ArgumentNullException">Thrown when id is null.</exception>
         /// <exception cref="ArgumentException">Thrown when the key does not match the entity's key columns.</exception>
-        public Guid GetNodeGuid<T>(object id) where T : class
+        public Guid GetNodeGuid<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(object id) where T : class
         {
             return GetNodeGuid(typeof(T), id);
         }
@@ -324,7 +334,7 @@ namespace Durable.LiteGraph
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <returns>The relationships ordered by identifier. Never null.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
-        public IReadOnlyList<LiteGraphRelationship> GetRelationships(Type entityType)
+        public IReadOnlyList<LiteGraphRelationship> GetRelationships([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             _Registry.Register(EntityMetadata.For(entityType));
@@ -336,15 +346,68 @@ namespace Durable.LiteGraph
         }
 
         /// <summary>
+        /// Deletes every node and edge of the graph (Durable data and anything else stored in the graph), bypassing soft
+        /// delete, query filters and transactions, and resets the auto-increment sequences. Must not be called while a
+        /// transaction is open. Blocks the calling thread; prefer <see cref="ClearAsync(CancellationToken)"/>.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        public void Clear()
+        {
+            Task.Run(() => ClearAsync(CancellationToken.None)).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Deletes every node and edge of the graph (Durable data and anything else stored in the graph), bypassing soft
+        /// delete, query filters and transactions, and resets the auto-increment sequences. Must not be called while a
+        /// transaction is open.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A task.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public async Task ClearAsync(CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+            await _WriteGate.WaitAsync(token).ConfigureAwait(false);
+            try
+            {
+                await _Client.Edge.DeleteAllInGraph(TenantGuid, GraphGuid, token).ConfigureAwait(false);
+                await _Client.Node.DeleteAllInGraph(TenantGuid, GraphGuid, token).ConfigureAwait(false);
+                lock (_Sequences) _Sequences.Clear();
+            }
+            finally
+            {
+                _WriteGate.Release();
+            }
+        }
+
+        /// <summary>
         /// Deletes every node of an entity type (including soft-deleted rows) and their edges, bypassing soft delete,
-        /// query filters and transactions. Auto-increment sequences are not reset.
+        /// query filters and transactions, and resets its auto-increment sequence. Must not be called while a transaction
+        /// is open. Blocks the calling thread; prefer <see cref="ClearAsync(Type, CancellationToken)"/>.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <returns>The number of nodes deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        public int Clear([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            return Task.Run(() => ClearAsync(entityType, CancellationToken.None)).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Deletes every node of an entity type (including soft-deleted rows) and their edges, bypassing soft delete,
+        /// query filters and transactions, and resets its auto-increment sequence. Must not be called while a transaction
+        /// is open.
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of nodes deleted.</returns>
         /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
-        public async Task<int> ClearAsync(Type entityType, CancellationToken token = default)
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public async Task<int> ClearAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entityType);
             ThrowIfDisposed();
@@ -364,6 +427,7 @@ namespace Durable.LiteGraph
                     await _Client.Node.DeleteMany(TenantGuid, GraphGuid, guids.GetRange(start, Math.Min(_ReadChunkSize, guids.Count - start)), token).ConfigureAwait(false);
                 }
 
+                lock (_Sequences) _Sequences.Remove(metadata.EntityType);
                 return guids.Count;
             }
             finally
@@ -373,22 +437,82 @@ namespace Durable.LiteGraph
         }
 
         /// <summary>
+        /// Returns the stored rows of an entity (column name to stored value, as encoded in the node data), for diagnostics
+        /// and tests that check the stored representation. Soft-deleted rows are included; transactions are ignored.
+        /// Blocks the calling thread; prefer <see cref="GetStoredRowsAsync"/>.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <returns>The rows in creation order. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> GetStoredRows([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            return Task.Run(() => GetStoredRowsAsync(entityType, CancellationToken.None)).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Returns the stored rows of an entity (column name to stored value, as encoded in the node data), for diagnostics
+        /// and tests that check the stored representation. Soft-deleted rows are included; transactions are ignored.
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The rows in creation order. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GetStoredRowsAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            ThrowIfDisposed();
+            EntityMetadata metadata = EntityMetadata.For(entityType);
+            LiteGraphTableSchema schema = LiteGraphTableSchema.For(metadata);
+            List<IReadOnlyDictionary<string, object?>> rows = new List<IReadOnlyDictionary<string, object?>>();
+            foreach (LiteGraphRow row in await ReadStoredAsync(LiteGraphReadRequest.All(metadata), token).ConfigureAwait(false))
+            {
+                Dictionary<string, object?> values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                foreach (ColumnMetadata column in metadata.Columns)
+                {
+                    object? value = row.Values[schema.Ordinal(column)];
+                    values[column.Name] = value is byte[] bytes ? bytes.Clone() : value;
+                }
+
+                rows.Add(values);
+            }
+
+            return rows;
+        }
+
+        /// <summary>
+        /// Recomputes the edges of every registered relationship (see <see cref="RebuildEdgesAsync"/>). Blocks the calling
+        /// thread; prefer <see cref="RebuildEdgesAsync"/>.
+        /// </summary>
+        /// <param name="entities">Entities to register before rebuilding (with every type reachable from them), for example <c>EntityMetadata.For&lt;Order&gt;()</c>; null for none.</param>
+        /// <returns>The number of edges created or deleted.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        public int RebuildEdges(IEnumerable<EntityMetadata>? entities = null)
+        {
+            return Task.Run(() => RebuildEdgesAsync(entities, CancellationToken.None)).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
         /// Recomputes the edges of every registered relationship from the stored foreign keys: creates missing edges and
         /// deletes Durable edges that no longer correspond to a foreign key (for example after nodes were changed outside
-        /// Durable, after edges were disabled with <see cref="LiteGraphBackendSettings.MaintainEdges"/>, or after a
+        /// Durable, after edges were disabled with <see cref="LiteGraphRepositorySettings.MaintainEdges"/>, or after a
         /// relationship became known later). Not atomic; applied in graph transactions of at most
-        /// <see cref="LiteGraphBackendSettings.MaxOperationsPerTransaction"/> operations.
+        /// <see cref="LiteGraphRepositorySettings.MaxOperationsPerTransaction"/> operations.
         /// </summary>
-        /// <param name="entityTypes">Entity types to register before rebuilding (with every type reachable from them); null for none.</param>
+        /// <param name="entities">Entities to register before rebuilding (with every type reachable from them), for example <c>EntityMetadata.For&lt;Order&gt;()</c>; null for none.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of edges created or deleted.</returns>
         /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
-        public async Task<int> RebuildEdgesAsync(IEnumerable<Type>? entityTypes = null, CancellationToken token = default)
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public async Task<int> RebuildEdgesAsync(IEnumerable<EntityMetadata>? entities = null, CancellationToken token = default)
         {
             ThrowIfDisposed();
-            if (entityTypes != null)
+            if (entities != null)
             {
-                foreach (Type type in entityTypes) _Registry.Register(EntityMetadata.For(type));
+                foreach (EntityMetadata metadata in entities) _Registry.Register(metadata ?? throw new ArgumentException("Entities cannot contain null.", nameof(entities)));
             }
 
             await _WriteGate.WaitAsync(token).ConfigureAwait(false);
@@ -641,22 +765,35 @@ namespace Durable.LiteGraph
             }, token);
         }
 
-        /// <inheritdoc />
-        public Task<ITransaction> BeginTransactionAsync(CancellationToken token)
-        {
-            token.ThrowIfCancellationRequested();
-            return Task.FromResult<ITransaction>(BeginTransaction());
-        }
-
         /// <summary>
         /// Begins an interactive transaction (see <see cref="LiteGraphTransaction"/>).
         /// </summary>
-        /// <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
         /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
         public LiteGraphTransaction BeginTransaction()
         {
             ThrowIfDisposed();
             return new LiteGraphTransaction(this);
+        }
+
+        /// <summary>
+        /// Begins an interactive transaction (see <see cref="LiteGraphTransaction"/>). Nothing is sent to LiteGraph until
+        /// commit, so this completes synchronously.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The transaction. Never null. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the backend is disposed.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        public Task<LiteGraphTransaction> BeginTransactionAsync(CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(BeginTransaction());
+        }
+
+        /// <inheritdoc />
+        async Task<ITransaction> IRepositoryBackend.BeginTransactionAsync(CancellationToken token)
+        {
+            return await BeginTransactionAsync(token).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1292,11 +1429,6 @@ namespace Durable.LiteGraph
 
         private void RaisePlan(string operation, LiteGraphReadRequest request, bool inTransaction)
         {
-            EventHandler<LiteGraphQueryPlan>? handler = QueryPlanned;
-            ILogger? logger = _Logger;
-            bool log = logger != null && logger.IsEnabled(LogLevel.Debug);
-            if (handler == null && !log) return;
-
             LiteGraphQueryPlan plan = new LiteGraphQueryPlan(
                 operation,
                 request.Metadata.EntityType,
@@ -1305,8 +1437,21 @@ namespace Durable.LiteGraph
                 request.Guids,
                 request.Filter?.ToString(),
                 inTransaction);
-            if (log) logger!.LogDebug("LiteGraph read: {Plan}", plan.ToString());
-            handler?.Invoke(this, plan);
+            _LastQueryPlan = plan;
+            EventHandler<LiteGraphQueryPlan>? handlers = QueryPlanned;
+            if (handlers != null)
+            {
+                try
+                {
+                    handlers(this, plan);
+                }
+                catch (Exception e)
+                {
+                    _Logger?.LogWarning(e, "A LiteGraph QueryPlanned handler threw: {Message}", e.Message);
+                }
+            }
+
+            if (_Logger != null && _Logger.IsEnabled(LogLevel.Debug)) _Logger.LogDebug("LiteGraph read: {Plan}", plan.ToString());
         }
 
         private DateTime NextCreatedUtc()
@@ -1367,7 +1512,7 @@ namespace Durable.LiteGraph
             return value is int || value is long || value is short || value is byte || value is sbyte || value is ushort || value is uint;
         }
 
-        private static async Task<Guid> ResolveTenantAsync(LiteGraphClient client, LiteGraphBackendSettings settings, CancellationToken token)
+        private static async Task<Guid> ResolveTenantAsync(LiteGraphClient client, LiteGraphRepositorySettings settings, CancellationToken token)
         {
             if (settings.TenantGuid.HasValue)
             {

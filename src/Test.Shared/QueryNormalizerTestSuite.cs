@@ -78,7 +78,7 @@ namespace Test.Shared
             ComparisonNode outOfRange = Assert.IsType<ComparisonNode>(Normalize<LiteDbPrecisionItem>(x => x.Letter < 70000));
             Assert.Equal(70000, Assert.IsType<ValueNode>(outOfRange.Right).Value);
 
-            Durable.InMemory.InMemoryRepository<LiteDbPrecisionItem> repository = new Durable.InMemory.InMemoryBackend().CreateRepository<LiteDbPrecisionItem>();
+            Durable.InMemory.InMemoryRepository<LiteDbPrecisionItem> repository = Durable.InMemory.InMemoryBackend.Create().CreateRepository<LiteDbPrecisionItem>();
             repository.Create(new LiteDbPrecisionItem { Code = "x", Letter = 'e' });
             Assert.Equal(1L, repository.Count(x => x.Letter == 'e'));
             Assert.Equal(1L, repository.Count(x => x.Letter >= 'a' && x.Letter < 'f'));

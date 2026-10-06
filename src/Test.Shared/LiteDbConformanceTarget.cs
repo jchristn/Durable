@@ -38,7 +38,7 @@ namespace Test.Shared
         /// </summary>
         public LiteDbConformanceTarget()
         {
-            _Backend = new LiteDbBackend(LiteDbRepositorySettings.InMemory());
+            _Backend = LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory());
         }
 
         #endregion

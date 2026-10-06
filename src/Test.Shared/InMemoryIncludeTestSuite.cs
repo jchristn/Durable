@@ -126,7 +126,7 @@ namespace Test.Shared
         [Fact]
         public async Task SoftDeletedRelatedRowsAreExcluded()
         {
-            InMemoryBackend backend = new InMemoryBackend();
+            InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelSoftParent> parents = backend.CreateRepository<RelSoftParent>();
             InMemoryRepository<RelSoftNote> notes = backend.CreateRepository<RelSoftNote>();
             RelSoftParent p1 = await parents.CreateAsync(new RelSoftParent { Name = "P1" });

@@ -44,12 +44,12 @@ namespace Test.Shared
         /// </summary>
         /// <param name="configure">Optional settings customization (the filename is already set).</param>
         /// <returns>The store.</returns>
-        public static async Task<LiteGraphTestStore> CreateAsync(Action<LiteGraphBackendSettings>? configure = null)
+        public static async Task<LiteGraphTestStore> CreateAsync(Action<LiteGraphRepositorySettings>? configure = null)
         {
             string directory = Path.Combine(Path.GetTempPath(), "durable-litegraph-test-" + Guid.NewGuid().ToString("N"));
             System.IO.Directory.CreateDirectory(directory);
             string filename = Path.Combine(directory, "graph.db");
-            LiteGraphBackendSettings settings = LiteGraphBackendSettings.ForFile(filename);
+            LiteGraphRepositorySettings settings = LiteGraphRepositorySettings.ForFile(filename);
             configure?.Invoke(settings);
             return new LiteGraphTestStore(directory, filename, await LiteGraphBackend.CreateAsync(settings));
         }
@@ -63,10 +63,10 @@ namespace Test.Shared
         /// </summary>
         /// <param name="configure">Optional settings customization (the filename is already set).</param>
         /// <returns>A task.</returns>
-        public async Task ReopenAsync(Action<LiteGraphBackendSettings>? configure = null)
+        public async Task ReopenAsync(Action<LiteGraphRepositorySettings>? configure = null)
         {
             await Backend.DisposeAsync();
-            LiteGraphBackendSettings settings = LiteGraphBackendSettings.ForFile(Filename);
+            LiteGraphRepositorySettings settings = LiteGraphRepositorySettings.ForFile(Filename);
             configure?.Invoke(settings);
             Backend = await LiteGraphBackend.CreateAsync(settings);
         }

@@ -6,11 +6,13 @@ namespace Test.Shared
     using System.Linq;
     using System.Linq.Expressions;
     using System.Text.Json;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Extensions.Logging;
     using Durable;
     using Durable.Conformance;
     using Durable.LiteGraph;
+    using Durable.Query;
     using LiteGraph;
     using Xunit;
 
@@ -79,11 +81,11 @@ namespace Test.Shared
             Assert.Equal("Widget", ((JsonElement)compositeNode.Data).GetProperty("name").GetString());
             Assert.NotEqual(compositeGuid, backend.GetNodeGuid<CfCompositeItem>(new object[] { 7, "sku-1" }));
 
-            await using LiteGraphBackend sameGraph = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForClient(backend.Client, backend.TenantGuid, backend.GraphGuid));
+            await using LiteGraphBackend sameGraph = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForClient(backend.Client, backend.TenantGuid, backend.GraphGuid));
             Assert.Equal(backend.GetNodeGuid<CfAuthor>(5), sameGraph.GetNodeGuid<CfAuthor>(5));
             Assert.Equal("Widget", (await sameGraph.CreateRepository<CfCompositeItem>().ReadByIdAsync(new object[] { 7, "SKU-1" }))!.Name);
 
-            await using LiteGraphBackend otherGraph = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForClient(backend.Client, backend.TenantGuid, Guid.NewGuid()));
+            await using LiteGraphBackend otherGraph = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForClient(backend.Client, backend.TenantGuid, Guid.NewGuid()));
             Assert.NotEqual(backend.GetNodeGuid<CfAuthor>(5), otherGraph.GetNodeGuid<CfAuthor>(5));
             Assert.Null(await otherGraph.CreateRepository<CfCompositeItem>().ReadByIdAsync(new object[] { 7, "SKU-1" }));
         }
@@ -392,6 +394,64 @@ namespace Test.Shared
             Assert.Equal(new[] { "Hammer" }, (await ignoreCase.Query().Where(x => x.Category == "tools").ExecuteAsync()).Select(x => x.Name).ToArray());
 
             Assert.Contains(logger.Snapshot(), entry => entry.Level == LogLevel.Debug && entry.Message.Contains("LiteGraph read") && entry.Message.Contains("cf_items"));
+            Assert.Same(plans[plans.Count - 1], backend.LastQueryPlan);
+
+            backend.QueryPlanned += (sender, plan) => throw new InvalidOperationException("handler failure");
+            Assert.Single(await items.Query().Where(x => x.Name == "Kite").ExecuteAsync());
+            Assert.Contains(logger.Snapshot(), entry => entry.Level == LogLevel.Warning && entry.Message.Contains("handler failure"));
+        }
+
+        /// <summary>
+        /// The members every non-SQL backend shares: factories with default (in-memory) settings, the typed Backend
+        /// property, typed async transactions, Clear/ClearAsync of everything or one type (resetting sequences), stored-row
+        /// diagnostics, synchronous edge rebuild and async disposal.
+        /// </summary>
+        [Fact]
+        public async Task BackendConventionMembers()
+        {
+            LiteGraphBackend backend = await LiteGraphBackend.CreateAsync();
+            Assert.True(backend.OwnsClient);
+            LiteGraphRepository<CfPublisher> publishers = backend.CreateRepository<CfPublisher>();
+            LiteGraphRepository<CfAuthor> authors = new LiteGraphRepository<CfAuthor>(backend);
+            Assert.Same(backend, publishers.Backend);
+            Assert.Same(backend, ((RepositoryBase<CfAuthor>)authors).Backend);
+
+            await using (LiteGraphTransaction transaction = await backend.BeginTransactionAsync())
+            {
+                Assert.True(backend.Owns(transaction));
+                await publishers.CreateAsync(new CfPublisher { Name = "rolled back" }, transaction);
+            }
+
+            Assert.Equal(0L, publishers.Count());
+            CfPublisher first = publishers.Create(new CfPublisher { Name = "first" });
+            publishers.Create(new CfPublisher { Name = "second" });
+            authors.Create(new CfAuthor { Name = "Ada", PublisherId = first.Id });
+            IReadOnlyList<IReadOnlyDictionary<string, object?>> stored = await backend.GetStoredRowsAsync(typeof(CfPublisher));
+            Assert.Equal(2, stored.Count);
+            Assert.Equal(2, backend.GetStoredRows(typeof(CfPublisher)).Count);
+            Assert.Equal(0, backend.RebuildEdges(new[] { EntityMetadata.For<CfAuthor>() }));
+
+            Assert.Equal(2, backend.Clear(typeof(CfPublisher)));
+            Assert.Equal(0, await backend.ClearAsync(typeof(CfPublisher)));
+            Assert.Equal(1L, authors.Count());
+            Assert.Equal(1, publishers.Create(new CfPublisher { Name = "after clear" }).Id);
+
+            await backend.ClearAsync();
+            Assert.Equal(0L, authors.Count());
+            Assert.Equal(0L, publishers.Count());
+            Assert.Equal(1, publishers.Create(new CfPublisher { Name = "again" }).Id);
+            backend.Clear();
+            Assert.Empty(backend.GetStoredRows(typeof(CfPublisher)));
+
+            using CancellationTokenSource canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => backend.BeginTransactionAsync(canceled.Token));
+
+            await backend.DisposeAsync();
+            await backend.DisposeAsync();
+            Assert.Throws<ObjectDisposedException>(() => publishers.Count());
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => backend.ClearAsync());
+            Assert.Throws<ObjectDisposedException>(() => backend.BeginTransaction());
         }
 
         /// <summary>
@@ -403,7 +463,7 @@ namespace Test.Shared
         {
             await using LiteGraphTestStore store = await LiteGraphTestStore.CreateAsync();
             LiteGraphBackend pushing = store.Backend;
-            await using LiteGraphBackend clientSide = await LiteGraphBackend.CreateAsync(new LiteGraphBackendSettings
+            await using LiteGraphBackend clientSide = await LiteGraphBackend.CreateAsync(new LiteGraphRepositorySettings
             {
                 Client = pushing.Client,
                 TenantGuid = pushing.TenantGuid,
@@ -642,8 +702,8 @@ namespace Test.Shared
             Guid publisherNode = plain.GetNodeGuid<CfPublisher>(publisher.Id);
             Assert.Equal(0, await CountEdgesAsync(plain, publisherNode, false));
 
-            await using LiteGraphBackend maintaining = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForClient(plain.Client, plain.TenantGuid, plain.GraphGuid));
-            Assert.Equal(3, await maintaining.RebuildEdgesAsync(new[] { typeof(CfBook) }));
+            await using LiteGraphBackend maintaining = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForClient(plain.Client, plain.TenantGuid, plain.GraphGuid));
+            Assert.Equal(3, await maintaining.RebuildEdgesAsync(new[] { EntityMetadata.For<CfBook>() }));
             Assert.Equal(2, await CountEdgesAsync(maintaining, publisherNode, false));
             Assert.Equal(0, await maintaining.RebuildEdgesAsync());
 
@@ -659,23 +719,31 @@ namespace Test.Shared
         [Fact]
         public async Task SettingsAreValidated()
         {
-            await Assert.ThrowsAsync<ArgumentNullException>(() => LiteGraphBackend.CreateAsync(null!));
-            Assert.Throws<ArgumentNullException>(() => LiteGraphBackend.Create(null!));
-            await Assert.ThrowsAsync<ArgumentException>(() => LiteGraphBackend.CreateAsync(new LiteGraphBackendSettings()));
-            Assert.Throws<ArgumentException>(() => LiteGraphBackendSettings.ForFile(string.Empty));
-            Assert.Throws<ArgumentNullException>(() => LiteGraphBackendSettings.ForClient(null!));
-            Assert.Throws<ArgumentException>(() => new LiteGraphBackendSettings { TenantName = string.Empty });
-            Assert.Throws<ArgumentException>(() => new LiteGraphBackendSettings { GraphName = null! });
-            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphBackendSettings { MaxOperationsPerTransaction = 0 });
-            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphBackendSettings { MaxOperationsPerTransaction = 10001 });
-            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphBackendSettings { TransactionTimeoutSeconds = 0 });
-            Assert.Throws<ArgumentException>(() => new LiteGraphBackendSettings { InMemory = true, GraphGuid = Guid.Empty }.Validate());
-            Assert.Throws<ArgumentException>(() => new LiteGraphBackendSettings { InMemory = true, TenantGuid = Guid.Empty }.Validate());
+            Assert.True(new LiteGraphRepositorySettings().IsInMemory);
+            Assert.True(LiteGraphRepositorySettings.ForInMemory().IsInMemory);
+            Assert.False(LiteGraphRepositorySettings.ForFile("graph.db").IsInMemory);
+            Assert.Equal(TimeSpan.FromMinutes(1), new LiteGraphRepositorySettings().TransactionTimeout);
+            await Assert.ThrowsAsync<ArgumentException>(() => LiteGraphBackend.CreateAsync(new LiteGraphRepositorySettings { Filename = string.Empty }));
+            Assert.Throws<ArgumentException>(() => LiteGraphBackend.Create(new LiteGraphRepositorySettings { LoadIntoMemory = true }));
+            Assert.Throws<ArgumentException>(() => LiteGraphRepositorySettings.ForFile(string.Empty));
+            Assert.Throws<ArgumentNullException>(() => LiteGraphRepositorySettings.ForClient(null!));
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { TenantName = string.Empty });
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { GraphName = null! });
+            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphRepositorySettings { MaxOperationsPerTransaction = 0 });
+            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphRepositorySettings { MaxOperationsPerTransaction = 10001 });
+            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphRepositorySettings { TransactionTimeout = TimeSpan.FromMilliseconds(500) });
+            Assert.Throws<ArgumentOutOfRangeException>(() => new LiteGraphRepositorySettings { TransactionTimeout = TimeSpan.FromHours(2) });
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { GraphGuid = Guid.Empty }.Validate());
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { TenantGuid = Guid.Empty }.Validate());
 
             await using LiteGraphTestStore store = await LiteGraphTestStore.CreateAsync();
-            Assert.Throws<ArgumentException>(() => new LiteGraphBackendSettings { Client = store.Backend.Client, Filename = "other.db" }.Validate());
-            new LiteGraphBackendSettings { Client = store.Backend.Client }.Validate();
-            new LiteGraphBackendSettings { InMemory = true }.Validate();
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { Client = store.Backend.Client, Filename = "other.db" }.Validate());
+            Assert.Throws<ArgumentException>(() => new LiteGraphRepositorySettings { Client = store.Backend.Client, LoadIntoMemory = true }.Validate());
+            LiteGraphRepositorySettings forClient = LiteGraphRepositorySettings.ForClient(store.Backend.Client);
+            Assert.False(forClient.IsInMemory);
+            forClient.Validate();
+            new LiteGraphRepositorySettings().Validate();
+            new LiteGraphRepositorySettings { Filename = "graph.db", LoadIntoMemory = true }.Validate();
         }
 
         /// <summary>
@@ -688,7 +756,7 @@ namespace Test.Shared
         {
             await using LiteGraphTestStore store = await LiteGraphTestStore.CreateAsync();
             Assert.True(store.Backend.OwnsClient);
-            LiteGraphBackend borrowing = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForClient(store.Backend.Client, store.Backend.TenantGuid, store.Backend.GraphGuid));
+            LiteGraphBackend borrowing = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForClient(store.Backend.Client, store.Backend.TenantGuid, store.Backend.GraphGuid));
             Assert.False(borrowing.OwnsClient);
             await borrowing.CreateRepository<CfTenantNote>().CreateAsync(new CfTenantNote { Title = "borrowed" });
             await borrowing.DisposeAsync();
@@ -697,7 +765,7 @@ namespace Test.Shared
             Assert.NotNull(borrowing.Client);
             Assert.Throws<ObjectDisposedException>(() => borrowing.CreateRepository<CfTenantNote>());
 
-            LiteGraphBackend owning = LiteGraphBackend.Create(LiteGraphBackendSettings.ForInMemory());
+            LiteGraphBackend owning = LiteGraphBackend.Create(LiteGraphRepositorySettings.ForInMemory());
             IRepository<CfTenantNote> notes = owning.CreateRepository<CfTenantNote>();
             await notes.CreateAsync(new CfTenantNote { Title = "ephemeral" });
             Assert.Equal(1L, await notes.CountAsync());
@@ -717,8 +785,8 @@ namespace Test.Shared
         [Fact]
         public async Task InMemoryBackendsAreIsolated()
         {
-            await using LiteGraphBackend first = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForInMemory());
-            await using LiteGraphBackend second = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForInMemory());
+            await using LiteGraphBackend first = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForInMemory());
+            await using LiteGraphBackend second = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForInMemory());
             Assert.NotEqual(first.GraphGuid, second.GraphGuid);
             IRepository<CfPublisher> firstPublishers = first.CreateRepository<CfPublisher>();
             CfPublisher publisher = await firstPublishers.CreateAsync(new CfPublisher { Name = "Acme" });

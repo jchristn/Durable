@@ -11,7 +11,7 @@ namespace Test.Aot
     {
         public static async Task RunAsync(CheckRunner runner)
         {
-            InMemoryBackend backend = new InMemoryBackend(RepositoryCapabilities.All, DurableJson.CreateOptions(AotJsonContext.Default));
+            using InMemoryBackend backend = InMemoryBackend.Create(new InMemoryRepositorySettings { JsonOptions = DurableJson.CreateOptions(AotJsonContext.Default) });
             using InMemoryRepository<Author> authors = new InMemoryRepository<Author>(backend);
             using InMemoryRepository<Book> books = new InMemoryRepository<Book>(backend);
             using InMemoryRepository<Review> reviews = new InMemoryRepository<Review>(backend);
