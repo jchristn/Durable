@@ -45,7 +45,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+		<!-- SQLitePCLRaw 3.x (instead of the 2.1.x Microsoft.Data.Sqlite pins) matches Durable.LiteGraph, whose LiteGraph
+		     dependency requires it, so Durable.Sqlite is built, tested and shipped with the same SQLite stack in every
+		     combination of Durable packages. -->
+		<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
 	</ItemGroup>
 
 	<ItemGroup>
