@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>0.3.0: rebuilt on the shared Durable.Sql engine (parameterized SQL, split-query includes, compiled materializers, driver-native pooling, bulk insert, interceptors and tracing).</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0 (breaking): MySqlRepositorySettings MinimumPoolSize/MaximumPoolSize (uint?) renamed MinPoolSize/MaxPoolSize (int?), ConnectionTimeout is int?; Parse leaves SslMode null for the driver default; MySqlConnectionFactory(settings) constructor; AOT-annotated (driver not verified under AOT); raw SQL, validation and transaction API changes from Durable.Sql. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

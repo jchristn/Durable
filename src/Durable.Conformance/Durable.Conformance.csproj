@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>orm;linq;testing;conformance;touchstone;repository;nosql;database</PackageTags>
-		<PackageReleaseNotes>Initial conformance kit: backend-neutral, capability-gated suites written only against IRepository, IQueryBuilder, IGroupedQueryBuilder and ITransaction.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0: runs against SQLite, PostgreSQL, MySQL, SQL Server, in-memory, LiteDB and LiteGraph (no skipped cases on full-capability backends); resolver and transaction API updates (CancellationToken on resolver methods, AmbientTransactionScope); AOT-annotated IConformanceTarget.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

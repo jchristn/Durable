@@ -23,7 +23,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;graph;litegraph;property-graph;repository</PackageTags>
-		<PackageReleaseNotes>Initial release: LiteGraph IRepositoryBackend with foreign keys maintained as edges, deterministic node GUIDs, push-down of labels, keys and exact string/integer equality, and atomic interactive transactions.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0: initial release. LiteGraphBackend.Create/CreateAsync with LiteGraphRepositorySettings.ForInMemory/ForFile/ForClient; rows as nodes with deterministic GUIDs, foreign keys as edges (RebuildEdgesAsync); push-down of labels, keys and exact equality; atomic interactive transactions (MaxOperationsPerTransaction, TransactionTimeout); QueryPlanned/LastQueryPlan; passes the full conformance kit. Not Native AOT-compatible yet (the LiteGraph library uses reflection-based System.Text.Json).</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

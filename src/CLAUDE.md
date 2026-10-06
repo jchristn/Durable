@@ -21,19 +21,25 @@ src/
 ├── Durable/                    # Backend-neutral core (no SQL concepts)
 │   ├── IRepository.cs         # Neutral repository interface (incl. Capabilities, ConflictResolver)
 │   ├── IQueryBuilder.cs       # Neutral LINQ query builder interface
-│   ├── EntityMetadata.cs      # Cached per-type mapping (columns, keys, navigations, compiled accessors)
+│   ├── EntityMetadata.cs      # Cached per-type mapping (columns, keys, navigations, accessors); RequiredMemberTypes for AOT
+│   ├── DurableJson.cs         # AOT-safe JSON helpers (source-generated contexts for JSON columns)
+│   ├── AmbientTransactionScope.cs # Durable's AsyncLocal ambient transaction (not System.Transactions)
+│   ├── buildTransitive/       # Durable.props (NullabilityInfoContextSupport=true for trimmed apps)
 │   ├── RepositoryCapabilities.cs # Optional features a backend supports
 │   ├── Query/                 # Neutral query model (namespace Durable.Query)
 │   │   ├── QueryNormalizer.cs # LINQ -> QueryNode tree with C# semantics (the one place LINQ is interpreted)
 │   │   ├── *Node.cs           # Immutable query nodes; QueryNodeVisitor<TResult> translates them
 │   │   ├── IRepositoryBackend.cs # Storage contract for non-SQL backends
 │   │   ├── RepositoryBase.cs  # Full IRepository<T> over an IRepositoryBackend
+│   │   ├── QueryEvaluator.cs  # Client-side evaluator with C# semantics for non-SQL backends
 │   │   └── QueryBuilder.cs    # Neutral IQueryBuilder<T> (QueryModel, includes, client-side Select/GroupBy)
 │   └── ...                    # Attributes, transactions, resolvers, diagnostics, options
 ├── Durable.Sql/               # Shared SQL engine used by every SQL provider
 │   ├── ISqlDialect.cs         # Everything that differs between databases
 │   ├── SqlRepository.cs       # ISqlRepository<T> implementation (CRUD, upsert, bulk, schema, raw SQL)
-│   ├── SqlQueryBuilder.cs     # ISqlQueryBuilder<T> implementation
+│   ├── RawSql.cs              # The one raw-SQL placeholder convention ({0}, {{ }}, verbatim without values)
+│   ├── RepositorySettings.cs  # Base settings class + RepositoryType (SQL connection concepts)
+│   ├── SqlQueryBuilder.cs     # ISqlQueryBuilder<T> implementation (internal)
 │   ├── SqlExpressionTranslator.cs # Renders QueryNode trees as SQL (always parameterized)
 │   ├── IncludeLoader.cs       # Split-query Include/ThenInclude loading
 │   ├── SqlCommandExecutor.cs  # Connection leasing, interceptors, logging, tracing, SQL capture
@@ -44,13 +50,18 @@ src/
 ├── Durable.Postgres/          # PostgreSQL implementation
 ├── Durable.SqlServer/         # SQL Server implementation
 ├── Durable.InMemory/          # In-memory IRepositoryBackend (reference non-SQL backend)
+├── Durable.LiteDb/            # LiteDB IRepositoryBackend (embedded document database)
+├── Durable.LiteGraph/         # LiteGraph IRepositoryBackend (property graph; not AOT-capable: LiteGraph lib)
 ├── Durable.Conformance/       # Conformance kit: capability-gated suites for any IRepository<T> backend
+├── Durable.Tool/              # The `durable` .NET tool: migrations, schema diff/sync, scaffolding (not AOT)
 ├── Test.Shared/               # Touchstone source of truth: entities, provider glue, and all test suites
 ├── Test.Automated/            # Touchstone CLI runner (console); supports --docker for ephemeral DBs
 ├── Test.Xunit/                # Touchstone xUnit adapter (dotnet test)
 ├── Test.Nunit/                # Touchstone NUnit adapter (dotnet test)
+├── Test.Aot/                  # Native AOT end-to-end app (PublishAot; trim/AOT warnings are errors)
 ├── Test.Benchmark/            # BenchmarkDotNet: Durable vs Dapper vs ADO.NET reads
 └── Sample.BlogApp.*/          # Sample applications per database
+.github/workflows/ci.yml       # CI: build, SQLite x3 OS, xUnit/NUnit adapters, docker databases, aot (all net8.0+net10.0)
 ```
 
 ## Architecture
@@ -59,19 +70,31 @@ src/
 
 - **Durable** (core) is backend-neutral so non-SQL repositories (document stores, search engines, graph databases) can implement `IRepository<T>`/`IQueryBuilder<T>`. Do not add SQL concepts here.
 - **LINQ is interpreted once**, by `QueryNormalizer` (Durable.Query), into `QueryNode` trees with C# semantics (null handling, enum conversion, string match modes, navigations, grouping). Backends translate nodes with `QueryNodeVisitor<TResult>`; never parse expression trees in a backend. New LINQ support = a normalizer change (+ node type if needed) plus a visitor method per backend.
-- **Non-SQL backends** implement `IRepositoryBackend` and use `RepositoryBase<T>`; they declare `RepositoryCapabilities`, and unsupported calls must throw `NotSupportedException` at the call site (`QueryCapabilityValidator`).
+- **Non-SQL backends** implement `IRepositoryBackend` and use `RepositoryBase<T>`; they declare `RepositoryCapabilities`, and unsupported calls must throw `NotSupportedException` at the call site (`QueryCapabilityValidator`). Evaluate what the store cannot push down with `QueryEvaluator<TRow>`.
+- **Backend convention** (InMemory, LiteDb, LiteGraph; follow it for any new backend):
+  - `XBackend.Create(XRepositorySettings? settings = null)` / `CreateAsync(settings?, token)`; no public constructors.
+  - `XRepositorySettings` with `ForInMemory()` (+ `ForFile(path)`, `ForDatabase(db)` / `ForClient(client, ...)` where they apply), `IsInMemory`, `Validate()`, `JsonOptions`, `Logger` (InMemory: `Capabilities`, `JsonOptions`).
+  - `backend.CreateRepository<T>(options?)` or `new XRepository<T>(backend, options?)`; the repository exposes a typed `new XBackend Backend`.
+  - Ownership: the backend disposes only stores it opened (`OwnsDatabase` / `OwnsClient`); repositories never dispose the backend.
+  - Backends are `IDisposable` + `IAsyncDisposable` and throw `ObjectDisposedException` after disposal.
+  - Typed `BeginTransaction()` / `BeginTransactionAsync(token)` returning `XTransaction` (`IAsyncDisposable`); `Owns(ITransaction?)`.
+  - `Clear()` / `ClearAsync(token)`, `Clear(Type)` / `ClearAsync(Type, token)` (row count; sequences restart); `GetStoredRows[Async](Type)`.
+  - Query plans: `event EventHandler<XQueryPlan> QueryPlanned` + `LastQueryPlan`; plan types derive from `EventArgs` with `Operation` and `EntityType`; handler exceptions are logged, never thrown.
+  - `IRepositoryBackend` SPI methods take a required `CancellationToken` (RepositoryBase always passes one).
 - **Durable.Sql** holds the SQL engine. All SQL generation goes through `ISqlDialect`; never special-case a provider inside the engine. `RepositoryType` checks in the engine are a smell.
-- **Providers** contain only a dialect (`XDialect : SqlDialect`), a converter (`XDataTypeConverter : DataTypeConverter`), a connection factory (`XConnectionFactory : ConnectionFactory`), settings, and a thin `XRepository<T> : SqlRepository<T>` (constructors, bulk insert, database creation). A new database = those five files.
+- **Providers** contain only a dialect (`XDialect : SqlDialect`), a converter (`XDataTypeConverter : DataTypeConverter`, constructor takes optional `JsonSerializerOptions`), a connection factory (`XConnectionFactory : ConnectionFactory`, constructors from a connection string or `XRepositorySettings`, plus optional `maxConcurrentConnections`), settings (`XRepositorySettings : RepositorySettings`; shared names `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`), and a thin `XRepository<T> : SqlRepository<T>` (constructors, bulk insert via the protected `CreateCommand(ConnectionLease, SqlStatement)`, database creation). A new database = those five files. Engine internals (`SqlCommandExecutor`, `IncludeLoader`, materializers, translator, concrete builders) are `internal`; keep them so.
 
 ### Core Abstractions (Durable project)
 
 1. **IRepository<T>**: Primary interface for all CRUD operations
-   - Read operations: `ReadFirst`, `ReadMany`, `ReadById`, `Count`, etc.
+   - Read operations: `ReadFirst` (returns null when nothing matches; there is no `ReadFirstOrDefault`), `ReadMany`, `ReadById`, `Count`, etc.
    - Write operations: `Create`, `Update`, `Delete`, `Upsert`
-   - Batch operations: `CreateMany`, `UpdateMany`, `BatchUpdate`, `BatchDelete`
+   - Batch operations: `CreateMany`, `UpdateMany`, `BatchUpdate`, `UpdateField`, `DeleteMany` (`BatchDelete` was removed in 0.5.0)
+   - Transactions: `BeginTransaction[Async]` returns `ITransaction` (SQL: `ISqlTransaction`; non-SQL backends: their typed transaction); ambient `AmbientTransactionScope`
    - Query building: `Query()` returns `IQueryBuilder<T>`
    - Query filters: `AddQueryFilter`, soft delete via `[SoftDelete]`
-   - SQL-only members (`FromSql`, `ExecuteSql`, procedures, `QueryMultiple`, `BulkInsert`, schema management, SQL capture) are on `ISqlRepository<T>` in Durable.Sql
+   - SQL-only members (`FromSql`/`FromSqlRaw`, `ExecuteSql`/`ExecuteSqlRaw`, `ExecuteScalar`/`ExecuteScalarRaw`, procedures, `QueryMultiple`/`QueryMultipleRaw`, `BulkInsert`, schema management incl. `ValidateTable[s][Async]` result objects, SQL capture) are on `ISqlRepository<T>` in Durable.Sql
+   - Raw SQL rules: interpolated (`FormattableString`) overloads turn every hole into a parameter; `*Raw` overloads take text + `IEnumerable<object?>?` with `{0}` placeholders (`{{`/`}}` literal braces, text sent verbatim when there are no values); the `CancellationToken` is always the last parameter. Never reintroduce `@p0`-style placeholders.
 
 2. **IQueryBuilder<T>**: Fluent LINQ-style query builder
    - Filtering: `Where`, `IgnoreQueryFilters` (raw/subquery filtering is on `ISqlQueryBuilder<T>`)
@@ -80,7 +103,7 @@ src/
    - Aggregation: `Count`, `Sum`, `Average`, `Min`, `Max`
    - Projection: `Select` for custom result shapes
    - Joins: `Include`, `ThenInclude` for related data
-   - SQL-only (`ISqlQueryBuilder<T>`): `WhereRaw`, `WhereIn`, `WhereExists`, set operations, CTEs, window functions, `SelectCase`, `BuildSql`
+   - SQL-only (`ISqlQueryBuilder<T>`): `WhereSql` (interpolated), `WhereRaw`, `WhereIn`, `WhereExists`, set operations, CTEs, window functions, `SelectCase`, `BuildSql`
 
 3. **IConnectionFactory** (Durable.Sql): returns open connections; drivers do the pooling
 
@@ -91,7 +114,7 @@ src/
    - `[NavigationProperty("ForeignKeyProperty")]`: One-to-many/one-to-one navigation
    - `[InverseNavigationProperty("ForeignKeyProperty")]`: Reverse navigation for collections
    - `[ManyToManyNavigationProperty(typeof(JoinEntity), "ThisKey", "OtherKey")]`: Many-to-many
-   - `[VersionColumn(VersionColumnType)]`: Optimistic concurrency control
+   - `[VersionColumn]` / `[VersionColumn(VersionColumnType)]`: Optimistic concurrency control (type inferred from the property when omitted)
    - `[ValueConverter(typeof(...))]`: Per-property conversion
    - `[SoftDelete]`: Soft-delete marker column
    - `[NotMapped]`: Exclude a property from convention mapping
@@ -145,14 +168,21 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 
 # Or point at an existing server: --type <provider> --host <h> --port <p> --user <u> --pass <p> --database <db>
 # Use --help to list all options.
+
+# Native AOT end-to-end check (use your RID: linux-x64, osx-arm64, win-x64, ...)
+dotnet publish src/Test.Aot/Test.Aot.csproj -c Release -r osx-arm64 -f net10.0 -o aot-out
+./aot-out/Test.Aot
+# Plain JIT run of the same checks: dotnet run --project src/Test.Aot -f net10.0 -p:PublishAot=false
 ```
 
 **Notes**:
 - The xUnit/NUnit adapters and the CLI all consume the same Touchstone suites in `Test.Shared`, so coverage stays in sync.
 - Provider selection for the adapters can also be set via environment variables (`DURABLE_TEST_DB`, `DURABLE_TEST_HOST`, etc.).
 - Every behavioral suite runs on all four providers; run all four before committing engine changes (Docker runs can execute in parallel).
-- The Durable.Conformance kit runs against each SQL provider and, in the SQLite configuration, against the in-memory backend (full and with no capabilities). Fix behavior differences in the engine or backend, never by weakening a conformance assertion.
+- The Durable.Conformance kit runs against each SQL provider and, in the SQLite configuration, against the in-memory backend (full and with no capabilities), LiteDB and LiteGraph. Fix behavior differences in the engine or backend, never by weakening a conformance assertion.
 - The test projects target net8.0 and net10.0; run both (C# 14 changes some expression trees, e.g. `array.Contains` binds to `MemoryExtensions.Contains`).
+- `PublicApiConventionsTestSuite` (Test.Shared) checks every Durable assembly by reflection: async methods take a defaulted `CancellationToken` as the last parameter, awaitables end in `Async`, sync I/O members of the repository/query-builder/transaction interfaces have async twins, no tuples, no `out`/`ref` on async-capable types. Justified exceptions go in its commented allow-lists (stale entries fail the suite). New public API must pass it.
+- `Test.Aot` must publish with zero trim/AOT warnings and its native binary must pass (see Native AOT below); CI runs it on linux-x64 for both frameworks.
 
 ### Creating NuGet Packages
 
@@ -164,7 +194,7 @@ dotnet pack src/Durable.sln -c Release
 dotnet pack src/Durable.Sqlite/Durable.Sqlite.csproj -c Release
 ```
 
-Published packages:
+Published packages (11, one shared version number):
 - `Durable` (core)
 - `Durable.Sql` (shared SQL engine)
 - `Durable.Sqlite`
@@ -172,7 +202,10 @@ Published packages:
 - `Durable.Postgres`
 - `Durable.SqlServer`
 - `Durable.InMemory`
+- `Durable.LiteDb`
+- `Durable.LiteGraph`
 - `Durable.Conformance`
+- `Durable.Tool` (.NET tool, command `durable`)
 
 ## Code Style and Conventions
 
@@ -484,6 +517,17 @@ private const int DefaultTimeout = 30;
 - Do NOT make assumptions about what class members or methods exist on a class that is opaque to you
 - ASK for the implementation if you need to understand what members/methods are available
 
+### 16. Native AOT and Trimming
+
+Every library project sets `<IsAotCompatible>true</IsAotCompatible>` (Durable.Tool is the only exception: it loads user assemblies) and must build with zero IL trim/AOT warnings. Rules:
+- Annotate every generic parameter or `Type` that reaches entity metadata with `[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)]` (as on `IRepository<T>`, `RepositoryBase<T>`, `SqlRepository<T>`, `Select<TResult>`, `FromSql<TResult>`, backend `CreateRepository<T>`, `Clear(Type)`). Annotations must match across interface and implementation.
+- APIs that take `IEnumerable<Type>`, scan assemblies or otherwise cannot be analyzed get `[RequiresUnreferencedCode]` (and `[RequiresDynamicCode]` when relevant) plus an AOT-safe overload taking `EntityMetadata` (pattern: `SqlMigrator.SyncSchema`, `MigrationContext.EnsureSchema`, `SchemaDiffer.Compare`).
+- No runtime code generation on the AOT path: no `Reflection.Emit`, no `Expression.Compile` without the `RuntimeFeature.IsDynamicCodeSupported` fallback that `MemberAccessorFactory` uses, `MakeGenericType`/`MakeGenericMethod` only where the analyzer is satisfied (annotated, or on the JIT-only path behind `IsDynamicCodeSupported`), no delegate types built at runtime on the AOT path, no `MetadataToken` ordering.
+- JSON goes through `DurableJson` (`CreateOptions`, `Serialize`, `Deserialize`) with the configured `JsonSerializerOptions`; never call reflection-based `JsonSerializer` overloads directly.
+- `[UnconditionalSuppressMessage]` only with a precise `Justification` explaining why the code is safe (for example navigation targets kept through `[ForeignKey(typeof(X))]` or `EntityMetadata.For<X>()`).
+- Durable.LiteGraph is annotated, but the LiteGraph library is not AOT-compatible; its `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. Do not add it to Test.Aot until LiteGraph is fixed.
+- Behavior that matters under AOT gets a check in `src/Test.Aot` (it publishes with `PublishAot` and trim/AOT warnings as errors). Run it (publish + run the binary) for changes to metadata, accessors, materialization, JSON or annotations.
+
 ## Working with Entity Relationships
 
 ### Defining Relationships
@@ -549,8 +593,10 @@ Tests use the **Touchstone** framework: each case is authored once in `Test.Shar
 - Group-by / having, projections, complex expression translation
 - String matching modes (Ordinal / IgnoreCase identical on all databases)
 - Migrations (introspection, diff/sync, versioned migrations, locking, scripts)
-- Neutral query model (QueryNormalizer unit suite), in-memory backend, SQL/in-memory parity, conformance kit
-- Transactions (commit/rollback, sync + async)
+- Neutral query model (QueryNormalizer unit suite), QueryEvaluator, in-memory / LiteDB / LiteGraph backends, SQL/in-memory parity, conformance kit
+- The `durable` CLI (driven in-process on every provider; generated code compiled with Roslyn)
+- Public API conventions (reflection), window frames, resolvers and default-value providers, `*WithQuery`, database lifecycle, provider settings, version columns
+- Transactions (commit/rollback, sync + async, ambient scopes, savepoints)
 - Negative / edge cases (not-found, empty sets, single-result violations)
 - SQLite-specific unit suites (data-type converter, repository settings, initialization)
 
@@ -559,16 +605,18 @@ Test entities and the four `IRepositoryProvider` implementations live in `Test.S
 ## Common Patterns
 
 ### Connections
-Drivers pool connections; Durable does not. Share one `{Provider}ConnectionFactory` across repositories; repositories never dispose a factory they were given. Optional `maxConcurrentConnections` caps open connections. See CONNECTION_MGMT.md.
+Drivers pool connections; Durable does not. Share one `{Provider}ConnectionFactory` (built from a connection string or `{Provider}RepositorySettings`) across repositories; repositories never dispose a factory they were given. Optional `maxConcurrentConnections` caps open connections. Disposing a `SqliteConnectionFactory` releases only its private `:memory:` database, never the driver pool for a file (tests that delete SQLite files call `SqliteConnection.ClearPool`/`ClearAllPools`). See CONNECTION_MGMT.md.
 
 ### Optimistic Concurrency
-Version columns track concurrent updates:
-- `VersionColumnType.Integer`: Auto-incremented
-- `VersionColumnType.RowVersion`: Binary timestamp (SQL Server)
+Version columns track concurrent updates (`[VersionColumn]` infers the type from the property; a mismatched declared type fails when metadata is built):
+- `VersionColumnType.Integer`: Auto-incremented (`int`, `long`, `short`, `byte`)
+- `VersionColumnType.BinaryCounter`: 8-byte big-endian counter maintained by Durable (`byte[]`; formerly `RowVersion`, not SQL Server's server-generated rowversion)
 - `VersionColumnType.Timestamp`: DateTime-based
 - `VersionColumnType.Guid`: Unique per update
 
-Conflict resolvers: `ClientWinsResolver`, `DatabaseWinsResolver`, `MergeChangesResolver`, `ImprovedMergeChangesResolver`
+Set-based writes (`UpdateField`, `BatchUpdate`) also write a fresh version.
+
+Conflict resolvers: `ClientWinsResolver`, `DatabaseWinsResolver`, `MergeChangesResolver` (with `MergeConflictBehavior`; `ImprovedMergeChangesResolver` was folded into it), `ThrowExceptionResolver`, `DefaultConflictResolver`. Async resolver methods take a trailing `CancellationToken`.
 
 ### SQL Capture
 SQL repositories implement `ISqlCapture` for debugging (plus `ILogger`, `ISqlCommandInterceptor` and the "Durable" OpenTelemetry ActivitySource via `SqlRepositoryOptions`):
@@ -578,6 +626,7 @@ repository.CaptureSql = true;
 string sql = repository.LastExecutedSql;
 string sqlWithParams = repository.LastExecutedSqlWithParameters;
 ```
+Per-call SQL: the `*WithQuery` methods (`CreateWithQuery`, `ReadManyWithQuery`, `IQueryBuilder.ExecuteWithQuery`, ...). The 0.4 "include query in results" switches (`DurableConfiguration`, `IncludeQueryInResults`, `CreateAuto`) are gone; do not reintroduce global modes.
 
 ## Important Implementation Notes
 
@@ -589,18 +638,20 @@ string sqlWithParams = repository.LastExecutedSqlWithParameters;
 
 4. **Nullable properties**: Use `int?`, `DateTime?`, `string?` for nullable columns.
 
-5. **Transaction scope**: Supports both explicit transactions (`ITransaction`) and ambient transactions (`TransactionScope`).
+5. **Transaction scope**: Supports explicit transactions (`ITransaction`, `IAsyncDisposable`) and Durable's own ambient scope (`AmbientTransactionScope`, AsyncLocal-based, `await using`; formerly `TransactionScope`). Durable does not participate in `System.Transactions` (never reads `Transaction.Current`, never enlists). `ISavepoint` is not disposable: call `Rollback`/`Release`.
 
 6. **Batch operations**: `CreateMany` returns generated keys (one statement per row batched into a single command); `BulkInsert` uses the database's bulk path without key write-back. Batch sizes via `SqlRepositoryOptions.BatchConfiguration`.
 
-7. **Repository settings**: Each provider has a `{Provider}RepositorySettings` class for strongly-typed configuration instead of connection strings.
+7. **Repository settings**: Each provider has a `{Provider}RepositorySettings` class (derived from `Durable.Sql.RepositorySettings`, init-only nullable properties) for strongly-typed configuration instead of connection strings. Command timeouts belong to `SqlRepositoryOptions.CommandTimeoutSeconds`, not to settings.
+
+8. **Dependencies**: Durable.Sqlite uses Microsoft.Data.Sqlite 10.0.12 with SQLitePCLRaw 3.x (aligned with the stack LiteGraph requires); keep them aligned.
 
 ## Key Interfaces for Extension
 
 When adding new features, these are the primary extension points:
 - `IRepository<T>`: Add new repository operations
 - `IQueryBuilder<T>`: Add new query capabilities
-- `IRepositoryBackend` / `RepositoryBase<T>`: Add a non-SQL backend (prove it with `Durable.Conformance`)
+- `IRepositoryBackend` / `RepositoryBase<T>` / `QueryEvaluator<TRow>`: Add a non-SQL backend following the backend convention (prove it with `Durable.Conformance`)
 - `QueryNodeVisitor<TResult>`: Translate the neutral query tree for a backend
 - `ISqlDialect`: Add a new SQL database
 - `IConnectionFactory`: Add new connection management strategies

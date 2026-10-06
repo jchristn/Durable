@@ -28,7 +28,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql;migrations;cli;tool</PackageTags>
-		<PackageReleaseNotes>Initial release of the durable command-line tool: migrate, rollback, status, script, migrations add, schema diff, schema sync and scaffold.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0: initial release of the durable command-line tool: migrate, rollback, status, script (ranges with --from/--to), migrations add (Up/Down from the schema diff, emitting ExecuteSqlRaw), schema diff, schema sync and scaffold, for SQLite, PostgreSQL, MySQL and SQL Server; settings from options, DURABLE_PROVIDER/DURABLE_CONNECTION or durable.json.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

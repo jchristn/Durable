@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>Shared SQL engine for Durable providers: dialect abstraction, parameterized LINQ translation, compiled materializers, split-query includes.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0 (breaking): raw SQL redesigned (interpolated FromSql/ExecuteSql/ExecuteScalar/QueryMultiple whose holes are parameters, *Raw overloads with {0} placeholders, CancellationToken last; @p0 placeholders removed); procedures take IEnumerable&lt;SqlParameterValue&gt;; ValidateTable(s)[Async] return TableValidationResult/SchemaValidationResult; savepoints no longer disposable; WhereSql; AOT-safe EntityMetadata overloads for schema sync and migrations; RepositorySettings/RepositoryType now here; engine internals made internal (protected CreateCommand for providers); ISqlDialect.TableNamesQuery, SupportsNthValue, SupportsRangeFrameOffsets; SqlMigrator.GenerateScript(from, to); SqlStatement.ToInlineSql. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

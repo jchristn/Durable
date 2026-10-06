@@ -55,6 +55,7 @@ A lightweight .NET ORM with full LINQ support. Typed queries, CRUD, relationship
   - [Dependency Injection](#dependency-injection)
   - [Unit Testing with the In-Memory Backend](#unit-testing-with-the-in-memory-backend)
 - **Non-SQL Backends**
+  - [Non-SQL Backend Conventions](#non-sql-backend-conventions)
   - [In-Memory Backend](#in-memory-backend)
   - [LiteDB Backend](#litedb-backend)
   - [LiteGraph Backend](#litegraph-backend)
@@ -154,9 +155,9 @@ Durable sits between Dapper and Entity Framework.
 
 | Package | Contents | Depends on |
 |---|---|---|
-| `Durable` | Backend-neutral core: `IRepository<T>`, `IQueryBuilder<T>`, attributes, `EntityMetadata`, transactions, conflict resolvers, the neutral query model (`Durable.Query`), `RepositoryBase<T>`, `QueryEvaluator<TRow>` | Microsoft.Extensions.Logging.Abstractions |
-| `Durable.Sql` | Shared SQL engine: `ISqlRepository<T>`, `ISqlQueryBuilder<T>`, `ISqlDialect`, LINQ-to-SQL translation, includes, migrations, interceptors | Durable |
-| `Durable.Sqlite` | SQLite provider | Durable.Sql, Microsoft.Data.Sqlite 10.0.11 |
+| `Durable` | Backend-neutral core: `IRepository<T>`, `IQueryBuilder<T>`, attributes, `EntityMetadata`, transactions (`AmbientTransactionScope`), conflict resolvers, `DurableJson`, the neutral query model (`Durable.Query`), `RepositoryBase<T>`, `QueryEvaluator<TRow>` | Microsoft.Extensions.Logging.Abstractions |
+| `Durable.Sql` | Shared SQL engine: `ISqlRepository<T>`, `ISqlQueryBuilder<T>`, `ISqlDialect`, `RepositorySettings`, LINQ-to-SQL translation, includes, migrations, interceptors | Durable |
+| `Durable.Sqlite` | SQLite provider | Durable.Sql, Microsoft.Data.Sqlite 10.0.12, SQLitePCLRaw.bundle_e_sqlite3 3.0.5 |
 | `Durable.Postgres` | PostgreSQL provider | Durable.Sql, Npgsql 10.0.3 |
 | `Durable.MySql` | MySQL provider | Durable.Sql, MySqlConnector 2.6.2 |
 | `Durable.SqlServer` | SQL Server provider | Durable.Sql, Microsoft.Data.SqlClient 7.0.2 |
@@ -181,12 +182,13 @@ Durable sits between Dapper and Entity Framework.
 
 ## Requirements
 
-- **.NET 8.0** or later. Libraries target `net8.0` and are tested on .NET 8 and .NET 10; `Durable.Conformance` and `Durable.Tool` target `net8.0` and `net10.0`.
+- **.NET 8.0** or later. Libraries target `net8.0` and are tested on .NET 8 and .NET 10; `Durable.Conformance` and `Durable.Tool` target `net8.0` and `net10.0`. Every library except `Durable.LiteGraph` (whose LiteGraph dependency is not AOT-compatible yet) and the `Durable.Tool` executable works in trimmed and Native AOT applications ([Native AOT](#native-aot)).
+- **SQLite native library**: `Durable.Sqlite` references Microsoft.Data.Sqlite 10.0.12 with **SQLitePCLRaw 3.x** (`SQLitePCLRaw.bundle_e_sqlite3` 3.0.5), the same SQLite stack `Durable.LiteGraph` uses. If your application references SQLitePCLRaw 2.x packages directly (for example another bundle or provider), update them to 3.x so every SQLitePCLRaw package resolves to the same major version.
 - **Databases**:
 
 | Database | Minimum version | Driver | Why that minimum |
 |---|---|---|---|
-| SQLite | 3.35 (bundled with Microsoft.Data.Sqlite) | Microsoft.Data.Sqlite 10.0.11 | `INSERT ... RETURNING` for generated keys |
+| SQLite | 3.35 (bundled by SQLitePCLRaw.bundle_e_sqlite3) | Microsoft.Data.Sqlite 10.0.12 + SQLitePCLRaw 3.0.5 | `INSERT ... RETURNING` for generated keys |
 | PostgreSQL | 12 | Npgsql 10.0.3 | |
 | MySQL | 8.0.31 (8.0.19 without set operations) | MySqlConnector 2.6.2 | `INTERSECT`/`EXCEPT` need 8.0.31; the upsert row alias needs 8.0.19 |
 | SQL Server | 2017 | Microsoft.Data.SqlClient 7.0.2 | `OFFSET`/`FETCH` paging, `OUTPUT INSERTED`, `MERGE` |
@@ -226,7 +228,8 @@ Every backend implements `IRepository<T>` and `IQueryBuilder<T>`. The SQL provid
 | `BulkInsert` | Prepared inserts | Binary `COPY` | `MySqlBulkCopy` (needs `AllowLoadLocalInfile=true`) or multi-row `INSERT` | `SqlBulkCopy` | - | - | - |
 | Set operations, CTEs, window functions | Yes | Yes | Yes (8.0.31+) | Yes | - | - | - |
 | `InitializeTable`, migrations, `durable` CLI | Yes | Yes | Yes (DDL not transactional) | Yes | Not needed | Not needed | Not needed |
-| SQL capture, interceptors, OpenTelemetry | Yes | Yes | Yes | Yes | - | Query plans (`LastQueryPlan`) | Query plans (`QueryPlanned`) |
+| SQL capture, interceptors, OpenTelemetry | Yes | Yes | Yes | Yes | - | Query plans (`QueryPlanned`, `LastQueryPlan`) | Query plans (`QueryPlanned`, `LastQueryPlan`) |
+| Native AOT | Yes (verified) | Durable yes; driver not verified | Durable yes; driver not verified | Durable yes; driver not verified | Yes (verified) | Yes (verified) | Not yet |
 | Best for | Embedded apps, tests against real SQL | Production servers | Production servers | Production servers | Unit tests, prototypes | Embedded, no native deps | Data that is also a graph |
 
 "-" means the member does not exist on that backend's type (it is on `ISqlRepository<T>`).
@@ -237,7 +240,7 @@ Every backend implements `IRepository<T>` and `IQueryBuilder<T>`. The SQL provid
 
 Snippets in this guide assume `using Durable;`, the provider namespace (`Durable.Sqlite`, `Durable.Postgres`, `Durable.MySql`, `Durable.SqlServer`), and `Durable.Sql` for SQL-specific types (`ISqlRepository<T>`, `SqlRepositoryOptions`, `SqlMigrator`, ...). A comment at the top of a snippet names the variables it assumes. Entities used in the examples are defined in [Defining Entities](#defining-entities) (`Person`), [Relationships](#relationships-and-include) (`Author`, `Book`, `Publisher`, `Category`), [Query Filters](#query-filters-and-soft-delete) (`Order`, `OrderLine`) and [Optimistic Concurrency](#optimistic-concurrency) (`Document`).
 
-Each provider's repository has three constructors: a connection string, a strongly-typed settings object, or a shared `IConnectionFactory`. All take optional `SqlRepositoryOptions`.
+Each provider's repository has three constructors: a connection string, a strongly-typed settings object, or a shared `IConnectionFactory`. All take optional `SqlRepositoryOptions`. Each connection factory can likewise be built from a connection string or a settings object (plus an optional `maxConcurrentConnections`).
 
 ```csharp
 using Durable.Sqlite;
@@ -252,6 +255,9 @@ SqliteRepository<Person> fromSettings = new SqliteRepository<Person>(new SqliteR
 SqliteConnectionFactory factory = new SqliteConnectionFactory("Data Source=app.db");
 SqliteRepository<Person> shared = new SqliteRepository<Person>(factory);
 SqliteRepository<Author> authors = new SqliteRepository<Author>(factory);
+
+// A factory from a settings object
+SqliteConnectionFactory fromSettingsFactory = new SqliteConnectionFactory(new SqliteRepositorySettings { DataSource = "app.db", Pooling = true });
 ```
 
 PostgreSQL, MySQL and SQL Server work the same way:
@@ -265,20 +271,27 @@ PostgresRepository<Person> pg = new PostgresRepository<Person>("Host=localhost;D
 MySqlRepository<Person> my = new MySqlRepository<Person>("Server=localhost;Database=mydb;User=root;Password=password");
 SqlServerRepository<Person> ms = new SqlServerRepository<Person>("Server=localhost;Database=mydb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true");
 
-PostgresRepository<Person> pgFromSettings = new PostgresRepository<Person>(new PostgresRepositorySettings
+PostgresRepositorySettings pgSettings = new PostgresRepositorySettings
 {
-    Hostname = "localhost", Port = 5432, Database = "mydb", Username = "postgres", Password = "password"
+    Hostname = "localhost", Port = 5432, Database = "mydb", Username = "postgres", Password = "password", MaxPoolSize = 50
+};
+PostgresRepository<Person> pgFromSettings = new PostgresRepository<Person>(pgSettings);
+PostgresConnectionFactory pgFactory = new PostgresConnectionFactory(pgSettings, maxConcurrentConnections: 20);
+
+MySqlRepository<Person> myFromSettings = new MySqlRepository<Person>(new MySqlRepositorySettings
+{
+    Hostname = "localhost", Database = "mydb", Username = "root", Password = "password", MinPoolSize = 0, MaxPoolSize = 100
 });
 ```
 
 | Settings class | Properties (besides `Hostname`, `Port`, `Username`, `Password`, `Database`, `AdditionalProperties`) |
 |---|---|
-| `SqliteRepositorySettings` | `DataSource`, `Mode`, `CacheMode` |
-| `PostgresRepositorySettings` | `ConnectionTimeout`, `CommandTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`, `SslMode` |
-| `MySqlRepositorySettings` | `ConnectionTimeout`, `MinimumPoolSize`, `MaximumPoolSize`, `Pooling`, `SslMode` |
+| `SqliteRepositorySettings` | `DataSource`, `Mode`, `CacheMode`, `Pooling` |
+| `PostgresRepositorySettings` | `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`, `SslMode` (Npgsql `SslMode`) |
+| `MySqlRepositorySettings` | `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`, `SslMode` (`MySqlSslMode`) |
 | `SqlServerRepositorySettings` | `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`, `Encrypt`, `TrustServerCertificate`, `IntegratedSecurity` |
 
-Each settings class has `Parse(connectionString)` and `BuildConnectionString()`. `CreateDatabaseIfNotExistsAsync()` creates the database (or, for SQLite, the file's directory).
+All settings properties are nullable and init-only; null leaves the driver default (`ConnectionTimeout` is in seconds). The settings base class `RepositorySettings` and `RepositoryType` live in the `Durable.Sql` namespace. Each settings class has `Parse(connectionString)` and `BuildConnectionString()`; For the server providers, `Parse` leaves `SslMode` null when the string selects the driver default and keeps keys it does not model in `AdditionalProperties`. The command timeout is not a connection setting: use `SqlRepositoryOptions.CommandTimeoutSeconds`. `CreateDatabaseIfNotExistsAsync()` creates the database (or, for SQLite, the file's directory).
 
 Disposable local databases for development:
 
@@ -343,7 +356,7 @@ public enum Priority { Low = 1, Normal = 2, High = 3 }
 | `[DefaultValue(...)]` | Value applied on create when the property is null/default (static value, `DefaultValueType`, or a provider type) |
 | `[ForeignKey(typeof(T), "Property")]` | Foreign key to another entity |
 | `[NavigationProperty]`, `[InverseNavigationProperty]`, `[ManyToManyNavigationProperty]` | Relationships ([see below](#relationships-and-include)) |
-| `[VersionColumn(VersionColumnType)]` | Optimistic concurrency token |
+| `[VersionColumn]`, `[VersionColumn(VersionColumnType)]` | Optimistic concurrency token (type inferred from the property when omitted) |
 | `[SoftDelete]` | Soft-delete marker column |
 | `[ValueConverter(typeof(...))]` | Per-property value conversion |
 | `[NotMapped]` | Excludes a property from convention mapping |
@@ -431,7 +444,7 @@ IEnumerable<Person> inserted = await people.CreateManyAsync(batch);
 Person saved = await people.UpsertAsync(new Person { Id = 7, FirstName = "Seven" });
 ```
 
-`ReadFirst`/`ReadFirstOrDefault`/`ReadSingle`/`ReadSingleOrDefault` mirror LINQ: `ReadSingle` throws `InvalidOperationException` when zero or several rows match.
+`ReadFirst` returns the first match or null (there is no separate `ReadFirstOrDefault`). `ReadSingle`/`ReadSingleOrDefault` mirror LINQ: `ReadSingle` throws `InvalidOperationException` when zero or several rows match, `ReadSingleOrDefault` returns null for zero and throws for several. Predicate deletes use `DeleteMany` (there is no separate `BatchDelete`).
 
 The SQL providers add `BulkInsertAsync`, the fastest path, without key write-back:
 
@@ -524,7 +537,9 @@ IEnumerable<Person> union = await people.Query().Where(p => p.Department == "Sal
     .Union(people.Query().Where(p => p.Salary > 150000))
     .ExecuteAsync();
 
-IEnumerable<Person> raw = await people.Query().WhereRaw("salary BETWEEN {0} AND {1}", 50000, 90000).ExecuteAsync();  // placeholders become parameters
+decimal low = 50000m, high = 90000m;
+IEnumerable<Person> band = await people.Query().WhereSql($"salary BETWEEN {low} AND {high}").ExecuteAsync();   // holes become parameters
+IEnumerable<Person> raw = await people.Query().WhereRaw("salary BETWEEN {0} AND {1}", 50000, 90000).ExecuteAsync();  // {n} placeholders become parameters
 
 IEnumerable<Author> withBooks = await authors.Query()
     .WhereExists(books.Query(), (a, b) => b.AuthorId == a.Id)
@@ -533,7 +548,7 @@ IEnumerable<Author> withBooks = await authors.Query()
 string sql = people.Query().Where(p => p.Salary > 25).OrderBy(p => p.LastName).BuildSql();
 ```
 
-Also: `UnionAll`, `Intersect`, `Except`, `WhereIn`/`WhereNotIn` (subquery), `WhereInRaw`, `WhereNotExists`, `SelectRaw`, `FromRaw`, `JoinRaw`, `WithCte`, `WithRecursiveCte`, `WithWindowFunction(...)` (`RowNumber`, `Rank`, `DenseRank`, `Lead`, `Lag`, `FirstValue`, `LastValue`, `NthValue`, `Sum`, `Avg`, `Count`, `Min`, `Max`, frames), `SelectCase()` and `BuildStatement()`.
+Also: `UnionAll`, `Intersect`, `Except`, `WhereIn`/`WhereNotIn` (subquery), `WhereInRaw`/`WhereNotInRaw`, `WhereNotExists`, `SelectRaw`, `FromRaw`, `JoinRaw`, `WithCte`, `WithRecursiveCte`, `WithWindowFunction(...)` (`RowNumber`, `Rank`, `DenseRank`, `Lead`, `Lag`, `FirstValue`, `LastValue`, `NthValue`, `Sum`, `Avg`, `Count`, `Min`, `Max`, frames), `SelectCase()` and `BuildStatement()`. SQL Server has no `NTH_VALUE` and no numeric `RANGE` frame offsets, so `NthValue` and `Range(int, int)` throw `NotSupportedException` there when called (the dialect reports `SupportsNthValue` / `SupportsRangeFrameOffsets`).
 
 ## String Matching
 
@@ -659,29 +674,31 @@ Query filters and soft-delete filtering apply to all predicate-based reads and w
 
 ```csharp
 // orders: SqliteRepository<Order>; lines: SqliteRepository<OrderLine> (same database)
-using (ISqlTransaction tx = await orders.BeginTransactionAsync())
+await using (ISqlTransaction tx = await orders.BeginTransactionAsync())
 {
     Order order = await orders.CreateAsync(new Order { TenantId = 1, Total = 42m }, tx);
     await lines.CreateAsync(new OrderLine { OrderId = order.Id, Sku = "A-1" }, tx);
 
     ISavepoint beforeDiscount = await tx.CreateSavepointAsync();
     await orders.UpdateFieldAsync(o => o.Id == order.Id, o => o.Total, 40m, tx);
-    await beforeDiscount.RollbackAsync();             // undo just the discount
+    await beforeDiscount.RollbackAsync();             // undo just the discount (savepoints are not disposable)
 
     await tx.CommitAsync();                           // disposing without commit rolls back
 }
 
 // Ambient scope: operations without an explicit transaction join it, across awaits
-using (TransactionScope scope = await TransactionScope.CreateAsync(orders))
+await using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(orders))
 {
     await orders.CreateAsync(new Order { TenantId = 1, Total = 10m });
-    await scope.CompleteAsync();
+    await scope.CompleteAsync();                      // disposing an uncompleted scope rolls back
 }
 ```
 
-`IRepository<T>.BeginTransactionAsync()` returns a backend-neutral `ITransaction` (`Commit`/`Rollback`, sync and async); the SQL providers return `ISqlTransaction`, which adds `Connection`, `Transaction` and savepoints. A transaction belongs to one database: repositories sharing it must use the same provider and database (for non-SQL backends, the same backend instance).
+`IRepository<T>.BeginTransactionAsync()` returns a backend-neutral `ITransaction` (`Commit`/`Rollback`, sync and async). The SQL providers return `ISqlTransaction`, which adds `Connection`, `Transaction` and savepoints; the non-SQL backends' `BeginTransactionAsync` returns their own type (`InMemoryTransaction`, `LiteDbTransaction`, `LiteGraphTransaction`). A transaction belongs to one database: repositories sharing it must use the same provider and database (for non-SQL backends, the same backend instance). Transactions and scopes are `IAsyncDisposable`; prefer `await using` so the rollback of an uncommitted transaction is asynchronous.
 
-`Durable.TransactionScope` is not `System.Transactions.TransactionScope`; qualify the name if you import both namespaces.
+Savepoints (`ISavepoint`) are not disposable: call `Rollback`/`RollbackAsync` or `Release`/`ReleaseAsync` explicitly. A savepoint you neither roll back nor release simply ends with its transaction.
+
+`AmbientTransactionScope` is Durable's own ambient scope, carried in an `AsyncLocal` on the current async flow; `AmbientTransactionScope.Current` returns it and `repository.ExecuteInTransactionScopeAsync(...)` wraps a delegate in one. **Durable does not participate in `System.Transactions`**: it never reads `Transaction.Current` and never enlists in a `System.Transactions.TransactionScope`. (A driver that auto-enlists may still enlist a connection Durable opens inside such a scope; do not rely on it.)
 
 To run Durable inside a transaction you opened with ADO.NET, Dapper or EF Core, wrap it. Durable never commits, rolls back or disposes it:
 
@@ -702,7 +719,7 @@ public class Document
     [Property("body")] public string Body { get; set; } = "";
 
     [Property("version")]
-    [VersionColumn(VersionColumnType.Integer)]
+    [VersionColumn]                                   // int property: an integer counter (VersionColumnType.Integer)
     public int Version { get; set; } = 1;
 }
 
@@ -719,33 +736,49 @@ catch (OptimisticConcurrencyException)
 }
 
 documents.ConflictResolver = new ClientWinsResolver<Document>();   // or DatabaseWinsResolver, MergeChangesResolver
+
+// Merge: properties only one side changed are combined; MergeConflictBehavior decides when both changed one
+documents.ConflictResolver = new MergeChangesResolver<Document>(MergeConflictBehavior.ThrowException, "Version");
 ```
 
-| `VersionColumnType` | Property type | New value on update |
+`[VersionColumn]` without an argument infers the type from the property; a declared type that does not fit the property throws `InvalidOperationException` when the entity's metadata is built.
+
+| `VersionColumnType` | Property type (inferred for) | New value on update |
 |---|---|---|
 | `Integer` | `int`, `long`, `short`, `byte` | Previous + 1 |
 | `Guid` | `Guid` | `Guid.NewGuid()` |
 | `Timestamp` | `DateTime` | `DateTime.UtcNow` |
-| `RowVersion` (the attribute's default) | `byte[]` | 8-byte counter incremented by Durable (not a server-generated SQL Server `rowversion`) |
+| `BinaryCounter` | `byte[]` | 8-byte big-endian counter maintained by Durable. It is not SQL Server's server-generated `rowversion`: map it to an ordinary binary column |
 
-Without a resolver, a conflict throws `OptimisticConcurrencyException`. A resolver receives the current database row and your entity and returns the entity to save; `ClientWinsResolver` overwrites, `DatabaseWinsResolver` keeps the database row, `MergeChangesResolver`/`ImprovedMergeChangesResolver` merge changed properties. Because there is no change tracking, "original" values are approximated from your entity.
+Set-based writes (`UpdateField`, `BatchUpdate`) also write a fresh version to every row they change, so copies read before them become stale.
+
+Without a resolver, a conflict throws `OptimisticConcurrencyException`. A resolver receives the current database row and your entity and returns the entity to save: `ClientWinsResolver` overwrites, `DatabaseWinsResolver` keeps the database row, `MergeChangesResolver` merges changed properties (collections compared element by element; `MergeConflictBehavior.IncomingWins` (default), `CurrentWins` or `ThrowException` for properties both sides changed), and `ThrowExceptionResolver` always fails with a `ConcurrencyConflictException` carrying the current, incoming and original entities. Because there is no change tracking, "original" values are approximated from your entity. To write your own, implement `IConcurrencyConflictResolver<T>`; its async methods take a trailing `CancellationToken`, which the repository passes through (an `OperationCanceledException` from a resolver is not wrapped).
 
 ## Raw SQL, Procedures and Multiple Result Sets
 
-SQL providers only (`ISqlRepository<T>`). Placeholders are `@p0`, `@p1`, ... (`{0}` in `WhereRaw`), and values are always bound as parameters.
+SQL providers only (`ISqlRepository<T>`). Every raw-SQL member comes in two forms, and values are always bound as parameters:
+
+- **Interpolated** (`FromSql`, `FromSqlAsync`, `ExecuteSql`, `ExecuteScalar`, `QueryMultiple`, + `Async`): pass an interpolated string; every hole (`{x}`) becomes a parameter, so the call is safe by construction. Holes can never supply identifiers or SQL text.
+- **Raw** (`FromSqlRaw`, `ExecuteSqlRaw`, `ExecuteScalarRaw`, `QueryMultipleRaw`, + `Async`): pass SQL text and the values separately; `{0}`, `{1}`, ... are placeholders (an index may repeat), `{{`/`}}` are literal braces, and text with no values is sent verbatim. Use these for DDL and for dynamic identifiers you validate yourself.
+
+The parameters are always `(sql, [values,] transaction = null, token = default)`: the `CancellationToken` is last.
 
 ```csharp
 // people: SqliteRepository<Person> (any ISqlRepository<Person>)
-List<Person> rows = people.FromSql("SELECT * FROM people WHERE salary BETWEEN @p0 AND @p1", null, 50000, 100000).ToList();
+decimal min = 50000m, max = 100000m;
+List<Person> rows = people.FromSql($"SELECT * FROM people WHERE salary BETWEEN {min} AND {max}").ToList();
+List<Person> same = people.FromSqlRaw("SELECT * FROM people WHERE salary BETWEEN {0} AND {1}", new object?[] { min, max }).ToList();
 
 // DTO mapping by column name (snake_case columns map to PascalCase properties)
-await foreach (TopEarner t in people.FromSqlAsync<TopEarner>("SELECT first_name, salary FROM people ORDER BY salary DESC"))
+await foreach (TopEarner t in people.FromSqlAsync<TopEarner>($"SELECT first_name, salary FROM people ORDER BY salary DESC"))
     Console.WriteLine(t.FirstName);
 
-long total = people.ExecuteScalar<long>("SELECT COUNT(*) FROM people");
-int affected = await people.ExecuteSqlAsync("UPDATE people SET salary = salary * 1.05 WHERE department = @p0", null, CancellationToken.None, "Engineering");
+long total = people.ExecuteScalar<long>($"SELECT COUNT(*) FROM people");
+string department = "Engineering";
+int affected = await people.ExecuteSqlAsync($"UPDATE people SET salary = salary * 1.05 WHERE department = {department}");
+await people.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS ix_people_department ON people (department)");
 
-using (SqlMultipleResultReader multi = people.QueryMultiple("SELECT * FROM people; SELECT COUNT(*) FROM people"))
+using (SqlMultipleResultReader multi = people.QueryMultiple($"SELECT * FROM people; SELECT COUNT(*) FROM people"))
 {
     List<Person> everyone = multi.Read<Person>();
     long count = multi.Read<long>()[0];
@@ -758,13 +791,15 @@ public class TopEarner
 }
 ```
 
-Stored procedures (PostgreSQL, MySQL, SQL Server):
+Stored procedures (PostgreSQL, MySQL, SQL Server) take the procedure name, then the parameters, transaction and token:
 
 ```csharp
 // people: SqlServerRepository<Person>
-List<Person> sales = people.FromProcedure<Person>("get_people_by_department", null, new SqlParameterValue("@department", "Sales"));
-int changed = await people.ExecuteProcedureAsync("archive_people", null, CancellationToken.None, new SqlParameterValue("@before", new DateTime(2020, 1, 1)));
+List<Person> sales = people.FromProcedure<Person>("get_people_by_department", new[] { new SqlParameterValue("@department", "Sales") });
+int changed = await people.ExecuteProcedureAsync("archive_people", new[] { new SqlParameterValue("@before", new DateTime(2020, 1, 1)) });
 ```
+
+`ISqlQueryBuilder<T>.WhereSql($"...")` and `WhereRaw("... {0}", value)` follow the same rules inside a query, and `RawSql.ToStatement(...)` builds a `SqlStatement` with them for your own commands.
 
 ## Creating Tables
 
@@ -774,11 +809,14 @@ For quick starts and tests, the SQL repositories create tables and indexes direc
 // people: SqliteRepository<Person> (any ISqlRepository<Person>)
 await people.InitializeTableAsync(typeof(Person));                               // CREATE TABLE if missing, indexes, column validation
 await people.InitializeTablesAsync(new[] { typeof(Author), typeof(Book), typeof(Publisher) });
-bool valid = people.ValidateTable(typeof(Person), out List<string> errors, out List<string> warnings);
 List<string> indexes = await people.GetIndexesAsync(typeof(Person));
+
+TableValidationResult check = await people.ValidateTableAsync(typeof(Person));   // compares the table with the entity
+if (!check.IsValid) Console.WriteLine(string.Join(Environment.NewLine, check.Errors));
+SchemaValidationResult all = await people.ValidateTablesAsync(new[] { typeof(Author), typeof(Book) });   // .Tables: one result per type
 ```
 
-`InitializeTable` never alters an existing table; it throws `InvalidOperationException` when the existing table is missing mapped columns.
+`InitializeTable` never alters an existing table; it throws `InvalidOperationException` when the existing table is missing mapped columns. `ValidateTable(s)` reports instead of throwing: `TableValidationResult` has `TableExists`, `Errors`, `Warnings` and `IsValid`; `SchemaValidationResult` adds `Tables` and prefixes each message with the type name. Both accept an optional transaction.
 
 ## Migrations
 
@@ -788,10 +826,11 @@ Durable has lightweight migrations without model snapshots: schema sync brings t
 // Person, Order: entities from the sections above
 SqliteConnectionFactory factory = new SqliteConnectionFactory("Data Source=app.db");
 SqlMigrator migrator = new SqlMigrator(factory, SqliteDialect.Default)
-    .AddMigrationsFromAssembly(typeof(AddPersonEmail).Assembly);
+    .AddMigrationsFromAssembly(typeof(AddPersonEmail).Assembly);   // or .AddMigration(new AddPersonEmail()) (trimming/AOT-safe)
 
 // Additive sync: create tables, add columns, create indexes. Drops only with AllowDestructive.
 SchemaSyncResult sync = await migrator.SyncSchemaAsync(new[] { typeof(Person), typeof(Order) });
+// AOT-safe overloads take EntityMetadata: migrator.SyncSchemaAsync(new[] { EntityMetadata.For<Person>(), EntityMetadata.For<Order>() })
 foreach (SchemaDifference difference in sync.Differences) Console.WriteLine("Manual step: " + difference.Message);
 string review = await migrator.GenerateSyncScriptAsync(new[] { typeof(Person) });   // e.g. for CI review
 
@@ -805,13 +844,14 @@ public class AddPersonEmail : Migration
     public override string Id => "20261005120000_AddPersonEmail";
     public override void Up(MigrationContext context)
     {
-        context.EnsureSchema(typeof(Person));   // additive sync for this entity
-        context.ExecuteSql("UPDATE people SET email = @p0 WHERE email IS NULL", "unknown@example.com");
+        context.EnsureSchema(EntityMetadata.For<Person>());   // additive sync for this entity
+        string placeholder = "unknown@example.com";
+        context.ExecuteSql($"UPDATE people SET email = {placeholder} WHERE email IS NULL");   // holes are parameters
     }
     public override void Down(MigrationContext context)
     {
-        context.ExecuteSql("DROP INDEX ix_people_email");
-        context.ExecuteSql("ALTER TABLE people DROP COLUMN email");
+        context.ExecuteSqlRaw("DROP INDEX ix_people_email");
+        context.ExecuteSqlRaw("ALTER TABLE people DROP COLUMN email");
     }
 }
 ```
@@ -819,6 +859,7 @@ public class AddPersonEmail : Migration
 - Migrations run in ordinal `Id` order under a database lock (PostgreSQL advisory lock, SQL Server `sp_getapplock`, MySQL `GET_LOCK`, SQLite `BEGIN IMMEDIATE`).
 - On PostgreSQL, SQL Server and SQLite each migration commits together with its history row, so a failed migration is rolled back and not recorded. MySQL commits DDL implicitly: a failed migration is not recorded but earlier statements stay applied (`MigrationException.MayBePartiallyApplied`), so keep MySQL migrations small and idempotent.
 - A new NOT NULL column needs a constant `[DefaultValue]` or a numeric/bool/enum type (which defaults to its CLR default); otherwise sync reports it as a manual step. Type, length, nullability and key changes are reported, never applied.
+- `MigrationContext` follows the [raw SQL rules](#raw-sql-procedures-and-multiple-result-sets): `ExecuteSql`/`ExecuteScalar` take an interpolated string, `ExecuteSqlRaw`/`ExecuteScalarRaw` take text and `{0}`-style values (+ `Async` forms with a trailing token).
 - `DatabaseSchemaReader` (`ReadTable`, `ReadTableNames`) and `SchemaDiffer` are public for tooling.
 
 ## Command-Line Tool
@@ -906,7 +947,25 @@ OpenTelemetry: every command is an `Activity` from the `"Durable"` source.
 services.AddOpenTelemetry().WithTracing(t => t.AddSource(DurableDiagnostics.ActivitySourceName));
 ```
 
-`LogParameterValues` (default false) adds parameter values to log entries. `IQueryBuilder<T>.ExecuteWithQueryAsync()` returns the results together with the query text.
+`LogParameterValues` (default false) adds parameter values to log entries.
+
+To get the SQL of one specific call together with its results, use the `*WithQuery` methods; they replace the 0.4 "include query in results" switches:
+
+```csharp
+// people: SqliteRepository<Person> (any ISqlRepository<Person>)
+IDurableResult<Person> created = people.CreateWithQuery(new Person { FirstName = "Kim" });
+Console.WriteLine(created.Query);                                       // the INSERT that ran
+Person kim = created.AsEntity();
+
+IDurableResult<Person> result = await people.ReadManyWithQueryAsync(p => p.Salary > 25);
+Console.WriteLine(result.Query);
+foreach (Person p in result.Result) Console.WriteLine(p.FirstName);
+
+// Any backend: the query builder
+IDurableResult<Person> page = await people.Query().Where(p => p.Salary > 25).Take(10).ExecuteWithQueryAsync();
+```
+
+Also: `UpdateWithQuery`, `DeleteWithQuery`, `DeleteManyWithQuery` (+ `Async`) on SQL repositories (extension methods in `Durable.Sql`) and `ExecuteWithQuery` / `ExecuteAsyncEnumerableWithQuery` on query builders. `AsEntityAsync`, `AsValueAsync` and `AsCountAsync` unwrap a `Task` of a result.
 
 ## Connections
 
@@ -914,14 +973,16 @@ Durable uses each driver's connection pooling; it does not pool connections itse
 
 ```csharp
 // connectionString: a PostgreSQL connection string
-PostgresConnectionFactory factory = new PostgresConnectionFactory(connectionString, maxConcurrentConnections: 50);
+await using PostgresConnectionFactory factory = new PostgresConnectionFactory(connectionString, maxConcurrentConnections: 50);
 PostgresRepository<Person> people = new PostgresRepository<Person>(factory);
 PostgresRepository<Order> orders = new PostgresRepository<Order>(factory);
+
+// Or from settings: new PostgresConnectionFactory(new PostgresRepositorySettings { Hostname = "db", Database = "app", ... })
 ```
 
 - Each operation opens a connection, runs, and returns it to the pool. Streaming reads hold their connection until enumeration finishes or the enumerator is disposed.
 - `maxConcurrentConnections` caps connections Durable holds open; when reached, opening waits up to `AcquireTimeout` and then throws `TimeoutException`.
-- SQLite: `SqliteConnectionFactory.BusyTimeoutMilliseconds` (default 30 s) sets `PRAGMA busy_timeout` on every connection. A `:memory:` data source becomes a private in-memory database (memdb VFS) that lives as long as its factory.
+- SQLite: `SqliteConnectionFactory.BusyTimeoutMilliseconds` (default 30 s) sets `PRAGMA busy_timeout` on every connection. A `:memory:` data source becomes a private in-memory database (memdb VFS) that lives as long as its factory. Disposing a SQLite factory releases only that private database; it does not clear the driver's pool for a file or a named in-memory database (call `SqliteConnection.ClearPool`/`ClearAllPools` for that).
 
 ---
 
@@ -939,6 +1000,7 @@ PostgresRepository<Order> orders = new PostgresRepository<Order>(factory);
 - Every async method takes a `CancellationToken`; it is passed to the driver, and streaming checks it per row.
 - With `Include`, streaming loads related rows in batches (`IncludeStreamingBatchSize`, default 256 root rows).
 - LiteDB and LiteGraph are synchronous or batch-oriented stores: their queries read all candidates before returning the first row, and LiteDB operations outside a transaction complete synchronously.
+- Async disposal: connection factories, transactions (`ITransaction`), `AmbientTransactionScope`, `SqlMultipleResultReader` and the non-SQL backends implement `IAsyncDisposable`; use `await using` in async code. Repositories are `IDisposable` only (they hold no connection between operations).
 
 ```csharp
 // people: IRepository<Person>; token: a CancellationToken
@@ -953,12 +1015,14 @@ await foreach (Person p in people.ReadManyAsync(p => p.Status == Status.Active, 
 | Exception | When |
 |---|---|
 | `OptimisticConcurrencyException` | Version mismatch on `Update` that the conflict resolver did not resolve, or the row was deleted by someone else. Properties: `Entity`, `ExpectedVersion`, `ActualVersion` |
-| `NotSupportedException` | A LINQ construct that cannot be translated; a capability the backend lacks (the message names it); a function a dialect lacks |
-| `InvalidOperationException` | `ReadSingle` with zero or several matches; `Update` of a row that does not exist; duplicate key on the In-Memory and LiteDB backends; table validation failures; a non-SQL transaction commit that lost a write conflict |
+| `ConcurrencyConflictException` | Raised by a resolver that refuses to choose (`ThrowExceptionResolver`, `MergeChangesResolver` with `MergeConflictBehavior.ThrowException`). Properties: `CurrentEntity`, `IncomingEntity`, `OriginalEntity` |
+| `NotSupportedException` | A LINQ construct that cannot be translated; a capability the backend lacks (the message names it); a function a dialect lacks (for example `NthValue` on SQL Server) |
+| `InvalidOperationException` | `ReadSingle` with zero or several matches; `Update` of a row that does not exist; duplicate key on the In-Memory and LiteDB backends; `InitializeTable` on an existing table that lacks mapped columns; an invalid mapping such as a `[VersionColumn]` type that does not fit its property (when metadata is built); a non-SQL transaction commit that lost a write conflict |
+| `FormatException` | A raw-SQL `{n}` placeholder without a value, or an interpolation hole with an alignment or format specifier |
 | `MigrationException` | A migration failed. `MigrationId` and `MayBePartiallyApplied` (MySQL) describe it |
 | `TimeoutException` | `maxConcurrentConnections` reached and `AcquireTimeout` elapsed |
 | `ArgumentNullException`, `ArgumentException`, `ArgumentOutOfRangeException` | Invalid arguments and option values (validated up front) |
-| `ObjectDisposedException` | Using a disposed repository, factory or backend |
+| `ObjectDisposedException` | Using a disposed repository, factory, backend or transaction |
 | Driver exceptions (`SqliteException`, `PostgresException`, `MySqlException`, `SqlException`) | Constraint violations, deadlocks, timeouts and other database errors are passed through unwrapped |
 | `OperationCanceledException` | The `CancellationToken` was cancelled |
 
@@ -981,9 +1045,11 @@ catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
 | SQL repositories (`SqliteRepository<T>`, ...) | Safe for concurrent use. Configure (`AddQueryFilter`, `ConflictResolver`, `CaptureSql`) before sharing |
 | `RepositoryBase<T>` repositories (In-Memory, LiteDB, LiteGraph) | Same as above |
 | Connection factories, dialects, data type converters | Safe for concurrent use |
-| `InMemoryBackend`, `LiteDbBackend`, `LiteGraphBackend` | Safe for concurrent use by any number of repositories and threads |
+| `InMemoryBackend`, `LiteDbBackend`, `LiteGraphBackend` | Safe for concurrent use by any number of repositories and threads. `QueryPlanned` handlers run on the querying thread; an exception thrown by a handler is logged, never thrown to the query |
 | Query builders (`Query()`) | Not thread-safe; create one per query |
-| Transactions (`ITransaction`) | Use from one logical flow at a time |
+| Transactions (`ITransaction`), savepoints | Use from one logical flow at a time |
+| `AmbientTransactionScope` | Flows with the async context (`AsyncLocal`); `Current` is per flow, so concurrent flows never see each other's scope |
+| Conflict resolvers | The built-in resolvers are thread-safe and can be shared; set `DefaultConflictResolver.DefaultStrategy` before sharing |
 | `SqlRepositoryOptions`, settings classes, `DurableMapping` | Configure before use; not for concurrent mutation |
 | `CaptureSql` / `LastExecutedSql` | Reports the last command the repository ran, from any thread; use a repository per flow when capturing under concurrency |
 
@@ -994,6 +1060,7 @@ Durable has no container integration package; register the pieces yourself with 
 ```csharp
 // services: IServiceCollection; connectionString: string; ITenantContext: your scoped service exposing int TenantId
 services.AddSingleton(_ => new PostgresConnectionFactory(connectionString));   // the container disposes it at shutdown
+// (or from settings: new PostgresConnectionFactory(PostgresRepositorySettings.Parse(connectionString)))
 
 // Stateless repositories can be singletons: they are thread-safe and hold no connections between operations
 services.AddSingleton<IRepository<Person>>(sp => new PostgresRepository<Person>(sp.GetRequiredService<PostgresConnectionFactory>()));
@@ -1014,7 +1081,7 @@ services.AddScoped<IRepository<Order>>(sp =>
 | Connection factory | Singleton | Owns the driver data source and optional concurrency cap; disposing it ends the in-memory SQLite database |
 | Repository built on a shared factory | Singleton, or scoped when configured per request | Cheap and thread-safe; disposal never touches the shared factory |
 | Repository built from a connection string or settings | Avoid in containers | It creates and disposes its own factory; for SQLite `:memory:`, every instance is a separate database |
-| `InMemoryBackend`, `LiteDbBackend`, `LiteGraphBackend` | Singleton | Hold the data (or the database handle) and serve every entity type |
+| `InMemoryBackend`, `LiteDbBackend`, `LiteGraphBackend` | Singleton (register the instance from `Create`/`CreateAsync`) | Hold the data (or the database handle) and serve every entity type; the container disposes them at shutdown |
 
 ## Unit Testing with the In-Memory Backend
 
@@ -1033,7 +1100,7 @@ public class PayrollService
 }
 
 // In a test (any framework):
-InMemoryBackend backend = new InMemoryBackend();
+using InMemoryBackend backend = InMemoryBackend.Create();
 InMemoryRepository<Person> people = backend.CreateRepository<Person>();
 await people.CreateManyAsync(new[]
 {
@@ -1052,9 +1119,33 @@ What differs from a SQL database:
 - String comparisons are ordinal for `StringMatchMode.Database` (SQL Server and MySQL default collations are case-insensitive). Use `StringMatchMode.Ordinal` or `IgnoreCase` in production code if you want identical results.
 - No SQL-only members (`FromSql`, `BulkInsert`, migrations). Code that needs them takes `ISqlRepository<T>`; test it against SQLite (`Data Source=:memory:`) instead.
 - Decimals keep full precision and `DateTime.Kind` is preserved; SQL columns may round or return `Unspecified`.
-- `new InMemoryBackend(RepositoryCapabilities.None)` simulates a minimal backend: masked features throw `NotSupportedException`, which lets you test code paths for limited backends.
+- `InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = RepositoryCapabilities.None })` simulates a minimal backend: masked features throw `NotSupportedException`, which lets you test code paths for limited backends.
+- Reset between tests with `backend.Clear()` / `ClearAsync()` (every table, sequences restart) or `Clear(typeof(T))`, or create a new backend per test.
 
 ---
+
+## Non-SQL Backend Conventions
+
+The three non-SQL backends follow one convention, so switching between them (or writing a fourth) changes only the type names:
+
+| | In-Memory | LiteDB | LiteGraph | SQL providers (for comparison) |
+|---|---|---|---|---|
+| Backend type | `InMemoryBackend` | `LiteDbBackend` | `LiteGraphBackend` | - (the connection factory plays this role) |
+| Create | `InMemoryBackend.Create(settings?)` / `CreateAsync(settings?, token)` | `LiteDbBackend.Create(settings?)` / `CreateAsync(...)` | `LiteGraphBackend.Create(settings?)` / `CreateAsync(...)` | `new XConnectionFactory(connectionString \| settings)` |
+| Settings | `InMemoryRepositorySettings` | `LiteDbRepositorySettings` | `LiteGraphRepositorySettings` | `XRepositorySettings` |
+| Factory methods | `ForInMemory()` | `ForInMemory()`, `ForFile(path)`, `ForDatabase(liteDatabase)` | `ForInMemory()`, `ForFile(path)`, `ForClient(client, tenant?, graph?)` | `Parse(connectionString)` |
+| Settings members | `IsInMemory`, `Validate()`, `Capabilities`, `JsonOptions` | `IsInMemory`, `Validate()`, `JsonOptions`, `Logger`, ... | `IsInMemory`, `Validate()`, `JsonOptions`, `Logger`, ... | `BuildConnectionString()` |
+| Repositories | `backend.CreateRepository<T>(options?)` or `new InMemoryRepository<T>(backend, options?)` | `backend.CreateRepository<T>(options?)` or `new LiteDbRepository<T>(backend, options?)` | `backend.CreateRepository<T>(options?)` or `new LiteGraphRepository<T>(backend, options?)` | `new XRepository<T>(factory, options?)` |
+| Typed `repository.Backend` | `InMemoryBackend` | `LiteDbBackend` | `LiteGraphBackend` | - (`repository.ConnectionFactory`) |
+| Ownership | Owns its data (disposing discards it) | Owns the `LiteDatabase` it opened (`OwnsDatabase`); one you pass is never disposed | Owns the client it created (`OwnsClient`); one you pass is never disposed | You dispose a factory you created |
+| Disposal | `IDisposable` + `IAsyncDisposable`; `ObjectDisposedException` afterwards. Repositories never dispose their backend | same | same | same (factories) |
+| Transactions | `BeginTransaction()` / `BeginTransactionAsync(token)` return `InMemoryTransaction`; `Owns(transaction)` | `LiteDbTransaction` | `LiteGraphTransaction` | `ISqlTransaction` |
+| Reset | `Clear()` / `ClearAsync(token)`; `Clear(type)` / `ClearAsync(type, token)` return the row count and restart sequences | same | same | `DeleteAll` / SQL |
+| Inspect storage | `GetStoredRows(type)` / `GetStoredRowsAsync` | same (BSON documents) | same | SQL |
+| Query plans | - | `QueryPlanned` event, `LastQueryPlan` (`ExplainQueries` adds LiteDB's plan) | `QueryPlanned` event, `LastQueryPlan` | SQL capture, logging, interceptors |
+| Native AOT | Yes | Yes | Not yet | Yes (SQLite verified) |
+
+Plan objects (`LiteDbQueryPlan`, `LiteGraphQueryPlan`) derive from `EventArgs` and carry `Operation` and `EntityType`. An exception thrown by a `QueryPlanned` handler is logged and never breaks the query.
 
 ## In-Memory Backend
 
@@ -1063,7 +1154,7 @@ What differs from a SQL database:
 ```csharp
 using Durable.InMemory;
 
-InMemoryBackend backend = new InMemoryBackend();
+await using InMemoryBackend backend = await InMemoryBackend.CreateAsync();   // or InMemoryBackend.Create(settings)
 InMemoryRepository<Author> authors = backend.CreateRepository<Author>();
 InMemoryRepository<Book> books = backend.CreateRepository<Book>();      // same backend: includes and navigations work across them
 
@@ -1073,12 +1164,14 @@ await books.CreateAsync(new Book { Title = "Notes", Year = 1843, AuthorId = ada.
 Author loaded = (await authors.Query().Include(a => a.Books).ExecuteAsync()).Single();
 Console.WriteLine($"{loaded.Name}: {loaded.Books.Count} book(s)");       // Ada: 1 book(s)
 
-backend.Clear();                                                         // empty every table
+int removed = await backend.ClearAsync(typeof(Book));                    // 1; ClearAsync() empties every table
 ```
 
 - Transactions use snapshot isolation; commit fails with `InvalidOperationException` when another writer changed a row the transaction wrote (first committer wins).
-- Values are stored as a driver would store them (converter provider values, JSON text, enum names), auto-increment keys are never reused, unordered reads return insertion order, ordering is stable with nulls first.
+- Values are stored as a driver would store them (converter provider values, JSON text, enum names), auto-increment keys are never reused (until `Clear`), unordered reads return insertion order, ordering is stable with nulls first.
 - `GetStoredRows(typeof(T))` returns the raw stored rows for assertions.
+- `InMemoryRepositorySettings`: `Capabilities` (default `All`; mask features to simulate a limited backend) and `JsonOptions` (JSON columns; see [Native AOT](#native-aot)).
+- Disposing the backend discards its data.
 
 ## LiteDB Backend
 
@@ -1087,40 +1180,44 @@ backend.Clear();                                                         // empt
 ```csharp
 using Durable.LiteDb;
 
-using LiteDbBackend store = new LiteDbBackend(LiteDbRepositorySettings.ForFile("library.db"));
-// In memory: new LiteDbBackend(LiteDbRepositorySettings.InMemory())
-// Existing LiteDatabase (never disposed by Durable): new LiteDbBackend(myLiteDatabase)
+using LiteDbBackend store = LiteDbBackend.Create(LiteDbRepositorySettings.ForFile("library.db"));
+// In memory: LiteDbBackend.Create(LiteDbRepositorySettings.ForInMemory())
+// Existing LiteDatabase (never disposed by Durable): LiteDbBackend.Create(LiteDbRepositorySettings.ForDatabase(myLiteDatabase))
 
 LiteDbRepository<Author> authors = store.CreateRepository<Author>();
 LiteDbRepository<Book> books = store.CreateRepository<Book>();
 
 Author ada = await authors.CreateAsync(new Author { Name = "Ada" });
-await using (ITransaction tx = await books.BeginTransactionAsync())
+await using (LiteDbTransaction tx = await store.BeginTransactionAsync())
 {
     await books.CreateAsync(new Book { Title = "Notes", Year = 1843, AuthorId = ada.Id }, tx);
     await books.CreateAsync(new Book { Title = "Sketch", Year = 1842, AuthorId = ada.Id }, tx);
     await tx.CommitAsync();
 }
 
-store.ExplainQueries = true;
+store.QueryPlanned += (sender, plan) => Console.WriteLine($"plan: {plan}");
 List<Book> early = books.ReadMany(b => b.AuthorId == ada.Id && b.Title.Contains("e")).ToList();
-Console.WriteLine($"{early.Count} book(s); plan: {store.LastQueryPlan}");
+Console.WriteLine($"{early.Count} book(s)");
 ```
 
 ```text
-2 book(s); plan: Query books WHERE $.["author_id"] = @p0 {"p0":1} | client: WHERE ((books.author_id = 1) AND (books.title CONTAINS 'e')) | read 2
+plan: Query books WHERE $.["author_id"] = @p0 {"p0":1} | client: WHERE ((books.author_id = 1) AND (books.title CONTAINS 'e')) | read 2
+2 book(s)
 ```
 
-The author filter was pushed into LiteDB (and its index); `Contains` ran client-side.
+The author filter was pushed into LiteDB (and its index); `Contains` ran client-side. `LastQueryPlan` holds the most recent plan, and `ExplainQueries = true` adds LiteDB's own explain output to it.
 
 | Setting (`LiteDbRepositorySettings`) | Default |
 |---|---|
-| `Filename` | `":memory:"` (`InMemory()`, `ForFile(path)`) |
+| `Filename` | `":memory:"` (`ForInMemory()`, `ForFile(path)`) |
+| `Database` | None; an existing `LiteDatabase` (`ForDatabase`), never disposed by Durable |
 | `ConnectionType` | `Direct` (exclusive file access); `Shared` for several processes |
-| `Password`, `ReadOnly`, `Upgrade`, `Timeout`, `InitialSizeBytes` | LiteDB's defaults |
+| `Timeout` | 1 minute (1 second to 1 hour) |
+| `Password`, `ReadOnly`, `Upgrade`, `InitialSizeBytes` | None, false, false, 0 |
+| `Logger`, `JsonOptions` | None; Durable's default JSON options |
 
 - **Storage**: one collection per entity (`[Entity]` name); each column is a document field. A single primary key is `_id`. Values round-trip exactly (`DateTime` ticks and kind, `DateTimeOffset` offset, decimal scale, `DateOnly`/`TimeOnly`, unsigned integers).
-- **Queries**: comparisons, null checks and `IN` between a column and a value, combined with AND/OR, are pushed into LiteDB and use indexes on keys, foreign keys and `[Index]` columns (string indexes only when `MaxLength` is 250 or less). Everything else (non-ordinal string matching, functions, navigations, ordering, grouping) runs client-side with C# semantics, so push-down never changes results. `Skip`/`Take`/`Count` are pushed down when the filter is fully pushed and the query is unordered. `ExplainQueries`/`LastQueryPlan` and `QueryPlanned` show what was pushed.
+- **Queries**: comparisons, null checks and `IN` between a column and a value, combined with AND/OR, are pushed into LiteDB and use indexes on keys, foreign keys and `[Index]` columns (string indexes only when `MaxLength` is 250 or less; `EnsureIndexes(type)` creates them up front). Everything else (non-ordinal string matching, functions, navigations, ordering, grouping) runs client-side with C# semantics, so push-down never changes results. `Skip`/`Take`/`Count` are pushed down when the filter is fully pushed and the query is unordered.
 - **Strings**: new databases use an ordinal collation, so `StringMatchMode.Database` behaves as `Ordinal`.
 - **Transactions**: work across `await` (each runs on a dedicated thread). An open transaction blocks other writers of the same collection (of the whole file in `Shared` mode); LiteDB allows at most 100 open transactions per database. If an operation fails inside LiteDB, the transaction is rolled back and further use throws.
 - **Limits**: auto-increment requires a single integer primary key; table names must be valid LiteDB collection names (collection and field names are case-insensitive); `[Index(IsUnique = true)]` is not enforced.
@@ -1133,8 +1230,8 @@ The author filter was pushed into LiteDB (and its index); `Contains` ran client-
 ```csharp
 using Durable.LiteGraph;
 
-await using LiteGraphBackend backend = await LiteGraphBackend.CreateAsync(LiteGraphBackendSettings.ForFile("graph.db"));
-// In memory (ephemeral): LiteGraphBackendSettings.ForInMemory(); existing client: LiteGraphBackendSettings.ForClient(client)
+await using LiteGraphBackend backend = await LiteGraphBackend.CreateAsync(LiteGraphRepositorySettings.ForFile("graph.db"));
+// In memory (ephemeral): LiteGraphRepositorySettings.ForInMemory(); existing client: LiteGraphRepositorySettings.ForClient(client)
 
 LiteGraphRepository<Author> authors = backend.CreateRepository<Author>();
 LiteGraphRepository<Book> books = backend.CreateRepository<Book>();
@@ -1151,23 +1248,24 @@ await foreach (LiteGraph.Node node in backend.Client.Node.ReadParents(backend.Te
     Console.WriteLine(node.Name);                                                       // books:1
 ```
 
-| Setting (`LiteGraphBackendSettings`) | Default |
+| Setting (`LiteGraphRepositorySettings`) | Default |
 |---|---|
-| `Client` / `Filename` / `InMemory` | One location is required (`ForClient`, `ForFile`, `ForInMemory`). A client you pass is never disposed |
+| `Client` / `Filename` | Neither: an ephemeral in-memory graph (`IsInMemory`, `ForInMemory`). `ForFile(path)` opens a SQLite file (`LoadIntoMemory` keeps it in memory and writes it back on dispose); `ForClient(client)` uses a `LiteGraphClient` you own, never disposed |
 | `TenantGuid`/`TenantName`, `GraphGuid`/`GraphName` | First tenant/graph named `"Durable"`, created when missing |
 | `MaintainEdges` | `true`: foreign keys are kept as edges |
 | `PushDownDataFilters` | `true`: exact equality filters narrow candidates in LiteGraph |
 | `PreserveNodeSubordinates` | `true`: labels, tags and vectors added outside Durable survive updates |
 | `MaxOperationsPerTransaction` | 10,000 node and edge operations (1 to 10,000) |
-| `TransactionTimeoutSeconds` | 60 |
+| `TransactionTimeout` | 1 minute (1 second to 1 hour) |
 | `Logger`, `JsonOptions` | None; camelCase JSON |
 
 - **Storage model**: each row is a node labelled with the table name, named `table:key`, whose data is a JSON object of the column values (converters, JSON columns and enums applied). Values round-trip exactly: decimals keep their scale, `DateTime`/`DateTimeOffset` use the round-trip `"O"` format, `TimeSpan` the `"c"` format, `DateOnly` `yyyy-MM-dd`, `TimeOnly` `HH:mm:ss.fffffff`, byte arrays base64, non-finite doubles as strings. Node GUIDs are derived from the graph, table and key (`GetNodeGuid`), so key lookups are GUID lookups and keys (including composite keys) are unique.
-- **Edges**: an edge from dependent to principal exists exactly when the foreign key references an existing principal row; it is labelled with the navigation name. Many-to-many junction rows are nodes with an edge to each side. `RebuildEdgesAsync()` repairs edges; `GetRelationships(type)` lists them.
-- **Queries**: labels and primary keys are always pushed down; exact (ordinal) string equality/`IN` and non-negative integer equality are pushed as LiteGraph data filters. Everything is re-evaluated client-side, so results follow C# semantics. Every candidate node is read before results are returned. `QueryPlanned` and the logger show push-down.
+- **Edges**: an edge from dependent to principal exists exactly when the foreign key references an existing principal row; it is labelled with the navigation name. Many-to-many junction rows are nodes with an edge to each side. `RebuildEdges`/`RebuildEdgesAsync(entities?)` recomputes the edges of every registered relationship (pass `EntityMetadata.For<T>()` values to register types first); `GetRelationships(type)` lists them.
+- **Queries**: labels and primary keys are always pushed down; exact (ordinal) string equality/`IN` and non-negative integer equality are pushed as LiteGraph data filters. Everything is re-evaluated client-side, so results follow C# semantics. Every candidate node is read before results are returned. `QueryPlanned`, `LastQueryPlan` and the logger show push-down.
 - **Transactions**: interactive with read-your-writes; they commit atomically as one LiteGraph graph transaction, first committer wins. A transaction (including the implicit one in `CreateMany`, `UpsertMany` and `UpdateMany`) is limited to `MaxOperationsPerTransaction` operations: split larger batches.
 - **Limits**: auto-increment keys are generated per process, so several processes writing one graph should not rely on generated keys (a collision fails; nothing is overwritten). Do not change key values or data of Durable nodes outside Durable.
-- **Dependencies**: LiteGraph 10.1.0 brings about 20 packages (Npgsql, Microsoft.Data.Sqlite, SQLitePCLRaw, HnswLite, Pgvector, ...).
+- **Native AOT**: not supported yet. The LiteGraph library itself is not AOT-compatible (it uses reflection-based System.Text.Json); `Durable.LiteGraph`'s own code is annotated, and `LiteGraphBackend.Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` so a trimmed or AOT build warns.
+- **Dependencies**: LiteGraph 10.1.0 brings about 20 packages (Npgsql, Microsoft.Data.Sqlite, SQLitePCLRaw 3, HnswLite, Pgvector, ...).
 - Capabilities: all. Passes the full conformance kit.
 
 ## Writing a Custom Backend
@@ -1226,18 +1324,14 @@ using Durable.InMemory;
 
 public sealed class MyConformanceTarget : IConformanceTarget
 {
-    private readonly InMemoryBackend _Backend = new InMemoryBackend();   // replace with your backend
+    private readonly InMemoryBackend _Backend = InMemoryBackend.Create();   // replace with your backend
 
     public string Name => "My backend";
     public RepositoryCapabilities Capabilities => _Backend.Capabilities;
     public IRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new() => _Backend.CreateRepository<T>(options);
 
     // Empty storage for the given entity types before each case
-    public Task ResetAsync(IReadOnlyList<Type> entityTypes, CancellationToken token = default)
-    {
-        _Backend.Clear();
-        return Task.CompletedTask;
-    }
+    public Task ResetAsync(IReadOnlyList<Type> entityTypes, CancellationToken token = default) => _Backend.ClearAsync(token);
 }
 
 // Console runner (Touchstone.Cli package); returns 0 when every case passes
@@ -1256,17 +1350,18 @@ Every method has a sync form and an `...Async` form with a trailing `Cancellatio
 
 | Family | Methods | Returns (async) |
 |---|---|---|
-| Read one | `ReadById`, `ReadFirst`, `ReadFirstOrDefault`, `ReadSingle`, `ReadSingleOrDefault` | `Task<T?>` (`ReadSingle`: `Task<T>`) |
+| Read one | `ReadById`, `ReadFirst` (null when nothing matches), `ReadSingle`, `ReadSingleOrDefault` | `Task<T?>` (`ReadSingle`: `Task<T>`) |
 | Read many | `ReadMany(predicate?)`, `ReadAll` | `IAsyncEnumerable<T>` (sync: streamed `IEnumerable<T>`) |
 | Existence, count | `Exists`, `ExistsById`, `Count(predicate?)` | `Task<bool>`, `Task<long>` |
 | Aggregates | `Sum`, `Average`, `Min`, `Max` (selector, predicate?) | `Task<decimal>` (Sum/Average), `Task<TResult>` |
 | Create | `Create`, `CreateMany` (generated keys written back, input order) | `Task<T>`, `Task<IEnumerable<T>>` |
 | Update | `Update(entity)`, `UpdateMany(predicate, action)`, `UpdateField(predicate, field, value)`, `BatchUpdate(predicate, p => new T { ... })` | `Task<T>`, `Task<int>` |
-| Delete | `Delete(entity)`, `DeleteById`, `DeleteMany(predicate)`, `DeleteAll`, `BatchDelete(predicate)` | `Task<bool>`, `Task<int>` |
+| Delete | `Delete(entity)`, `DeleteById`, `DeleteMany(predicate)`, `DeleteAll` | `Task<bool>`, `Task<int>` |
 | Upsert | `Upsert`, `UpsertMany` | `Task<T>`, `Task<IEnumerable<T>>` |
 | Query | `Query(transaction?)` | `IQueryBuilder<T>` |
-| Transactions | `BeginTransaction`, `BeginTransactionAsync` | `ITransaction` |
+| Transactions | `BeginTransaction`, `BeginTransactionAsync`; ambient: `AmbientTransactionScope.Create[Async]`, `ExecuteInTransactionScope[Async]` | `ITransaction` |
 | Configuration | `Metadata`, `Capabilities`, `ConflictResolver`, `QueryFilters`, `AddQueryFilter`, `ClearQueryFilters` | |
+| Results with query text (SQL, extensions) | `CreateWithQuery`, `ReadManyWithQuery`, `UpdateWithQuery`, `DeleteWithQuery`, `DeleteManyWithQuery`; `AsEntity[Async]`, `AsValue[Async]`, `AsCount[Async]` | `IDurableResult<T>` |
 
 ### `IQueryBuilder<T>`
 
@@ -1284,14 +1379,15 @@ Every method has a sync form and an `...Async` form with a trailing `Cancellatio
 
 | Area | Members |
 |---|---|
-| Raw SQL | `FromSql`, `FromSql<TResult>`, `FromSqlAsync`, `ExecuteSql`, `ExecuteScalar<TResult>` (+ `Async`) |
-| Multiple results, procedures | `QueryMultiple` → `SqlMultipleResultReader`; `ExecuteProcedure`, `FromProcedure<TResult>` with `SqlParameterValue` (input/output) |
+| Raw SQL | Interpolated: `FromSql`, `FromSql<TResult>`, `ExecuteSql`, `ExecuteScalar<TResult>`, `QueryMultiple`; text + `{0}` values: `FromSqlRaw`, `FromSqlRaw<TResult>`, `ExecuteSqlRaw`, `ExecuteScalarRaw<TResult>`, `QueryMultipleRaw` (+ `Async`, token last) |
+| Multiple results, procedures | `QueryMultiple[Raw]` → `SqlMultipleResultReader`; `ExecuteProcedure`, `FromProcedure<TResult>` with `IEnumerable<SqlParameterValue>` (input/output) |
 | Bulk | `BulkInsert` / `BulkInsertAsync` |
-| Schema | `InitializeTable(s)`, `ValidateTable(s)`, `CreateIndexes`, `DropIndex`, `GetIndexes`, `CreateDatabaseIfNotExists` |
-| Transactions | `BeginTransaction` → `ISqlTransaction` (`Connection`, `Transaction`, `CreateSavepoint`); `SqlTransactionContext.Wrap` |
+| Schema | `InitializeTable(s)`, `ValidateTable(s)` → `TableValidationResult` / `SchemaValidationResult`, `CreateIndexes`, `DropIndex`, `GetIndexes`, `CreateDatabaseIfNotExists` (+ `Async`) |
+| Transactions | `BeginTransaction[Async]` → `ISqlTransaction` (`Connection`, `Transaction`, `CreateSavepoint[Async]` → `ISavepoint`: `Rollback`, `Release`); `SqlTransactionContext.Wrap` |
 | Diagnostics | `CaptureSql`, `LastExecutedSql`, `LastExecutedSqlWithParameters`, `Options`, `Dialect`, `ConnectionFactory`, `Settings` |
-| Query builder | `Union`, `UnionAll`, `Intersect`, `Except`, `WhereIn`, `WhereNotIn`, `WhereInRaw`, `WhereNotInRaw`, `WhereExists`, `WhereNotExists`, `WhereRaw`, `SelectRaw`, `FromRaw`, `JoinRaw`, `WithCte`, `WithRecursiveCte`, `WithWindowFunction`, `SelectCase`, `BuildSql`, `BuildStatement` |
+| Query builder | `Union`, `UnionAll`, `Intersect`, `Except`, `WhereIn`, `WhereNotIn`, `WhereInRaw`, `WhereNotInRaw`, `WhereExists`, `WhereNotExists`, `WhereSql`, `WhereRaw`, `SelectRaw`, `FromRaw`, `JoinRaw`, `WithCte`, `WithRecursiveCte`, `WithWindowFunction`, `SelectCase`, `BuildSql`, `BuildStatement` |
 | Migrations | `SqlMigrator`, `Migration`, `MigrationContext`, `DatabaseSchemaReader`, `SchemaDiffer` |
+| Raw SQL helpers | `RawSql` (placeholder convention, `ToStatement`), `SqlStatement`, `SqlParameterValue` |
 
 ## Supported LINQ
 
@@ -1367,7 +1463,90 @@ On SQLite, Durable reads 10,000 rows in about 10.9 ms (Dapper 12.1 ms, ADO.NET 1
 
 ## Native AOT
 
-<!-- AOT section: filled in when the AOT work merges -->
+Durable runs in trimmed and Native AOT applications. Every library (except the `Durable.Tool` executable) is marked `IsAotCompatible` and builds with zero trim/AOT warnings, and CI publishes and runs an AOT test application on every push. `Durable.LiteGraph` is annotated too, but the LiteGraph library it depends on is not AOT-compatible yet. Under AOT nothing is generated at runtime: entity accessors and row readers use reflection invokers instead of compiled expression trees (a 10,000-row SQLite read takes about 11 ms under AOT versus 12 ms JIT on .NET 10), and the client-side parts of LINQ run on the expression interpreter.
+
+### Setup
+
+```xml
+<PropertyGroup>
+  <PublishAot>true</PublishAot>
+</PropertyGroup>
+```
+
+The `Durable` package also sets `NullabilityInfoContextSupport=true` (through `buildTransitive`), because Durable reads nullable annotations to decide which reference-type columns are nullable; if you turn it off, every reference-type column is treated as nullable.
+
+### Keeping entity types
+
+The trimmer keeps an entity's properties and constructor when the type is used as a repository or query type argument (`SqliteRepository<Book>`, `Select<BookSummary>`, `FromSql<TResult>`) or named in `[ForeignKey(typeof(X), ...)]` or `[ManyToManyNavigationProperty(typeof(J), ...)]`. A type reached **only** through a navigation property must be rooted once at startup:
+
+```csharp
+EntityMetadata.For<OrderLine>();   // OrderLine is only reached through Order.Lines
+```
+
+If you forget, Durable throws an `InvalidOperationException` naming the type and this fix instead of silently mapping nothing.
+
+### JSON columns
+
+`Flags.Json` columns and collection/complex properties are serialized with System.Text.Json, which under AOT needs a source-generated context. Declare one for your JSON column types (camelCase, matching Durable's default) and pass options created by `DurableJson.CreateOptions`:
+
+```csharp
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(BookDetails))]
+internal partial class AppJsonContext : JsonSerializerContext { }
+
+public class BookDetails
+{
+    public int Pages { get; set; }
+    public string? Isbn { get; set; }
+}
+
+// Startup
+JsonSerializerOptions json = DurableJson.CreateOptions(AppJsonContext.Default);
+
+// SQL providers: the data type converter carries the options
+SqlRepositoryOptions options = new SqlRepositoryOptions { DataTypeConverter = new SqliteDataTypeConverter(json) };
+SqliteRepository<Person> people = new SqliteRepository<Person>("Data Source=app.db", options);
+
+// Non-SQL backends: the settings carry them
+InMemoryBackend memory = InMemoryBackend.Create(new InMemoryRepositorySettings { JsonOptions = json });
+LiteDbRepositorySettings liteSettings = LiteDbRepositorySettings.ForFile("app.litedb");
+liteSettings.JsonOptions = json;
+LiteDbBackend lite = LiteDbBackend.Create(liteSettings);
+```
+
+`DurableJson.Serialize`/`Deserialize` are the AOT-safe helpers Durable itself uses.
+
+### Schema and migrations
+
+Overloads that take `Type` collections or scan assemblies are marked `[RequiresUnreferencedCode]`, and the trimmer warns where you call them. Use the AOT-safe forms:
+
+| Instead of | Use |
+|---|---|
+| `migrator.SyncSchema(new[] { typeof(Person) })` (also `DiffSchema`, `GenerateSyncScript`, + `Async`) | `migrator.SyncSchema(new[] { EntityMetadata.For<Person>() })` |
+| `context.EnsureSchema(typeof(Person))` | `context.EnsureSchema(EntityMetadata.For<Person>())` |
+| `migrator.AddMigrationsFromAssembly(assembly)` | `migrator.AddMigration(new AddPersonEmail())` per migration |
+| `repo.InitializeTables(types)`, `repo.ValidateTables(types)` | `InitializeTable(typeof(X))` / `ValidateTable(typeof(X))` per type (a single `typeof` is analyzable) |
+
+`SchemaDiffer.Compare` also takes `EntityMetadata`.
+
+### Provider support
+
+| Package | Native AOT |
+|---|---|
+| `Durable`, `Durable.Sql`, `Durable.Conformance` | Yes |
+| `Durable.Sqlite` | Yes, verified end to end (.NET 8 and 10, Linux and macOS) |
+| `Durable.InMemory` | Yes, verified end to end |
+| `Durable.LiteDb` | Yes, verified end to end (the test runs on .NET 9+). LiteDB's own `BsonMapper` is not trim-safe and the AOT compiler prints summary warnings (IL2104/IL3053) for the LiteDB assembly; Durable.LiteDb never uses the mapper |
+| `Durable.Postgres`, `Durable.MySql`, `Durable.SqlServer` | Durable's code is warning-free; the drivers are not verified by Durable's CI (Npgsql needs its slim data source builder for full AOT; Microsoft.Data.SqlClient has known trim warnings) |
+| `Durable.LiteGraph` | Not supported yet: the LiteGraph library itself is not AOT-compatible (reflection-based System.Text.Json); Durable.LiteGraph's own code is annotated, and `LiteGraphBackend.Create`/`CreateAsync` warn in trimmed builds |
+| `Durable.Tool` | Not applicable (a .NET tool that builds and loads your assembly) |
+
+### Known limitations
+
+- `Select(x => new Dto { ... })` makes the C# compiler emit `Expression.Bind`, which carries a trim warning (IL2026) at your call site. It is safe when the DTO is the `Select` type argument (its properties are kept); suppress it with `[UnconditionalSuppressMessage("Trimming", "IL2026")]` on the method.
+- Client-side LINQ pieces (captured values, method calls on client values) are evaluated by the expression interpreter, which is slower than compiled delegates; database-side translation is unaffected.
+- Library authors that annotate their own generic wrappers can use `EntityMetadata.RequiredMemberTypes` with `[DynamicallyAccessedMembers]` on entity type parameters, as Durable does on `IRepository<T>`.
 
 ## Troubleshooting and FAQ
 
@@ -1380,9 +1559,12 @@ On SQLite, Durable reads 10,000 rows in about 10.9 ms (Dapper 12.1 ms, ADO.NET 1
 | `Count()` on a paged query | `Count` applies `Skip`/`Take`, as `IEnumerable.Count` would; build the count without paging for totals. |
 | Navigation property is null or empty after a read | Navigations are loaded only with `Include`. |
 | "transaction cannot span database providers" | A transaction from one provider (or database) was passed to another repository. Use one transaction per database. |
+| SQLite file cannot be deleted after disposing repositories ("file in use", especially on Windows) | The driver's pool still holds connections to the file; disposing a factory or repository does not clear it. Call `SqliteConnection.ClearAllPools()` (or `ClearPool`) before deleting the file. |
 | Driver pool timeout | A streamed `ReadMany` enumeration was abandoned without disposing, or transactions are held across slow work. Use `await foreach`/`foreach` (which dispose), `.ToList()`, and short transactions. |
 | `NotSupportedException` from a `Where` | The construct is not in [Supported LINQ](#supported-linq), or the backend lacks a capability. Evaluate the value client-side first, or filter after reading. |
-| `TransactionScope` is ambiguous | `Durable.TransactionScope` and `System.Transactions.TransactionScope` are both imported; qualify the name. |
+| Does a `System.Transactions.TransactionScope` make Durable operations atomic? | No. Durable does not participate in `System.Transactions`. Use an explicit `ITransaction` or Durable's `AmbientTransactionScope`. |
+| Upgrading from 0.4: `TransactionScope`, `ReadFirstOrDefault`, `BatchDelete`, `@p0` in raw SQL no longer compile or work | Renamed or consolidated in 0.5.0: `AmbientTransactionScope`, `ReadFirst`, `DeleteMany`, `{0}` placeholders (or interpolated strings). The [CHANGELOG](CHANGELOG.md) lists every change with a migration hint. |
+| Trimmed/AOT app: "Type X has no parameterless constructor and no public properties" | The entity is only reachable through a navigation property. Call `EntityMetadata.For<X>()` at startup ([Native AOT](#native-aot)). |
 | PostgreSQL `DateTime` comes back with `Kind = Unspecified` | `timestamp` columns have no time zone; use UTC by convention or `DateTimeOffset` (`timestamptz`). |
 | MySQL `BulkInsert` is not faster than `CreateMany` | `MySqlBulkCopy` needs `AllowLoadLocalInfile=true` in the connection string and `local_infile` on the server; otherwise it falls back to multi-row `INSERT`. |
 | MySQL migration failed half-way | MySQL commits DDL implicitly; check `MigrationException.MayBePartiallyApplied` and write idempotent migrations. |
@@ -1409,6 +1591,7 @@ Tests are written once in `src/Test.Shared` with [Touchstone](https://www.nuget.
 | SQLite | The CLI runner on SQLite (plus in-memory, LiteDB, LiteGraph and the conformance kit) on Linux, Windows and macOS, net8.0 and net10.0 |
 | Adapters | The same suites through `dotnet test` with the xUnit and NUnit adapters |
 | Databases | PostgreSQL, MySQL and SQL Server in disposable docker containers, net8.0 and net10.0 |
+| Native AOT | Publishes `src/Test.Aot` with `PublishAot` for linux-x64 (trim and AOT warnings are errors, including inside the Durable assemblies) and runs the native binary, net8.0 and net10.0 |
 
 Run them locally:
 
@@ -1426,7 +1609,13 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type sqlserver --docker
 
 # An existing server: --type <provider> --host <h> --port <p> --user <u> --pass <p> --database <db>; --help lists all options
+
+# Native AOT end-to-end check (needs the platform's native toolchain; use your RID, e.g. osx-arm64, win-x64)
+dotnet publish src/Test.Aot/Test.Aot.csproj -c Release -r linux-x64 -f net10.0 -o aot-out
+./aot-out/Test.Aot
 ```
+
+The suites also include `PublicApiConventions`, a reflection check over every Durable assembly (async methods take a defaulted `CancellationToken` as their last parameter, awaitable methods end in `Async`, synchronous I/O members of the repository, query-builder and transaction interfaces have async twins, no tuples and no `out`/`ref` parameters on async-capable types).
 
 ## Contributing
 

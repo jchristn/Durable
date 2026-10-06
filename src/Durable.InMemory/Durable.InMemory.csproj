@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;inmemory;in-memory;testing;repository</PackageTags>
-		<PackageReleaseNotes>Initial release: in-memory IRepositoryBackend with snapshot-isolation transactions and the full IRepository surface via RepositoryBase.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0 (breaking): unified backend convention: InMemoryBackend.Create/CreateAsync(InMemoryRepositorySettings) replaces the constructors (Capabilities, JsonOptions on the settings); Store replaced by the typed Backend property; the backend is IDisposable/IAsyncDisposable (disposing discards data); typed BeginTransactionAsync; Clear/ClearAsync (per type returns the row count); evaluator moved to core QueryEvaluator&lt;TRow&gt;; Native AOT verified. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

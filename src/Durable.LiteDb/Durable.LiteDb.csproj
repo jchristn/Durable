@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;litedb;nosql;document;embedded;repository</PackageTags>
-		<PackageReleaseNotes>Initial release: LiteDB IRepositoryBackend with push-down of exact predicates, async-safe transactions and the full IRepository surface via RepositoryBase.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0: initial release. LiteDbBackend.Create/CreateAsync with LiteDbRepositorySettings.ForInMemory/ForFile/ForDatabase; lossless value encoding; push-down of comparisons, null checks and IN to LiteDB indexes; transactions across await; QueryPlanned/LastQueryPlan; Clear/ClearAsync, GetStoredRows; Native AOT verified (.NET 9+ in CI); passes the full conformance kit.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

@@ -12,7 +12,7 @@
 		<Title>Durable</Title>
 		<Version>0.5.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
-		<Description>A lightweight .NET ORM library with LINQ capabilities, designed with a clean, generic architecture that allows developers to build custom repository implementations without being constrained by opinionated base classes</Description>
+		<Description>A lightweight .NET ORM with full LINQ support: the backend-neutral core of Durable (IRepository, IQueryBuilder, attribute and convention mapping, transactions, optimistic concurrency, the neutral query model and RepositoryBase for non-SQL backends). Trim- and Native AOT-compatible. Use with Durable.Sqlite, Durable.Postgres, Durable.MySql, Durable.SqlServer, Durable.InMemory, Durable.LiteDb or Durable.LiteGraph.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>0.3.0: backend-neutral core (cached entity metadata, composite keys, value converters, conventions, global query filters, soft delete, diagnostics); SQL engine moved to Durable.Sql.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.5.0 (breaking): Native AOT and trimming support (DynamicallyAccessedMembers annotations, no runtime codegen under AOT, DurableJson for source-generated JSON, EntityMetadata.RequiredMemberTypes); QueryEvaluator&lt;TRow&gt; public for non-SQL backends; TransactionScope renamed AmbientTransactionScope (IAsyncDisposable; Durable does not participate in System.Transactions); ImprovedMergeChangesResolver folded into MergeChangesResolver with MergeConflictBehavior; resolver async methods take a CancellationToken; [VersionColumn] infers its type, RowVersion renamed BinaryCounter; ReadFirstOrDefault and BatchDelete removed (use ReadFirst, DeleteMany); include-query switches and RepositoryExtensions removed (use the *WithQuery methods); RepositorySettings/RepositoryType moved to Durable.Sql. See CHANGELOG.md for migration hints.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
