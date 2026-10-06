@@ -25,6 +25,16 @@ namespace Durable.SqlServer
         /// </summary>
         public static SqlServerDialect Default { get; } = new SqlServerDialect();
 
+        /// <summary>
+        /// Gets false: SQL Server has no NTH_VALUE window function.
+        /// </summary>
+        public override bool SupportsNthValue => false;
+
+        /// <summary>
+        /// Gets false: SQL Server RANGE frames only accept UNBOUNDED and CURRENT ROW bounds.
+        /// </summary>
+        public override bool SupportsRangeFrameOffsets => false;
+
         /// <inheritdoc />
         public override RepositoryType RepositoryType => RepositoryType.SqlServer;
 

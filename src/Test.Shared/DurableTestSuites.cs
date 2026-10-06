@@ -42,6 +42,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<BatchInsertTestSuite>("BatchInsert", "Batch Insert Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<SchemaManagementTestSuite>("SchemaManagement", "Schema Management Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<MigrationTestSuite>("Migration", "Migration (Introspection / Diff / Sync / Versioned) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<DatabaseLifecycleTestSuite>("DatabaseLifecycle", "Database Lifecycle (CreateDatabaseIfNotExistsAsync / InitializeTablesAsync / ReadTables / AddMigrations) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<DurableToolTestSuite>("DurableTool", "durable Command-Line Tool (Migrate / Script / Schema / Scaffold) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConnectionPoolStressTestSuite>("ConnectionPoolStress", "Connection Pool Stress Tests", providerTag, BeforeEach));
 
@@ -62,6 +63,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<SavepointAndInteropTestSuite>("SavepointInterop", "Savepoint / External Transaction Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<ConnectionFactoryTestSuite>("ConnectionFactory", "Connection Factory Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<DiagnosticsTestSuite>("Diagnostics", "Diagnostics (Interceptor / Tracing / Logging / Capture) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<WithQueryTestSuite>("WithQuery", "WithQuery Extensions (Results + Executed SQL) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<RawSqlAndProcedureTestSuite>("RawSqlProcedure", "Raw SQL / Procedure / Timeout / Cancellation Tests", providerTag, BeforeEach));
 
                 // Relationship and write-feature suites (split-query Include, many-to-many, composite keys, value
@@ -84,6 +86,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<QueryTranslationTestSuite>("QueryTranslation", "Query Translation (Predicates / Functions) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<StringMatchingTestSuite>("StringMatching", "String Matching Mode (Ordinal / IgnoreCase / Database) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<WindowFrameTestSuite>("WindowFrame", "Window Frame (ROWS / RANGE / FIRST_VALUE / LAST_VALUE / NTH_VALUE / DENSE_RANK / AVG) Tests", providerTag, BeforeEach));
 
                 // Backend-neutral unit suites (no database).
                 suites.Add(TouchstoneBridge.BuildSuite<QueryNormalizerTestSuite>(
@@ -92,6 +95,8 @@ namespace Test.Shared
                     "QueryEvaluator", "Query Evaluator (Client-Side Node Evaluation) Tests", () => new QueryEvaluatorTestSuite(), new List<string> { providerTag, "neutral" }));
                 suites.Add(TouchstoneBridge.BuildSuite<PublicApiConventionsTestSuite>(
                     "PublicApiConventions", "Public API Conventions (Tokens / Async Suffix / Sync-Async Pairs / Tuples / Out-Ref) Tests", () => new PublicApiConventionsTestSuite(), new List<string> { providerTag, "neutral" }));
+                suites.Add(TouchstoneBridge.BuildSuite<ResolverAndDefaultValueTestSuite>(
+                    "ResolverDefaultValue", "Conflict Resolver / Default Value Provider (Direct) Tests", () => new ResolverAndDefaultValueTestSuite(), new List<string> { providerTag, "neutral" }));
                 suites.Add(TouchstoneBridge.BuildSuite<ProviderSettingsTestSuite>(
                     "ProviderSettings", "Provider Settings / Connection Factory Mapping Tests", () => new ProviderSettingsTestSuite(), new List<string> { providerTag, "neutral" }));
 

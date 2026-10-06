@@ -8,8 +8,8 @@ namespace Durable.DefaultValueProviders
     /// </summary>
     public class DelegateValueProvider : IDefaultValueProvider
     {
-        private readonly Func<object?> _valueFactory;
-        private readonly bool _onlyIfNull;
+        private readonly Func<object?> _ValueFactory;
+        private readonly bool _OnlyIfNull;
 
         /// <summary>
         /// Initializes a new instance of the DelegateValueProvider class
@@ -18,20 +18,20 @@ namespace Durable.DefaultValueProviders
         /// <param name="onlyIfNull">If true, only apply when the current value is null/default</param>
         public DelegateValueProvider(Func<object?> valueFactory, bool onlyIfNull = true)
         {
-            _valueFactory = valueFactory ?? throw new ArgumentNullException(nameof(valueFactory));
-            _onlyIfNull = onlyIfNull;
+            _ValueFactory = valueFactory ?? throw new ArgumentNullException(nameof(valueFactory));
+            _OnlyIfNull = onlyIfNull;
         }
 
         /// <inheritdoc/>
         public object? GetDefaultValue(PropertyInfo property, object entity)
         {
-            return _valueFactory();
+            return _ValueFactory();
         }
 
         /// <inheritdoc/>
         public bool ShouldApply(object? currentValue, Type propertyType)
         {
-            if (!_onlyIfNull) return true;
+            if (!_OnlyIfNull) return true;
             if (currentValue == null) return true;
 
             // Check if value is the default for its type

@@ -997,6 +997,19 @@
             Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsNthValue">
+            <summary>
+            Gets whether the NTH_VALUE window function is supported. When false,
+            <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets">
+            <summary>
+            Gets whether RANGE window frames accept numeric offsets (<c>RANGE BETWEEN n PRECEDING AND m FOLLOWING</c>).
+            When false, <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Range(System.Int32,System.Int32)"/> throws <see cref="T:System.NotSupportedException"/>;
+            UNBOUNDED and CURRENT ROW bounds remain available.
+            </summary>
+        </member>
         <member name="P:Durable.Sql.ISqlDialect.MaxIdentifierLength">
             <summary>
             Gets the maximum identifier length. Longer names are truncated (PostgreSQL) or rejected by the database;
@@ -4262,6 +4275,12 @@
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsDropColumn">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsNthValue">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsRangeFrameOffsets">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.MaxIdentifierLength">

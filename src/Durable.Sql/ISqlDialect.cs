@@ -306,6 +306,19 @@ namespace Durable.Sql
         bool SupportsDropColumn { get; }
 
         /// <summary>
+        /// Gets whether the NTH_VALUE window function is supported. When false,
+        /// <see cref="IWindowedQueryBuilder{T}.NthValue"/> throws <see cref="System.NotSupportedException"/>.
+        /// </summary>
+        bool SupportsNthValue { get; }
+
+        /// <summary>
+        /// Gets whether RANGE window frames accept numeric offsets (<c>RANGE BETWEEN n PRECEDING AND m FOLLOWING</c>).
+        /// When false, <see cref="IWindowedQueryBuilder{T}.Range"/> throws <see cref="System.NotSupportedException"/>;
+        /// UNBOUNDED and CURRENT ROW bounds remain available.
+        /// </summary>
+        bool SupportsRangeFrameOffsets { get; }
+
+        /// <summary>
         /// Gets the maximum identifier length. Longer names are truncated (PostgreSQL) or rejected by the database;
         /// schema comparison truncates expected index names to this length.
         /// </summary>

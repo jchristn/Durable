@@ -64,6 +64,16 @@
             Gets the shared default instance.
             </summary>
         </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.SupportsNthValue">
+            <summary>
+            Gets false: SQL Server has no NTH_VALUE window function.
+            </summary>
+        </member>
+        <member name="P:Durable.SqlServer.SqlServerDialect.SupportsRangeFrameOffsets">
+            <summary>
+            Gets false: SQL Server RANGE frames only accept UNBOUNDED and CURRENT ROW bounds.
+            </summary>
+        </member>
         <member name="P:Durable.SqlServer.SqlServerDialect.RepositoryType">
             <inheritdoc />
         </member>
