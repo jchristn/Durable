@@ -264,61 +264,6 @@ namespace Durable.Sql
             }).ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-        /// Respects global, thread-local, and instance-level SQL tracking settings.
-        /// </summary>
-        /// <typeparam name="T">The entity type.</typeparam>
-        /// <param name="repository">The repository instance.</param>
-        /// <param name="entity">The entity to create.</param>
-        /// <param name="transaction">Optional transaction to use for the operation.</param>
-        /// <returns>Either T or IDurableResult&lt;T&gt; depending on configuration.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static object CreateAuto<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null) where T : class, new()
-        {
-            if (repository == null) throw new ArgumentNullException(nameof(repository));
-            if (entity == null) throw new ArgumentNullException(nameof(entity));
-
-            if (ShouldIncludeQuery(repository))
-                return repository.CreateWithQuery(entity, transaction);
-            else
-                return repository.Create(entity, transaction);
-        }
-
-        /// <summary>
-        /// Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-        /// Respects global, thread-local, and instance-level SQL tracking settings.
-        /// </summary>
-        /// <typeparam name="T">The entity type.</typeparam>
-        /// <param name="repository">The repository instance.</param>
-        /// <param name="entity">The entity to create.</param>
-        /// <param name="transaction">Optional transaction to use for the operation.</param>
-        /// <param name="token">Cancellation token.</param>
-        /// <returns>Either Task&lt;T&gt; or Task&lt;IDurableResult&lt;T&gt;&gt; depending on configuration.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when repository or entity is null.</exception>
-        public static async Task<object> CreateAutoAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(this IRepository<T> repository, T entity, ITransaction? transaction = null, CancellationToken token = default) where T : class, new()
-        {
-            if (repository == null) throw new ArgumentNullException(nameof(repository));
-            if (entity == null) throw new ArgumentNullException(nameof(entity));
-
-            if (ShouldIncludeQuery(repository))
-                return await repository.CreateWithQueryAsync(entity, transaction, token).ConfigureAwait(false);
-            else
-                return await repository.CreateAsync(entity, transaction, token).ConfigureAwait(false);
-        }
-
-        private static bool ShouldIncludeQuery<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T>(IRepository<T> repository) where T : class, new()
-        {
-            bool? instanceLevelSetting = null;
-            if (repository is ISqlTrackingConfiguration config)
-            {
-                instanceLevelSetting = config.IncludeQueryInResults;
-            }
-
-            ConfigurationSettingResult effectiveSettingResult = DurableConfiguration.ResolveIncludeQuerySetting(instanceLevelSetting);
-            return effectiveSettingResult.EffectiveSetting;
-        }
-
         private static void EnableSqlCaptureTemporarily<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TResult>(IRepository<T> repository, Func<TResult> operation, out TResult result) where T : class, new()
         {
             using (SqlCaptureScope.Begin())

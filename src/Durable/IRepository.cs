@@ -74,14 +74,6 @@ namespace Durable
         T? ReadFirst(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null);
 
         /// <summary>
-        /// Reads the first entity matching the predicate. Equivalent to <see cref="ReadFirst"/>.
-        /// </summary>
-        /// <param name="predicate">Predicate; null matches all rows.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <returns>The first matching entity, or null.</returns>
-        T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null);
-
-        /// <summary>
         /// Reads exactly one entity matching the predicate.
         /// </summary>
         /// <param name="predicate">Predicate. Must not be null.</param>
@@ -134,15 +126,6 @@ namespace Durable
         /// <param name="token">Cancellation token.</param>
         /// <returns>The first matching entity, or null.</returns>
         Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default);
-
-        /// <summary>
-        /// Reads the first entity matching the predicate. Equivalent to <see cref="ReadFirstAsync"/>.
-        /// </summary>
-        /// <param name="predicate">Predicate; null matches all rows.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="token">Cancellation token.</param>
-        /// <returns>The first matching entity, or null.</returns>
-        Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Reads exactly one entity matching the predicate.
@@ -525,15 +508,6 @@ namespace Durable
         int DeleteAll(ITransaction? transaction = null);
 
         /// <summary>
-        /// Deletes all matching rows with a single statement. Equivalent to <see cref="DeleteMany"/>.
-        /// </summary>
-        /// <param name="predicate">Predicate. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <returns>The number of rows affected.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
-        int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null);
-
-        /// <summary>
         /// Deletes an entity by its key.
         /// </summary>
         /// <param name="entity">Entity. Must not be null.</param>
@@ -570,16 +544,6 @@ namespace Durable
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of rows affected.</returns>
         Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default);
-
-        /// <summary>
-        /// Deletes all matching rows with a single statement. Equivalent to <see cref="DeleteManyAsync"/>.
-        /// </summary>
-        /// <param name="predicate">Predicate. Must not be null.</param>
-        /// <param name="transaction">Transaction; may be null.</param>
-        /// <param name="token">Cancellation token.</param>
-        /// <returns>The number of rows affected.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when predicate is null.</exception>
-        Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default);
 
         #endregion
 

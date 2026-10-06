@@ -599,33 +599,6 @@
             <returns>A task whose result has <see cref="P:Durable.TryResolveConflictResult`1.Success"/> set to false.</returns>
             <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
-        <member name="T:Durable.ConfigurationSettingResult">
-            <summary>
-            Represents the result of resolving a configuration setting.
-            </summary>
-        </member>
-        <member name="P:Durable.ConfigurationSettingResult.EffectiveSetting">
-            <summary>
-            Gets or sets the effective setting value.
-            </summary>
-        </member>
-        <member name="P:Durable.ConfigurationSettingResult.Source">
-            <summary>
-            Gets or sets the source of the effective setting (e.g., "Instance", "ThreadLocal", "Global").
-            </summary>
-        </member>
-        <member name="M:Durable.ConfigurationSettingResult.#ctor">
-            <summary>
-            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
-            </summary>
-        </member>
-        <member name="M:Durable.ConfigurationSettingResult.#ctor(System.Boolean,System.String)">
-            <summary>
-            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
-            </summary>
-            <param name="effectiveSetting">The effective setting value.</param>
-            <param name="source">The source of the setting.</param>
-        </member>
         <member name="T:Durable.ConflictResolutionStrategy">
             <summary>
             Defines strategies for resolving conflicts during concurrent operations.
@@ -872,45 +845,6 @@
             <summary>
             False boolean value
             </summary>
-        </member>
-        <member name="T:Durable.DurableConfiguration">
-            <summary>
-            Provides global and thread-local configuration settings for Durable ORM behavior.
-            Supports hierarchical configuration where thread-local settings override global settings.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.GlobalIncludeQuery">
-            <summary>
-            Gets or sets the global default for whether repository operations should include executed SQL in results.
-            This setting applies to all repository instances unless overridden by thread-local or instance-level configuration.
-            Default value is false for performance and backward compatibility.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.ThreadLocalIncludeQuery">
-            <summary>
-            Gets or sets a thread-local override for SQL inclusion in results.
-            When set to a non-null value, this overrides the GlobalIncludeQuery setting for the current thread.
-            When null, the GlobalIncludeQuery setting is used.
-            This allows temporary per-thread behavior changes without affecting other threads.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.ShouldIncludeQuery">
-            <summary>
-            Gets the effective SQL inclusion setting for the current thread.
-            Returns the thread-local override if set, otherwise returns the global setting.
-            This is the computed value that should be used by repository implementations.
-            </summary>
-        </member>
-        <member name="M:Durable.DurableConfiguration.ResolveIncludeQuerySetting(System.Nullable{System.Boolean})">
-            <summary>
-            Resolves the effective SQL inclusion setting using explicit configuration hierarchy.
-            Precedence order (highest to lowest):
-            1. Instance-level configuration (repository.IncludeQueryInResults)
-            2. Thread-local configuration (ThreadLocalIncludeQuery)
-            3. Global configuration (GlobalIncludeQuery)
-            </summary>
-            <param name="instanceLevelSetting">The instance-level setting from the repository, or null if not configured</param>
-            <returns>A ConfigurationSettingResult object containing the effective setting and the source of that setting for debugging</returns>
         </member>
         <member name="T:Durable.DurableDiagnostics">
             <summary>
@@ -2119,14 +2053,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <returns>The first matching entity, or null when none match.</returns>
         </member>
-        <member name="M:Durable.IRepository`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Reads the first entity matching the predicate. Equivalent to <see cref="M:Durable.IRepository`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)"/>.
-            </summary>
-            <param name="predicate">Predicate; null matches all rows.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <returns>The first matching entity, or null.</returns>
-        </member>
         <member name="M:Durable.IRepository`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <summary>
             Reads exactly one entity matching the predicate.
@@ -2175,15 +2101,6 @@
         <member name="M:Durable.IRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Reads the first entity matching the predicate.
-            </summary>
-            <param name="predicate">Predicate; null matches all rows.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>The first matching entity, or null.</returns>
-        </member>
-        <member name="M:Durable.IRepository`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Reads the first entity matching the predicate. Equivalent to <see cref="M:Durable.IRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)"/>.
             </summary>
             <param name="predicate">Predicate; null matches all rows.</param>
             <param name="transaction">Transaction; may be null.</param>
@@ -2554,15 +2471,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <returns>The number of rows affected.</returns>
         </member>
-        <member name="M:Durable.IRepository`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Deletes all matching rows with a single statement. Equivalent to <see cref="M:Durable.IRepository`1.DeleteMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)"/>.
-            </summary>
-            <param name="predicate">Predicate. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <returns>The number of rows affected.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null.</exception>
-        </member>
         <member name="M:Durable.IRepository`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Deletes an entity by its key.
@@ -2600,16 +2508,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The number of rows affected.</returns>
-        </member>
-        <member name="M:Durable.IRepository`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Deletes all matching rows with a single statement. Equivalent to <see cref="M:Durable.IRepository`1.DeleteManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)"/>.
-            </summary>
-            <param name="predicate">Predicate. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>The number of rows affected.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null.</exception>
         </member>
         <member name="M:Durable.IRepository`1.Upsert(`0,Durable.ITransaction)">
             <summary>
@@ -5639,9 +5537,6 @@
         <member name="M:Durable.Query.RepositoryBase`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
@@ -5658,9 +5553,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
@@ -5771,9 +5663,6 @@
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAll(Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Query.RepositoryBase`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
@@ -5784,9 +5673,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Query.RepositoryBase`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.Upsert(`0,Durable.ITransaction)">
@@ -6129,53 +6015,6 @@
         <member name="F:Durable.RepositoryCapabilities.All">
             <summary>Every capability.</summary>
         </member>
-        <member name="T:Durable.RepositoryExtensions">
-            <summary>
-            Provides extension methods for IRepository to simplify query operations.
-            </summary>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectWithQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Executes a query with an optional predicate and returns the results with the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <returns>A durable result containing the entities and the generated SQL query.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectWithQueryAsync``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a query with an optional predicate and returns the results with the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>A task that resolves to a durable result containing the entities and the generated SQL query.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectAsyncWithQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Returns an async enumerable query result with an optional predicate and the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>An async durable result that can be enumerated asynchronously.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.GetSelectQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Gets the generated SQL query string for a select operation with an optional predicate.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <returns>The generated SQL query string.</returns>
-        </member>
         <member name="T:Durable.RepositoryOptions">
             <summary>
             Backend-neutral repository options. Backends extend this type with their own settings.
@@ -6211,78 +6050,91 @@
         </member>
         <member name="T:Durable.RepositoryResultExtensions">
             <summary>
-            Extension methods to provide backward compatibility for repository results.
+            Unwraps the data from <see cref="T:Durable.IDurableResult`1"/> and <see cref="T:Durable.IAsyncDurableResult`1"/> (the results of the
+            <c>*WithQuery</c> methods) when the query text is not needed. Stateless and thread-safe.
             </summary>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsEnumerable``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts just the data from a DurableResult for backward compatibility.
+            Returns the data of a result without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The enumerable data without the query information.</returns>
+            <param name="result">The durable result. May be null, which yields an empty sequence.</param>
+            <returns>The data. Never null.</returns>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(Durable.IAsyncDurableResult{``0})">
             <summary>
-            Extracts just the async enumerable data from an AsyncDurableResult for backward compatibility.
+            Returns the streamed data of a result without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The async durable result.</param>
-            <returns>The async enumerable data without the query information.</returns>
+            <param name="result">The async durable result. May be null, which yields an empty stream.</param>
+            <returns>The data stream. Never null.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(System.Threading.Tasks.Task{Durable.IAsyncDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(System.Threading.Tasks.Task{Durable.IAsyncDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extension method to get async enumerable data from a Task of AsyncDurableResult.
+            Awaits a pending streamed result and streams its data without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="resultTask">The task containing the async durable result.</param>
-            <returns>An async enumerable of the data.</returns>
+            <param name="resultTask">The task producing the async durable result. Must not be null.</param>
+            <param name="token">Cancellation token, also passed to the underlying stream.</param>
+            <returns>The data stream.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsEntity``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts a single entity from a DurableResult for backward compatibility.
+            Returns the first item of a result (the entity of a single-entity operation such as <c>CreateWithQuery</c>).
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The first entity or default.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The first item, or default when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsEntity``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsEntityAsync``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a single entity from a Task&lt;DurableResult&lt;T&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns its first item.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The first entity or default.</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The first item, or default when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsValue``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts a single value from a DurableResult for backward compatibility.
+            Returns the first value of a result (the value of a scalar operation such as <c>DeleteWithQuery</c>).
             </summary>
             <typeparam name="T">The value type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The first value or default.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The first value, or default when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsValue``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsValueAsync``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a single value from a Task&lt;DurableResult&lt;T&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns its first value.
             </summary>
             <typeparam name="T">The value type.</typeparam>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The first value or default.</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The first value, or default when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsCount(Durable.IDurableResult{System.Int32})">
             <summary>
-            Extracts a count value from a DurableResult&lt;int&gt; for backward compatibility.
+            Returns the count carried by a result (for example the rows affected by <c>DeleteManyWithQuery</c>).
             </summary>
-            <param name="result">The durable result.</param>
-            <returns>The count value.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The count, or 0 when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsCount(System.Threading.Tasks.Task{Durable.IDurableResult{System.Int32}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsCountAsync(System.Threading.Tasks.Task{Durable.IDurableResult{System.Int32}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a count value from a Task&lt;DurableResult&lt;int&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns the count it carries.
             </summary>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The count value.</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The count, or 0 when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="T:Durable.RepositorySettings">
             <summary>

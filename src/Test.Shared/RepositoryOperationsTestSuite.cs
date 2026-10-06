@@ -141,7 +141,7 @@ namespace Test.Shared
 
             Assert.Equal(1, updated);
 
-            Person? marketing = await repository.ReadFirstOrDefaultAsync(p => p.Department == "Marketing");
+            Person? marketing = await repository.ReadFirstAsync(p => p.Department == "Marketing");
             Assert.NotNull(marketing);
             Assert.Equal(123456m, marketing.Salary);
         }
@@ -219,7 +219,7 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = await SeedAsync();
 
-            int deleted = await repository.BatchDeleteAsync(p => p.Department == "Engineering");
+            int deleted = await repository.DeleteManyAsync(p => p.Department == "Engineering");
             Assert.Equal(3, deleted);
 
             long remaining = await repository.CountAsync();
@@ -237,7 +237,7 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = await SeedAsync();
 
-            int deleted = await repository.BatchDeleteAsync(p => p.Department == "NoSuchDepartment");
+            int deleted = await repository.DeleteManyAsync(p => p.Department == "NoSuchDepartment");
             Assert.Equal(0, deleted);
 
             long remaining = await repository.CountAsync();

@@ -53,7 +53,7 @@ namespace Test.Shared
         public async Task ReadFirstOrDefaultReturnsNullWhenNoMatch()
         {
             ISqlRepository<Person> repository = await SeedAsync();
-            Person? result = await repository.ReadFirstOrDefaultAsync(p => p.Department == "NoSuchDepartment");
+            Person? result = await repository.ReadFirstAsync(p => p.Department == "NoSuchDepartment");
             Assert.Null(result);
         }
 

@@ -15,7 +15,7 @@ namespace Durable.Sql
     /// Thread safety: safe for concurrent use; see <see cref="IRepository{T}"/>.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public interface ISqlRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IRepository<T>, ISqlCapture, ISqlTrackingConfiguration where T : class, new()
+    public interface ISqlRepository<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IRepository<T>, ISqlCapture where T : class, new()
     {
         #region Configuration
 

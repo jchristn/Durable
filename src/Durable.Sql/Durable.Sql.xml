@@ -1658,20 +1658,6 @@
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
         </member>
-        <member name="T:Durable.Sql.ISqlTrackingConfiguration">
-            <summary>
-            Provides configuration options for SQL tracking behavior on repository instances.
-            This interface is optional and allows repositories to expose per-instance SQL tracking settings.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.ISqlTrackingConfiguration.IncludeQueryInResults">
-            <summary>
-            Gets or sets whether query results should automatically include the executed SQL statement.
-            When true, repository operations will return IDurableResult objects containing both results and SQL.
-            When false, repository operations return standard result types without SQL information.
-            Default value is false for performance and backward compatibility.
-            </summary>
-        </member>
         <member name="T:Durable.Sql.ISqlTransaction">
             <summary>
             A SQL transaction bound to one connection. Pass it to any repository of the same provider to run operations on
@@ -5134,9 +5120,6 @@
         <member name="P:Durable.Sql.SqlRepository`1.CaptureSql">
             <inheritdoc />
         </member>
-        <member name="P:Durable.Sql.SqlRepository`1.IncludeQueryInResults">
-            <inheritdoc />
-        </member>
         <member name="P:Durable.Sql.SqlRepository`1.LastExecutedSql">
             <inheritdoc />
         </member>
@@ -5174,9 +5157,6 @@
         <member name="M:Durable.Sql.SqlRepository`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
@@ -5193,9 +5173,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
@@ -5303,9 +5280,6 @@
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAll(Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
@@ -5316,9 +5290,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlRepository`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.Upsert(`0,Durable.ITransaction)">
@@ -5505,11 +5476,6 @@
             Gets or sets the initial value of <see cref="P:Durable.Sql.ISqlCapture.CaptureSql"/>. Default: false.
             </summary>
         </member>
-        <member name="P:Durable.Sql.SqlRepositoryOptions.IncludeQueryInResults">
-            <summary>
-            Gets or sets the initial value of <see cref="P:Durable.Sql.ISqlTrackingConfiguration.IncludeQueryInResults"/>. Default: false.
-            </summary>
-        </member>
         <member name="P:Durable.Sql.SqlRepositoryOptions.IncludeStreamingBatchSize">
             <summary>
             Gets or sets how many root entities are buffered before loading includes while streaming with
@@ -5648,31 +5614,6 @@
             <param name="token">Cancellation token.</param>
             <returns>A task representing the asynchronous operation with a durable result containing the number of deleted entities and the executed SQL query.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when repository or predicate is null.</exception>
-        </member>
-        <member name="M:Durable.Sql.SqlRepositoryResultExtensions.CreateAuto``1(Durable.IRepository{``0},``0,Durable.ITransaction)">
-            <summary>
-            Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-            Respects global, thread-local, and instance-level SQL tracking settings.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository instance.</param>
-            <param name="entity">The entity to create.</param>
-            <param name="transaction">Optional transaction to use for the operation.</param>
-            <returns>Either T or IDurableResult&lt;T&gt; depending on configuration.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or entity is null.</exception>
-        </member>
-        <member name="M:Durable.Sql.SqlRepositoryResultExtensions.CreateAutoAsync``1(Durable.IRepository{``0},``0,Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-            Respects global, thread-local, and instance-level SQL tracking settings.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository instance.</param>
-            <param name="entity">The entity to create.</param>
-            <param name="transaction">Optional transaction to use for the operation.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>Either Task&lt;T&gt; or Task&lt;IDurableResult&lt;T&gt;&gt; depending on configuration.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or entity is null.</exception>
         </member>
         <member name="T:Durable.Sql.SqlSavepoint">
             <summary>

@@ -56,9 +56,9 @@ namespace Durable.Conformance
         {
             IRepository<CfNote> repository = Repository<CfNote>();
             await SeedAsync(repository, 6);
-            Assert.Equal(2, repository.BatchDelete(x => x.Text == "n0" || x.Text == "n1"));
+            Assert.Equal(2, repository.DeleteMany(x => x.Text == "n0" || x.Text == "n1"));
             Assert.Equal(1, repository.Query().Where(x => x.Text == "n2").Delete());
-            Assert.Equal(1, await repository.BatchDeleteAsync(x => x.Text == "n2" || x.Text == "n3", null, Token));
+            Assert.Equal(1, await repository.DeleteManyAsync(x => x.Text == "n2" || x.Text == "n3", null, Token));
             Assert.Equal(2, repository.DeleteAll());
             Assert.Equal(0, await repository.DeleteAllAsync(null, Token));
             Assert.Equal(0L, repository.Count());

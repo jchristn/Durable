@@ -165,12 +165,6 @@ namespace Durable.Query
         }
 
         /// <inheritdoc />
-        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
-        {
-            return ReadFirst(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public T ReadSingle(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -212,12 +206,6 @@ namespace Durable.Query
             QueryBuilder<T> query = NewQuery(transaction);
             if (predicate != null) query.Where(predicate);
             return (await query.Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
-        }
-
-        /// <inheritdoc />
-        public Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return ReadFirstAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
@@ -552,12 +540,6 @@ namespace Durable.Query
         }
 
         /// <inheritdoc />
-        public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
-        {
-            return DeleteMany(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entity);
@@ -582,12 +564,6 @@ namespace Durable.Query
         public Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
             return NewQuery(transaction).DeleteAsync(token);
-        }
-
-        /// <inheritdoc />
-        public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return DeleteManyAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
