@@ -17,6 +17,18 @@ namespace Durable.SqlServer
         public string ConnectionString { get; }
 
         /// <summary>
+        /// Instantiates the factory from strongly-typed settings (<see cref="SqlServerRepositorySettings.BuildConnectionString"/>).
+        /// </summary>
+        /// <param name="settings">Settings. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the settings lack required values (see <see cref="SqlServerRepositorySettings.BuildConnectionString"/>).</exception>
+        public SqlServerConnectionFactory(SqlServerRepositorySettings settings, int? maxConcurrentConnections = null)
+            : this(BuildConnectionString(settings), maxConcurrentConnections)
+        {
+        }
+
+        /// <summary>
         /// Instantiates the factory.
         /// </summary>
         /// <param name="connectionString">SqlClient connection string. Must not be null.</param>
@@ -31,6 +43,12 @@ namespace Durable.SqlServer
         protected override DbConnection CreateConnection()
         {
             return new SqlConnection(ConnectionString);
+        }
+
+        private static string BuildConnectionString(SqlServerRepositorySettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            return settings.BuildConnectionString();
         }
     }
 }

@@ -3452,6 +3452,146 @@
             <returns>The statement.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when sql, dialect or converter is null.</exception>
         </member>
+        <member name="T:Durable.Sql.RepositorySettings">
+            <summary>
+            Abstract base class for repository connection settings.
+            Derived classes should implement provider-specific connection string parsing and building.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Type">
+            <summary>
+            The type of repository
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Hostname">
+            <summary>
+            The hostname or server address. Default: null
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Port">
+            <summary>
+            The port number for the database server. Default: null (uses provider default)
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Username">
+            <summary>
+            The username for authentication. Default: null
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Password">
+            <summary>
+            The password for authentication. Default: null
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Database">
+            <summary>
+            The database name. Default: null
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.AdditionalProperties">
+            <summary>
+            Additional provider-specific properties. Default: null
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositorySettings.#ctor">
+            <summary>
+            Initializes a new instance of the RepositorySettings class
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositorySettings.BuildConnectionString">
+            <summary>
+            Builds a connection string from the current settings
+            </summary>
+            <returns>A connection string</returns>
+        </member>
+        <member name="T:Durable.Sql.RepositoryType">
+            <summary>
+            Represents a repository type in an extensible, type-safe manner.
+            This class provides built-in repository types (Sqlite, MySql, Postgres, SqlServer)
+            and allows users to define custom repository types.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositoryType.Identifier">
+            <summary>
+            The unique identifier for this repository type
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositoryType.DisplayName">
+            <summary>
+            The display name for this repository type
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.Sqlite">
+            <summary>
+            Represents a SQLite repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.MySql">
+            <summary>
+            Represents a MySQL repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.Postgres">
+            <summary>
+            Represents a PostgreSQL repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.SqlServer">
+            <summary>
+            Represents a SQL Server repository
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.#ctor(System.String,System.String)">
+            <summary>
+            Creates a new repository type with the specified identifier and display name
+            </summary>
+            <param name="identifier">The unique identifier for the repository type (case-insensitive)</param>
+            <param name="displayName">The display name for the repository type</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when identifier or displayName is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when identifier or displayName is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.Equals(Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether this repository type is equal to another repository type
+            </summary>
+            <param name="other">The other repository type to compare</param>
+            <returns>True if the repository types are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.Equals(System.Object)">
+            <summary>
+            Determines whether this repository type is equal to another object
+            </summary>
+            <param name="obj">The object to compare</param>
+            <returns>True if the objects are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.GetHashCode">
+            <summary>
+            Gets the hash code for this repository type
+            </summary>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.ToString">
+            <summary>
+            Returns the display name of this repository type
+            </summary>
+            <returns>The display name</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.op_Equality(Durable.Sql.RepositoryType,Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether two repository types are equal
+            </summary>
+            <param name="left">The first repository type</param>
+            <param name="right">The second repository type</param>
+            <returns>True if the repository types are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.op_Inequality(Durable.Sql.RepositoryType,Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether two repository types are not equal
+            </summary>
+            <param name="left">The first repository type</param>
+            <param name="right">The second repository type</param>
+            <returns>True if the repository types are not equal, false otherwise</returns>
+        </member>
         <member name="T:Durable.Sql.ResultMapper">
             <summary>
             Creates row mappers for arbitrary result types: scalar types read the first column; other types are materialized
@@ -5188,7 +5328,7 @@
         <member name="P:Durable.Sql.SqlRepository`1.LastExecutedSqlWithParameters">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.#ctor(Durable.Sql.ISqlDialect,Durable.Sql.IConnectionFactory,System.Boolean,System.Type,Durable.RepositorySettings,Durable.Sql.SqlRepositoryOptions)">
+        <member name="M:Durable.Sql.SqlRepository`1.#ctor(Durable.Sql.ISqlDialect,Durable.Sql.IConnectionFactory,System.Boolean,System.Type,Durable.Sql.RepositorySettings,Durable.Sql.SqlRepositoryOptions)">
             <summary>
             Instantiates the repository.
             </summary>

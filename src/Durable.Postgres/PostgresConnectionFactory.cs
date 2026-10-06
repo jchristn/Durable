@@ -30,6 +30,18 @@ namespace Durable.Postgres
         #region Constructors-and-Factories
 
         /// <summary>
+        /// Instantiates the factory from strongly-typed settings (<see cref="PostgresRepositorySettings.BuildConnectionString"/>).
+        /// </summary>
+        /// <param name="settings">Settings. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the settings lack required values (see <see cref="PostgresRepositorySettings.BuildConnectionString"/>).</exception>
+        public PostgresConnectionFactory(PostgresRepositorySettings settings, int? maxConcurrentConnections = null)
+            : this(BuildConnectionString(settings), maxConcurrentConnections)
+        {
+        }
+
+        /// <summary>
         /// Instantiates the factory from a connection string. Connections share Npgsql's pool for that connection string,
         /// so any number of factories and repositories with the same connection string use one pool.
         /// </summary>
@@ -61,6 +73,12 @@ namespace Durable.Postgres
         protected override DbConnection CreateConnection()
         {
             return DataSource != null ? DataSource.CreateConnection() : new NpgsqlConnection(ConnectionString);
+        }
+
+        private static string BuildConnectionString(PostgresRepositorySettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            return settings.BuildConnectionString();
         }
 
         #endregion

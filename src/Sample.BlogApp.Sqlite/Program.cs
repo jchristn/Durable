@@ -5,6 +5,7 @@ namespace Sample.BlogApp.Sqlite
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.Sqlite;
     using Microsoft.Data.Sqlite;
 

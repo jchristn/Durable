@@ -6,6 +6,7 @@ namespace Durable.Postgres
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Sql;
     using Npgsql;
 
     /// <summary>
@@ -22,32 +23,29 @@ namespace Durable.Postgres
         public override RepositoryType Type => RepositoryType.Postgres;
 
         /// <summary>
-        /// The connection timeout in seconds. Default: null (uses PostgreSQL default of 15 seconds)
+        /// Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+        /// (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
         /// </summary>
         public int? ConnectionTimeout { get; init; }
 
         /// <summary>
-        /// The command timeout in seconds. Default: null (uses PostgreSQL default of 30 seconds)
-        /// </summary>
-        public int? CommandTimeout { get; init; }
-
-        /// <summary>
-        /// The minimum pool size. Default: null (uses PostgreSQL default of 0)
+        /// Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+        /// Minimum: 0. Must not exceed <see cref="MaxPoolSize"/>.
         /// </summary>
         public int? MinPoolSize { get; init; }
 
         /// <summary>
-        /// The maximum pool size. Default: null (uses PostgreSQL default of 100)
+        /// Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
         /// </summary>
         public int? MaxPoolSize { get; init; }
 
         /// <summary>
-        /// Whether to use connection pooling. Default: null (uses PostgreSQL default of true)
+        /// Gets whether the driver pools connections. Default: null (the driver default, true).
         /// </summary>
         public bool? Pooling { get; init; }
 
         /// <summary>
-        /// The SSL mode. Default: null (uses PostgreSQL default)
+        /// Gets the TLS mode (Npgsql's <see cref="Npgsql.SslMode"/>). Default: null (the driver default, Prefer).
         /// </summary>
         public SslMode? SslMode { get; init; }
 
@@ -112,8 +110,6 @@ namespace Durable.Postgres
                     lowerKey != "db" &&
                     lowerKey != "timeout" &&
                     lowerKey != "connection timeout" &&
-                    lowerKey != "commandtimeout" &&
-                    lowerKey != "command timeout" &&
                     lowerKey != "minpoolsize" &&
                     lowerKey != "minimum pool size" &&
                     lowerKey != "maxpoolsize" &&
@@ -139,11 +135,10 @@ namespace Durable.Postgres
                 Password = builder.Password,
                 Database = builder.Database,
                 ConnectionTimeout = builder.Timeout != 15 ? builder.Timeout : null,
-                CommandTimeout = builder.CommandTimeout != 30 ? builder.CommandTimeout : null,
                 MinPoolSize = builder.MinPoolSize != 0 ? builder.MinPoolSize : null,
                 MaxPoolSize = builder.MaxPoolSize != 100 ? builder.MaxPoolSize : null,
                 Pooling = builder.Pooling != true ? builder.Pooling : null,
-                SslMode = builder.SslMode,
+                SslMode = builder.SslMode != Npgsql.SslMode.Prefer ? builder.SslMode : null,
                 AdditionalProperties = additionalProperties
             };
         }
@@ -193,11 +188,6 @@ namespace Durable.Postgres
             if (ConnectionTimeout.HasValue)
             {
                 builder.Timeout = ConnectionTimeout.Value;
-            }
-
-            if (CommandTimeout.HasValue)
-            {
-                builder.CommandTimeout = CommandTimeout.Value;
             }
 
             if (MinPoolSize.HasValue)

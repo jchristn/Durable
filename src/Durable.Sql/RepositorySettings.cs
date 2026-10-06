@@ -1,4 +1,4 @@
-namespace Durable
+namespace Durable.Sql
 {
 
     using System;

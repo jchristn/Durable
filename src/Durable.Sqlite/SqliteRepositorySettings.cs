@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace Durable.Sqlite
 {
 
@@ -9,6 +7,7 @@ namespace Durable.Sqlite
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Sql;
     using Microsoft.Data.Sqlite;
 
     /// <summary>
@@ -38,6 +37,11 @@ namespace Durable.Sqlite
         /// The open mode. Default: null (uses SQLite default). Values: ReadWriteCreate, ReadWrite, ReadOnly, Memory
         /// </summary>
         public SqliteOpenMode? Mode { get; init; }
+
+        /// <summary>
+        /// Gets whether Microsoft.Data.Sqlite pools connections. Default: null (the driver default, true).
+        /// </summary>
+        public bool? Pooling { get; init; }
 
         #endregion
 
@@ -91,7 +95,8 @@ namespace Durable.Sqlite
                     lowerKey != "datasource" &&
                     lowerKey != "filename" &&
                     lowerKey != "cache" &&
-                    lowerKey != "mode")
+                    lowerKey != "mode" &&
+                    lowerKey != "pooling")
                 {
                     if (additionalProperties == null)
                     {
@@ -107,6 +112,7 @@ namespace Durable.Sqlite
                 DataSource = builder.DataSource,
                 CacheMode = builder.Cache != SqliteCacheMode.Default ? builder.Cache : null,
                 Mode = builder.Mode != SqliteOpenMode.ReadWriteCreate ? builder.Mode : null,
+                Pooling = builder.Pooling != true ? builder.Pooling : null,
                 AdditionalProperties = additionalProperties
             };
         }
@@ -140,6 +146,11 @@ namespace Durable.Sqlite
             if (Mode.HasValue)
             {
                 builder.Mode = Mode.Value;
+            }
+
+            if (Pooling.HasValue)
+            {
+                builder.Pooling = Pooling.Value;
             }
 
             if (AdditionalProperties != null)

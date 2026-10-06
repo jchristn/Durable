@@ -5,6 +5,7 @@ namespace Sample.BlogApp.MySql
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.MySql;
     using MySqlConnector;
 

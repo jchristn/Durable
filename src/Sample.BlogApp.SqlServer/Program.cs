@@ -5,6 +5,7 @@ namespace Sample.BlogApp.SqlServer
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.SqlServer;
     using Microsoft.Data.SqlClient;
 

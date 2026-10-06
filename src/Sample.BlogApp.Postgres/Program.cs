@@ -5,6 +5,7 @@ namespace Sample.BlogApp.Postgres
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.Postgres;
     using Npgsql;
 

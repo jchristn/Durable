@@ -15,6 +15,15 @@
             Gets the connection string. Never null.
             </summary>
         </member>
+        <member name="M:Durable.SqlServer.SqlServerConnectionFactory.#ctor(Durable.SqlServer.SqlServerRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.SqlServer.SqlServerRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack required values (see <see cref="M:Durable.SqlServer.SqlServerRepositorySettings.BuildConnectionString"/>).</exception>
+        </member>
         <member name="M:Durable.SqlServer.SqlServerConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
             <summary>
             Instantiates the factory.
@@ -283,22 +292,24 @@
         </member>
         <member name="P:Durable.SqlServer.SqlServerRepositorySettings.ConnectionTimeout">
             <summary>
-            The connection timeout in seconds. Default: null (uses SQL Server default of 15 seconds)
+            Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+            (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
             </summary>
         </member>
         <member name="P:Durable.SqlServer.SqlServerRepositorySettings.MinPoolSize">
             <summary>
-            The minimum pool size. Default: null (uses SQL Server default of 0)
+            Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+            Minimum: 0. Must not exceed <see cref="P:Durable.SqlServer.SqlServerRepositorySettings.MaxPoolSize"/>.
             </summary>
         </member>
         <member name="P:Durable.SqlServer.SqlServerRepositorySettings.MaxPoolSize">
             <summary>
-            The maximum pool size. Default: null (uses SQL Server default of 100)
+            Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.SqlServer.SqlServerRepositorySettings.Pooling">
             <summary>
-            Whether to use connection pooling. Default: null (uses SQL Server default of true)
+            Gets whether the driver pools connections. Default: null (the driver default, true).
             </summary>
         </member>
         <member name="P:Durable.SqlServer.SqlServerRepositorySettings.Encrypt">

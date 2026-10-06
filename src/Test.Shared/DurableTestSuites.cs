@@ -89,6 +89,8 @@ namespace Test.Shared
                     "QueryNormalizer", "Query Normalizer (Neutral Query Model) Tests", () => new QueryNormalizerTestSuite(), new List<string> { providerTag, "neutral" }));
                 suites.Add(TouchstoneBridge.BuildSuite<QueryEvaluatorTestSuite>(
                     "QueryEvaluator", "Query Evaluator (Client-Side Node Evaluation) Tests", () => new QueryEvaluatorTestSuite(), new List<string> { providerTag, "neutral" }));
+                suites.Add(TouchstoneBridge.BuildSuite<ProviderSettingsTestSuite>(
+                    "ProviderSettings", "Provider Settings / Connection Factory Mapping Tests", () => new ProviderSettingsTestSuite(), new List<string> { providerTag, "neutral" }));
 
                 // Durable.Conformance kit: the backend-neutral suites every IRepository<T> backend must pass, run here
                 // against the configured SQL provider (SqlConformanceTarget resets storage by dropping and recreating tables).
