@@ -349,11 +349,13 @@
             SqliteRepository<Product> repository = new SqliteRepository<Product>(settings);
 
             // Act
-            bool isValid = repository.ValidateTable(typeof(Product), out List<string> errors, out List<string> warnings);
+            TableValidationResult result = repository.ValidateTable(typeof(Product));
 
             // Assert
-            Assert.True(isValid, "Product entity should be valid");
-            Assert.Empty(errors);
+            Assert.True(result.IsValid, "Product entity should be valid");
+            Assert.Empty(result.Errors);
+            Assert.False(result.TableExists);
+            Assert.Equal(typeof(Product), result.EntityType);
             _output.WriteLine("âœ“ ValidateTable returned true for valid entity");
         }
 
@@ -373,13 +375,13 @@
             SqliteRepository<Product> repository = new SqliteRepository<Product>(settings);
 
             // Act
-            bool isValid = repository.ValidateTable(typeof(InvalidEntity), out List<string> errors, out List<string> warnings);
+            TableValidationResult result = repository.ValidateTable(typeof(InvalidEntity));
 
             // Assert
-            Assert.False(isValid, "InvalidEntity should not be valid");
-            Assert.NotEmpty(errors);
-            Assert.Contains(errors, e => e.Contains("Entity"));
-            _output.WriteLine($"âœ“ ValidateTable returned false with errors: {string.Join(", ", errors)}");
+            Assert.False(result.IsValid, "InvalidEntity should not be valid");
+            Assert.NotEmpty(result.Errors);
+            Assert.Contains(result.Errors, e => e.Contains("Entity"));
+            _output.WriteLine($"âœ“ ValidateTable returned false with errors: {string.Join(", ", result.Errors)}");
         }
 
         /// <summary>
@@ -398,12 +400,12 @@
             SqliteRepository<Product> repository = new SqliteRepository<Product>(settings);
 
             // Act
-            bool isValid = repository.ValidateTable(typeof(InvalidNoPrimaryKey), out List<string> errors, out List<string> warnings);
+            TableValidationResult result = repository.ValidateTable(typeof(InvalidNoPrimaryKey));
 
             // Assert
-            Assert.False(isValid, "Entity without primary key should not be valid");
-            Assert.NotEmpty(errors);
-            Assert.Contains(errors, e => e.Contains("primary key"));
+            Assert.False(result.IsValid, "Entity without primary key should not be valid");
+            Assert.NotEmpty(result.Errors);
+            Assert.Contains(result.Errors, e => e.Contains("primary key"));
             _output.WriteLine($"âœ“ ValidateTable correctly identified missing primary key");
         }
 
@@ -424,12 +426,16 @@
             Type[] entityTypes = new[] { typeof(Product), typeof(Category), typeof(InvalidEntity) };
 
             // Act
-            bool isValid = repository.ValidateTables(entityTypes, out List<string> errors, out List<string> warnings);
+            SchemaValidationResult result = repository.ValidateTables(entityTypes);
 
             // Assert
-            Assert.False(isValid, "Should fail because InvalidEntity is included");
-            Assert.NotEmpty(errors);
-            _output.WriteLine($"âœ“ ValidateTables found errors in mixed entity types: {errors.Count} errors");
+            Assert.False(result.IsValid, "Should fail because InvalidEntity is included");
+            Assert.NotEmpty(result.Errors);
+            Assert.Equal(3, result.Tables.Count);
+            Assert.True(result.Tables[0].IsValid);
+            Assert.False(result.Tables[2].IsValid);
+            Assert.All(result.Errors, e => Assert.StartsWith(nameof(InvalidEntity) + ": ", e));
+            _output.WriteLine($"âœ“ ValidateTables found errors in mixed entity types: {result.Errors.Count} errors");
         }
 
         #endregion
@@ -580,11 +586,9 @@
             productRepo.InitializeTables(new[] { typeof(Product), typeof(Category), typeof(Order) });
 
             // Step 3: Validate tables
-            bool isValid = productRepo.ValidateTables(
-                new[] { typeof(Product), typeof(Category), typeof(Order) },
-                out List<string> errors,
-                out List<string> warnings);
-            Assert.True(isValid, $"Tables should be valid. Errors: {string.Join(", ", errors)}");
+            SchemaValidationResult validation = productRepo.ValidateTables(new[] { typeof(Product), typeof(Category), typeof(Order) });
+            Assert.True(validation.IsValid, $"Tables should be valid. Errors: {string.Join(", ", validation.Errors)}");
+            Assert.All(validation.Tables, t => Assert.True(t.TableExists));
 
             // Step 4: Create data with default values
             Product product = productRepo.Create(new Product { Name = "Widget", Price = 19.99m });

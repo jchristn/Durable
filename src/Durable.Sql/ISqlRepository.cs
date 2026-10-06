@@ -280,23 +280,49 @@ namespace Durable.Sql
 
         /// <summary>
         /// Validates an entity mapping and, when its table exists, compares it with the table's columns.
-        /// Missing mapped columns are errors; unmapped table columns are warnings.
+        /// Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+        /// are warnings. A missing table is not an error (<see cref="InitializeTable"/> creates it).
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
-        /// <param name="errors">Errors. Never null.</param>
-        /// <param name="warnings">Warnings. Never null.</param>
-        /// <returns>True when there are no errors.</returns>
-        bool ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors, out List<string> warnings);
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>The validation result. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        TableValidationResult ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null);
 
         /// <summary>
-        /// Validates several entity mappings.
+        /// Validates an entity mapping and, when its table exists, compares it with the table's columns.
+        /// Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+        /// are warnings. A missing table is not an error (<see cref="InitializeTableAsync"/> creates it).
+        /// </summary>
+        /// <param name="entityType">Entity type. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The validation result. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        Task<TableValidationResult> ValidateTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default);
+
+        /// <summary>
+        /// Validates several entity mappings against the database (see <see cref="ValidateTable"/>).
         /// </summary>
         /// <param name="entityTypes">Entity types. Must not be null.</param>
-        /// <param name="errors">Errors. Never null.</param>
-        /// <param name="warnings">Warnings. Never null.</param>
-        /// <returns>True when there are no errors.</returns>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <returns>The combined validation result. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
         [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
-        bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings);
+        SchemaValidationResult ValidateTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null);
+
+        /// <summary>
+        /// Validates several entity mappings against the database (see <see cref="ValidateTableAsync"/>).
+        /// </summary>
+        /// <param name="entityTypes">Entity types. Must not be null.</param>
+        /// <param name="transaction">Transaction; may be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The combined validation result. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
+        Task<SchemaValidationResult> ValidateTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
         /// Creates the indexes declared with <see cref="IndexAttribute"/> and <see cref="CompositeIndexAttribute"/> that do not exist yet.

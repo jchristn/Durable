@@ -899,42 +899,55 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public bool ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors, out List<string> warnings)
+        public TableValidationResult ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityType);
-            warnings = new List<string>();
-            EntityMetadata metadata;
-            try
+            EntityMetadata? metadata = TryReadMetadata(entityType, out List<string> errors);
+            if (metadata == null) return new TableValidationResult(entityType, null, false, errors, null);
+
+            List<string> warnings = new List<string>();
+            bool exists = errors.Count == 0 && TableExists(metadata.TableName, transaction);
+            if (exists) errors.AddRange(CompareColumns(metadata, GetColumnNames(metadata.TableName, transaction), warnings));
+            return new TableValidationResult(entityType, metadata.TableName, exists, errors, warnings);
+        }
+
+        /// <inheritdoc />
+        public async Task<TableValidationResult> ValidateTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            token.ThrowIfCancellationRequested();
+            EntityMetadata? metadata = TryReadMetadata(entityType, out List<string> errors);
+            if (metadata == null) return new TableValidationResult(entityType, null, false, errors, null);
+
+            List<string> warnings = new List<string>();
+            bool exists = errors.Count == 0 && await TableExistsAsync(metadata.TableName, transaction, token).ConfigureAwait(false);
+            if (exists)
             {
-                metadata = EntityMetadata.For(entityType);
-            }
-            catch (InvalidOperationException e)
-            {
-                errors = new List<string> { e.Message };
-                return false;
+                List<string> columns = await GetColumnNamesAsync(metadata.TableName, transaction, token).ConfigureAwait(false);
+                errors.AddRange(CompareColumns(metadata, columns, warnings));
             }
 
-            errors = ValidateMapping(metadata);
-            if (errors.Count == 0 && TableExists(metadata.TableName, null))
-                errors.AddRange(CompareColumns(metadata, GetColumnNames(metadata.TableName, null), warnings));
-            return errors.Count == 0;
+            return new TableValidationResult(entityType, metadata.TableName, exists, errors, warnings);
         }
 
         /// <inheritdoc />
         [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
-        public bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings)
+        public SchemaValidationResult ValidateTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityTypes);
-            errors = new List<string>();
-            warnings = new List<string>();
-            foreach (Type type in entityTypes)
-            {
-                ValidateTable(type, out List<string> typeErrors, out List<string> typeWarnings);
-                errors.AddRange(typeErrors.Select(e => type.Name + ": " + e));
-                warnings.AddRange(typeWarnings.Select(w => type.Name + ": " + w));
-            }
+            List<TableValidationResult> tables = new List<TableValidationResult>();
+            foreach (Type type in entityTypes) tables.Add(ValidateTable(type, transaction));
+            return new SchemaValidationResult(tables);
+        }
 
-            return errors.Count == 0;
+        /// <inheritdoc />
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
+        public async Task<SchemaValidationResult> ValidateTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityTypes);
+            List<TableValidationResult> tables = new List<TableValidationResult>();
+            foreach (Type type in entityTypes) tables.Add(await ValidateTableAsync(type, transaction, token).ConfigureAwait(false));
+            return new SchemaValidationResult(tables);
         }
 
         /// <inheritdoc />
@@ -1624,6 +1637,21 @@ namespace Durable.Sql
             }
 
             return names;
+        }
+
+        private static EntityMetadata? TryReadMetadata([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors)
+        {
+            try
+            {
+                EntityMetadata metadata = EntityMetadata.For(entityType);
+                errors = ValidateMapping(metadata);
+                return metadata;
+            }
+            catch (InvalidOperationException e)
+            {
+                errors = new List<string> { e.Message };
+                return null;
+            }
         }
 
         private static List<string> ValidateMapping(EntityMetadata metadata)

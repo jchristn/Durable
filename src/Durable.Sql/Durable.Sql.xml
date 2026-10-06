@@ -1580,24 +1580,49 @@
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)">
             <summary>
             Validates an entity mapping and, when its table exists, compares it with the table's columns.
-            Missing mapped columns are errors; unmapped table columns are warnings.
+            Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+            are warnings. A missing table is not an error (<see cref="M:Durable.Sql.ISqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)"/> creates it).
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
-            <param name="errors">Errors. Never null.</param>
-            <param name="warnings">Warnings. Never null.</param>
-            <returns>True when there are no errors.</returns>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Validates several entity mappings.
+            Validates an entity mapping and, when its table exists, compares it with the table's columns.
+            Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+            are warnings. A missing table is not an error (<see cref="M:Durable.Sql.ISqlRepository`1.InitializeTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/> creates it).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <summary>
+            Validates several entity mappings against the database (see <see cref="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)"/>).
             </summary>
             <param name="entityTypes">Entity types. Must not be null.</param>
-            <param name="errors">Errors. Never null.</param>
-            <param name="warnings">Warnings. Never null.</param>
-            <returns>True when there are no errors.</returns>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The combined validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Validates several entity mappings against the database (see <see cref="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/>).
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The combined validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
             <summary>
@@ -3549,6 +3574,41 @@
             <param name="resultType">Delegate return type: the entity type or <see cref="T:System.Object"/>.</param>
             <returns>A <c>Func&lt;DbDataReader, IDataTypeConverter, TResult&gt;</c>.</returns>
         </member>
+        <member name="T:Durable.Sql.SchemaValidationResult">
+            <summary>
+            The outcome of validating several entity mappings (<see cref="M:Durable.Sql.ISqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)"/>): one
+            <see cref="T:Durable.Sql.TableValidationResult"/> per entity type, plus the combined errors and warnings, each prefixed with the
+            entity type name.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Tables">
+            <summary>
+            Gets the per-table results, in the order the entity types were given. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Errors">
+            <summary>
+            Gets all errors, each prefixed with "EntityTypeName: ". Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Warnings">
+            <summary>
+            Gets all warnings, each prefixed with "EntityTypeName: ". Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.IsValid">
+            <summary>
+            Gets whether every table is valid.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaValidationResult.#ctor(System.Collections.Generic.IReadOnlyList{Durable.Sql.TableValidationResult})">
+            <summary>
+            Instantiates a result from per-table results.
+            </summary>
+            <param name="tables">Per-table results. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="tables"/> is null.</exception>
+        </member>
         <member name="T:Durable.Sql.SelectModel">
             <summary>
             The rendered parts of a SELECT statement. Query builders translate their state into a model (adding parameters to
@@ -5364,10 +5424,16 @@
         <member name="M:Durable.Sql.SqlRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
@@ -5979,6 +6045,57 @@
             <param name="qualifier">Column qualifier; null for none.</param>
             <param name="metadata">Metadata. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="T:Durable.Sql.TableValidationResult">
+            <summary>
+            The outcome of validating one entity mapping against the database
+            (<see cref="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/>): mapping errors (no key, duplicate columns, invalid
+            auto-increment type), mapped columns missing from an existing table (errors), and table columns the entity does not
+            map (warnings). A table that does not exist yet is not an error.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.EntityType">
+            <summary>
+            Gets the validated entity type. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.TableName">
+            <summary>
+            Gets the mapped table name, or null when the entity's mapping could not be read.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.TableExists">
+            <summary>
+            Gets whether the table exists in the database. False when it does not exist or the mapping is invalid
+            (the database is only queried for a valid mapping).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.Errors">
+            <summary>
+            Gets the errors. Empty when valid. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.Warnings">
+            <summary>
+            Gets the warnings (table columns not mapped by the entity). Warnings do not make the result invalid. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.IsValid">
+            <summary>
+            Gets whether there are no errors.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.TableValidationResult.#ctor(System.Type,System.String,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Instantiates a result.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="tableName">Table name; null when the mapping could not be read.</param>
+            <param name="tableExists">Whether the table exists.</param>
+            <param name="errors">Errors; null is treated as empty.</param>
+            <param name="warnings">Warnings; null is treated as empty.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="entityType"/> is null.</exception>
         </member>
         <member name="T:Durable.Sql.TypedRowMapper`1">
             <summary>
