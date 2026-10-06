@@ -9,7 +9,7 @@ namespace Durable.LiteDb
     /// A repository stored in LiteDB: the complete <see cref="IRepository{T}"/> surface from <see cref="RepositoryBase{T}"/>
     /// over a <see cref="LiteDbBackend"/>. Repositories created over the same backend (or over backends wrapping the same
     /// <see cref="LiteDB.LiteDatabase"/>) share data, so includes, navigation predicates and transactions work across
-    /// entity types. An ambient <see cref="TransactionScope"/> is used only when its transaction was created over the same
+    /// entity types. An ambient <see cref="AmbientTransactionScope"/> is used only when its transaction was created over the same
     /// database. Creating a repository validates the entity's LiteDB mapping and creates its indexes. The repository never
     /// disposes the backend.
     /// <para>

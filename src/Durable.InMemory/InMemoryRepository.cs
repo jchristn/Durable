@@ -9,7 +9,7 @@ namespace Durable.InMemory
     /// A repository stored in an <see cref="InMemoryBackend"/>: the complete <see cref="IRepository{T}"/> surface from
     /// <see cref="RepositoryBase{T}"/> over in-memory tables. Repositories created over the same backend share data, so
     /// includes, navigation predicates and transactions work across entity types. An ambient
-    /// <see cref="TransactionScope"/> is used only when its transaction was created by the same backend. The repository
+    /// <see cref="AmbientTransactionScope"/> is used only when its transaction was created by the same backend. The repository
     /// never disposes the backend.
     /// Thread safety: safe for concurrent use once configured (see <see cref="RepositoryBase{T}"/>).
     /// </summary>

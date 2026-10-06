@@ -658,7 +658,7 @@
             A repository stored in LiteDB: the complete <see cref="T:Durable.IRepository`1"/> surface from <see cref="T:Durable.Query.RepositoryBase`1"/>
             over a <see cref="T:Durable.LiteDb.LiteDbBackend"/>. Repositories created over the same backend (or over backends wrapping the same
             <see cref="T:LiteDB.LiteDatabase"/>) share data, so includes, navigation predicates and transactions work across
-            entity types. An ambient <see cref="T:Durable.TransactionScope"/> is used only when its transaction was created over the same
+            entity types. An ambient <see cref="T:Durable.AmbientTransactionScope"/> is used only when its transaction was created over the same
             database. Creating a repository validates the entity's LiteDB mapping and creates its indexes. The repository never
             disposes the backend.
             <para>

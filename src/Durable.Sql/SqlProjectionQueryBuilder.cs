@@ -23,7 +23,7 @@ namespace Durable.Sql
     /// </summary>
     /// <typeparam name="TSource">Source entity type.</typeparam>
     /// <typeparam name="TResult">Projected type.</typeparam>
-    public class SqlProjectionQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TSource, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult> : ISqlQueryBuilder<TResult>
+    internal class SqlProjectionQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TSource, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult> : ISqlQueryBuilder<TResult>
         where TSource : class, new()
         where TResult : class, new()
     {
@@ -153,6 +153,14 @@ namespace Durable.Sql
         public ISqlQueryBuilder<TResult> IgnoreQueryFilters()
         {
             _Source.IgnoreQueryFilters();
+            return this;
+        }
+
+        /// <inheritdoc />
+        public ISqlQueryBuilder<TResult> WhereSql(FormattableString condition)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            _Conditions.Add(translator => "(" + RawSql.BindInterpolated(condition, translator.Builder, translator.Converter) + ")");
             return this;
         }
 

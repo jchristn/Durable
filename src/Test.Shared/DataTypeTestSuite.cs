@@ -40,7 +40,7 @@ namespace Test.Shared
         public async Task DateTimeValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             DateTime testDate = new DateTime(2024, 3, 15, 14, 30, 45, DateTimeKind.Utc);
 
@@ -77,7 +77,7 @@ namespace Test.Shared
         public async Task NullableDateTimeValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             DateTimeOffset? testDateTimeOffset = new DateTimeOffset(2024, 3, 15, 14, 30, 45, TimeSpan.Zero);
 
@@ -136,7 +136,7 @@ namespace Test.Shared
         public async Task EnumValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             ComplexEntity entity = new ComplexEntity
             {
@@ -200,7 +200,7 @@ namespace Test.Shared
         public async Task BooleanValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             ComplexEntity entityTrue = new ComplexEntity
             {
@@ -256,7 +256,7 @@ namespace Test.Shared
         public async Task StringValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             string[] testStrings = new[]
             {
@@ -301,7 +301,7 @@ namespace Test.Shared
         public async Task DecimalValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             decimal[] testDecimals = new[]
             {
@@ -346,7 +346,7 @@ namespace Test.Shared
         public async Task IntegerValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int[] testIntegers = new[] { 0, 1, 100, 999, -1, -100, int.MaxValue, int.MinValue };
 
@@ -383,7 +383,7 @@ namespace Test.Shared
         public async Task NullableIntegerValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             ComplexEntity entityWithValue = new ComplexEntity
             {
@@ -438,7 +438,7 @@ namespace Test.Shared
         public async Task GuidValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             Guid testGuid = Guid.NewGuid();
 
@@ -473,7 +473,7 @@ namespace Test.Shared
         public async Task TimeSpanValuesAreStoredAndRetrievedCorrectly()
         {
             ISqlRepository<ComplexEntity> repository = _Provider.CreateRepository<ComplexEntity>();
-            await repository.ExecuteSqlAsync("DELETE FROM complex_entities");
+            await repository.ExecuteSqlRawAsync("DELETE FROM complex_entities");
 
             TimeSpan testTimeSpan = new TimeSpan(2, 14, 30, 45);
 

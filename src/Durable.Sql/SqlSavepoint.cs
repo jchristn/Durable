@@ -9,7 +9,7 @@ namespace Durable.Sql
     /// A savepoint implemented with dialect SQL on the transaction's connection.
     /// Thread safety: not thread-safe.
     /// </summary>
-    public sealed class SqlSavepoint : ISavepoint
+    internal sealed class SqlSavepoint : ISavepoint
     {
         #region Public-Members
 
@@ -62,13 +62,6 @@ namespace Durable.Sql
         public Task RollbackAsync(CancellationToken token = default)
         {
             return ExecuteAsync(_Dialect.RollbackToSavepointSql(Name), token);
-        }
-
-        /// <summary>
-        /// Does nothing; savepoints end with their transaction.
-        /// </summary>
-        public void Dispose()
-        {
         }
 
         #endregion

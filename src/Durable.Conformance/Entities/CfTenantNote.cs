@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Multi-tenant row used by query-filter cases. Storage: <c>cf_tenant_notes</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_tenant_notes")]
     public class CfTenantNote

@@ -62,7 +62,7 @@ namespace Test.Shared
             List<RelSoftNote> everything = (await repository.Query().IgnoreQueryFilters().OrderBy(x => x.Text).ExecuteAsync()).ToList();
             Assert.Equal(6, everything.Count);
             Assert.Equal(4, everything.Count(x => x.IsDeleted));
-            Assert.Equal(6L, await repository.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM rel_soft_notes"));
+            Assert.Equal(6L, await repository.ExecuteScalarRawAsync<long>("SELECT COUNT(*) FROM rel_soft_notes"));
 
             Assert.Equal(2, await repository.DeleteAllAsync());
             Assert.Equal(0, await repository.CountAsync());

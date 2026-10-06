@@ -7,10 +7,11 @@ namespace Durable.DefaultValueProviders
     /// <summary>
     /// Provides a sequential GUID optimized for database indexing as a default value.
     /// Sequential GUIDs reduce index fragmentation compared to random GUIDs.
+    /// Thread safety: stateless (uses a thread-safe random number generator); safe for concurrent use.
     /// </summary>
     public class SequentialGuidProvider : IDefaultValueProvider
     {
-        private static readonly RandomNumberGenerator _rng = RandomNumberGenerator.Create();
+        private static readonly RandomNumberGenerator _Rng = RandomNumberGenerator.Create();
 
         /// <inheritdoc/>
         public object? GetDefaultValue(PropertyInfo property, object entity)
@@ -38,7 +39,7 @@ namespace Durable.DefaultValueProviders
         private static Guid GenerateSequentialGuid()
         {
             byte[] guidBytes = new byte[16];
-            _rng.GetBytes(guidBytes);
+            _Rng.GetBytes(guidBytes);
 
             // Get timestamp as ticks (8 bytes)
             long timestamp = DateTime.UtcNow.Ticks;

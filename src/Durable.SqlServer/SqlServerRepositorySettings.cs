@@ -6,10 +6,12 @@ namespace Durable.SqlServer
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Sql;
     using Microsoft.Data.SqlClient;
 
     /// <summary>
     /// Connection settings for SQL Server repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class SqlServerRepositorySettings : RepositorySettings
     {
@@ -17,27 +19,29 @@ namespace Durable.SqlServer
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.SqlServer"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.SqlServer;
 
         /// <summary>
-        /// The connection timeout in seconds. Default: null (uses SQL Server default of 15 seconds)
+        /// Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+        /// (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
         /// </summary>
         public int? ConnectionTimeout { get; init; }
 
         /// <summary>
-        /// The minimum pool size. Default: null (uses SQL Server default of 0)
+        /// Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+        /// Minimum: 0. Must not exceed <see cref="MaxPoolSize"/>.
         /// </summary>
         public int? MinPoolSize { get; init; }
 
         /// <summary>
-        /// The maximum pool size. Default: null (uses SQL Server default of 100)
+        /// Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
         /// </summary>
         public int? MaxPoolSize { get; init; }
 
         /// <summary>
-        /// Whether to use connection pooling. Default: null (uses SQL Server default of true)
+        /// Gets whether the driver pools connections. Default: null (the driver default, true).
         /// </summary>
         public bool? Pooling { get; init; }
 
@@ -58,9 +62,6 @@ namespace Durable.SqlServer
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -272,9 +273,6 @@ namespace Durable.SqlServer
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

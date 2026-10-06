@@ -132,11 +132,11 @@ namespace Durable.Conformance
             await AssertMergeResolvesAsync(repository);
         }
 
-        [ConformanceTest(Requires = RepositoryCapabilities.OptimisticConcurrency, Description = "ImprovedMergeChangesResolver resolves the conflict and keeps changes only the other writer made")]
-        public async Task ImprovedMergeChangesResolver()
+        [ConformanceTest(Requires = RepositoryCapabilities.OptimisticConcurrency, Description = "MergeChangesResolver with CurrentWins resolves the conflict and keeps changes only the other writer made")]
+        public async Task MergeChangesResolverCurrentWins()
         {
             IRepository<CfVersionedItem> repository = await PrepareAsync();
-            repository.ConflictResolver = new ImprovedMergeChangesResolver<CfVersionedItem>();
+            repository.ConflictResolver = new MergeChangesResolver<CfVersionedItem>(MergeConflictBehavior.CurrentWins);
             await AssertMergeResolvesAsync(repository);
         }
 

@@ -5,11 +5,12 @@ namespace Durable.DefaultValueProviders
 
     /// <summary>
     /// Provides a static value as a default value
+    /// Thread safety: immutable; safe for concurrent use.
     /// </summary>
     public class StaticValueProvider : IDefaultValueProvider
     {
-        private readonly object? _value;
-        private readonly bool _onlyIfNull;
+        private readonly object? _Value;
+        private readonly bool _OnlyIfNull;
 
         /// <summary>
         /// Initializes a new instance of the StaticValueProvider class
@@ -18,20 +19,20 @@ namespace Durable.DefaultValueProviders
         /// <param name="onlyIfNull">If true, only apply when the current value is null/default</param>
         public StaticValueProvider(object? value, bool onlyIfNull = true)
         {
-            _value = value;
-            _onlyIfNull = onlyIfNull;
+            _Value = value;
+            _OnlyIfNull = onlyIfNull;
         }
 
         /// <inheritdoc/>
         public object? GetDefaultValue(PropertyInfo property, object entity)
         {
-            return _value;
+            return _Value;
         }
 
         /// <inheritdoc/>
         public bool ShouldApply(object? currentValue, Type propertyType)
         {
-            if (!_onlyIfNull) return true;
+            if (!_OnlyIfNull) return true;
             if (currentValue == null) return true;
 
             // Check if value is the default for its type

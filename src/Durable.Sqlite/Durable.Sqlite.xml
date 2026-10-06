@@ -37,6 +37,15 @@
             </summary>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
         </member>
+        <member name="M:Durable.Sqlite.SqliteConnectionFactory.#ctor(Durable.Sqlite.SqliteRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.Sqlite.SqliteRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack required values (see <see cref="M:Durable.Sqlite.SqliteRepositorySettings.BuildConnectionString"/>).</exception>
+        </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
             <summary>
             Instantiates the factory.
@@ -228,16 +237,18 @@
         <member name="T:Durable.Sqlite.SqliteRepositorySettings">
             <summary>
             Connection settings for SQLite repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.Sqlite"/>.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.DataSource">
             <summary>
-            The file path to the SQLite database file. Required for file-based databases.
+            Gets the database file path, or ":memory:" for a private in-memory database. Default: null. Required by
+            <see cref="M:Durable.Sqlite.SqliteRepositorySettings.BuildConnectionString"/>.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.CacheMode">
@@ -248,6 +259,11 @@
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.Mode">
             <summary>
             The open mode. Default: null (uses SQLite default). Values: ReadWriteCreate, ReadWrite, ReadOnly, Memory
+            </summary>
+        </member>
+        <member name="P:Durable.Sqlite.SqliteRepositorySettings.Pooling">
+            <summary>
+            Gets whether Microsoft.Data.Sqlite pools connections. Default: null (the driver default, true).
             </summary>
         </member>
         <member name="M:Durable.Sqlite.SqliteRepositorySettings.#ctor">

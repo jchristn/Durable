@@ -7,7 +7,7 @@ namespace Durable.Sql
     /// A table bound to a lambda parameter during translation: the qualifier to prefix columns with and the entity metadata.
     /// Thread safety: immutable.
     /// </summary>
-    public sealed class TableSource
+    internal sealed class TableSource
     {
         /// <summary>
         /// Gets the SQL qualifier (an alias such as "t0", or a quoted table name), or null for unqualified columns.

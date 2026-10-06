@@ -5,6 +5,7 @@ namespace Durable.Conformance
     /// <summary>
     /// Book: reference navigations to <see cref="CfAuthor"/> (required) and <see cref="CfPublisher"/> (optional).
     /// Storage: <c>cf_books</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_books")]
     public class CfBook

@@ -119,7 +119,7 @@ namespace Test.Shared
         {
             ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS people (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     first VARCHAR(64) NOT NULL,
@@ -131,7 +131,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS complex_entities (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
@@ -151,7 +151,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS authors (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(200) NOT NULL,
@@ -160,7 +160,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS books (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     title VARCHAR(200) NOT NULL,
@@ -169,7 +169,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS author_categories (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     author_id INT NOT NULL,
@@ -177,7 +177,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS categories (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
@@ -185,7 +185,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS companies (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
@@ -193,7 +193,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS employees (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     first_name VARCHAR(100) NOT NULL,
@@ -205,7 +205,7 @@ namespace Test.Shared
                 ) ENGINE=InnoDB
             ");
 
-            await personRepo.ExecuteSqlAsync(@"
+            await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE IF NOT EXISTS products (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(200) NOT NULL,
@@ -228,16 +228,16 @@ namespace Test.Shared
             {
                 ISqlRepository<Person> personRepo = CreateRepository<Person>();
 
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS author_categories");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS books");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors_with_version");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS authors");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS categories");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS companies");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS complex_entities");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS people");
-                await personRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS author_categories");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS books");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS authors_with_version");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS authors");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS categories");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS companies");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS complex_entities");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS people");
+                await personRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             }
             catch
             {

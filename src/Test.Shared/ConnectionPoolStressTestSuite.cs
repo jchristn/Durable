@@ -46,7 +46,7 @@ namespace Test.Shared
         public async Task SequentialQueries_ShouldReuseConnections()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person testPerson = new Person
             {
@@ -83,7 +83,7 @@ namespace Test.Shared
         public async Task ConcurrentQueries_ShouldHandleMultipleThreads()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[100];
             for (int i = 0; i < testPeople.Length; i++)
@@ -148,7 +148,7 @@ namespace Test.Shared
         public async Task MixedReadWriteOperations_ShouldHandleHighLoad()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int operationCount = 2000;
             long initialMemory = GC.GetTotalMemory(true);
@@ -212,7 +212,7 @@ namespace Test.Shared
         public async Task RapidConnectionCycling_ShouldNotLeakConnections()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person testPerson = new Person
             {
@@ -262,7 +262,7 @@ namespace Test.Shared
         public async Task ComplexQueries_ShouldMaintainPoolIntegrity()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] testPeople = new Person[500];
             for (int i = 0; i < testPeople.Length; i++)
@@ -314,7 +314,7 @@ namespace Test.Shared
         public async Task HighVolumeTransactions_ShouldReleaseConnections()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int transactionCount = 1000;
             long initialMemory = GC.GetTotalMemory(true);
@@ -360,7 +360,7 @@ namespace Test.Shared
         public async Task ParallelBatchOperations_ShouldHandleConcurrency()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int batchCount = 50;
             int recordsPerBatch = 100;
@@ -401,7 +401,7 @@ namespace Test.Shared
             // Warm-up pass: lets the driver pool grow to the workload's concurrency and JIT/caches settle,
             // so the measured pass reflects leaks rather than one-time growth.
             await RunBatchesAsync("Warm");
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             long initialMemory = GC.GetTotalMemory(true);
             await RunBatchesAsync("Batch");
@@ -425,7 +425,7 @@ namespace Test.Shared
         public async Task SustainedLoad_ShouldNotLeakMemory()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] initialData = new Person[200];
             for (int i = 0; i < initialData.Length; i++)
@@ -488,7 +488,7 @@ namespace Test.Shared
         public async Task ExtremeConcurrentLoad_ShouldHandleBackpressure()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             // Create test data
             for (int i = 0; i < 50; i++)
@@ -551,7 +551,7 @@ namespace Test.Shared
         public async Task TransactionsUnderLoad_ShouldNotStarveQueries()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             // Create test data
             for (int i = 0; i < 20; i++)
@@ -642,7 +642,7 @@ namespace Test.Shared
         public async Task ManyExceptions_ShouldNotLeakConnections()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             // Cause 100 exceptions with invalid SQL
             int exceptionCount = 100;
@@ -650,7 +650,7 @@ namespace Test.Shared
             {
                 try
                 {
-                    await repository.ExecuteSqlAsync("SELECT * FROM nonexistent_table_xyz_999");
+                    await repository.ExecuteSqlRawAsync("SELECT * FROM nonexistent_table_xyz_999");
                 }
                 catch
                 {
@@ -696,7 +696,7 @@ namespace Test.Shared
         public async Task ConcurrentRollbacks_ShouldReturnConnections()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int rollbackCount = 30;
             int successfulRollbacks = 0;
@@ -769,7 +769,7 @@ namespace Test.Shared
         public async Task HighConcurrencyMixedOperations_ShouldComplete()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             int threadCount = 20;
             int opsPerThread = 30;
@@ -850,7 +850,7 @@ namespace Test.Shared
         public async Task LargeResultSets_ShouldNotExhaustPool()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             // Create many records
             int recordCount = 1000;

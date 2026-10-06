@@ -23,7 +23,7 @@ factories, so it has been removed.
   or the enumerator is disposed.
 - **Explicit transaction:** operations given an `ITransaction` run on that transaction's connection, which is not closed
   per operation.
-- **Ambient transaction:** while a `TransactionScope` is current on the async flow, operations without an explicit
+- **Ambient transaction:** while a Durable `AmbientTransactionScope` is current on the async flow, operations without an explicit
   transaction use it, as long as it belongs to the same provider.
 - **Includes:** loaded with follow-up queries on the same connection after the root query completes. When streaming with
   includes outside a transaction, a second connection loads each batch.
@@ -72,10 +72,10 @@ tx.Commit();                            // dispose without commit rolls back
 
 `ISqlTransaction` exposes `Connection`, `Transaction`, and `CreateSavepoint()`.
 
-Async ambient scopes work across `await`:
+Async ambient scopes work across `await` (dispose them with `await using` so an uncompleted scope rolls back asynchronously). Durable does not take part in `System.Transactions`:
 
 ```csharp
-using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+await using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
 {
     await repository.CreateAsync(a);      // joins the scope
     await otherRepository.CreateAsync(b); // joins the scope

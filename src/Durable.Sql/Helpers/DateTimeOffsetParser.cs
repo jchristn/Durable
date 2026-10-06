@@ -9,11 +9,10 @@ namespace Durable.Sql.Helpers
     /// while preserving timezone offset information and microsecond precision where available.
     /// Unlike DateTime, DateTimeOffset can preserve the original timezone offset from the input string.
     /// </summary>
-    public class DateTimeOffsetParser
+    internal class DateTimeOffsetParser
     {
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-        private static string[] _defaultFormats = new[]
+        private static string[] _DefaultFormats = new[]
         {
             // ========== 7-digit precision (SQL Server datetime2(7)) ==========
             "yyyy-MM-dd HH:mm:ss.fffffff",
@@ -148,8 +147,8 @@ namespace Durable.Sql.Helpers
             "r"                              // RFC1123
         };
 
-        private string[] _formats = null;
-        private TimeSpan _defaultOffset = TimeSpan.Zero;
+        private string[]? _Formats = null;
+        private TimeSpan _DefaultOffset = TimeSpan.Zero;
 
         /// <summary>
         /// Gets or sets the default timezone offset to use when parsing datetime strings without timezone information.
@@ -162,8 +161,8 @@ namespace Durable.Sql.Helpers
         /// </remarks>
         public TimeSpan DefaultOffset
         {
-            get => _defaultOffset;
-            set => _defaultOffset = value;
+            get => _DefaultOffset;
+            set => _DefaultOffset = value;
         }
 
         /// <summary>
@@ -174,14 +173,14 @@ namespace Durable.Sql.Helpers
         /// </summary>
         public string[] Formats
         {
-            get => _formats ?? _defaultFormats;
-            set => _formats = value;
+            get => _Formats ?? _DefaultFormats;
+            set => _Formats = value;
         }
 
         /// <summary>
         /// Gets the default format strings used for parsing datetime values across various database systems.
         /// </summary>
-        public static string[] DefaultFormats => (string[])_defaultFormats.Clone();
+        public static string[] DefaultFormats => (string[])_DefaultFormats.Clone();
 
         /// <summary>
         /// Parses a datetime string using the configured format list, preserving precision and timezone offset.
@@ -192,7 +191,7 @@ namespace Durable.Sql.Helpers
         /// <exception cref="FormatException">Thrown when the input string cannot be parsed using any of the configured formats.</exception>
         public static DateTimeOffset ParseString(string input)
         {
-            return ParseString(input, _defaultFormats, TimeSpan.Zero);
+            return ParseString(input, _DefaultFormats, TimeSpan.Zero);
         }
 
         /// <summary>
@@ -211,7 +210,7 @@ namespace Durable.Sql.Helpers
 
             // Use default formats if null or empty array provided
             if (formats == null || formats.Length == 0)
-                formats = _defaultFormats;
+                formats = _DefaultFormats;
 
             string dateStr = input.Trim();
 
@@ -374,7 +373,7 @@ namespace Durable.Sql.Helpers
         /// <returns>true if the input was converted successfully; otherwise, false.</returns>
         public static bool TryParseString(string input, out DateTimeOffset result)
         {
-            return TryParseString(input, _defaultFormats, TimeSpan.Zero, out result);
+            return TryParseString(input, _DefaultFormats, TimeSpan.Zero, out result);
         }
 
         /// <summary>
@@ -394,7 +393,7 @@ namespace Durable.Sql.Helpers
 
             // Use default formats if null or empty array provided
             if (formats == null || formats.Length == 0)
-                formats = _defaultFormats;
+                formats = _DefaultFormats;
 
             try
             {
@@ -435,10 +434,9 @@ namespace Durable.Sql.Helpers
         /// </summary>
         public void ResetToDefaults()
         {
-            _formats = null;
-            _defaultOffset = TimeSpan.Zero;
+            _Formats = null;
+            _DefaultOffset = TimeSpan.Zero;
         }
 
-#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
     }
 }

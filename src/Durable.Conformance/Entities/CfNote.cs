@@ -5,6 +5,7 @@ namespace Durable.Conformance
     /// <summary>
     /// Soft-deletable note belonging to a <see cref="CfAuthor"/>: deletes set <see cref="IsDeleted"/> instead of removing
     /// the row. Storage: <c>cf_notes</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_notes")]
     public class CfNote

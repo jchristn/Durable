@@ -2,6 +2,7 @@ namespace Durable
 {
     /// <summary>
     /// Represents the result of attempting to resolve a conflict for an entity of type T.
+    /// Thread safety: a mutable result holder; do not share across threads while it is being set.
     /// </summary>
     /// <typeparam name="T">The type of entity being resolved.</typeparam>
     public class TryResolveConflictResult<T> where T : class

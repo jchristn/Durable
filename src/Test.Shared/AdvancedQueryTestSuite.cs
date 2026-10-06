@@ -75,8 +75,8 @@ namespace Test.Shared
             ISqlRepository<Author> authorRepository = _Provider.CreateRepository<Author>();
             ISqlRepository<Book> bookRepository = _Provider.CreateRepository<Book>();
 
-            await bookRepository.ExecuteSqlAsync("DELETE FROM books");
-            await authorRepository.ExecuteSqlAsync("DELETE FROM authors");
+            await bookRepository.ExecuteSqlRawAsync("DELETE FROM books");
+            await authorRepository.ExecuteSqlRawAsync("DELETE FROM authors");
 
             List<Author> authors = new List<Author>
             {

@@ -125,11 +125,11 @@ namespace Test.Shared
         private async Task ResetAsync()
         {
             ISqlRepository<Author> repository = _Provider.CreateRepository<Author>();
-            await repository.ExecuteSqlAsync("DELETE FROM author_categories");
-            await repository.ExecuteSqlAsync("DELETE FROM books");
-            await repository.ExecuteSqlAsync("DELETE FROM authors");
-            await repository.ExecuteSqlAsync("DELETE FROM categories");
-            await repository.ExecuteSqlAsync("DELETE FROM companies");
+            await repository.ExecuteSqlRawAsync("DELETE FROM author_categories");
+            await repository.ExecuteSqlRawAsync("DELETE FROM books");
+            await repository.ExecuteSqlRawAsync("DELETE FROM authors");
+            await repository.ExecuteSqlRawAsync("DELETE FROM categories");
+            await repository.ExecuteSqlRawAsync("DELETE FROM companies");
         }
 
         #endregion

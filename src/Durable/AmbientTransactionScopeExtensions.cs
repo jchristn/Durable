@@ -6,9 +6,10 @@ namespace Durable
     using System.Threading.Tasks;
 
     /// <summary>
-    /// Extension methods for executing operations within transaction scopes.
+    /// Runs a delegate inside an <see cref="AmbientTransactionScope"/>: the scope commits when the delegate returns and
+    /// rolls back when it throws. The async forms dispose the scope asynchronously. Stateless and thread-safe.
     /// </summary>
-    public static class TransactionScopeExtensions
+    public static class AmbientTransactionScopeExtensions
     {
         /// <summary>
         /// Executes an action within a transaction scope for the specified repository.
@@ -22,7 +23,7 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (action == null) throw new ArgumentNullException(nameof(action));
 
-            using TransactionScope scope = TransactionScope.Create(repository);
+            using AmbientTransactionScope scope = AmbientTransactionScope.Create(repository);
             try
             {
                 action();
@@ -49,7 +50,7 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = TransactionScope.Create(repository);
+            using AmbientTransactionScope scope = AmbientTransactionScope.Create(repository);
             try
             {
                 TResult result = func();
@@ -77,7 +78,7 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
+            await using AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
             try
             {
                 await func().ConfigureAwait(false);
@@ -105,7 +106,7 @@ namespace Durable
             if (repository == null) throw new ArgumentNullException(nameof(repository));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = await TransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
+            await using AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository, token).ConfigureAwait(false);
             TResult result = await func().ConfigureAwait(false);
             await scope.CompleteAsync(token).ConfigureAwait(false);
             return result;
@@ -122,7 +123,7 @@ namespace Durable
             if (transaction == null) throw new ArgumentNullException(nameof(transaction));
             if (action == null) throw new ArgumentNullException(nameof(action));
 
-            using TransactionScope scope = TransactionScope.Create(transaction);
+            using AmbientTransactionScope scope = AmbientTransactionScope.Create(transaction);
             try
             {
                 action();
@@ -148,7 +149,7 @@ namespace Durable
             if (transaction == null) throw new ArgumentNullException(nameof(transaction));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = TransactionScope.Create(transaction);
+            using AmbientTransactionScope scope = AmbientTransactionScope.Create(transaction);
             try
             {
                 TResult result = func();
@@ -175,7 +176,7 @@ namespace Durable
             if (transaction == null) throw new ArgumentNullException(nameof(transaction));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = TransactionScope.Create(transaction);
+            await using AmbientTransactionScope scope = AmbientTransactionScope.Create(transaction);
             try
             {
                 await func().ConfigureAwait(false);
@@ -202,7 +203,7 @@ namespace Durable
             if (transaction == null) throw new ArgumentNullException(nameof(transaction));
             if (func == null) throw new ArgumentNullException(nameof(func));
 
-            using TransactionScope scope = TransactionScope.Create(transaction);
+            await using AmbientTransactionScope scope = AmbientTransactionScope.Create(transaction);
             try
             {
                 TResult result = await func().ConfigureAwait(false);

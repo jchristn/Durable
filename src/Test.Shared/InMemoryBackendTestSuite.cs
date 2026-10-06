@@ -142,7 +142,7 @@ namespace Test.Shared
             Assert.Throws<ArgumentNullException>(() => repository.ReadSingle(null!));
 
             Assert.Equal("a", repository.ReadFirst()!.Title);
-            Assert.Equal("b", (await repository.ReadFirstOrDefaultAsync(x => x.Amount > 1))!.Title);
+            Assert.Equal("b", (await repository.ReadFirstAsync(x => x.Amount > 1))!.Title);
             Assert.Null(repository.ReadFirst(x => x.Amount > 100));
             Assert.True(repository.Exists(x => x.Title == "b"));
             Assert.False(await repository.ExistsAsync(x => x.Title == "z"));
@@ -223,7 +223,7 @@ namespace Test.Shared
             Assert.True(await repository.DeleteByIdAsync(notes[1].Id));
             Assert.False(repository.DeleteById(notes[1].Id));
             Assert.Equal(1, repository.DeleteMany(x => x.Amount == 3));
-            Assert.Equal(1, await repository.BatchDeleteAsync(x => x.Amount == 4));
+            Assert.Equal(1, await repository.DeleteManyAsync(x => x.Amount == 4));
             Assert.Throws<NotSupportedException>(() => repository.Query().Take(1).Delete());
             Assert.Equal(2, await repository.DeleteAllAsync());
             Assert.Equal(0, repository.Count());

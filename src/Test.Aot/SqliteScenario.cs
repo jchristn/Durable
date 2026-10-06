@@ -47,12 +47,12 @@ namespace Test.Aot
                         links.InitializeTable(typeof(AuthorCategory));
                         shelves.InitializeTable(typeof(Shelf));
                         readings.InitializeTable(typeof(Reading));
-                        shelves.ExecuteSql("CREATE TABLE shelf_items (id INTEGER PRIMARY KEY AUTOINCREMENT, shelf_id INTEGER NOT NULL, label TEXT NOT NULL)");
-                        return authors.ExecuteScalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('authors','books','reviews','categories','author_categories','shelves','readings')") == 7;
+                        shelves.ExecuteSqlRaw("CREATE TABLE shelf_items (id INTEGER PRIMARY KEY AUTOINCREMENT, shelf_id INTEGER NOT NULL, label TEXT NOT NULL)");
+                        return authors.ExecuteScalarRaw<long>("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('authors','books','reviews','categories','author_categories','shelves','readings')") == 7;
                     });
                     runner.Check("[sqlite] Nullable reference annotations honored (NOT NULL name, NULL email)", () =>
                     {
-                        string ddl = authors.ExecuteScalar<string>("SELECT sql FROM sqlite_master WHERE name = 'authors'") ?? string.Empty;
+                        string ddl = authors.ExecuteScalarRaw<string>("SELECT sql FROM sqlite_master WHERE name = 'authors'") ?? string.Empty;
                         EntityMetadata metadata = EntityMetadata.For<Author>();
                         return !metadata.FindColumnByProperty("Name")!.IsNullable && metadata.FindColumnByProperty("Email")!.IsNullable && ddl.Length > 0;
                     });
@@ -61,12 +61,12 @@ namespace Test.Aot
 
                     runner.Check("[sqlite] FromSql<TResult> to DTO", () =>
                     {
-                        List<AuthorSummary> rows = authors.FromSql<AuthorSummary>("SELECT name AS Name, rating AS Rating FROM authors WHERE rating >= @p0 ORDER BY name", null, 5).ToList();
+                        List<AuthorSummary> rows = authors.FromSqlRaw<AuthorSummary>("SELECT name AS Name, rating AS Rating FROM authors WHERE rating >= {0} ORDER BY name", new object?[] { 5 }).ToList();
                         return rows.Count == 2 && rows[0].Name == "Ada Lovelace";
                     });
                     runner.Check("[sqlite] JSON stored as camelCase text", () =>
                     {
-                        string? json = books.ExecuteScalar<string>("SELECT details FROM books WHERE title = @p0", null, "Notes on the Analytical Engine");
+                        string? json = books.ExecuteScalarRaw<string>("SELECT details FROM books WHERE title = {0}", new object?[] { "Notes on the Analytical Engine" });
                         return json != null && json.Contains("\"pages\":64", StringComparison.Ordinal);
                     });
 

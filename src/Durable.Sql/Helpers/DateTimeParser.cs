@@ -8,11 +8,10 @@ namespace Durable.Sql.Helpers
     /// A comprehensive DateTime parser that handles various database and standard datetime formats
     /// while preserving microsecond precision where available.
     /// </summary>
-    public class DateTimeParser
+    internal class DateTimeParser
     {
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
 
-        private static string[] _defaultFormats = new[]
+        private static string[] _DefaultFormats = new[]
         {
             // ========== 7-digit precision (SQL Server datetime2(7)) ==========
             "yyyy-MM-dd HH:mm:ss.fffffff",
@@ -150,7 +149,7 @@ namespace Durable.Sql.Helpers
             "r"                              // RFC1123
         };
 
-        private string[] _formats = null;
+        private string[]? _Formats = null;
 
         /// <summary>
         /// Gets or sets the array of datetime format strings used for parsing.
@@ -171,14 +170,14 @@ namespace Durable.Sql.Helpers
         /// </remarks>
         public string[] Formats
         {
-            get => _formats ?? _defaultFormats;
-            set => _formats = value;
+            get => _Formats ?? _DefaultFormats;
+            set => _Formats = value;
         }
 
         /// <summary>
         /// Gets the default format strings used for parsing datetime values across various database systems.
         /// </summary>
-        public static string[] DefaultFormats => (string[])_defaultFormats.Clone();
+        public static string[] DefaultFormats => (string[])_DefaultFormats.Clone();
 
         /// <summary>
         /// Parses a datetime string using the configured format list, preserving precision up to microseconds.
@@ -190,7 +189,7 @@ namespace Durable.Sql.Helpers
         public static DateTime ParseString(string input)
         {
             if (input != null && TryParseCanonical(input, out DateTime canonical)) return canonical;
-            return ParseString(input!, _defaultFormats);
+            return ParseString(input!, _DefaultFormats);
         }
 
         /// <summary>
@@ -208,7 +207,7 @@ namespace Durable.Sql.Helpers
 
             // Use default formats if null or empty array provided
             if (formats == null || formats.Length == 0)
-                formats = _defaultFormats;
+                formats = _DefaultFormats;
 
             string dateStr = input.Trim();
 
@@ -303,7 +302,7 @@ namespace Durable.Sql.Helpers
         /// <returns>true if the input was converted successfully; otherwise, false.</returns>
         public static bool TryParseString(string input, out DateTime result)
         {
-            return TryParseString(input, _defaultFormats, out result);
+            return TryParseString(input, _DefaultFormats, out result);
         }
 
         /// <summary>
@@ -322,7 +321,7 @@ namespace Durable.Sql.Helpers
 
             // Use default formats if null or empty array provided
             if (formats == null || formats.Length == 0)
-                formats = _defaultFormats;
+                formats = _DefaultFormats;
 
             try
             {
@@ -363,7 +362,7 @@ namespace Durable.Sql.Helpers
         /// </summary>
         public void ResetToDefaults()
         {
-            _formats = null;
+            _Formats = null;
         }
 
         /// <summary>
@@ -438,6 +437,5 @@ namespace Durable.Sql.Helpers
             return parsed;
         }
 
-#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
     }
 }

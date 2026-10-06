@@ -192,8 +192,8 @@ namespace Test.Shared
 
         private async Task SeedAsync()
         {
-            await Items.ExecuteSqlAsync("DROP TABLE IF EXISTS qt_items").ConfigureAwait(false);
-            await Owners.ExecuteSqlAsync("DROP TABLE IF EXISTS qt_owners").ConfigureAwait(false);
+            await Items.ExecuteSqlRawAsync("DROP TABLE IF EXISTS qt_items").ConfigureAwait(false);
+            await Owners.ExecuteSqlRawAsync("DROP TABLE IF EXISTS qt_owners").ConfigureAwait(false);
             await Owners.InitializeTableAsync(typeof(QtOwner)).ConfigureAwait(false);
             await Items.InitializeTableAsync(typeof(QtItem)).ConfigureAwait(false);
 

@@ -107,9 +107,9 @@ namespace Durable.Conformance
         public async Task BatchDeleteAndDeleteMany()
         {
             ItemFixture f = await SeedItemsAsync();
-            Assert.Equal(2, f.Items.BatchDelete(x => x.Category == "Tools"));
-            Assert.Equal(0, await f.Items.BatchDeleteAsync(x => x.Category == "Tools", null, Token));
-            Assert.Equal(1, await f.Items.BatchDeleteAsync(x => x.Quantity > 10, null, Token));
+            Assert.Equal(2, f.Items.DeleteMany(x => x.Category == "Tools"));
+            Assert.Equal(0, await f.Items.DeleteManyAsync(x => x.Category == "Tools", null, Token));
+            Assert.Equal(1, await f.Items.DeleteManyAsync(x => x.Quantity > 10, null, Token));
             Assert.Equal(1, f.Items.DeleteMany(x => x.Name == ItemFixture.Delta));
             ConformanceAssert.NameSet(f.Items.ReadAll().Select(x => x.Name), new[] { ItemFixture.Echo, ItemFixture.Foxtrot }, "rows left");
         }

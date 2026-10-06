@@ -12,7 +12,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlCaseExpressionBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ICaseExpressionBuilder<T> where T : class, new()
+    internal class SqlCaseExpressionBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ICaseExpressionBuilder<T> where T : class, new()
     {
         #region Private-Members
 

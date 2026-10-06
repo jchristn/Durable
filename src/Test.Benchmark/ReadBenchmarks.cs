@@ -228,7 +228,7 @@ namespace Test.Benchmark
         [Benchmark, BenchmarkCategory("Dto")]
         public List<OrderSummary> Durable_FromSqlDto()
         {
-            return _Database.Orders.FromSql<OrderSummary>(SelectSummaries).ToList();
+            return _Database.Orders.FromSqlRaw<OrderSummary>(SelectSummaries).ToList();
         }
 
         [Benchmark, BenchmarkCategory("Dto")]

@@ -858,23 +858,23 @@ namespace Durable.Sql
 
         private SqlStatement RecordedStatement(string id)
         {
-            return RawSql.Positional(
-                "SELECT 1 FROM " + History + " WHERE " + Column("id") + " = " + Dialect.FormatParameterName(0),
+            return RawSql.ToStatement(
+                "SELECT 1 FROM " + History + " WHERE " + Column("id") + " = " + "{0}",
                 new object?[] { id }, Dialect, Dialect.Converter);
         }
 
         private SqlStatement InsertHistoryStatement(Migration migration, DateTime appliedUtc, long durationMs)
         {
-            return RawSql.Positional(
+            return RawSql.ToStatement(
                 "INSERT INTO " + History + " (" + Column("id") + ", " + Column("description") + ", " + Column("applied_utc") + ", " + Column("duration_ms") + ") VALUES (" +
-                Dialect.FormatParameterName(0) + ", " + Dialect.FormatParameterName(1) + ", " + Dialect.FormatParameterName(2) + ", " + Dialect.FormatParameterName(3) + ")",
+                "{0}" + ", " + "{1}" + ", " + "{2}" + ", " + "{3}" + ")",
                 new object?[] { migration.Id, Truncate(migration.Description), appliedUtc, durationMs }, Dialect, Dialect.Converter);
         }
 
         private SqlStatement DeleteHistoryStatement(string id)
         {
-            return RawSql.Positional(
-                "DELETE FROM " + History + " WHERE " + Column("id") + " = " + Dialect.FormatParameterName(0),
+            return RawSql.ToStatement(
+                "DELETE FROM " + History + " WHERE " + Column("id") + " = " + "{0}",
                 new object?[] { id }, Dialect, Dialect.Converter);
         }
 

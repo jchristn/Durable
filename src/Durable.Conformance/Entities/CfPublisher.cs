@@ -5,6 +5,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Publisher: parent of <see cref="CfAuthor"/> (collection navigation) and of <see cref="CfBook"/>. Storage: <c>cf_publishers</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_publishers")]
     public class CfPublisher

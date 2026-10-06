@@ -175,13 +175,7 @@ namespace Durable
             if (VersionColumn != null)
             {
                 VersionColumnAttribute versionAttribute = VersionColumn.Property.GetCustomAttribute<VersionColumnAttribute>()!;
-                VersionInfo = new VersionColumnInfo
-                {
-                    ColumnName = VersionColumn.Name,
-                    Property = VersionColumn.Property,
-                    PropertyType = VersionColumn.PropertyType,
-                    Type = versionAttribute.Type
-                };
+                VersionInfo = new VersionColumnInfo(VersionColumn.Name, VersionColumn.Property, versionAttribute.Type);
             }
 
             List<ColumnMetadata> softDeletes = columns.Where(c => c.IsSoftDelete).ToList();

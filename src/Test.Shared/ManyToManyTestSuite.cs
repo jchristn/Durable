@@ -44,9 +44,9 @@ namespace Test.Shared
             ISqlRepository<Category> categoryRepository = _Provider.CreateRepository<Category>();
             ISqlRepository<AuthorCategory> linkRepository = _Provider.CreateRepository<AuthorCategory>();
 
-            await linkRepository.ExecuteSqlAsync("DELETE FROM author_categories");
-            await linkRepository.ExecuteSqlAsync("DELETE FROM categories");
-            await linkRepository.ExecuteSqlAsync("DELETE FROM authors");
+            await linkRepository.ExecuteSqlRawAsync("DELETE FROM author_categories");
+            await linkRepository.ExecuteSqlRawAsync("DELETE FROM categories");
+            await linkRepository.ExecuteSqlRawAsync("DELETE FROM authors");
 
             Author author = await authorRepository.CreateAsync(new Author { Name = "Prolific", CompanyId = 1 });
             Category fiction = await categoryRepository.CreateAsync(new Category { Name = "Fiction", Description = "Fiction works" });

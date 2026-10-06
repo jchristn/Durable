@@ -5,6 +5,7 @@ namespace Durable.Conformance
     /// <summary>
     /// Convention-mapped entity (no attributes except <see cref="NotMappedAttribute"/>): storage name
     /// <c>CfConventionWidget</c>, key <see cref="Id"/> (identity), columns named after the properties.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     public class CfConventionWidget
     {

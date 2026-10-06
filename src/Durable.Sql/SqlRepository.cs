@@ -51,10 +51,7 @@ namespace Durable.Sql
         /// </summary>
         public IDataTypeConverter Converter { get; }
 
-        /// <summary>
-        /// Gets the command executor. Never null.
-        /// </summary>
-        public SqlCommandExecutor Executor { get; }
+        internal SqlCommandExecutor Executor { get; }
 
         /// <inheritdoc />
         public IReadOnlyList<Expression<Func<T, bool>>> QueryFilters => _QueryFilters;
@@ -68,9 +65,6 @@ namespace Durable.Sql
 
         /// <inheritdoc />
         public bool CaptureSql { get; set; }
-
-        /// <inheritdoc />
-        public bool IncludeQueryInResults { get; set; }
 
         /// <inheritdoc />
         public string? LastExecutedSql => CurrentCapture()?.Sql;
@@ -115,7 +109,6 @@ namespace Durable.Sql
             Settings = settings;
             Options = options ?? new SqlRepositoryOptions();
             CaptureSql = Options.CaptureSql;
-            IncludeQueryInResults = Options.IncludeQueryInResults;
 
             Metadata = EntityMetadata.For(typeof(T));
             Metadata.RequireKey();
@@ -195,12 +188,6 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
-        {
-            return ReadFirst(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public T ReadSingle(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -246,12 +233,6 @@ namespace Durable.Sql
             SqlQueryBuilder<T> query = NewQuery(transaction);
             if (predicate != null) query.Where(predicate);
             return (await query.Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
-        }
-
-        /// <inheritdoc />
-        public Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return ReadFirstAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
@@ -521,7 +502,7 @@ namespace Durable.Sql
                 throw new InvalidOperationException("No rows were affected during update for entity with key " + FormatKey(key) + ".");
 
             T? current = (await NewQuery(transaction).WhereKey(key).Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
-            T resolved = await ResolveConflictAsync(entity, current, key).ConfigureAwait(false);
+            T resolved = await ResolveConflictAsync(entity, current, key, token).ConfigureAwait(false);
             return await UpdateAsync(resolved, transaction, token).ConfigureAwait(false);
         }
 
@@ -616,12 +597,6 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
-        {
-            return DeleteMany(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entity);
@@ -646,12 +621,6 @@ namespace Durable.Sql
         public Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
             return NewQuery(transaction).DeleteAsync(token);
-        }
-
-        /// <inheritdoc />
-        public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return DeleteManyAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
@@ -716,105 +685,141 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public IEnumerable<T> FromSql(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IEnumerable<T> FromSql(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<T>(Converter));
+            return Executor.Query(Interpolated(sql), transaction, "RAW", ResultMapper.Create<T>(Converter));
         }
 
         /// <inheritdoc />
-        public IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IAsyncEnumerable<T> FromSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.Query(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
+            return Executor.QueryAsync(Interpolated(sql), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
         }
 
         /// <inheritdoc />
-        public int ExecuteSql(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IEnumerable<TResult> FromSql<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.ExecuteNonQuery(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW");
+            return Executor.Query(Interpolated(sql), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
         }
 
         /// <inheritdoc />
-        public TResult? ExecuteScalar<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            object? value = Executor.ExecuteScalar(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW");
-            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+            return Executor.QueryAsync(Interpolated(sql), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IEnumerable<T> FromSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
+            return Executor.Query(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<T>(Converter));
         }
 
         /// <inheritdoc />
-        public IAsyncEnumerable<TResult> FromSqlAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IAsyncEnumerable<T> FromSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.QueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
+            return Executor.QueryAsync(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<T>(Converter), token);
         }
 
         /// <inheritdoc />
-        public Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IEnumerable<TResult> FromSqlRaw<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            return Executor.ExecuteNonQueryAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", token);
+            return Executor.Query(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<TResult>(Converter));
         }
 
         /// <inheritdoc />
-        public async Task<TResult?> ExecuteScalarAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public IAsyncEnumerable<TResult> FromSqlRawAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            object? value = await Executor.ExecuteScalarAsync(RawSql.Positional(sql, parameters, Dialect, Converter), transaction, "RAW", token).ConfigureAwait(false);
-            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+            return Executor.QueryAsync(Raw(sql, parameters), transaction, "RAW", ResultMapper.Create<TResult>(Converter), token);
         }
 
         /// <inheritdoc />
-        public SqlMultipleResultReader QueryMultiple(string sql, ITransaction? transaction = null, params object?[] parameters)
+        public int ExecuteSql(FormattableString sql, ITransaction? transaction = null)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
-            ConnectionLease lease = Executor.Lease(transaction);
-            try
-            {
-                return Executor.ExecuteMultiple(lease, statement, Converter);
-            }
-            catch
-            {
-                lease.Dispose();
-                throw;
-            }
+            return Executor.ExecuteNonQuery(Interpolated(sql), transaction, "RAW");
         }
 
         /// <inheritdoc />
-        public async Task<SqlMultipleResultReader> QueryMultipleAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters)
+        public Task<int> ExecuteSqlAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(sql);
-            SqlStatement statement = RawSql.Positional(sql, parameters, Dialect, Converter);
-            ConnectionLease lease = await Executor.LeaseAsync(transaction, token).ConfigureAwait(false);
-            try
-            {
-                return await Executor.ExecuteMultipleAsync(lease, statement, Converter, token).ConfigureAwait(false);
-            }
-            catch
-            {
-                await lease.DisposeAsync().ConfigureAwait(false);
-                throw;
-            }
+            return Executor.ExecuteNonQueryAsync(Interpolated(sql), transaction, "RAW", token);
         }
 
         /// <inheritdoc />
-        public int ExecuteProcedure(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
+        public int ExecuteSqlRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return Executor.ExecuteNonQuery(Raw(sql, parameters), transaction, "RAW");
+        }
+
+        /// <inheritdoc />
+        public Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return Executor.ExecuteNonQueryAsync(Raw(sql, parameters), transaction, "RAW", token);
+        }
+
+        /// <inheritdoc />
+        public TResult? ExecuteScalar<TResult>(FormattableString sql, ITransaction? transaction = null)
+        {
+            return ConvertScalar<TResult>(Executor.ExecuteScalar(Interpolated(sql), transaction, "RAW"));
+        }
+
+        /// <inheritdoc />
+        public async Task<TResult?> ExecuteScalarAsync<TResult>(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            SqlStatement statement = Interpolated(sql);
+            return ConvertScalar<TResult>(await Executor.ExecuteScalarAsync(statement, transaction, "RAW", token).ConfigureAwait(false));
+        }
+
+        /// <inheritdoc />
+        public TResult? ExecuteScalarRaw<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return ConvertScalar<TResult>(Executor.ExecuteScalar(Raw(sql, parameters), transaction, "RAW"));
+        }
+
+        /// <inheritdoc />
+        public async Task<TResult?> ExecuteScalarRawAsync<TResult>(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            SqlStatement statement = Raw(sql, parameters);
+            return ConvertScalar<TResult>(await Executor.ExecuteScalarAsync(statement, transaction, "RAW", token).ConfigureAwait(false));
+        }
+
+        /// <inheritdoc />
+        public SqlMultipleResultReader QueryMultiple(FormattableString sql, ITransaction? transaction = null)
+        {
+            return QueryMultipleCore(Interpolated(sql), transaction);
+        }
+
+        /// <inheritdoc />
+        public Task<SqlMultipleResultReader> QueryMultipleAsync(FormattableString sql, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return QueryMultipleCoreAsync(Interpolated(sql), transaction, token);
+        }
+
+        /// <inheritdoc />
+        public SqlMultipleResultReader QueryMultipleRaw(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null)
+        {
+            return QueryMultipleCore(Raw(sql, parameters), transaction);
+        }
+
+        /// <inheritdoc />
+        public Task<SqlMultipleResultReader> QueryMultipleRawAsync(string sql, IEnumerable<object?>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return QueryMultipleCoreAsync(Raw(sql, parameters), transaction, token);
+        }
+
+        /// <inheritdoc />
+        public int ExecuteProcedure(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null)
         {
             return Executor.ExecuteNonQuery(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", CommandType.StoredProcedure);
         }
 
         /// <inheritdoc />
-        public List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters)
+        public Task<int> ExecuteProcedureAsync(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            return Executor.ExecuteNonQueryAsync(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", token, CommandType.StoredProcedure);
+        }
+
+        /// <inheritdoc />
+        public List<TResult> FromProcedure<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -827,13 +832,7 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public Task<int> ExecuteProcedureAsync(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
-        {
-            return Executor.ExecuteNonQueryAsync(ProcedureStatement(procedureName, parameters), transaction, "PROCEDURE", token, CommandType.StoredProcedure);
-        }
-
-        /// <inheritdoc />
-        public Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters)
+        public Task<List<TResult>> FromProcedureAsync<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TResult>(string procedureName, IEnumerable<SqlParameterValue>? parameters = null, ITransaction? transaction = null, CancellationToken token = default)
         {
             SqlStatement statement = ProcedureStatement(procedureName, parameters);
             Func<DbDataReader, TResult> map = ResultMapper.Create<TResult>(Converter);
@@ -927,42 +926,55 @@ namespace Durable.Sql
         }
 
         /// <inheritdoc />
-        public bool ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors, out List<string> warnings)
+        public TableValidationResult ValidateTable([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityType);
-            warnings = new List<string>();
-            EntityMetadata metadata;
-            try
+            EntityMetadata? metadata = TryReadMetadata(entityType, out List<string> errors);
+            if (metadata == null) return new TableValidationResult(entityType, null, false, errors, null);
+
+            List<string> warnings = new List<string>();
+            bool exists = errors.Count == 0 && TableExists(metadata.TableName, transaction);
+            if (exists) errors.AddRange(CompareColumns(metadata, GetColumnNames(metadata.TableName, transaction), warnings));
+            return new TableValidationResult(entityType, metadata.TableName, exists, errors, warnings);
+        }
+
+        /// <inheritdoc />
+        public async Task<TableValidationResult> ValidateTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityType);
+            token.ThrowIfCancellationRequested();
+            EntityMetadata? metadata = TryReadMetadata(entityType, out List<string> errors);
+            if (metadata == null) return new TableValidationResult(entityType, null, false, errors, null);
+
+            List<string> warnings = new List<string>();
+            bool exists = errors.Count == 0 && await TableExistsAsync(metadata.TableName, transaction, token).ConfigureAwait(false);
+            if (exists)
             {
-                metadata = EntityMetadata.For(entityType);
-            }
-            catch (InvalidOperationException e)
-            {
-                errors = new List<string> { e.Message };
-                return false;
+                List<string> columns = await GetColumnNamesAsync(metadata.TableName, transaction, token).ConfigureAwait(false);
+                errors.AddRange(CompareColumns(metadata, columns, warnings));
             }
 
-            errors = ValidateMapping(metadata);
-            if (errors.Count == 0 && TableExists(metadata.TableName, null))
-                errors.AddRange(CompareColumns(metadata, GetColumnNames(metadata.TableName, null), warnings));
-            return errors.Count == 0;
+            return new TableValidationResult(entityType, metadata.TableName, exists, errors, warnings);
         }
 
         /// <inheritdoc />
         [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
-        public bool ValidateTables(IEnumerable<Type> entityTypes, out List<string> errors, out List<string> warnings)
+        public SchemaValidationResult ValidateTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(entityTypes);
-            errors = new List<string>();
-            warnings = new List<string>();
-            foreach (Type type in entityTypes)
-            {
-                ValidateTable(type, out List<string> typeErrors, out List<string> typeWarnings);
-                errors.AddRange(typeErrors.Select(e => type.Name + ": " + e));
-                warnings.AddRange(typeWarnings.Select(w => type.Name + ": " + w));
-            }
+            List<TableValidationResult> tables = new List<TableValidationResult>();
+            foreach (Type type in entityTypes) tables.Add(ValidateTable(type, transaction));
+            return new SchemaValidationResult(tables);
+        }
 
-            return errors.Count == 0;
+        /// <inheritdoc />
+        [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
+        public async Task<SchemaValidationResult> ValidateTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(entityTypes);
+            List<TableValidationResult> tables = new List<TableValidationResult>();
+            foreach (Type type in entityTypes) tables.Add(await ValidateTableAsync(type, transaction, token).ConfigureAwait(false));
+            return new SchemaValidationResult(tables);
         }
 
         /// <inheritdoc />
@@ -1096,6 +1108,21 @@ namespace Durable.Sql
         }
 
         /// <summary>
+        /// Creates a command for a statement on a lease, with the statement's parameters bound, the lease's transaction
+        /// attached and the configured command timeout applied. Used by provider bulk-insert paths.
+        /// </summary>
+        /// <param name="lease">Lease. Must not be null.</param>
+        /// <param name="statement">Statement. Must not be null.</param>
+        /// <returns>The command; the caller disposes it.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when lease or statement is null.</exception>
+        protected DbCommand CreateCommand(ConnectionLease lease, SqlStatement statement)
+        {
+            ArgumentNullException.ThrowIfNull(lease);
+            ArgumentNullException.ThrowIfNull(statement);
+            return Executor.CreateCommand(lease, statement);
+        }
+
+        /// <summary>
         /// Releases resources.
         /// </summary>
         /// <param name="disposing">True when called from <see cref="Dispose()"/>.</param>
@@ -1191,8 +1218,7 @@ namespace Durable.Sql
             int maxParameters = Math.Min(config.MaxParametersPerStatement, Dialect.MaxParameters);
             int perRow = Math.Max(1, _InsertColumns.Count);
             int byParameters = Math.Max(1, maxParameters / perRow);
-            int rows = config.EnableMultiRowInsert ? Math.Min(config.MaxRowsPerBatch, byParameters) : Math.Min(config.MaxRowsPerBatch, byParameters);
-            return Math.Max(1, rows);
+            return Math.Max(1, Math.Min(config.MaxRowsPerBatch, byParameters));
         }
 
         private static IEnumerable<List<T>> Chunk(IReadOnlyList<T> source, int size)
@@ -1409,7 +1435,7 @@ namespace Durable.Sql
             return result;
         }
 
-        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key)
+        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key, CancellationToken token)
         {
             if (current == null)
                 throw new OptimisticConcurrencyException("Entity " + typeof(T).Name + " with key " + FormatKey(key) + " was deleted by another process.");
@@ -1418,9 +1444,13 @@ namespace Durable.Sql
             TryResolveConflictResult<T> outcome;
             try
             {
-                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
+                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy, token).ConfigureAwait(false);
             }
             catch (OptimisticConcurrencyException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
             {
                 throw;
             }
@@ -1517,11 +1547,8 @@ namespace Durable.Sql
                 case VersionColumnType.Integer:
                     assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.ColumnSql(source, version) + " + 1");
                     break;
-                case VersionColumnType.Timestamp:
-                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(DateTime.UtcNow, version));
-                    break;
-                case VersionColumnType.Guid:
-                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(Guid.NewGuid(), version));
+                default:
+                    assignments.Add(Dialect.QuoteIdentifier(version.Name) + " = " + translator.Parameter(Metadata.VersionInfo.CreateSetBasedVersion(), version));
                     break;
             }
         }
@@ -1562,7 +1589,52 @@ namespace Durable.Sql
             return builder.Build();
         }
 
-        private SqlStatement ProcedureStatement(string procedureName, SqlParameterValue[] parameters)
+        private SqlStatement Interpolated(FormattableString sql)
+        {
+            ArgumentNullException.ThrowIfNull(sql);
+            return RawSql.ToStatement(sql, Dialect, Converter);
+        }
+
+        private SqlStatement Raw(string sql, IEnumerable<object?>? parameters)
+        {
+            ArgumentNullException.ThrowIfNull(sql);
+            return RawSql.ToStatement(sql, parameters, Dialect, Converter);
+        }
+
+        private TResult? ConvertScalar<TResult>(object? value)
+        {
+            return value == null ? default : (TResult?)Converter.ConvertFromDatabase(value, typeof(TResult));
+        }
+
+        private SqlMultipleResultReader QueryMultipleCore(SqlStatement statement, ITransaction? transaction)
+        {
+            ConnectionLease lease = Executor.Lease(transaction);
+            try
+            {
+                return Executor.ExecuteMultiple(lease, statement, Converter);
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
+        }
+
+        private async Task<SqlMultipleResultReader> QueryMultipleCoreAsync(SqlStatement statement, ITransaction? transaction, CancellationToken token)
+        {
+            ConnectionLease lease = await Executor.LeaseAsync(transaction, token).ConfigureAwait(false);
+            try
+            {
+                return await Executor.ExecuteMultipleAsync(lease, statement, Converter, token).ConfigureAwait(false);
+            }
+            catch
+            {
+                await lease.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        private SqlStatement ProcedureStatement(string procedureName, IEnumerable<SqlParameterValue>? parameters)
         {
             if (string.IsNullOrWhiteSpace(procedureName)) throw new ArgumentNullException(nameof(procedureName));
             if (!Dialect.SupportsStoredProcedures)
@@ -1648,6 +1720,21 @@ namespace Durable.Sql
             }
 
             return names;
+        }
+
+        private static EntityMetadata? TryReadMetadata([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, out List<string> errors)
+        {
+            try
+            {
+                EntityMetadata metadata = EntityMetadata.For(entityType);
+                errors = ValidateMapping(metadata);
+                return metadata;
+            }
+            catch (InvalidOperationException e)
+            {
+                errors = new List<string> { e.Message };
+                return null;
+            }
         }
 
         private static List<string> ValidateMapping(EntityMetadata metadata)

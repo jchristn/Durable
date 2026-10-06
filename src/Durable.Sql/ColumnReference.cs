@@ -7,7 +7,7 @@ namespace Durable.Sql
     /// A mapped column together with the table source it was resolved from.
     /// Thread safety: immutable.
     /// </summary>
-    public sealed class ColumnReference
+    internal sealed class ColumnReference
     {
         /// <summary>
         /// Gets the table source. Never null.

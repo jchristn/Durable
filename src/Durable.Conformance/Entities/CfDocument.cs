@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Document with a reference navigation to a soft-deletable <see cref="CfFolder"/>. Storage: <c>cf_documents</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_documents")]
     public class CfDocument

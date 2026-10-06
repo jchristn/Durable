@@ -5,9 +5,11 @@ namespace Durable
     using System.Threading.Tasks;
 
     /// <summary>
-    /// Represents a transaction scope that manages the lifecycle of a transaction.
+    /// A scope that owns or shares a transaction: completing it commits (when it owns the transaction) and disposing it
+    /// without completing rolls back. Dispose with <c>await using</c> so the rollback is asynchronous.
+    /// See <see cref="AmbientTransactionScope"/>.
     /// </summary>
-    public interface ITransactionScope : IDisposable
+    public interface ITransactionScope : IDisposable, IAsyncDisposable
     {
         /// <summary>
         /// Gets the transaction associated with this scope.

@@ -6,10 +6,12 @@ namespace Durable.MySql
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Sql;
     using MySqlConnector;
 
     /// <summary>
     /// Connection settings for MySQL repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class MySqlRepositorySettings : RepositorySettings
     {
@@ -17,40 +19,39 @@ namespace Durable.MySql
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.MySql"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.MySql;
 
         /// <summary>
-        /// The connection timeout in seconds. Default: null (uses MySQL default of 15 seconds)
+        /// Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+        /// (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
         /// </summary>
-        public uint? ConnectionTimeout { get; init; }
+        public int? ConnectionTimeout { get; init; }
 
         /// <summary>
-        /// The minimum pool size. Default: null (uses MySQL default of 0)
+        /// Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+        /// Minimum: 0. Must not exceed <see cref="MaxPoolSize"/>.
         /// </summary>
-        public uint? MinimumPoolSize { get; init; }
+        public int? MinPoolSize { get; init; }
 
         /// <summary>
-        /// The maximum pool size. Default: null (uses MySQL default of 100)
+        /// Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
         /// </summary>
-        public uint? MaximumPoolSize { get; init; }
+        public int? MaxPoolSize { get; init; }
 
         /// <summary>
-        /// Whether to use connection pooling. Default: null (uses MySQL default of true)
+        /// Gets whether the driver pools connections. Default: null (the driver default, true).
         /// </summary>
         public bool? Pooling { get; init; }
 
         /// <summary>
-        /// The SSL mode. Default: null (uses MySQL default)
+        /// Gets the TLS mode (MySqlConnector's <see cref="MySqlSslMode"/>). Default: null (the driver default, Preferred).
         /// </summary>
         public MySqlSslMode? SslMode { get; init; }
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -133,11 +134,11 @@ namespace Durable.MySql
                 Username = !string.IsNullOrEmpty(builder.UserID) ? builder.UserID : null,
                 Password = !string.IsNullOrEmpty(builder.Password) ? builder.Password : null,
                 Database = builder.Database,
-                ConnectionTimeout = builder.ConnectionTimeout != 15 ? builder.ConnectionTimeout : null,
-                MinimumPoolSize = builder.MinimumPoolSize != 0 ? builder.MinimumPoolSize : null,
-                MaximumPoolSize = builder.MaximumPoolSize != 100 ? builder.MaximumPoolSize : null,
+                ConnectionTimeout = builder.ConnectionTimeout != 15 ? (int)builder.ConnectionTimeout : null,
+                MinPoolSize = builder.MinimumPoolSize != 0 ? (int)builder.MinimumPoolSize : null,
+                MaxPoolSize = builder.MaximumPoolSize != 100 ? (int)builder.MaximumPoolSize : null,
                 Pooling = builder.Pooling != true ? builder.Pooling : null,
-                SslMode = builder.SslMode,
+                SslMode = builder.SslMode != MySqlSslMode.Preferred ? builder.SslMode : null,
                 AdditionalProperties = additionalProperties
             };
         }
@@ -151,6 +152,7 @@ namespace Durable.MySql
         /// </summary>
         /// <returns>A MySQL connection string</returns>
         /// <exception cref="InvalidOperationException">Thrown when Hostname is null or empty</exception>
+        /// <exception cref="OverflowException">Thrown when ConnectionTimeout, MinPoolSize or MaxPoolSize is negative.</exception>
         public override string BuildConnectionString()
         {
             if (string.IsNullOrWhiteSpace(Hostname))
@@ -186,17 +188,17 @@ namespace Durable.MySql
 
             if (ConnectionTimeout.HasValue)
             {
-                builder.ConnectionTimeout = ConnectionTimeout.Value;
+                builder.ConnectionTimeout = checked((uint)ConnectionTimeout.Value);
             }
 
-            if (MinimumPoolSize.HasValue)
+            if (MinPoolSize.HasValue)
             {
-                builder.MinimumPoolSize = MinimumPoolSize.Value;
+                builder.MinimumPoolSize = checked((uint)MinPoolSize.Value);
             }
 
-            if (MaximumPoolSize.HasValue)
+            if (MaxPoolSize.HasValue)
             {
-                builder.MaximumPoolSize = MaximumPoolSize.Value;
+                builder.MaximumPoolSize = checked((uint)MaxPoolSize.Value);
             }
 
             if (Pooling.HasValue)
@@ -222,9 +224,6 @@ namespace Durable.MySql
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

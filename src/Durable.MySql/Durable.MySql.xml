@@ -22,6 +22,15 @@
             Gets the connection string, or null when the factory wraps a caller-supplied data source.
             </summary>
         </member>
+        <member name="M:Durable.MySql.MySqlConnectionFactory.#ctor(Durable.MySql.MySqlRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.MySql.MySqlRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack required values (see <see cref="M:Durable.MySql.MySqlRepositorySettings.BuildConnectionString"/>).</exception>
+        </member>
         <member name="M:Durable.MySql.MySqlConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
             <summary>
             Instantiates the factory from a connection string. Connections share MySqlConnector's pool for that connection
@@ -265,36 +274,39 @@
         <member name="T:Durable.MySql.MySqlRepositorySettings">
             <summary>
             Connection settings for MySQL repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.MySql"/>.
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.ConnectionTimeout">
             <summary>
-            The connection timeout in seconds. Default: null (uses MySQL default of 15 seconds)
+            Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+            (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
             </summary>
         </member>
-        <member name="P:Durable.MySql.MySqlRepositorySettings.MinimumPoolSize">
+        <member name="P:Durable.MySql.MySqlRepositorySettings.MinPoolSize">
             <summary>
-            The minimum pool size. Default: null (uses MySQL default of 0)
+            Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+            Minimum: 0. Must not exceed <see cref="P:Durable.MySql.MySqlRepositorySettings.MaxPoolSize"/>.
             </summary>
         </member>
-        <member name="P:Durable.MySql.MySqlRepositorySettings.MaximumPoolSize">
+        <member name="P:Durable.MySql.MySqlRepositorySettings.MaxPoolSize">
             <summary>
-            The maximum pool size. Default: null (uses MySQL default of 100)
+            Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.Pooling">
             <summary>
-            Whether to use connection pooling. Default: null (uses MySQL default of true)
+            Gets whether the driver pools connections. Default: null (the driver default, true).
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.SslMode">
             <summary>
-            The SSL mode. Default: null (uses MySQL default)
+            Gets the TLS mode (MySqlConnector's <see cref="T:MySqlConnector.MySqlSslMode"/>). Default: null (the driver default, Preferred).
             </summary>
         </member>
         <member name="M:Durable.MySql.MySqlRepositorySettings.#ctor">
@@ -317,6 +329,7 @@
             </summary>
             <returns>A MySQL connection string</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when Hostname is null or empty</exception>
+            <exception cref="T:System.OverflowException">Thrown when ConnectionTimeout, MinPoolSize or MaxPoolSize is negative.</exception>
         </member>
     </members>
 </doc>

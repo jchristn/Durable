@@ -22,6 +22,15 @@
             Gets the connection string, or null when the factory wraps a caller-supplied data source.
             </summary>
         </member>
+        <member name="M:Durable.Postgres.PostgresConnectionFactory.#ctor(Durable.Postgres.PostgresRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.Postgres.PostgresRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack required values (see <see cref="M:Durable.Postgres.PostgresRepositorySettings.BuildConnectionString"/>).</exception>
+        </member>
         <member name="M:Durable.Postgres.PostgresConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
             <summary>
             Instantiates the factory from a connection string. Connections share Npgsql's pool for that connection string,
@@ -222,41 +231,39 @@
         <member name="T:Durable.Postgres.PostgresRepositorySettings">
             <summary>
             Connection settings for PostgreSQL repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.Postgres"/>.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.ConnectionTimeout">
             <summary>
-            The connection timeout in seconds. Default: null (uses PostgreSQL default of 15 seconds)
-            </summary>
-        </member>
-        <member name="P:Durable.Postgres.PostgresRepositorySettings.CommandTimeout">
-            <summary>
-            The command timeout in seconds. Default: null (uses PostgreSQL default of 30 seconds)
+            Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0
+            (0 waits indefinitely on drivers that allow it). Maps to the driver's connection-timeout keyword.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.MinPoolSize">
             <summary>
-            The minimum pool size. Default: null (uses PostgreSQL default of 0)
+            Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 0).
+            Minimum: 0. Must not exceed <see cref="P:Durable.Postgres.PostgresRepositorySettings.MaxPoolSize"/>.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.MaxPoolSize">
             <summary>
-            The maximum pool size. Default: null (uses PostgreSQL default of 100)
+            Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.Pooling">
             <summary>
-            Whether to use connection pooling. Default: null (uses PostgreSQL default of true)
+            Gets whether the driver pools connections. Default: null (the driver default, true).
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.SslMode">
             <summary>
-            The SSL mode. Default: null (uses PostgreSQL default)
+            Gets the TLS mode (Npgsql's <see cref="T:Npgsql.SslMode"/>). Default: null (the driver default, Prefer).
             </summary>
         </member>
         <member name="M:Durable.Postgres.PostgresRepositorySettings.#ctor">

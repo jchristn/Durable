@@ -19,7 +19,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe; build and execute on one flow.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlQueryBuilder<T> where T : class, new()
+    internal class SqlQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : ISqlQueryBuilder<T> where T : class, new()
     {
         #region Public-Members
 
@@ -243,6 +243,14 @@ namespace Durable.Sql
         public ISqlQueryBuilder<T> WhereNotExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new()
         {
             return AddExists(subquery, correlation, true);
+        }
+
+        /// <inheritdoc />
+        public ISqlQueryBuilder<T> WhereSql(FormattableString condition)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            _Conditions.Add((translator, source) => "(" + RawSql.BindInterpolated(condition, translator.Builder, translator.Converter) + ")");
+            return this;
         }
 
         /// <inheritdoc />

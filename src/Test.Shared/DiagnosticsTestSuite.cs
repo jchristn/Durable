@@ -59,7 +59,7 @@ namespace Test.Shared
             Assert.Single(read);
             created.Age = 31;
             await repository.UpdateAsync(created);
-            await repository.ExecuteSqlAsync("UPDATE people SET age = 32 WHERE department = @p0", null, default, department);
+            await repository.ExecuteSqlRawAsync("UPDATE people SET age = 32 WHERE department = {0}", new object?[] { department });
             await repository.DeleteAsync(created);
 
             List<string> events = interceptor.Events();
@@ -86,7 +86,7 @@ namespace Test.Shared
             options.Interceptors.Add(interceptor);
             using ISqlRepository<Person> repository = _Provider.CreateRepositoryWithOptions<Person>(options);
 
-            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlAsync("SELECT * FROM durable_no_such_table_xyz"));
+            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlRawAsync("SELECT * FROM durable_no_such_table_xyz"));
 
             List<string> events = interceptor.Events();
             Assert.Equal(new List<string> { "Executing:RAW", "Failed:RAW" }, events);
@@ -180,7 +180,7 @@ namespace Test.Shared
             ActivitySource.AddActivityListener(listener);
 
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlAsync("SELECT * FROM durable_trace_missing_table"));
+            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlRawAsync("SELECT * FROM durable_trace_missing_table"));
 
             List<Activity> snapshot;
             lock (sync) snapshot = new List<Activity>(stopped);
@@ -257,7 +257,7 @@ namespace Test.Shared
             SqlRepositoryOptions options = new SqlRepositoryOptions { Logger = logger };
             using ISqlRepository<Person> repository = _Provider.CreateRepositoryWithOptions<Person>(options);
 
-            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlAsync("SELECT * FROM durable_log_missing_table"));
+            await Assert.ThrowsAnyAsync<Exception>(() => repository.ExecuteSqlRawAsync("SELECT * FROM durable_log_missing_table"));
 
             List<LogEntry> entries = logger.Snapshot();
             LogEntry? error = entries.LastOrDefault(e => e.Level == LogLevel.Error);
@@ -414,7 +414,7 @@ namespace Test.Shared
 
             Assert.Equal(0, await repository.CountAsync(p => p.LastName == "x' OR '1'='1"));
             Assert.Equal(2, await repository.CountAsync(p => p.Department == department));
-            Assert.True(await repository.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM people") >= 2);
+            Assert.True(await repository.ExecuteScalarRawAsync<long>("SELECT COUNT(*) FROM people") >= 2);
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
         }
 

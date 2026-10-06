@@ -17,7 +17,7 @@ namespace Test.Shared
         /// <inheritdoc />
         public override void Up(MigrationContext context)
         {
-            context.ExecuteSql("CREATE TABLE " + context.Dialect.QuoteIdentifier("mig_discovered") + " (" + context.Dialect.QuoteIdentifier("id") + " INT NOT NULL PRIMARY KEY)");
+            context.ExecuteSqlRaw("CREATE TABLE " + context.Dialect.QuoteIdentifier("mig_discovered") + " (" + context.Dialect.QuoteIdentifier("id") + " INT NOT NULL PRIMARY KEY)");
         }
     }
 }

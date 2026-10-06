@@ -53,7 +53,7 @@ namespace Test.Shared
         public async Task ReadFirstOrDefaultReturnsNullWhenNoMatch()
         {
             ISqlRepository<Person> repository = await SeedAsync();
-            Person? result = await repository.ReadFirstOrDefaultAsync(p => p.Department == "NoSuchDepartment");
+            Person? result = await repository.ReadFirstAsync(p => p.Department == "NoSuchDepartment");
             Assert.Null(result);
         }
 
@@ -64,7 +64,7 @@ namespace Test.Shared
         public async Task CountReturnsZeroWhenEmpty()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
             long count = await repository.CountAsync();
             Assert.Equal(0, count);
         }
@@ -191,7 +191,7 @@ namespace Test.Shared
         private async Task<ISqlRepository<Person>> SeedAsync()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             Person[] people = new[]
             {

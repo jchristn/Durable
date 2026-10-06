@@ -66,6 +66,12 @@ namespace Durable.Sql
         public virtual bool SupportsDropColumn => true;
 
         /// <inheritdoc />
+        public virtual bool SupportsNthValue => true;
+
+        /// <inheritdoc />
+        public virtual bool SupportsRangeFrameOffsets => true;
+
+        /// <inheritdoc />
         public virtual int MaxIdentifierLength => int.MaxValue;
 
         /// <inheritdoc />

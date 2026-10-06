@@ -19,7 +19,7 @@ namespace Test.Shared.CliFixtures.Migrations
         public override void Up(MigrationContext context)
         {
             ISqlDialect d = context.Dialect;
-            context.ExecuteSql("ALTER TABLE " + d.QuoteIdentifier("cli_items") + " ADD " + d.QuoteIdentifier("note") + " VARCHAR(200) NULL");
+            context.ExecuteSqlRaw("ALTER TABLE " + d.QuoteIdentifier("cli_items") + " ADD " + d.QuoteIdentifier("note") + " VARCHAR(200) NULL");
         }
 
         /// <summary>
@@ -28,7 +28,7 @@ namespace Test.Shared.CliFixtures.Migrations
         /// <param name="context">Migration context.</param>
         public override void Down(MigrationContext context)
         {
-            context.ExecuteSql(context.Dialect.DropColumnSql("cli_items", "note"));
+            context.ExecuteSqlRaw(context.Dialect.DropColumnSql("cli_items", "note"));
         }
     }
 }

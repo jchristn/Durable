@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace Durable.Sqlite
 {
 
@@ -9,10 +7,12 @@ namespace Durable.Sqlite
     using System.Linq;
     using System.Text;
     using Durable;
+    using Durable.Sql;
     using Microsoft.Data.Sqlite;
 
     /// <summary>
     /// Connection settings for SQLite repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class SqliteRepositorySettings : RepositorySettings
     {
@@ -20,12 +20,13 @@ namespace Durable.Sqlite
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.Sqlite"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.Sqlite;
 
         /// <summary>
-        /// The file path to the SQLite database file. Required for file-based databases.
+        /// Gets the database file path, or ":memory:" for a private in-memory database. Default: null. Required by
+        /// <see cref="BuildConnectionString"/>.
         /// </summary>
         public string? DataSource { get; init; }
 
@@ -39,11 +40,13 @@ namespace Durable.Sqlite
         /// </summary>
         public SqliteOpenMode? Mode { get; init; }
 
+        /// <summary>
+        /// Gets whether Microsoft.Data.Sqlite pools connections. Default: null (the driver default, true).
+        /// </summary>
+        public bool? Pooling { get; init; }
+
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -91,7 +94,8 @@ namespace Durable.Sqlite
                     lowerKey != "datasource" &&
                     lowerKey != "filename" &&
                     lowerKey != "cache" &&
-                    lowerKey != "mode")
+                    lowerKey != "mode" &&
+                    lowerKey != "pooling")
                 {
                     if (additionalProperties == null)
                     {
@@ -107,6 +111,7 @@ namespace Durable.Sqlite
                 DataSource = builder.DataSource,
                 CacheMode = builder.Cache != SqliteCacheMode.Default ? builder.Cache : null,
                 Mode = builder.Mode != SqliteOpenMode.ReadWriteCreate ? builder.Mode : null,
+                Pooling = builder.Pooling != true ? builder.Pooling : null,
                 AdditionalProperties = additionalProperties
             };
         }
@@ -142,6 +147,11 @@ namespace Durable.Sqlite
                 builder.Mode = Mode.Value;
             }
 
+            if (Pooling.HasValue)
+            {
+                builder.Pooling = Pooling.Value;
+            }
+
             if (AdditionalProperties != null)
             {
                 foreach (KeyValuePair<string, string> kvp in AdditionalProperties)
@@ -155,9 +165,6 @@ namespace Durable.Sqlite
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

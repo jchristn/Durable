@@ -19,7 +19,7 @@ namespace Durable.Sql
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
     /// <typeparam name="TKey">Group key type.</typeparam>
-    public class SqlGroupedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
+    internal class SqlGroupedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T, TKey> : IGroupedQueryBuilder<T, TKey> where T : class, new()
     {
         #region Private-Members
 

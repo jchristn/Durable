@@ -30,6 +30,18 @@ namespace Durable.MySql
         #region Constructors-and-Factories
 
         /// <summary>
+        /// Instantiates the factory from strongly-typed settings (<see cref="MySqlRepositorySettings.BuildConnectionString"/>).
+        /// </summary>
+        /// <param name="settings">Settings. Must not be null.</param>
+        /// <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+        /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the settings lack required values (see <see cref="MySqlRepositorySettings.BuildConnectionString"/>).</exception>
+        public MySqlConnectionFactory(MySqlRepositorySettings settings, int? maxConcurrentConnections = null)
+            : this(BuildConnectionString(settings), maxConcurrentConnections)
+        {
+        }
+
+        /// <summary>
         /// Instantiates the factory from a connection string. Connections share MySqlConnector's pool for that connection
         /// string, so any number of factories and repositories with the same connection string use one pool.
         /// </summary>
@@ -60,6 +72,12 @@ namespace Durable.MySql
         protected override DbConnection CreateConnection()
         {
             return DataSource != null ? DataSource.CreateConnection() : new MySqlConnection(ConnectionString);
+        }
+
+        private static string BuildConnectionString(MySqlRepositorySettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            return settings.BuildConnectionString();
         }
 
         #endregion

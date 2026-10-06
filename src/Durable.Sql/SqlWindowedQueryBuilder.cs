@@ -17,7 +17,7 @@ namespace Durable.Sql
     /// Thread safety: not thread-safe.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
-    public class SqlWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IWindowedQueryBuilder<T> where T : class, new()
+    internal class SqlWindowedQueryBuilder<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] T> : IWindowedQueryBuilder<T> where T : class, new()
     {
         #region Private-Members
 
@@ -79,6 +79,7 @@ namespace Durable.Sql
         {
             ArgumentNullException.ThrowIfNull(column);
             if (n < 1) throw new ArgumentOutOfRangeException(nameof(n), "n must be at least 1.");
+            if (!_Parent.Context.Dialect.SupportsNthValue) throw new NotSupportedException("NTH_VALUE is not supported by " + _Parent.Context.Dialect.RepositoryType + ".");
             string quotedAlias = QuoteAlias(alias);
             _Functions.Add((translator, source) =>
             {
@@ -165,6 +166,7 @@ namespace Durable.Sql
         public IWindowedQueryBuilder<T> Range(int preceding, int following)
         {
             if (preceding < 0 || following < 0) throw new ArgumentOutOfRangeException(nameof(preceding), "Frame offsets cannot be negative.");
+            if (!_Parent.Context.Dialect.SupportsRangeFrameOffsets) throw new NotSupportedException("RANGE frames with numeric offsets are not supported by " + _Parent.Context.Dialect.RepositoryType + ".");
             _Frame = "RANGE BETWEEN " + preceding.ToString(CultureInfo.InvariantCulture) + " PRECEDING AND " + following.ToString(CultureInfo.InvariantCulture) + " FOLLOWING";
             return this;
         }

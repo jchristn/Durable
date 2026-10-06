@@ -121,7 +121,7 @@ namespace Test.Shared
         private async Task<ISqlRepository<Person>> SeedAsync()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            await repository.ExecuteSqlAsync("DELETE FROM people");
+            await repository.ExecuteSqlRawAsync("DELETE FROM people");
 
             List<Person> people = new List<Person>
             {

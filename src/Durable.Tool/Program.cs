@@ -7,7 +7,7 @@ namespace Durable.Tool
     /// <summary>
     /// Process entry point of the <c>durable</c> command-line tool. All behavior lives in <see cref="DurableCli"/>.
     /// </summary>
-    public static class Program
+    internal static class Program
     {
         /// <summary>
         /// Runs the tool with the process console streams.

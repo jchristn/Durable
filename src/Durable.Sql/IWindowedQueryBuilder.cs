@@ -42,6 +42,7 @@ namespace Durable.Sql
         /// <param name="defaultValue">The default value to return if no subsequent row is found.</param>
         /// <param name="alias">The alias for the lead column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Lead<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object? defaultValue = null, string alias = "lead");
         /// <summary>
         /// Adds a LAG() window function to access data from a previous row.
@@ -52,6 +53,7 @@ namespace Durable.Sql
         /// <param name="defaultValue">The default value to return if no previous row is found.</param>
         /// <param name="alias">The alias for the lag column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Lag<TKey>(Expression<Func<T, TKey>> column, int offset = 1, object? defaultValue = null, string alias = "lag");
         /// <summary>
         /// Adds a FIRST_VALUE() window function to get the first value in the window frame.
@@ -60,6 +62,7 @@ namespace Durable.Sql
         /// <param name="column">The column to get the first value from.</param>
         /// <param name="alias">The alias for the first value column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> FirstValue<TKey>(Expression<Func<T, TKey>> column, string alias = "first_value");
         /// <summary>
         /// Adds a LAST_VALUE() window function to get the last value in the window frame.
@@ -68,6 +71,7 @@ namespace Durable.Sql
         /// <param name="column">The column to get the last value from.</param>
         /// <param name="alias">The alias for the last value column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> LastValue<TKey>(Expression<Func<T, TKey>> column, string alias = "last_value");
         /// <summary>
         /// Adds a NTH_VALUE() window function to get the nth value in the window frame.
@@ -77,6 +81,9 @@ namespace Durable.Sql
         /// <param name="n">The position of the value to retrieve (1-based).</param>
         /// <param name="alias">The alias for the nth value column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when n is less than 1.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the database has no NTH_VALUE function (<see cref="ISqlDialect.SupportsNthValue"/>; SQL Server).</exception>
         IWindowedQueryBuilder<T> NthValue<TKey>(Expression<Func<T, TKey>> column, int n, string alias = "nth_value");
         /// <summary>
         /// Adds a SUM() window function to calculate the sum of values in the window frame.
@@ -85,6 +92,7 @@ namespace Durable.Sql
         /// <param name="column">The column to sum.</param>
         /// <param name="alias">The alias for the sum column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Sum<TKey>(Expression<Func<T, TKey>> column, string alias = "sum");
         /// <summary>
         /// Adds an AVG() window function to calculate the average of values in the window frame.
@@ -93,6 +101,7 @@ namespace Durable.Sql
         /// <param name="column">The column to average.</param>
         /// <param name="alias">The alias for the average column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Avg<TKey>(Expression<Func<T, TKey>> column, string alias = "avg");
         /// <summary>
         /// Adds a COUNT() window function to count rows in the window frame.
@@ -107,6 +116,7 @@ namespace Durable.Sql
         /// <param name="column">The column to find the minimum value from.</param>
         /// <param name="alias">The alias for the minimum column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Min<TKey>(Expression<Func<T, TKey>> column, string alias = "min");
         /// <summary>
         /// Adds a MAX() window function to find the maximum value in the window frame.
@@ -115,6 +125,7 @@ namespace Durable.Sql
         /// <param name="column">The column to find the maximum value from.</param>
         /// <param name="alias">The alias for the maximum column.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
         IWindowedQueryBuilder<T> Max<TKey>(Expression<Func<T, TKey>> column, string alias = "max");
 
         // Window partitioning and ordering
@@ -124,6 +135,7 @@ namespace Durable.Sql
         /// <typeparam name="TKey">The type of the partition key.</typeparam>
         /// <param name="keySelector">The expression to partition by.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IWindowedQueryBuilder<T> PartitionBy<TKey>(Expression<Func<T, TKey>> keySelector);
         /// <summary>
         /// Orders the window frame by the specified key selector in ascending order.
@@ -131,6 +143,7 @@ namespace Durable.Sql
         /// <typeparam name="TKey">The type of the order key.</typeparam>
         /// <param name="keySelector">The expression to order by.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IWindowedQueryBuilder<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector);
         /// <summary>
         /// Orders the window frame by the specified key selector in descending order.
@@ -138,15 +151,16 @@ namespace Durable.Sql
         /// <typeparam name="TKey">The type of the order key.</typeparam>
         /// <param name="keySelector">The expression to order by.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IWindowedQueryBuilder<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
 
-        // Window frame specification
         /// <summary>
         /// Specifies a ROWS window frame with the given preceding and following row counts.
         /// </summary>
         /// <param name="preceding">The number of preceding rows to include.</param>
         /// <param name="following">The number of following rows to include.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
         IWindowedQueryBuilder<T> Rows(int preceding, int following);
         /// <summary>
         /// Specifies a ROWS window frame from unbounded preceding to current row.
@@ -164,6 +178,8 @@ namespace Durable.Sql
         /// <param name="start">The start boundary of the window frame.</param>
         /// <param name="end">The end boundary of the window frame.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when start or end is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         IWindowedQueryBuilder<T> RowsBetween(string start, string end);
         /// <summary>
         /// Specifies a RANGE window frame with the given preceding and following value ranges.
@@ -171,6 +187,8 @@ namespace Durable.Sql
         /// <param name="preceding">The preceding value range to include.</param>
         /// <param name="following">The following value range to include.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the database does not accept numeric RANGE offsets (<see cref="ISqlDialect.SupportsRangeFrameOffsets"/>; SQL Server).</exception>
         IWindowedQueryBuilder<T> Range(int preceding, int following);
         /// <summary>
         /// Specifies a RANGE window frame from unbounded preceding to current row.
@@ -188,16 +206,16 @@ namespace Durable.Sql
         /// <param name="start">The start boundary of the window frame.</param>
         /// <param name="end">The end boundary of the window frame.</param>
         /// <returns>The current query builder for method chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when start or end is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         IWindowedQueryBuilder<T> RangeBetween(string start, string end);
 
-        // Return to regular query builder
         /// <summary>
         /// Ends the window function configuration and returns to the regular query builder.
         /// </summary>
         /// <returns>The regular query builder for continued query construction.</returns>
         ISqlQueryBuilder<T> EndWindow();
 
-        // Execution methods (inherit from base query)
         /// <summary>
         /// Executes the windowed query and returns the results.
         /// </summary>

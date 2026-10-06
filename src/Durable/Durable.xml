@@ -4,9 +4,179 @@
         <name>Durable</name>
     </assembly>
     <members>
+        <member name="T:Durable.AmbientTransactionScope">
+            <summary>
+            Durable's ambient transaction scope. While a scope is current, repository calls made without an explicit
+            transaction on the same async flow use <see cref="P:Durable.AmbientTransactionScope.Transaction"/> (when the repository can use that transaction,
+            for example a SQL repository of the same provider). Disposing a scope that was not completed rolls back; prefer
+            <c>await using</c> so the rollback runs asynchronously. Nested scopes created for the same transaction share it and
+            only the outermost scope commits.
+            <para>
+            This is not <c>System.Transactions.TransactionScope</c> and Durable does not participate in System.Transactions:
+            it never reads <c>Transaction.Current</c> or enlists connections. (An ADO.NET driver configured to auto-enlist may
+            still enlist connections Durable opens inside a System.Transactions scope; that is driver behavior.)
+            </para>
+            Thread safety: a scope flows with the async execution context and must not be shared across concurrent flows.
+            </summary>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.Current">
+            <summary>
+            Gets the scope current on this async flow, or null. Completed or disposed scopes are skipped.
+            </summary>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.Transaction">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when accessed before an asynchronous scope finished starting its transaction.</exception>
+        </member>
+        <member name="P:Durable.AmbientTransactionScope.IsCompleted">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Create(Durable.ITransaction)">
+            <summary>
+            Creates a scope around an existing transaction. If the current scope already uses the same transaction,
+            a nested, non-owning scope is created.
+            </summary>
+            <param name="transaction">Transaction. Must not be null.</param>
+            <returns>The new scope, which is now current.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Create``1(Durable.IRepository{``0})">
+            <summary>
+            Begins a transaction on the repository and makes a new owning scope current.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="repository">Repository. Must not be null.</param>
+            <returns>The new scope.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.CreateAsync``1(Durable.IRepository{``0},System.Threading.CancellationToken)">
+            <summary>
+            Begins a transaction asynchronously and makes a new owning scope current on the caller's async flow.
+            The scope becomes current immediately (before the returned task completes), so code that awaits this method
+            observes it via <see cref="P:Durable.AmbientTransactionScope.Current"/>.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="repository">Repository. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task returning the new scope.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Complete">
+            <inheritdoc />
+            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.CompleteAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.Dispose">
+            <summary>
+            Disposes the scope, rolling back an owned transaction that was not completed, and restores the parent scope.
+            Rollback failures caused by a transaction that already ended are ignored. Prefer <see cref="M:Durable.AmbientTransactionScope.DisposeAsync"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.AmbientTransactionScope.DisposeAsync">
+            <summary>
+            Disposes the scope asynchronously, rolling back an owned transaction that was not completed with
+            <see cref="M:Durable.ITransaction.RollbackAsync(System.Threading.CancellationToken)"/>, and restores the parent scope. The scope stops being
+            <see cref="P:Durable.AmbientTransactionScope.Current"/> before the returned task completes.
+            </summary>
+            <returns>A task that completes when the transaction has been rolled back (if needed) and disposed.</returns>
+        </member>
+        <member name="T:Durable.AmbientTransactionScopeExtensions">
+            <summary>
+            Runs a delegate inside an <see cref="T:Durable.AmbientTransactionScope"/>: the scope commits when the delegate returns and
+            rolls back when it throws. The async forms dispose the scope asynchronously. Stateless and thread-safe.
+            </summary>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.IRepository{``0},System.Action)">
+            <summary>
+            Executes an action within a transaction scope for the specified repository.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="action">The action to execute within the transaction scope.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or action is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``2(Durable.IRepository{``0},System.Func{``1})">
+            <summary>
+            Executes a function within a transaction scope for the specified repository and returns the result.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The function to execute within the transaction scope.</param>
+            <returns>The result of the function execution.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task within a transaction scope for the specified repository.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``2(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task{``1}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task function within a transaction scope for the specified repository and returns the result.
+            </summary>
+            <typeparam name="T">The type of entity managed by the repository.</typeparam>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="repository">The repository to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope(Durable.ITransaction,System.Action)">
+            <summary>
+            Executes an action within a transaction scope for the specified transaction.
+            </summary>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="action">The action to execute within the transaction scope.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or action is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.ITransaction,System.Func{``0})">
+            <summary>
+            Executes a function within a transaction scope for the specified transaction and returns the result.
+            </summary>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The function to execute within the transaction scope.</param>
+            <returns>The result of the function execution.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync(Durable.ITransaction,System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task within a transaction scope for the specified transaction.
+            </summary>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
+        <member name="M:Durable.AmbientTransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.ITransaction,System.Func{System.Threading.Tasks.Task{``0}},System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously executes a task function within a transaction scope for the specified transaction and returns the result.
+            </summary>
+            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
+            <param name="transaction">The transaction to create a transaction scope for.</param>
+            <param name="func">The task function to execute within the transaction scope.</param>
+            <param name="token">A cancellation token that can be used to cancel the operation.</param>
+            <returns>A task that represents the asynchronous operation containing the result.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
+        </member>
         <member name="T:Durable.AsyncDurableResult`1">
             <summary>
             Represents an asynchronous durable result containing a query and its corresponding async enumerable result.
+            Thread safety: immutable; the wrapped stream should be enumerated once, on one flow.
             </summary>
             <typeparam name="T">The type of items in the result enumerable.</typeparam>
         </member>
@@ -251,14 +421,20 @@
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1">
             <summary>
-            A concurrency conflict resolver that always chooses the incoming (client-side) entity as the winner.
-            This resolver implements a "client wins" strategy where the client's version always takes precedence over the current database version.
+            A concurrency conflict resolver that always chooses the incoming (client-side) entity as the winner: the caller's
+            entity is written over whatever another writer stored. Stateless and thread-safe.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy used by this resolver.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.ClientWins"/>.
+            This resolver ignores it and always lets the client win.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
@@ -268,107 +444,122 @@
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>The incoming entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>The incoming entity.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict by returning the incoming entity (client wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains the incoming entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the incoming entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict by returning the incoming entity (client wins).
-            This method always succeeds for the ClientWinsResolver.
+            Attempts to resolve a concurrency conflict by returning the incoming entity (client wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity (always the incoming entity).</param>
-            <returns>Always returns true, indicating successful conflict resolution.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">When this method returns, the incoming entity.</param>
+            <returns>Always true.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict by returning the incoming entity (client wins).
-            This method always succeeds for the ClientWinsResolver.
+            Asynchronously attempts to resolve a concurrency conflict by returning the incoming entity (client wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains a successful resolution result with the incoming entity.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is a successful resolution carrying the incoming entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1">
             <summary>
-            A concurrency conflict resolver that always chooses the current database entity as the winner.
-            This resolver implements a "database wins" strategy where the database's current version always takes precedence over the incoming client version.
+            A concurrency conflict resolver that always chooses the current stored entity as the winner: the caller's changes
+            are discarded and the stored row is kept. Stateless and thread-safe.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy used by this resolver.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.DatabaseWins"/>.
+            This resolver ignores it and always lets the stored entity win.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Resolves a concurrency conflict by returning the current database entity (database wins).
+            Resolves a concurrency conflict by returning the current stored entity (database wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>The current database entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>The current stored entity.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously resolves a concurrency conflict by returning the current database entity (database wins).
+            Asynchronously resolves a concurrency conflict by returning the current stored entity (database wins).
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains the current database entity as the resolved conflict winner.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the current stored entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict by returning the current database entity (database wins).
-            This method always succeeds for the DatabaseWinsResolver.
+            Attempts to resolve a concurrency conflict by returning the current stored entity (database wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity (always the current database entity).</param>
-            <returns>Always returns true, indicating successful conflict resolution.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">When this method returns, the current stored entity.</param>
+            <returns>Always true.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict by returning the current database entity (database wins).
-            This method always succeeds for the DatabaseWinsResolver.
+            Asynchronously attempts to resolve a concurrency conflict by returning the current stored entity (database wins). Always succeeds.
             </summary>
             <param name="currentEntity">The current entity state in the data store.</param>
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
-            <param name="strategy">The conflict resolution strategy to apply.</param>
-            <returns>A task that represents the asynchronous operation. The task result contains a successful resolution result with the current database entity.</returns>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is a successful resolution carrying the current stored entity.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1">
             <summary>
             A default concurrency conflict resolver that delegates to specialized resolvers based on the conflict resolution strategy.
-            This resolver acts as a factory and dispatcher, routing conflict resolution to the appropriate strategy-specific resolver.
+            This resolver acts as a dispatcher, routing conflict resolution to the appropriate strategy-specific resolver
+            (<see cref="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1"/>, <see cref="T:Durable.ConcurrencyConflictResolvers.ClientWinsResolver`1"/>, <see cref="T:Durable.ConcurrencyConflictResolvers.DatabaseWinsResolver`1"/> or
+            <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/>). Repositories use <c>new DefaultConflictResolver&lt;T&gt;(ConflictResolutionStrategy.ThrowException)</c>
+            when no resolver is assigned. Thread-safe for resolution; changing <see cref="P:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.DefaultStrategy"/> while updates are running is not synchronized.
             </summary>
             <typeparam name="T">The type of entity being resolved. Must be a reference type with a parameterless constructor.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default conflict resolution strategy to use when the strategy is set to Custom.
+            Gets or sets the strategy repositories pass to this resolver, which is also used when
+            <see cref="F:Durable.ConflictResolutionStrategy.Custom"/> is passed. Default: the constructor argument
+            (<see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/> unless specified).
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.#ctor(Durable.ConflictResolutionStrategy)">
@@ -386,8 +577,9 @@
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
             <returns>The resolved entity according to the specified strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the selected strategy is <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict by delegating to the appropriate strategy-specific resolver.
             </summary>
@@ -395,7 +587,10 @@
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task that represents the asynchronous operation. The task result contains the resolved entity according to the specified strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown (when awaited) if the selected strategy is <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
@@ -408,7 +603,7 @@
             <param name="resolvedEntity">When this method returns, contains the resolved entity if the resolution was successful.</param>
             <returns>True if the conflict was successfully resolved; otherwise, false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.DefaultConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously attempts to resolve a concurrency conflict by delegating to the appropriate strategy-specific resolver.
             </summary>
@@ -416,231 +611,163 @@
             <param name="incomingEntity">The incoming entity from the client.</param>
             <param name="originalEntity">The original entity state used as baseline for the update.</param>
             <param name="strategy">The conflict resolution strategy to apply.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task that represents the asynchronous operation. The task result contains the conflict resolution result.</returns>
-        </member>
-        <member name="T:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1">
-            <summary>
-            An advanced concurrency conflict resolver that merges changes from different sources based on configurable conflict behavior.
-            Provides enhanced comparison capabilities including array and collection comparison.
-            </summary>
-            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
-        </member>
-        <member name="P:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.DefaultStrategy">
-            <summary>
-            Gets or sets the default strategy used for conflict resolution. Defaults to MergeChanges.
-            </summary>
-        </member>
-        <member name="T:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior">
-            <summary>
-            Defines the behavior when conflicts are detected between current and incoming changes.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.IncomingWins">
-            <summary>
-            The incoming value takes precedence in conflicts.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.CurrentWins">
-            <summary>
-            The current value takes precedence in conflicts.
-            </summary>
-        </member>
-        <member name="F:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ConflictBehavior.ThrowException">
-            <summary>
-            Throws an exception when conflicts are detected.
-            </summary>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.#ctor(Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver{`0}.ConflictBehavior,System.String[])">
-            <summary>
-            Initializes a new instance of the ImprovedMergeChangesResolver with specified conflict behavior and ignored properties.
-            </summary>
-            <param name="conflictBehavior">The behavior to use when conflicts are detected. Defaults to IncomingWins.</param>
-            <param name="ignoredProperties">Properties to ignore during merge operations.</param>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Resolves conflicts between current and incoming entities by merging changes based on the original entity state.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A merged entity with resolved conflicts</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters are null</exception>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Asynchronously resolves conflicts between current and incoming entities.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the merged entity with resolved conflicts</returns>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
-            <summary>
-            Attempts to resolve conflicts between entities without throwing exceptions.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <param name="resolvedEntity">The resolved entity if successful, null otherwise</param>
-            <returns>True if conflict resolution succeeded, false otherwise</returns>
-        </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ImprovedMergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
-            <summary>
-            Asynchronously attempts to resolve conflicts between entities without throwing exceptions.
-            </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the result of the conflict resolution attempt</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1">
             <summary>
-            A concurrency conflict resolver that merges changes from different sources.
-            When conflicts occur, incoming changes take precedence over current changes.
+            A concurrency conflict resolver that merges property by property against the original snapshot: a property only
+            the stored row changed keeps the stored value, a property only the caller changed takes the caller's value, and a
+            property both changed is decided by <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> (incoming wins by default). Arrays and
+            collections are compared element by element. Properties named in the constructor are never merged and keep the
+            stored value. Thread-safe: the resolver holds only immutable configuration.
             </summary>
-            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor</typeparam>
+            <typeparam name="T">The entity type that must be a reference type with a parameterless constructor.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy used for conflict resolution. Defaults to MergeChanges.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.MergeChanges"/>.
+            This resolver ignores it and always merges.
+            </summary>
+        </member>
+        <member name="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior">
+            <summary>
+            Gets what happens to a property both sides changed. Default: <see cref="F:Durable.MergeConflictBehavior.IncomingWins"/>.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.#ctor(System.String[])">
             <summary>
-            Initializes a new instance of the MergeChangesResolver with specified properties to ignore during merge operations.
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> class in which the incoming value wins
+            when both sides changed a property.
             </summary>
-            <param name="ignoredProperties">Properties to ignore during merge operations</param>
+            <param name="ignoredProperties">Names of properties that are never merged (the stored value is kept). May be null or empty.</param>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.#ctor(Durable.MergeConflictBehavior,System.String[])">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> class with the given behavior for
+            properties both sides changed.
+            </summary>
+            <param name="conflictBehavior">What to do with a property both sides changed.</param>
+            <param name="ignoredProperties">Names of properties that are never merged (the stored value is kept). May be null or empty.</param>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Resolves conflicts between current and incoming entities by merging changes based on the original entity state.
-            When both current and incoming have changes to the same property, incoming changes take precedence.
+            Merges the current and incoming entities against the original snapshot.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A merged entity with resolved conflicts</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters are null</exception>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>A new merged entity.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters is null.</exception>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when both sides changed a property and <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> is <see cref="F:Durable.MergeConflictBehavior.ThrowException"/>.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously resolves conflicts between current and incoming entities.
+            Asynchronously merges the current and incoming entities against the original snapshot. The merge itself is
+            synchronous; the method exists for interface symmetry.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the merged entity with resolved conflicts</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result is the merged entity.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when any of the entity parameters is null.</exception>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when both sides changed a property and <see cref="P:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.ConflictBehavior"/> is <see cref="F:Durable.MergeConflictBehavior.ThrowException"/>.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve conflicts between entities without throwing exceptions.
+            Attempts to merge the entities without throwing when the merge is not possible.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <param name="resolvedEntity">The resolved entity if successful, null otherwise</param>
-            <returns>True if conflict resolution succeeded, false otherwise</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">The merged entity when successful; otherwise null.</param>
+            <returns>True if the merge succeeded; otherwise false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve conflicts between entities without throwing exceptions.
+            Asynchronously attempts to merge the entities without throwing when the merge is not possible.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state used as baseline for change detection</param>
-            <param name="strategy">The conflict resolution strategy to use</param>
-            <returns>A task containing the result of the conflict resolution attempt</returns>
+            <param name="currentEntity">The current stored entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state used as baseline for change detection.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result describes the merge attempt.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1">
             <summary>
-            A concurrency conflict resolver that throws exceptions when conflicts are detected.
-            This resolver never attempts to merge or resolve conflicts automatically.
+            A concurrency conflict resolver that never resolves a conflict: the resolve methods throw
+            <see cref="T:Durable.ConcurrencyConflictException"/> and the try methods report failure, so the repository surfaces an
+            <see cref="T:Durable.OptimisticConcurrencyException"/>. This is the behavior of the repository default
+            (<c>DefaultConflictResolver&lt;T&gt;</c> with <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>).
+            Stateless and thread-safe.
             </summary>
-            <typeparam name="T">The entity type that must be a reference type</typeparam>
+            <typeparam name="T">The entity type that must be a reference type.</typeparam>
         </member>
         <member name="P:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy used for conflict resolution. Always set to ThrowException.
+            Gets or sets the strategy reported to callers. Default: <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.
+            This resolver ignores it.
+            </summary>
+        </member>
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1"/> class.
             </summary>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
-            Throws a ConcurrencyConflictException when called, as this resolver does not attempt to resolve conflicts.
+            Always throws, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>Never returns normally, always throws an exception</returns>
-            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when conflicts are detected</exception>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <returns>Never returns normally.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown; the exception carries the three entities.</exception>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Throws a ConcurrencyConflictException when called, as this resolver does not attempt to resolve conflicts.
+            Always fails, because this resolver does not resolve conflicts. The returned task is faulted.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>Never returns normally, always throws an exception</returns>
-            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when conflicts are detected</exception>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A faulted task.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Always thrown when the task is awaited.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve conflicts but always returns false as this resolver does not resolve conflicts.
+            Always reports failure, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <param name="resolvedEntity">Always set to null</param>
-            <returns>Always returns false</returns>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="resolvedEntity">Always null.</param>
+            <returns>Always false.</returns>
         </member>
-        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.ConcurrencyConflictResolvers.ThrowExceptionResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve conflicts but always returns a failure result.
+            Always reports failure, because this resolver does not resolve conflicts.
             </summary>
-            <param name="currentEntity">The current entity state</param>
-            <param name="incomingEntity">The incoming entity state</param>
-            <param name="originalEntity">The original entity state</param>
-            <param name="strategy">The conflict resolution strategy (ignored)</param>
-            <returns>A task containing a failure result with Success set to false</returns>
-        </member>
-        <member name="T:Durable.ConfigurationSettingResult">
-            <summary>
-            Represents the result of resolving a configuration setting.
-            </summary>
-        </member>
-        <member name="P:Durable.ConfigurationSettingResult.EffectiveSetting">
-            <summary>
-            Gets or sets the effective setting value.
-            </summary>
-        </member>
-        <member name="P:Durable.ConfigurationSettingResult.Source">
-            <summary>
-            Gets or sets the source of the effective setting (e.g., "Instance", "ThreadLocal", "Global").
-            </summary>
-        </member>
-        <member name="M:Durable.ConfigurationSettingResult.#ctor">
-            <summary>
-            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
-            </summary>
-        </member>
-        <member name="M:Durable.ConfigurationSettingResult.#ctor(System.Boolean,System.String)">
-            <summary>
-            Initializes a new instance of the <see cref="T:Durable.ConfigurationSettingResult"/> class.
-            </summary>
-            <param name="effectiveSetting">The effective setting value.</param>
-            <param name="source">The source of the setting.</param>
+            <param name="currentEntity">The current entity state.</param>
+            <param name="incomingEntity">The incoming entity state.</param>
+            <param name="originalEntity">The original entity state.</param>
+            <param name="strategy">The conflict resolution strategy (ignored).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task whose result has <see cref="P:Durable.TryResolveConflictResult`1.Success"/> set to false.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.ConflictResolutionStrategy">
             <summary>
@@ -722,6 +849,7 @@
         <member name="T:Durable.DefaultValueProviderInfo">
             <summary>
             Contains information about a default value provider for a property.
+            Thread safety: holds the attribute and its provider; providers are shared and must be thread-safe.
             </summary>
         </member>
         <member name="P:Durable.DefaultValueProviderInfo.Attribute">
@@ -742,6 +870,7 @@
         <member name="T:Durable.DefaultValueProviders.CurrentDateTimeUtcProvider">
             <summary>
             Provides the current UTC date and time as a default value
+            Thread safety: stateless; safe for concurrent use.
             </summary>
         </member>
         <member name="M:Durable.DefaultValueProviders.CurrentDateTimeUtcProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
@@ -753,6 +882,7 @@
         <member name="T:Durable.DefaultValueProviders.DelegateValueProvider">
             <summary>
             Provides a default value generated by a delegate function
+            Thread safety: as thread-safe as the supplied factory delegate.
             </summary>
         </member>
         <member name="M:Durable.DefaultValueProviders.DelegateValueProvider.#ctor(System.Func{System.Object},System.Boolean)">
@@ -771,6 +901,7 @@
         <member name="T:Durable.DefaultValueProviders.NewGuidProvider">
             <summary>
             Provides a new GUID as a default value
+            Thread safety: stateless; safe for concurrent use.
             </summary>
         </member>
         <member name="M:Durable.DefaultValueProviders.NewGuidProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
@@ -783,6 +914,7 @@
             <summary>
             Provides a sequential GUID optimized for database indexing as a default value.
             Sequential GUIDs reduce index fragmentation compared to random GUIDs.
+            Thread safety: stateless (uses a thread-safe random number generator); safe for concurrent use.
             </summary>
         </member>
         <member name="M:Durable.DefaultValueProviders.SequentialGuidProvider.GetDefaultValue(System.Reflection.PropertyInfo,System.Object)">
@@ -799,6 +931,7 @@
         <member name="T:Durable.DefaultValueProviders.StaticValueProvider">
             <summary>
             Provides a static value as a default value
+            Thread safety: immutable; safe for concurrent use.
             </summary>
         </member>
         <member name="M:Durable.DefaultValueProviders.StaticValueProvider.#ctor(System.Object,System.Boolean)">
@@ -888,45 +1021,6 @@
             <summary>
             False boolean value
             </summary>
-        </member>
-        <member name="T:Durable.DurableConfiguration">
-            <summary>
-            Provides global and thread-local configuration settings for Durable ORM behavior.
-            Supports hierarchical configuration where thread-local settings override global settings.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.GlobalIncludeQuery">
-            <summary>
-            Gets or sets the global default for whether repository operations should include executed SQL in results.
-            This setting applies to all repository instances unless overridden by thread-local or instance-level configuration.
-            Default value is false for performance and backward compatibility.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.ThreadLocalIncludeQuery">
-            <summary>
-            Gets or sets a thread-local override for SQL inclusion in results.
-            When set to a non-null value, this overrides the GlobalIncludeQuery setting for the current thread.
-            When null, the GlobalIncludeQuery setting is used.
-            This allows temporary per-thread behavior changes without affecting other threads.
-            </summary>
-        </member>
-        <member name="P:Durable.DurableConfiguration.ShouldIncludeQuery">
-            <summary>
-            Gets the effective SQL inclusion setting for the current thread.
-            Returns the thread-local override if set, otherwise returns the global setting.
-            This is the computed value that should be used by repository implementations.
-            </summary>
-        </member>
-        <member name="M:Durable.DurableConfiguration.ResolveIncludeQuerySetting(System.Nullable{System.Boolean})">
-            <summary>
-            Resolves the effective SQL inclusion setting using explicit configuration hierarchy.
-            Precedence order (highest to lowest):
-            1. Instance-level configuration (repository.IncludeQueryInResults)
-            2. Thread-local configuration (ThreadLocalIncludeQuery)
-            3. Global configuration (GlobalIncludeQuery)
-            </summary>
-            <param name="instanceLevelSetting">The instance-level setting from the repository, or null if not configured</param>
-            <returns>A ConfigurationSettingResult object containing the effective setting and the source of that setting for debugging</returns>
         </member>
         <member name="T:Durable.DurableDiagnostics">
             <summary>
@@ -1049,6 +1143,7 @@
         <member name="T:Durable.DurableResult`1">
             <summary>
             Represents the result of a database query operation containing both the query and its results.
+            Thread safety: immutable; safe to share once created.
             </summary>
             <typeparam name="T">The type of objects in the result set.</typeparam>
         </member>
@@ -1268,6 +1363,7 @@
         <member name="T:Durable.ExpressionExtensions">
             <summary>
             Provides extension methods for various expression operations and value comparisons.
+            Thread safety: stateless; safe for concurrent use.
             </summary>
         </member>
         <member name="M:Durable.ExpressionExtensions.Between``1(``0,``0,``0)">
@@ -1510,55 +1606,72 @@
         </member>
         <member name="T:Durable.IConcurrencyConflictResolver`1">
             <summary>
-            Provides methods for resolving conflicts that occur during concurrent entity operations.
+            Resolves an optimistic-concurrency conflict detected by an update: the row in storage no longer carries the
+            version the caller read. A repository calls <see cref="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)"/> (or
+            <see cref="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)"/>) with the current stored entity, the caller's entity and the
+            original snapshot; when resolution succeeds the resolved entity is written with the current version,
+            otherwise the repository throws <see cref="T:Durable.OptimisticConcurrencyException"/>.
+            Built-in implementations live in <c>Durable.ConcurrencyConflictResolvers</c>; repositories default to
+            <c>DefaultConflictResolver&lt;T&gt;</c> with <see cref="F:Durable.ConflictResolutionStrategy.ThrowException"/>.
+            Implementations should be stateless or thread-safe, because one resolver instance may serve concurrent updates.
             </summary>
             <typeparam name="T">The entity type for which conflicts are resolved.</typeparam>
         </member>
         <member name="P:Durable.IConcurrencyConflictResolver`1.DefaultStrategy">
             <summary>
-            Gets or sets the default strategy to use when resolving conflicts.
+            Gets or sets the strategy the repository passes to the resolve methods. Fixed-strategy resolvers
+            (client wins, database wins, merge, throw) ignore it; <c>DefaultConflictResolver&lt;T&gt;</c> uses it to pick the
+            strategy, and also when <see cref="F:Durable.ConflictResolutionStrategy.Custom"/> is passed.
             </summary>
         </member>
         <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy)">
             <summary>
             Resolves a concurrency conflict between entities using the specified strategy.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
             <returns>The resolved entity after applying the conflict resolution strategy.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the resolver cannot or will not resolve the conflict.</exception>
         </member>
-        <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.IConcurrencyConflictResolver`1.ResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
             Asynchronously resolves a concurrency conflict between entities using the specified strategy.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
+            <param name="token">Cancellation token.</param>
             <returns>A task representing the asynchronous operation, containing the resolved entity.</returns>
+            <exception cref="T:Durable.ConcurrencyConflictException">Thrown when the resolver cannot or will not resolve the conflict.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflict(`0,`0,`0,Durable.ConflictResolutionStrategy,`0@)">
             <summary>
-            Attempts to resolve a concurrency conflict between entities using the specified strategy.
+            Attempts to resolve a concurrency conflict between entities using the specified strategy, without throwing
+            when resolution is not possible.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
-            <param name="resolvedEntity">When this method returns, contains the resolved entity if resolution was successful; otherwise, the default value.</param>
-            <returns>true if the conflict was successfully resolved; otherwise, false.</returns>
+            <param name="resolvedEntity">When this method returns true, the resolved entity; otherwise null.</param>
+            <returns>True if the conflict was successfully resolved; otherwise, false.</returns>
         </member>
-        <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy)">
+        <member name="M:Durable.IConcurrencyConflictResolver`1.TryResolveConflictAsync(`0,`0,`0,Durable.ConflictResolutionStrategy,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously attempts to resolve a concurrency conflict between entities using the specified strategy.
+            Asynchronously attempts to resolve a concurrency conflict between entities using the specified strategy,
+            without throwing when resolution is not possible.
             </summary>
-            <param name="currentEntity">The current state of the entity in the database.</param>
-            <param name="incomingEntity">The entity with changes to be applied.</param>
-            <param name="originalEntity">The original state of the entity when it was first loaded.</param>
+            <param name="currentEntity">The current state of the entity in storage. Never null when called by a repository.</param>
+            <param name="incomingEntity">The entity with changes to be applied. Never null when called by a repository.</param>
+            <param name="originalEntity">The original state of the entity when it was first loaded. Never null when called by a repository.</param>
             <param name="strategy">The strategy to use for conflict resolution.</param>
-            <returns>A task representing the asynchronous operation, containing the result of the conflict resolution attempt.</returns>
+            <param name="token">Cancellation token.</param>
+            <returns>A task containing the result of the conflict resolution attempt.</returns>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.IDefaultValueProvider">
             <summary>
@@ -1658,6 +1771,7 @@
             <typeparam name="TProperty">Numeric type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The sum; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -1667,6 +1781,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The sum; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1675,6 +1790,7 @@
             <typeparam name="TProperty">Numeric type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The average; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -1684,6 +1800,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The average; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1692,6 +1809,7 @@
             <typeparam name="TResult">Value type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The maximum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -1701,6 +1819,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The maximum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1709,6 +1828,7 @@
             <typeparam name="TResult">Value type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The minimum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IGroupedQueryBuilder`2.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -1718,6 +1838,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The minimum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="T:Durable.IndexAttribute">
             <summary>
@@ -1815,6 +1936,7 @@
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key selector. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1823,6 +1945,7 @@
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key selector. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.ThenBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1831,6 +1954,7 @@
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key selector. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.ThenByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1839,6 +1963,7 @@
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key selector. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Skip(System.Int32)">
             <summary>
@@ -1887,6 +2012,7 @@
             <param name="navigationProperty">Navigation selector. Must not be null.</param>
             <returns>This builder.</returns>
             <exception cref="T:System.ArgumentException">Thrown when the selector is not a mapped navigation property.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigationProperty is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.ThenInclude``2(System.Linq.Expressions.Expression{System.Func{``0,``1}})">
             <summary>
@@ -1897,6 +2023,7 @@
             <param name="navigationProperty">Navigation selector. Must not be null.</param>
             <returns>This builder.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when no Include precedes this call.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when navigationProperty is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.GroupBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1905,6 +2032,7 @@
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key selector. Must not be null.</param>
             <returns>A grouped builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Execute">
             <summary>
@@ -1979,6 +2107,7 @@
             <typeparam name="TProperty">Numeric type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The sum; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.SumAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -1988,6 +2117,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The sum; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Average``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1996,6 +2126,7 @@
             <typeparam name="TProperty">Numeric type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The average; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.AverageAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -2005,6 +2136,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The average; zero when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Min``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -2013,6 +2145,7 @@
             <typeparam name="TProperty">Value type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The minimum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.MinAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -2022,6 +2155,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The minimum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -2030,6 +2164,7 @@
             <typeparam name="TProperty">Value type.</typeparam>
             <param name="selector">Value selector. Must not be null.</param>
             <returns>The maximum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.MaxAsync``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Threading.CancellationToken)">
             <summary>
@@ -2039,6 +2174,7 @@
             <param name="selector">Value selector. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The maximum; default when no rows match.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when selector is null.</exception>
         </member>
         <member name="M:Durable.IQueryBuilder`1.Delete">
             <summary>
@@ -2062,7 +2198,7 @@
             <summary>
             Backend-neutral repository for an entity type.
             Every method accepting an <see cref="T:Durable.ITransaction"/> runs inside that transaction when supplied; when null, the
-            ambient <see cref="P:Durable.TransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
+            ambient <see cref="P:Durable.AmbientTransactionScope.Current"/> is used if present, otherwise the operation runs on its own.
             Key arguments (<c>id</c>) are a scalar for single-column keys, or an <see cref="T:System.Object"/> array with one value
             per key column (in key order) for composite keys.
             Query filters registered with <see cref="M:Durable.IRepository`1.AddQueryFilter(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}})"/> and soft-delete filtering apply to all predicate-based
@@ -2118,14 +2254,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <returns>The first matching entity, or null when none match.</returns>
         </member>
-        <member name="M:Durable.IRepository`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Reads the first entity matching the predicate. Equivalent to <see cref="M:Durable.IRepository`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)"/>.
-            </summary>
-            <param name="predicate">Predicate; null matches all rows.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <returns>The first matching entity, or null.</returns>
-        </member>
         <member name="M:Durable.IRepository`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <summary>
             Reads exactly one entity matching the predicate.
@@ -2174,15 +2302,6 @@
         <member name="M:Durable.IRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Reads the first entity matching the predicate.
-            </summary>
-            <param name="predicate">Predicate; null matches all rows.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>The first matching entity, or null.</returns>
-        </member>
-        <member name="M:Durable.IRepository`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Reads the first entity matching the predicate. Equivalent to <see cref="M:Durable.IRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)"/>.
             </summary>
             <param name="predicate">Predicate; null matches all rows.</param>
             <param name="transaction">Transaction; may be null.</param>
@@ -2553,15 +2672,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <returns>The number of rows affected.</returns>
         </member>
-        <member name="M:Durable.IRepository`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Deletes all matching rows with a single statement. Equivalent to <see cref="M:Durable.IRepository`1.DeleteMany(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)"/>.
-            </summary>
-            <param name="predicate">Predicate. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <returns>The number of rows affected.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null.</exception>
-        </member>
         <member name="M:Durable.IRepository`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
             Deletes an entity by its key.
@@ -2599,16 +2709,6 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The number of rows affected.</returns>
-        </member>
-        <member name="M:Durable.IRepository`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Deletes all matching rows with a single statement. Equivalent to <see cref="M:Durable.IRepository`1.DeleteManyAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)"/>.
-            </summary>
-            <param name="predicate">Predicate. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>The number of rows affected.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when predicate is null.</exception>
         </member>
         <member name="M:Durable.IRepository`1.Upsert(`0,Durable.ITransaction)">
             <summary>
@@ -2657,17 +2757,20 @@
         </member>
         <member name="M:Durable.IRepository`1.BeginTransaction">
             <summary>
-            Begins a transaction.
+            Begins a transaction owned by the caller. Pass it to repository calls (of this or another repository of the
+            same backend/provider) to run them inside it, or wrap it in an <see cref="T:Durable.AmbientTransactionScope"/>. Commit
+            explicitly; disposing an uncommitted transaction rolls it back. Requires
+            <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.
             </summary>
-            <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+            <returns>The transaction. Dispose it (prefer <c>await using</c>).</returns>
             <exception cref="T:System.NotSupportedException">Thrown by backends without transaction support.</exception>
         </member>
         <member name="M:Durable.IRepository`1.BeginTransactionAsync(System.Threading.CancellationToken)">
             <summary>
-            Begins a transaction.
+            Begins a transaction owned by the caller (see <see cref="M:Durable.IRepository`1.BeginTransaction"/>).
             </summary>
             <param name="token">Cancellation token.</param>
-            <returns>The transaction.</returns>
+            <returns>The transaction. Dispose it (prefer <c>await using</c>); an uncommitted transaction rolls back on dispose.</returns>
             <exception cref="T:System.NotSupportedException">Thrown by backends without transaction support.</exception>
         </member>
         <member name="T:Durable.ITransaction">
@@ -2712,7 +2815,9 @@
         </member>
         <member name="T:Durable.ITransactionScope">
             <summary>
-            Represents a transaction scope that manages the lifecycle of a transaction.
+            A scope that owns or shares a transaction: completing it commits (when it owns the transaction) and disposing it
+            without completing rolls back. Dispose with <c>await using</c> so the rollback is asynchronous.
+            See <see cref="T:Durable.AmbientTransactionScope"/>.
             </summary>
         </member>
         <member name="P:Durable.ITransactionScope.Transaction">
@@ -2855,6 +2960,28 @@
             <param name="type">Type. Must not be null.</param>
             <returns>The default value, or null.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when type is null.</exception>
+        </member>
+        <member name="T:Durable.MergeConflictBehavior">
+            <summary>
+            What <see cref="T:Durable.ConcurrencyConflictResolvers.MergeChangesResolver`1"/> does with a property that both the
+            incoming entity and the stored entity changed relative to the original snapshot.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.IncomingWins">
+            <summary>
+            The incoming (caller's) value wins. This is the default.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.CurrentWins">
+            <summary>
+            The current stored value wins.
+            </summary>
+        </member>
+        <member name="F:Durable.MergeConflictBehavior.ThrowException">
+            <summary>
+            The merge fails with a <see cref="T:Durable.ConcurrencyConflictException"/> naming the property, so the repository
+            reports the conflict instead of choosing a value.
+            </summary>
         </member>
         <member name="T:Durable.NamingConvention">
             <summary>
@@ -3971,6 +4098,8 @@
             <see cref="T:Durable.Query.QueryModel"/>s and <see cref="T:Durable.Query.QueryNode"/>s. One backend instance serves every entity type, which is how
             Include loads related entities. Value conversion is the backend's job: <see cref="P:Durable.Query.ValueNode.Column"/> names the
             column a value is compared with, and <see cref="P:Durable.ColumnMetadata.Converter"/> describes per-property converters.
+            Cancellation tokens on this SPI are required parameters (no default): <see cref="T:Durable.Query.RepositoryBase`1"/> always passes
+            its caller's token, and implementations should observe it.
             Thread safety: implementations must be safe for concurrent use by multiple repositories.
             </summary>
         </member>
@@ -3987,6 +4116,7 @@
             <param name="model">Query. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The entities.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
             <summary>
@@ -3995,6 +4125,7 @@
             <param name="model">Query. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The count.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
             <summary>
@@ -4010,6 +4141,7 @@
             column's converter when the operand is a column); <see cref="T:Durable.Query.RepositoryBase`1"/> converts numeric results to the
             caller's type.
             </returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model or operand is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -4024,6 +4156,7 @@
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when the key already exists.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata or entity is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -4037,6 +4170,7 @@
             <param name="transaction">Transaction; null for none.</param>
             <param name="token">Cancellation token.</param>
             <returns>The number of entities updated (0 when the condition matched nothing).</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata, entity, condition or source is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
             <summary>
@@ -4046,6 +4180,7 @@
             <param name="assignments">Assignments, evaluated against each row's current values. Must not be null or empty.</param>
             <param name="token">Cancellation token.</param>
             <returns>The number of entities updated.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model or assignments is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
             <summary>
@@ -4054,6 +4189,7 @@
             <param name="model">Rows to delete. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>The number of entities deleted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when model is null.</exception>
         </member>
         <member name="M:Durable.Query.IRepositoryBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
             <summary>
@@ -5534,7 +5670,7 @@
             Observable behavior matches the SQL repositories: return values, exception types and messages, key handling
             (a scalar id, or an <see cref="T:System.Object"/> array for composite keys), generated-key write-back, optimistic
             concurrency with <see cref="P:Durable.Query.RepositoryBase`1.ConflictResolver"/>, version bumps on set-based updates, soft delete, query filters,
-            upsert and transactions (explicit, or the ambient <see cref="P:Durable.TransactionScope.Current"/>).
+            upsert and transactions (explicit, or the ambient <see cref="P:Durable.AmbientTransactionScope.Current"/>).
             <para>
             Capabilities: entities with composite keys require <see cref="F:Durable.RepositoryCapabilities.CompositeKeys"/> and entities
             with a version column require <see cref="F:Durable.RepositoryCapabilities.OptimisticConcurrency"/> (checked by the
@@ -5616,9 +5752,6 @@
         <member name="M:Durable.Query.RepositoryBase`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
@@ -5635,9 +5768,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Query.RepositoryBase`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
@@ -5748,9 +5878,6 @@
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAll(Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Query.RepositoryBase`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
@@ -5761,9 +5888,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Query.RepositoryBase`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Query.RepositoryBase`1.Upsert(`0,Durable.ITransaction)">
@@ -5809,7 +5933,7 @@
         <member name="M:Durable.Query.RepositoryBase`1.ResolveTransaction(Durable.ITransaction)">
             <summary>
             Resolves the transaction an operation runs in: the explicit transaction, otherwise the ambient
-            <see cref="P:Durable.TransactionScope.Current"/> transaction when it is not completed and <see cref="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)"/>
+            <see cref="P:Durable.AmbientTransactionScope.Current"/> transaction when it is not completed and <see cref="M:Durable.Query.RepositoryBase`1.AcceptsAmbientTransaction(Durable.ITransaction)"/>
             accepts it, otherwise null.
             </summary>
             <param name="transaction">Explicit transaction; may be null.</param>
@@ -6106,53 +6230,6 @@
         <member name="F:Durable.RepositoryCapabilities.All">
             <summary>Every capability.</summary>
         </member>
-        <member name="T:Durable.RepositoryExtensions">
-            <summary>
-            Provides extension methods for IRepository to simplify query operations.
-            </summary>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectWithQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Executes a query with an optional predicate and returns the results with the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <returns>A durable result containing the entities and the generated SQL query.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectWithQueryAsync``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a query with an optional predicate and returns the results with the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>A task that resolves to a durable result containing the entities and the generated SQL query.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.SelectAsyncWithQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Returns an async enumerable query result with an optional predicate and the generated SQL query.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>An async durable result that can be enumerated asynchronously.</returns>
-        </member>
-        <member name="M:Durable.RepositoryExtensions.GetSelectQuery``1(Durable.IRepository{``0},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},Durable.ITransaction)">
-            <summary>
-            Gets the generated SQL query string for a select operation with an optional predicate.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository to query.</param>
-            <param name="predicate">Optional predicate to filter results.</param>
-            <param name="transaction">Optional transaction to use for the query.</param>
-            <returns>The generated SQL query string.</returns>
-        </member>
         <member name="T:Durable.RepositoryOptions">
             <summary>
             Backend-neutral repository options. Backends extend this type with their own settings.
@@ -6188,218 +6265,91 @@
         </member>
         <member name="T:Durable.RepositoryResultExtensions">
             <summary>
-            Extension methods to provide backward compatibility for repository results.
+            Unwraps the data from <see cref="T:Durable.IDurableResult`1"/> and <see cref="T:Durable.IAsyncDurableResult`1"/> (the results of the
+            <c>*WithQuery</c> methods) when the query text is not needed. Stateless and thread-safe.
             </summary>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsEnumerable``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts just the data from a DurableResult for backward compatibility.
+            Returns the data of a result without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The enumerable data without the query information.</returns>
+            <param name="result">The durable result. May be null, which yields an empty sequence.</param>
+            <returns>The data. Never null.</returns>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(Durable.IAsyncDurableResult{``0})">
             <summary>
-            Extracts just the async enumerable data from an AsyncDurableResult for backward compatibility.
+            Returns the streamed data of a result without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The async durable result.</param>
-            <returns>The async enumerable data without the query information.</returns>
+            <param name="result">The async durable result. May be null, which yields an empty stream.</param>
+            <returns>The data stream. Never null.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(System.Threading.Tasks.Task{Durable.IAsyncDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsAsyncEnumerable``1(System.Threading.Tasks.Task{Durable.IAsyncDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extension method to get async enumerable data from a Task of AsyncDurableResult.
+            Awaits a pending streamed result and streams its data without the query text.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="resultTask">The task containing the async durable result.</param>
-            <returns>An async enumerable of the data.</returns>
+            <param name="resultTask">The task producing the async durable result. Must not be null.</param>
+            <param name="token">Cancellation token, also passed to the underlying stream.</param>
+            <returns>The data stream.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsEntity``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts a single entity from a DurableResult for backward compatibility.
+            Returns the first item of a result (the entity of a single-entity operation such as <c>CreateWithQuery</c>).
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The first entity or default.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The first item, or default when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsEntity``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsEntityAsync``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a single entity from a Task&lt;DurableResult&lt;T&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns its first item.
             </summary>
             <typeparam name="T">The entity type.</typeparam>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The first entity or default.</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The first item, or default when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsValue``1(Durable.IDurableResult{``0})">
             <summary>
-            Extracts a single value from a DurableResult for backward compatibility.
+            Returns the first value of a result (the value of a scalar operation such as <c>DeleteWithQuery</c>).
             </summary>
             <typeparam name="T">The value type.</typeparam>
-            <param name="result">The durable result.</param>
-            <returns>The first value or default.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The first value, or default when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsValue``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsValueAsync``1(System.Threading.Tasks.Task{Durable.IDurableResult{``0}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a single value from a Task&lt;DurableResult&lt;T&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns its first value.
             </summary>
             <typeparam name="T">The value type.</typeparam>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The first value or default.</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The first value, or default when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="M:Durable.RepositoryResultExtensions.AsCount(Durable.IDurableResult{System.Int32})">
             <summary>
-            Extracts a count value from a DurableResult&lt;int&gt; for backward compatibility.
+            Returns the count carried by a result (for example the rows affected by <c>DeleteManyWithQuery</c>).
             </summary>
-            <param name="result">The durable result.</param>
-            <returns>The count value.</returns>
+            <param name="result">The durable result. May be null.</param>
+            <returns>The count, or 0 when the result is null or empty.</returns>
         </member>
-        <member name="M:Durable.RepositoryResultExtensions.AsCount(System.Threading.Tasks.Task{Durable.IDurableResult{System.Int32}})">
+        <member name="M:Durable.RepositoryResultExtensions.AsCountAsync(System.Threading.Tasks.Task{Durable.IDurableResult{System.Int32}},System.Threading.CancellationToken)">
             <summary>
-            Extracts a count value from a Task&lt;DurableResult&lt;int&gt;&gt; for backward compatibility.
+            Awaits a pending result and returns the count it carries.
             </summary>
-            <param name="resultTask">The task containing the durable result.</param>
-            <returns>The count value.</returns>
-        </member>
-        <member name="T:Durable.RepositorySettings">
-            <summary>
-            Abstract base class for repository connection settings.
-            Derived classes should implement provider-specific connection string parsing and building.
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Type">
-            <summary>
-            The type of repository
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Hostname">
-            <summary>
-            The hostname or server address. Default: null
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Port">
-            <summary>
-            The port number for the database server. Default: null (uses provider default)
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Username">
-            <summary>
-            The username for authentication. Default: null
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Password">
-            <summary>
-            The password for authentication. Default: null
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.Database">
-            <summary>
-            The database name. Default: null
-            </summary>
-        </member>
-        <member name="P:Durable.RepositorySettings.AdditionalProperties">
-            <summary>
-            Additional provider-specific properties. Default: null
-            </summary>
-        </member>
-        <member name="M:Durable.RepositorySettings.#ctor">
-            <summary>
-            Initializes a new instance of the RepositorySettings class
-            </summary>
-        </member>
-        <member name="M:Durable.RepositorySettings.BuildConnectionString">
-            <summary>
-            Builds a connection string from the current settings
-            </summary>
-            <returns>A connection string</returns>
-        </member>
-        <member name="T:Durable.RepositoryType">
-            <summary>
-            Represents a repository type in an extensible, type-safe manner.
-            This class provides built-in repository types (Sqlite, MySql, Postgres, SqlServer)
-            and allows users to define custom repository types.
-            </summary>
-        </member>
-        <member name="P:Durable.RepositoryType.Identifier">
-            <summary>
-            The unique identifier for this repository type
-            </summary>
-        </member>
-        <member name="P:Durable.RepositoryType.DisplayName">
-            <summary>
-            The display name for this repository type
-            </summary>
-        </member>
-        <member name="F:Durable.RepositoryType.Sqlite">
-            <summary>
-            Represents a SQLite repository
-            </summary>
-        </member>
-        <member name="F:Durable.RepositoryType.MySql">
-            <summary>
-            Represents a MySQL repository
-            </summary>
-        </member>
-        <member name="F:Durable.RepositoryType.Postgres">
-            <summary>
-            Represents a PostgreSQL repository
-            </summary>
-        </member>
-        <member name="F:Durable.RepositoryType.SqlServer">
-            <summary>
-            Represents a SQL Server repository
-            </summary>
-        </member>
-        <member name="M:Durable.RepositoryType.#ctor(System.String,System.String)">
-            <summary>
-            Creates a new repository type with the specified identifier and display name
-            </summary>
-            <param name="identifier">The unique identifier for the repository type (case-insensitive)</param>
-            <param name="displayName">The display name for the repository type</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when identifier or displayName is null</exception>
-            <exception cref="T:System.ArgumentException">Thrown when identifier or displayName is empty or whitespace</exception>
-        </member>
-        <member name="M:Durable.RepositoryType.Equals(Durable.RepositoryType)">
-            <summary>
-            Determines whether this repository type is equal to another repository type
-            </summary>
-            <param name="other">The other repository type to compare</param>
-            <returns>True if the repository types are equal, false otherwise</returns>
-        </member>
-        <member name="M:Durable.RepositoryType.Equals(System.Object)">
-            <summary>
-            Determines whether this repository type is equal to another object
-            </summary>
-            <param name="obj">The object to compare</param>
-            <returns>True if the objects are equal, false otherwise</returns>
-        </member>
-        <member name="M:Durable.RepositoryType.GetHashCode">
-            <summary>
-            Gets the hash code for this repository type
-            </summary>
-            <returns>The hash code</returns>
-        </member>
-        <member name="M:Durable.RepositoryType.ToString">
-            <summary>
-            Returns the display name of this repository type
-            </summary>
-            <returns>The display name</returns>
-        </member>
-        <member name="M:Durable.RepositoryType.op_Equality(Durable.RepositoryType,Durable.RepositoryType)">
-            <summary>
-            Determines whether two repository types are equal
-            </summary>
-            <param name="left">The first repository type</param>
-            <param name="right">The second repository type</param>
-            <returns>True if the repository types are equal, false otherwise</returns>
-        </member>
-        <member name="M:Durable.RepositoryType.op_Inequality(Durable.RepositoryType,Durable.RepositoryType)">
-            <summary>
-            Determines whether two repository types are not equal
-            </summary>
-            <param name="left">The first repository type</param>
-            <param name="right">The second repository type</param>
-            <returns>True if the repository types are not equal, false otherwise</returns>
+            <param name="resultTask">The task producing the durable result. Must not be null.</param>
+            <param name="token">Cancellation token that stops waiting for <paramref name="resultTask"/> (the operation itself is not canceled).</param>
+            <returns>The count, or 0 when the result is empty.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="resultTask"/> is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled before the result is available.</exception>
         </member>
         <member name="T:Durable.ResolvedNavigation">
             <summary>
@@ -6430,161 +6380,10 @@
         <member name="F:Durable.StringMatchMode.IgnoreCase">
             <summary>Case-insensitive but accent-sensitive comparison, like C# <c>StringComparison.OrdinalIgnoreCase</c>: both sides are lower-cased and then compared ordinally. SQLite's built-in lower() folds ASCII letters only.</summary>
         </member>
-        <member name="T:Durable.TransactionScope">
-            <summary>
-            An ambient transaction scope. While a scope is current, repository calls made without an explicit transaction
-            on the same async flow use <see cref="P:Durable.TransactionScope.Transaction"/>. Disposing a scope that was not completed rolls back.
-            Nested scopes created for the same transaction share it and only the outermost scope commits.
-            Thread safety: a scope flows with the async execution context and must not be shared across concurrent flows.
-            </summary>
-        </member>
-        <member name="P:Durable.TransactionScope.Current">
-            <summary>
-            Gets the scope current on this async flow, or null. Completed or disposed scopes are skipped.
-            </summary>
-        </member>
-        <member name="P:Durable.TransactionScope.Transaction">
-            <inheritdoc />
-            <exception cref="T:System.InvalidOperationException">Thrown when accessed before an asynchronous scope finished starting its transaction.</exception>
-        </member>
-        <member name="P:Durable.TransactionScope.IsCompleted">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.TransactionScope.Create(Durable.ITransaction)">
-            <summary>
-            Creates a scope around an existing transaction. If the current scope already uses the same transaction,
-            a nested, non-owning scope is created.
-            </summary>
-            <param name="transaction">Transaction. Must not be null.</param>
-            <returns>The new scope, which is now current.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Create``1(Durable.IRepository{``0})">
-            <summary>
-            Begins a transaction on the repository and makes a new owning scope current.
-            </summary>
-            <typeparam name="T">Entity type.</typeparam>
-            <param name="repository">Repository. Must not be null.</param>
-            <returns>The new scope.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.CreateAsync``1(Durable.IRepository{``0},System.Threading.CancellationToken)">
-            <summary>
-            Begins a transaction asynchronously and makes a new owning scope current on the caller's async flow.
-            The scope becomes current immediately (before the returned task completes), so code that awaits this method
-            observes it via <see cref="P:Durable.TransactionScope.Current"/>.
-            </summary>
-            <typeparam name="T">Entity type.</typeparam>
-            <param name="repository">Repository. Must not be null.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>A task returning the new scope.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Complete">
-            <inheritdoc />
-            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
-            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.CompleteAsync(System.Threading.CancellationToken)">
-            <inheritdoc />
-            <exception cref="T:System.ObjectDisposedException">Thrown when the scope is disposed.</exception>
-            <exception cref="T:System.InvalidOperationException">Thrown when the scope is already completed.</exception>
-        </member>
-        <member name="M:Durable.TransactionScope.Dispose">
-            <summary>
-            Disposes the scope, rolling back an owned transaction that was not completed, and restores the parent scope.
-            </summary>
-        </member>
-        <member name="T:Durable.TransactionScopeExtensions">
-            <summary>
-            Extension methods for executing operations within transaction scopes.
-            </summary>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.IRepository{``0},System.Action)">
-            <summary>
-            Executes an action within a transaction scope for the specified repository.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="action">The action to execute within the transaction scope.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or action is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``2(Durable.IRepository{``0},System.Func{``1})">
-            <summary>
-            Executes a function within a transaction scope for the specified repository and returns the result.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The function to execute within the transaction scope.</param>
-            <returns>The result of the function execution.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task within a transaction scope for the specified repository.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``2(Durable.IRepository{``0},System.Func{System.Threading.Tasks.Task{``1}},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task function within a transaction scope for the specified repository and returns the result.
-            </summary>
-            <typeparam name="T">The type of entity managed by the repository.</typeparam>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="repository">The repository to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation containing the result.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope(Durable.ITransaction,System.Action)">
-            <summary>
-            Executes an action within a transaction scope for the specified transaction.
-            </summary>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="action">The action to execute within the transaction scope.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or action is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScope``1(Durable.ITransaction,System.Func{``0})">
-            <summary>
-            Executes a function within a transaction scope for the specified transaction and returns the result.
-            </summary>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The function to execute within the transaction scope.</param>
-            <returns>The result of the function execution.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync(Durable.ITransaction,System.Func{System.Threading.Tasks.Task},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task within a transaction scope for the specified transaction.
-            </summary>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
-        </member>
-        <member name="M:Durable.TransactionScopeExtensions.ExecuteInTransactionScopeAsync``1(Durable.ITransaction,System.Func{System.Threading.Tasks.Task{``0}},System.Threading.CancellationToken)">
-            <summary>
-            Asynchronously executes a task function within a transaction scope for the specified transaction and returns the result.
-            </summary>
-            <typeparam name="TResult">The type of the result returned by the function.</typeparam>
-            <param name="transaction">The transaction to create a transaction scope for.</param>
-            <param name="func">The task function to execute within the transaction scope.</param>
-            <param name="token">A cancellation token that can be used to cancel the operation.</param>
-            <returns>A task that represents the asynchronous operation containing the result.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when transaction or func is null.</exception>
-        </member>
         <member name="T:Durable.TryResolveConflictResult`1">
             <summary>
             Represents the result of attempting to resolve a conflict for an entity of type T.
+            Thread safety: a mutable result holder; do not share across threads while it is being set.
             </summary>
             <typeparam name="T">The type of entity being resolved.</typeparam>
         </member>
@@ -6602,6 +6401,7 @@
             <summary>
             Strongly-typed base class for <see cref="T:Durable.IValueConverter"/> implementations.
             Derived classes must have a public parameterless constructor when used with <see cref="T:Durable.ValueConverterAttribute"/>.
+            Thread safety: converters are shared by every repository for the property, so implementations must be stateless or thread-safe.
             </summary>
             <typeparam name="TModel">Property type.</typeparam>
             <typeparam name="TProvider">Stored type.</typeparam>
@@ -6653,95 +6453,134 @@
         </member>
         <member name="T:Durable.VersionColumnAttribute">
             <summary>
-            Attribute to mark a property as a version column for concurrency control
+            Marks a property as the optimistic-concurrency version column: updates only succeed when the stored value still
+            equals the value the caller read, and every write replaces it (see <see cref="T:Durable.VersionColumnType"/>). At most one
+            property per entity may carry this attribute. Thread safety: immutable.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnAttribute.Type">
             <summary>
-            Gets the type of version column
+            Gets the declared version type, or null when it is inferred from the property type: integer types use
+            <see cref="F:Durable.VersionColumnType.Integer"/>, <see cref="T:System.DateTime"/> uses <see cref="F:Durable.VersionColumnType.Timestamp"/>,
+            <see cref="T:System.Guid"/> uses <see cref="F:Durable.VersionColumnType.Guid"/> and <c>byte[]</c> uses
+            <see cref="F:Durable.VersionColumnType.BinaryCounter"/>.
+            </summary>
+        </member>
+        <member name="M:Durable.VersionColumnAttribute.#ctor">
+            <summary>
+            Marks a version column whose type is inferred from the property type (see <see cref="P:Durable.VersionColumnAttribute.Type"/>).
             </summary>
         </member>
         <member name="M:Durable.VersionColumnAttribute.#ctor(Durable.VersionColumnType)">
             <summary>
-            Initializes a new instance of the VersionColumnAttribute class
+            Marks a version column of the given type. The property type must match it (validated when the entity's
+            metadata is built).
             </summary>
-            <param name="type">The type of version column</param>
+            <param name="type">The version type.</param>
         </member>
         <member name="T:Durable.VersionColumnInfo">
             <summary>
-            Contains information about a version column property
+            The resolved version column of an entity (<see cref="P:Durable.EntityMetadata.VersionInfo"/>): its column, property,
+            effective <see cref="T:Durable.VersionColumnType"/>, and how new values are produced.
+            Thread safety: immutable; safe to share.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.ColumnName">
             <summary>
-            Gets or sets the database column name
+            Gets the database column name. Never null.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.Property">
             <summary>
-            Gets or sets the property information
+            Gets the mapped property. Never null.
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.Type">
             <summary>
-            Gets or sets the version column type
+            Gets the effective version type (declared, or inferred from the property type).
             </summary>
         </member>
         <member name="P:Durable.VersionColumnInfo.PropertyType">
             <summary>
-            Gets or sets the property type
+            Gets the property type. Never null.
             </summary>
+        </member>
+        <member name="M:Durable.VersionColumnInfo.#ctor(System.String,System.Reflection.PropertyInfo,System.Nullable{Durable.VersionColumnType})">
+            <summary>
+            Instantiates the version column description, validating that the property type suits the version type.
+            </summary>
+            <param name="columnName">Column name. Must not be null.</param>
+            <param name="property">Property. Must not be null.</param>
+            <param name="declaredType">Declared version type, or null to infer it from the property type.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when columnName or property is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the type cannot be inferred or does not suit the property type.</exception>
         </member>
         <member name="M:Durable.VersionColumnInfo.GetValue(System.Object)">
             <summary>
-            Gets the version value from the specified entity
+            Gets the version value from the specified entity.
             </summary>
-            <param name="entity">The entity to get the version from</param>
-            <returns>The version value</returns>
+            <param name="entity">The entity; null returns null.</param>
+            <returns>The version value; may be null.</returns>
         </member>
         <member name="M:Durable.VersionColumnInfo.SetValue(System.Object,System.Object)">
             <summary>
-            Sets the version value on the specified entity
+            Sets the version value on the specified entity.
             </summary>
-            <param name="entity">The entity to set the version on</param>
-            <param name="value">The version value to set</param>
+            <param name="entity">The entity; null does nothing.</param>
+            <param name="value">The version value.</param>
         </member>
         <member name="M:Durable.VersionColumnInfo.IncrementVersion(System.Object)">
             <summary>
-            Increments the version value based on the version column type
+            Returns the version value that replaces <paramref name="currentVersion"/> on an entity update.
             </summary>
-            <param name="currentVersion">The current version value</param>
-            <returns>The incremented version value</returns>
+            <param name="currentVersion">The current value; null yields <see cref="M:Durable.VersionColumnInfo.GetDefaultVersion"/>.</param>
+            <returns>The next value. Never null.</returns>
         </member>
         <member name="M:Durable.VersionColumnInfo.GetDefaultVersion">
             <summary>
-            Gets the default version value based on the version column type
+            Returns the version value of a newly created row: 1 for integers, the current UTC time, a new GUID, or the
+            8-byte counter value 1.
             </summary>
-            <returns>The default version value</returns>
+            <returns>The initial value. Never null.</returns>
+        </member>
+        <member name="M:Durable.VersionColumnInfo.CreateSetBasedVersion">
+            <summary>
+            Returns the value a set-based update (UpdateField, BatchUpdate) writes to every affected row, for types that
+            are not incremented in the database: the current UTC time, a new GUID, or an 8-byte counter value derived from
+            the current UTC ticks (larger than any per-row increment of a counter that started at 1).
+            </summary>
+            <returns>The value. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown for <see cref="F:Durable.VersionColumnType.Integer"/>, which set-based updates increment in the database.</exception>
         </member>
         <member name="T:Durable.VersionColumnType">
             <summary>
-            Specifies the type of version column for concurrency control
+            How a <see cref="T:Durable.VersionColumnAttribute"/> column's value changes on each update. Durable generates every new
+            value itself (client side); no version type relies on a database-generated value such as SQL Server's
+            <c>rowversion</c>.
             </summary>
         </member>
-        <member name="F:Durable.VersionColumnType.RowVersion">
+        <member name="F:Durable.VersionColumnType.BinaryCounter">
             <summary>
-            Binary row version (typically used with SQL Server ROWVERSION)
+            An 8-byte big-endian counter stored in a <c>byte[]</c> property (a binary/blob column). New rows start at
+            1 and each entity update increments it; set-based updates (UpdateField, BatchUpdate) assign a fresh value derived
+            from the current UTC time so held copies become stale. This is not SQL Server's server-generated
+            <c>rowversion</c>/<c>timestamp</c> type: map it to an ordinary binary column.
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Timestamp">
             <summary>
-            Timestamp-based versioning using DateTime
+            The UTC time of the last write, in a <see cref="T:System.DateTime"/> property.
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Integer">
             <summary>
-            Integer-based versioning (incremental counter)
+            An integer counter in an <c>int</c>, <c>long</c>, <c>short</c> or <c>byte</c> property: new rows start at 1
+            and every update adds 1 (set-based updates increment in the database).
             </summary>
         </member>
         <member name="F:Durable.VersionColumnType.Guid">
             <summary>
-            GUID-based versioning using unique identifiers
+            A new <see cref="T:System.Guid"/> on every write, in a <c>Guid</c> property.
             </summary>
         </member>
     </members>

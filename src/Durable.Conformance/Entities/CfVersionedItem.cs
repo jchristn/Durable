@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Entity with an integer version column for optimistic concurrency. Storage: <c>cf_versioned_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_versioned_items")]
     public class CfVersionedItem

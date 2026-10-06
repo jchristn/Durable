@@ -333,7 +333,7 @@ namespace Test.Shared
                 await Assert.ThrowsAsync<ArgumentException>(() =>
                     repository.CreateAsync(InfrastructureTestData.NewPerson("cross@example.com", department), context));
                 Assert.Throws<ArgumentException>(() => repository.Count(null, context));
-                Assert.Throws<ArgumentException>(() => repository.ExecuteSql("SELECT 1", context));
+                Assert.Throws<ArgumentException>(() => repository.ExecuteSqlRaw("SELECT 1", null, context));
             }
 
             Assert.Equal(0, await repository.CountAsync(p => p.Department == department));

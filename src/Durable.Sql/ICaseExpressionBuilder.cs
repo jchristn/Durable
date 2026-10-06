@@ -17,6 +17,7 @@ namespace Durable.Sql
         /// <param name="condition">Condition. Must not be null.</param>
         /// <param name="result">Result value; may be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when condition is null.</exception>
         ICaseExpressionBuilder<T> When(Expression<Func<T, bool>> condition, object? result);
 
         /// <summary>
@@ -25,6 +26,7 @@ namespace Durable.Sql
         /// <param name="condition">Condition SQL. Must not be null.</param>
         /// <param name="result">Result value; may be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when condition is null.</exception>
         ICaseExpressionBuilder<T> WhenRaw(string condition, object? result);
 
         /// <summary>
@@ -40,6 +42,7 @@ namespace Durable.Sql
         /// <param name="alias">Column alias. Must not be null; letters, digits and underscores.</param>
         /// <returns>The query builder.</returns>
         /// <exception cref="ArgumentException">Thrown when alias is invalid or no WHEN branch was added.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when alias is null.</exception>
         ISqlQueryBuilder<T> EndCase(string alias);
     }
 }

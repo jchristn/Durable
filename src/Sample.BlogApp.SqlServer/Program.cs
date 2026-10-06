@@ -5,6 +5,7 @@ namespace Sample.BlogApp.SqlServer
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.Sql;
     using Durable.SqlServer;
     using Microsoft.Data.SqlClient;
 
@@ -682,7 +683,7 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine($"   Views: {originalViews} → {updatedPost.ViewCount}");
 
             Console.WriteLine("\n2. Publish a draft post:");
-            BlogPost? draftPost = await postRepo.ReadFirstOrDefaultAsync(p => p.IsPublished == false);
+            BlogPost? draftPost = await postRepo.ReadFirstAsync(p => p.IsPublished == false);
             if (draftPost != null)
             {
                 draftPost.IsPublished = true;
@@ -957,7 +958,7 @@ namespace Sample.BlogApp.SqlServer
                 ORDER BY TotalViews DESC";
 
             List<BlogStatistics> stats = new List<BlogStatistics>();
-            await foreach (BlogStatistics stat in authorRepo.FromSqlAsync<BlogStatistics>(joinSql))
+            await foreach (BlogStatistics stat in authorRepo.FromSqlRawAsync<BlogStatistics>(joinSql))
             {
                 stats.Add(stat);
             }
@@ -1006,7 +1007,7 @@ namespace Sample.BlogApp.SqlServer
             }
 
             Console.WriteLine("\n3. ExecuteSql for bulk operations:");
-            int affectedRows = await postRepo.ExecuteSqlAsync(
+            int affectedRows = await postRepo.ExecuteSqlRawAsync(
                 "UPDATE blog_posts SET excerpt = SUBSTRING(content, 1, 100) WHERE excerpt IS NULL OR excerpt = ''"
             );
             Console.WriteLine($"   Updated {affectedRows} posts with auto-generated excerpts");
@@ -1092,7 +1093,7 @@ namespace Sample.BlogApp.SqlServer
             Console.WriteLine($"   ReadById(99999) returned: {(nonExistent == null ? "null" : "a post")}");
 
             Console.WriteLine("\n2. ReadFirstOrDefault with no matches:");
-            BlogPost? noMatch = await postRepo.ReadFirstOrDefaultAsync(p => p.ViewCount > 1000000);
+            BlogPost? noMatch = await postRepo.ReadFirstAsync(p => p.ViewCount > 1000000);
             Console.WriteLine($"   ReadFirstOrDefault (no matches) returned: {(noMatch == null ? "null" : "a post")}");
 
             Console.WriteLine("\n3. Empty collection operations:");

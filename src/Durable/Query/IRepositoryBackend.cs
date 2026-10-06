@@ -13,6 +13,8 @@ namespace Durable.Query
     /// <see cref="QueryModel"/>s and <see cref="QueryNode"/>s. One backend instance serves every entity type, which is how
     /// Include loads related entities. Value conversion is the backend's job: <see cref="ValueNode.Column"/> names the
     /// column a value is compared with, and <see cref="ColumnMetadata.Converter"/> describes per-property converters.
+    /// Cancellation tokens on this SPI are required parameters (no default): <see cref="RepositoryBase{T}"/> always passes
+    /// its caller's token, and implementations should observe it.
     /// Thread safety: implementations must be safe for concurrent use by multiple repositories.
     /// </summary>
     public interface IRepositoryBackend
@@ -29,6 +31,7 @@ namespace Durable.Query
         /// <param name="model">Query. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The entities.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when model is null.</exception>
         IAsyncEnumerable<object> QueryAsync(QueryModel model, CancellationToken token);
 
         /// <summary>
@@ -37,6 +40,7 @@ namespace Durable.Query
         /// <param name="model">Query. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The count.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when model is null.</exception>
         Task<long> CountAsync(QueryModel model, CancellationToken token);
 
         /// <summary>
@@ -52,6 +56,7 @@ namespace Durable.Query
         /// column's converter when the operand is a column); <see cref="RepositoryBase{T}"/> converts numeric results to the
         /// caller's type.
         /// </returns>
+        /// <exception cref="ArgumentNullException">Thrown when model or operand is null.</exception>
         Task<object?> AggregateAsync(QueryModel model, AggregateFunction function, QueryNode operand, CancellationToken token);
 
         /// <summary>
@@ -66,6 +71,7 @@ namespace Durable.Query
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the key already exists.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when metadata or entity is null.</exception>
         Task InsertAsync(EntityMetadata metadata, object entity, ITransaction? transaction, CancellationToken token);
 
         /// <summary>
@@ -79,6 +85,7 @@ namespace Durable.Query
         /// <param name="transaction">Transaction; null for none.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of entities updated (0 when the condition matched nothing).</returns>
+        /// <exception cref="ArgumentNullException">Thrown when metadata, entity, condition or source is null.</exception>
         Task<int> ReplaceAsync(EntityMetadata metadata, object entity, QueryNode condition, QuerySource source, ITransaction? transaction, CancellationToken token);
 
         /// <summary>
@@ -88,6 +95,7 @@ namespace Durable.Query
         /// <param name="assignments">Assignments, evaluated against each row's current values. Must not be null or empty.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of entities updated.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when model or assignments is null.</exception>
         Task<int> UpdateAsync(QueryModel model, IReadOnlyList<FieldAssignment> assignments, CancellationToken token);
 
         /// <summary>
@@ -96,6 +104,7 @@ namespace Durable.Query
         /// <param name="model">Rows to delete. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The number of entities deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when model is null.</exception>
         Task<int> DeleteAsync(QueryModel model, CancellationToken token);
 
         /// <summary>

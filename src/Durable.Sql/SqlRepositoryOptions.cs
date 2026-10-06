@@ -52,11 +52,6 @@ namespace Durable.Sql
         public bool CaptureSql { get; set; } = false;
 
         /// <summary>
-        /// Gets or sets the initial value of <see cref="ISqlTrackingConfiguration.IncludeQueryInResults"/>. Default: false.
-        /// </summary>
-        public bool IncludeQueryInResults { get; set; } = false;
-
-        /// <summary>
         /// Gets or sets how many root entities are buffered before loading includes while streaming with
         /// <c>ExecuteAsyncEnumerable</c>. Default: 256. Minimum: 1.
         /// </summary>

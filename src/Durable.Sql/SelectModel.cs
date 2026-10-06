@@ -9,7 +9,7 @@ namespace Durable.Sql
     /// the shared <see cref="SqlStatementBuilder"/>), then the model renders the final text in dialect order.
     /// Thread safety: not thread-safe.
     /// </summary>
-    public sealed class SelectModel
+    internal sealed class SelectModel
     {
         #region Public-Members
 

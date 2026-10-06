@@ -52,6 +52,23 @@ namespace Durable.Sql
         #region Constructors-and-Factories
 
         /// <summary>
+        /// Instantiates a column description that is not auto-increment (the 0.4.0 signature).
+        /// </summary>
+        /// <param name="name">Column name. Must not be null or empty.</param>
+        /// <param name="dataType">Declared type. Must not be null.</param>
+        /// <param name="isNullable">Whether the column accepts null.</param>
+        /// <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
+        /// <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
+        /// <param name="ordinal">Zero-based position. Minimum: 0.</param>
+        /// <exception cref="ArgumentException">Thrown when name is null or empty.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when dataType is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
+        public ColumnSchema(string name, string dataType, bool isNullable, int? maxLength, bool isPrimaryKey, int ordinal)
+            : this(name, dataType, isNullable, maxLength, isPrimaryKey, ordinal, false)
+        {
+        }
+
+        /// <summary>
         /// Instantiates a column description.
         /// </summary>
         /// <param name="name">Column name. Must not be null or empty.</param>
@@ -60,11 +77,11 @@ namespace Durable.Sql
         /// <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
         /// <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
         /// <param name="ordinal">Zero-based position. Minimum: 0.</param>
-        /// <param name="isAutoIncrement">Whether the database generates the value on insert. Default: false.</param>
+        /// <param name="isAutoIncrement">Whether the database generates the value on insert.</param>
         /// <exception cref="ArgumentException">Thrown when name is null or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown when dataType is null.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
-        public ColumnSchema(string name, string dataType, bool isNullable, int? maxLength, bool isPrimaryKey, int ordinal, bool isAutoIncrement = false)
+        public ColumnSchema(string name, string dataType, bool isNullable, int? maxLength, bool isPrimaryKey, int ordinal, bool isAutoIncrement)
         {
             if (string.IsNullOrEmpty(name)) throw new ArgumentException("Column name cannot be null or empty.", nameof(name));
             if (ordinal < 0) throw new ArgumentOutOfRangeException(nameof(ordinal), "Ordinal cannot be negative.");

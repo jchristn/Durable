@@ -8,13 +8,13 @@ namespace Test.Shared
     using Xunit;
 
     /// <summary>
-    /// Coverage for ambient <see cref="TransactionScope"/> behavior: <see cref="TransactionScope.CreateAsync{T}"/>
+    /// Coverage for ambient <see cref="AmbientTransactionScope"/> behavior: <see cref="AmbientTransactionScope.CreateAsync{T}"/>
     /// publishes the scope to the caller, repository calls without an explicit transaction join it, disposal
     /// without completion rolls back, completion commits, nested scopes share the transaction, repositories of
     /// different entity types share one scope, and the <c>ExecuteInTransactionScopeAsync</c> extension commits or
     /// rolls back. Executed identically across all database providers.
     /// </summary>
-    public class TransactionScopeTestSuite : IDisposable
+    public class AmbientTransactionScopeTestSuite : IDisposable
     {
         #region Private-Members
 
@@ -25,11 +25,11 @@ namespace Test.Shared
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="TransactionScopeTestSuite"/> class.
+        /// Initializes a new instance of the <see cref="AmbientTransactionScopeTestSuite"/> class.
         /// </summary>
         /// <param name="provider">The repository provider for the configured database.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is null.</exception>
-        public TransactionScopeTestSuite(IRepositoryProvider provider)
+        public AmbientTransactionScopeTestSuite(IRepositoryProvider provider)
         {
             _Provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
@@ -39,23 +39,23 @@ namespace Test.Shared
         #region Public-Methods
 
         /// <summary>
-        /// After awaiting CreateAsync the scope is visible as <see cref="TransactionScope.Current"/> in the caller,
+        /// After awaiting CreateAsync the scope is visible as <see cref="AmbientTransactionScope.Current"/> in the caller,
         /// and is cleared again once disposed.
         /// </summary>
         [Fact]
         public async Task CreateAsync_SetsCurrentInCaller()
         {
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            Assert.Null(TransactionScope.Current);
+            Assert.Null(AmbientTransactionScope.Current);
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
             {
-                Assert.NotNull(TransactionScope.Current);
-                Assert.Same(scope, TransactionScope.Current);
+                Assert.NotNull(AmbientTransactionScope.Current);
+                Assert.Same(scope, AmbientTransactionScope.Current);
                 Assert.IsAssignableFrom<ISqlTransaction>(scope.Transaction);
             }
 
-            Assert.Null(TransactionScope.Current);
+            Assert.Null(AmbientTransactionScope.Current);
         }
 
         /// <summary>
@@ -69,7 +69,7 @@ namespace Test.Shared
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
             {
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-rb-1@example.com", department));
                 repository.Create(InfrastructureTestData.NewPerson("scope-rb-2@example.com", department));
@@ -86,6 +86,73 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// <c>await using</c> disposes the scope asynchronously: an uncompleted scope rolls back with RollbackAsync and
+        /// stops being current in the caller, and a second DisposeAsync is a no-op.
+        /// </summary>
+        [Fact]
+        public async Task AwaitUsing_DisposeAsyncRollsBackAndClearsCurrent()
+        {
+            const string department = "TxScopeAsyncDispose";
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await InfrastructureTestData.ClearDepartmentAsync(repository, department);
+
+            AmbientTransactionScope captured;
+            await using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
+            {
+                captured = scope;
+                await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-ad-1@example.com", department));
+                Assert.Equal(1, await repository.CountAsync(p => p.Department == department));
+                Assert.Same(scope, AmbientTransactionScope.Current);
+            }
+
+            Assert.Null(AmbientTransactionScope.Current);
+            Assert.True(captured.Transaction.IsCompleted);
+            await captured.DisposeAsync();
+            Assert.Equal(0, await repository.CountAsync(p => p.Department == department));
+        }
+
+        /// <summary>
+        /// The synchronous ExecuteInTransactionScope overloads (repository and transaction forms) commit when the
+        /// delegate returns and roll back when it throws.
+        /// </summary>
+        [Fact]
+        public async Task ExecuteInTransactionScope_SyncOverloadsCommitAndRollBack()
+        {
+            const string department = "TxScopeSyncExec";
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
+            await InfrastructureTestData.ClearDepartmentAsync(repository, department);
+
+            repository.ExecuteInTransactionScope(() => { repository.Create(InfrastructureTestData.NewPerson("scope-se-1@example.com", department)); });
+            int returned = repository.ExecuteInTransactionScope(() => { repository.Create(InfrastructureTestData.NewPerson("scope-se-2@example.com", department)); return 7; });
+            Assert.Equal(7, returned);
+            Assert.Throws<InvalidOperationException>(() => repository.ExecuteInTransactionScope(() =>
+            {
+                repository.Create(InfrastructureTestData.NewPerson("scope-se-3@example.com", department));
+                throw new InvalidOperationException("boom");
+            }));
+            Assert.Equal(2, await repository.CountAsync(p => p.Department == department));
+
+            using (ITransaction transaction = repository.BeginTransaction())
+            {
+                transaction.ExecuteInTransactionScope(() => { repository.Create(InfrastructureTestData.NewPerson("scope-se-4@example.com", department)); });
+                Assert.True(transaction.IsCompleted);
+            }
+
+            using (ITransaction transaction = repository.BeginTransaction())
+            {
+                Assert.Throws<InvalidOperationException>(() => transaction.ExecuteInTransactionScope<int>(() =>
+                {
+                    repository.Create(InfrastructureTestData.NewPerson("scope-se-5@example.com", department));
+                    throw new InvalidOperationException("boom");
+                }));
+            }
+
+            Assert.Equal(3, await repository.CountAsync(p => p.Department == department));
+            Assert.Null(AmbientTransactionScope.Current);
+            await InfrastructureTestData.ClearDepartmentAsync(repository, department);
+        }
+
+        /// <summary>
         /// Writes inside an ambient scope persist after CompleteAsync.
         /// </summary>
         [Fact]
@@ -95,7 +162,7 @@ namespace Test.Shared
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
             {
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-c-1@example.com", department));
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-c-2@example.com", department));
@@ -120,7 +187,7 @@ namespace Test.Shared
             Person keep = await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-ud-1@example.com", department, 40));
             Person remove = await repository.CreateAsync(InfrastructureTestData.NewPerson("scope-ud-2@example.com", department, 41));
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
             {
                 keep.Age = 99;
                 await repository.UpdateAsync(keep);
@@ -150,19 +217,19 @@ namespace Test.Shared
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
 
-            using (TransactionScope outer = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope outer = await AmbientTransactionScope.CreateAsync(repository))
             {
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("nested-outer@example.com", department), outer.Transaction);
 
-                using (TransactionScope inner = TransactionScope.Create(outer.Transaction))
+                using (AmbientTransactionScope inner = AmbientTransactionScope.Create(outer.Transaction))
                 {
-                    Assert.Same(inner, TransactionScope.Current);
+                    Assert.Same(inner, AmbientTransactionScope.Current);
                     Assert.Same(outer.Transaction, inner.Transaction);
                     await repository.CreateAsync(InfrastructureTestData.NewPerson("nested-inner@example.com", department));
                     await inner.CompleteAsync();
                 }
 
-                Assert.Same(outer, TransactionScope.Current);
+                Assert.Same(outer, AmbientTransactionScope.Current);
                 Assert.False(outer.Transaction.IsCompleted);
                 Assert.Equal(2, await repository.CountAsync(p => p.Department == department));
             }
@@ -180,10 +247,10 @@ namespace Test.Shared
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
 
-            using (TransactionScope outer = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope outer = await AmbientTransactionScope.CreateAsync(repository))
             {
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("nested-ok-outer@example.com", department));
-                using (TransactionScope inner = TransactionScope.Create(outer.Transaction))
+                using (AmbientTransactionScope inner = AmbientTransactionScope.Create(outer.Transaction))
                 {
                     await repository.CreateAsync(InfrastructureTestData.NewPerson("nested-ok-inner@example.com", department));
                     inner.Complete();
@@ -210,7 +277,7 @@ namespace Test.Shared
             await InfrastructureTestData.ClearDepartmentAsync(people, department);
             await categories.DeleteManyAsync(c => c.Name == categoryName);
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(people))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(people))
             {
                 await people.CreateAsync(InfrastructureTestData.NewPerson("two-types@example.com", department));
                 await categories.CreateAsync(new Category { Name = categoryName, Description = "scope" });
@@ -235,7 +302,7 @@ namespace Test.Shared
             await InfrastructureTestData.ClearDepartmentAsync(people, department);
             await categories.DeleteManyAsync(c => c.Name == categoryName);
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(categories))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(categories))
             {
                 await people.CreateAsync(InfrastructureTestData.NewPerson("two-types-ok@example.com", department));
                 await categories.CreateAsync(new Category { Name = categoryName, Description = "scope" });
@@ -260,12 +327,12 @@ namespace Test.Shared
 
             await repository.ExecuteInTransactionScopeAsync(async () =>
             {
-                Assert.NotNull(TransactionScope.Current);
+                Assert.NotNull(AmbientTransactionScope.Current);
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("exec-ok-1@example.com", department));
                 await repository.CreateAsync(InfrastructureTestData.NewPerson("exec-ok-2@example.com", department));
             });
 
-            Assert.Null(TransactionScope.Current);
+            Assert.Null(AmbientTransactionScope.Current);
             Assert.Equal(2, await repository.CountAsync(p => p.Department == department));
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
         }
@@ -288,7 +355,7 @@ namespace Test.Shared
                 }));
 
             Assert.Equal("boom", thrown.Message);
-            Assert.Null(TransactionScope.Current);
+            Assert.Null(AmbientTransactionScope.Current);
             Assert.Equal(0, await repository.CountAsync(p => p.Department == department));
         }
 
@@ -327,7 +394,7 @@ namespace Test.Shared
 
             using (SqliteRepository<Person> foreign = new SqliteRepository<Person>("Data Source=:memory:"))
             {
-                using (TransactionScope scope = await TransactionScope.CreateAsync(foreign))
+                using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(foreign))
                 {
                     await repository.CreateAsync(InfrastructureTestData.NewPerson("foreign-scope@example.com", department));
                 }

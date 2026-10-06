@@ -58,11 +58,11 @@ namespace Durable.Conformance
             Assert.NotNull(gardenAsync);
             Assert.Equal("Garden", gardenAsync.Category);
             Assert.NotNull(f.Items.ReadFirst());
-            Assert.NotNull(await f.Items.ReadFirstOrDefaultAsync(null, null, Token));
+            Assert.NotNull(await f.Items.ReadFirstAsync(null, null, Token));
             Assert.Null(f.Items.ReadFirst(x => x.Category == "None"));
-            Assert.Null(f.Items.ReadFirstOrDefault(x => x.Category == "None"));
+            Assert.Null(f.Items.ReadFirst(x => x.Category == "None"));
             Assert.Null(await f.Items.ReadFirstAsync(x => x.Category == "None", null, Token));
-            Assert.Null(await f.Items.ReadFirstOrDefaultAsync(x => x.Category == "None", null, Token));
+            Assert.Null(await f.Items.ReadFirstAsync(x => x.Category == "None", null, Token));
         }
 
         [ConformanceTest(Description = "ReadSingle returns the only match; zero or several matches throw InvalidOperationException")]

@@ -43,7 +43,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
 
             repository.InitializeTable(typeof(Product));
 
@@ -74,7 +74,7 @@ namespace Test.Shared
         {
             ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
 
             await repository.InitializeTableAsync(typeof(Employee));
 
@@ -105,25 +105,51 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
 
-            List<string> errors = new List<string>();
-            List<string> warnings = new List<string>();
+            TableValidationResult result = repository.ValidateTable(typeof(Product));
+            Assert.True(result.IsValid, $"Table validation failed. Errors: {string.Join(", ", result.Errors)}");
+            Assert.Empty(result.Errors);
+            Assert.True(result.TableExists);
+            Assert.Equal("products", result.TableName);
 
-            bool isValid = repository.ValidateTable(typeof(Product), out errors, out warnings);
+            TableValidationResult asyncResult = await repository.ValidateTableAsync(typeof(Product));
+            Assert.True(asyncResult.IsValid, $"Async table validation failed. Errors: {string.Join(", ", asyncResult.Errors)}");
+            Assert.True(asyncResult.TableExists);
+            Assert.Equal(result.Warnings.Count, asyncResult.Warnings.Count);
+        }
 
-            Assert.True(isValid, $"Table validation failed. Errors: {string.Join(", ", errors)}");
-            Assert.Empty(errors);
+        /// <summary>
+        /// ValidateTable[Async] reports a mapped column missing from the table as an error and an unmapped table column
+        /// as a warning, and reports a table that does not exist as valid with <c>TableExists</c> false.
+        /// </summary>
+        [Fact]
+        public async Task ValidateTableReportsMissingColumnsAndUnmappedColumns()
+        {
+            ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
 
-            Console.WriteLine($"     Table 'products' validated successfully. Warnings: {warnings.Count}");
+            TableValidationResult missing = await repository.ValidateTableAsync(typeof(Product));
+            Assert.True(missing.IsValid);
+            Assert.False(missing.TableExists);
 
-            if (warnings.Count > 0)
+            await repository.ExecuteSqlRawAsync("CREATE TABLE products (id INT PRIMARY KEY, extra_column INT)");
+            try
             {
-                foreach (string warning in warnings)
-                {
-                    Console.WriteLine($"     Warning: {warning}");
-                }
+                TableValidationResult result = await repository.ValidateTableAsync(typeof(Product));
+                Assert.False(result.IsValid);
+                Assert.True(result.TableExists);
+                Assert.Contains(result.Errors, e => e.Contains("'name'"));
+                Assert.Contains(result.Warnings, w => w.Contains("extra_column"));
+
+                TableValidationResult sync = repository.ValidateTable(typeof(Product));
+                Assert.Equal(result.Errors.Count, sync.Errors.Count);
+                Assert.Equal(result.Warnings.Count, sync.Warnings.Count);
+            }
+            finally
+            {
+                await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             }
         }
 
@@ -136,22 +162,21 @@ namespace Test.Shared
             ISqlRepository<Product> productRepo = _Provider.CreateRepository<Product>();
             ISqlRepository<Employee> employeeRepo = _Provider.CreateRepository<Employee>();
 
-            await productRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
-            await employeeRepo.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await productRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
+            await employeeRepo.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
 
             productRepo.InitializeTable(typeof(Product));
             employeeRepo.InitializeTable(typeof(Employee));
 
-            List<string> errors = new List<string>();
-            List<string> warnings = new List<string>();
-
             Type[] types = new[] { typeof(Product), typeof(Employee) };
-            bool isValid = productRepo.ValidateTables(types, out errors, out warnings);
+            SchemaValidationResult result = productRepo.ValidateTables(types);
+            Assert.True(result.IsValid, $"Tables validation failed. Errors: {string.Join(", ", result.Errors)}");
+            Assert.Empty(result.Errors);
+            Assert.Equal(2, result.Tables.Count);
 
-            Assert.True(isValid, $"Tables validation failed. Errors: {string.Join(", ", errors)}");
-            Assert.Empty(errors);
-
-            Console.WriteLine($"     {types.Length} tables validated successfully. Warnings: {warnings.Count}");
+            SchemaValidationResult asyncResult = await productRepo.ValidateTablesAsync(types);
+            Assert.True(asyncResult.IsValid, $"Async tables validation failed. Errors: {string.Join(", ", asyncResult.Errors)}");
+            Assert.All(asyncResult.Tables, t => Assert.True(t.TableExists));
         }
 
         /// <summary>
@@ -162,7 +187,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
 
             repository.CreateIndexes(typeof(Product));
@@ -190,7 +215,7 @@ namespace Test.Shared
         {
             ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
 
             await repository.CreateIndexesAsync(typeof(Employee));
@@ -218,7 +243,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
             repository.CreateIndexes(typeof(Product));
 
@@ -238,7 +263,7 @@ namespace Test.Shared
         {
             ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
             await repository.CreateIndexesAsync(typeof(Employee));
 
@@ -258,7 +283,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
             repository.CreateIndexes(typeof(Product));
 
@@ -295,7 +320,7 @@ namespace Test.Shared
         {
             ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
             await repository.CreateIndexesAsync(typeof(Employee));
 
@@ -332,7 +357,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
             repository.CreateIndexes(typeof(Product));
 
@@ -362,7 +387,7 @@ namespace Test.Shared
         {
             ISqlRepository<Employee> repository = _Provider.CreateRepository<Employee>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS employees");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS employees");
             await repository.InitializeTableAsync(typeof(Employee));
             await repository.CreateIndexesAsync(typeof(Employee));
 
@@ -391,7 +416,7 @@ namespace Test.Shared
         {
             ISqlRepository<Product> repository = _Provider.CreateRepository<Product>();
 
-            await repository.ExecuteSqlAsync("DROP TABLE IF EXISTS products");
+            await repository.ExecuteSqlRawAsync("DROP TABLE IF EXISTS products");
             repository.InitializeTable(typeof(Product));
             repository.CreateIndexes(typeof(Product));
 

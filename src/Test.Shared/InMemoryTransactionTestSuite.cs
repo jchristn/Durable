@@ -163,7 +163,7 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// Ambient TransactionScope: operations without an explicit transaction join it; Complete commits, disposing
+        /// Ambient AmbientTransactionScope: operations without an explicit transaction join it; Complete commits, disposing
         /// without Complete rolls back; a scope from another backend is ignored.
         /// </summary>
         [Fact]
@@ -172,14 +172,14 @@ namespace Test.Shared
             InMemoryBackend backend = InMemoryBackend.Create();
             InMemoryRepository<RelTenantNote> repository = backend.CreateRepository<RelTenantNote>();
 
-            using (TransactionScope scope = TransactionScope.Create(repository))
+            using (AmbientTransactionScope scope = AmbientTransactionScope.Create(repository))
             {
                 repository.Create(new RelTenantNote { Title = "scoped" });
                 Assert.Equal(1, repository.Count());
                 scope.Complete();
             }
 
-            using (TransactionScope scope = await TransactionScope.CreateAsync(repository))
+            using (AmbientTransactionScope scope = await AmbientTransactionScope.CreateAsync(repository))
             {
                 await repository.CreateAsync(new RelTenantNote { Title = "discarded" });
                 Assert.Equal(2, await repository.CountAsync());
@@ -188,7 +188,7 @@ namespace Test.Shared
             Assert.Equal(new[] { "scoped" }, repository.ReadAll().Select(x => x.Title).ToArray());
 
             InMemoryRepository<RelTenantNote> other = InMemoryBackend.Create().CreateRepository<RelTenantNote>();
-            using (TransactionScope foreign = TransactionScope.Create(other))
+            using (AmbientTransactionScope foreign = AmbientTransactionScope.Create(other))
             {
                 repository.Create(new RelTenantNote { Title = "outside foreign scope" });
             }

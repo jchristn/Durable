@@ -44,7 +44,7 @@ namespace Test.Shared
         public static async Task RecreateTableAsync<T>(ISqlRepository<T> repository) where T : class, new()
         {
             ArgumentNullException.ThrowIfNull(repository);
-            await repository.ExecuteSqlAsync(DropTableSql(repository.Dialect, repository.Metadata.TableName)).ConfigureAwait(false);
+            await repository.ExecuteSqlRawAsync(DropTableSql(repository.Dialect, repository.Metadata.TableName)).ConfigureAwait(false);
             repository.InitializeTable(typeof(T));
         }
 

@@ -18,7 +18,7 @@ namespace Durable.Query
     /// Observable behavior matches the SQL repositories: return values, exception types and messages, key handling
     /// (a scalar id, or an <see cref="object"/> array for composite keys), generated-key write-back, optimistic
     /// concurrency with <see cref="ConflictResolver"/>, version bumps on set-based updates, soft delete, query filters,
-    /// upsert and transactions (explicit, or the ambient <see cref="TransactionScope.Current"/>).
+    /// upsert and transactions (explicit, or the ambient <see cref="AmbientTransactionScope.Current"/>).
     /// <para>
     /// Capabilities: entities with composite keys require <see cref="RepositoryCapabilities.CompositeKeys"/> and entities
     /// with a version column require <see cref="RepositoryCapabilities.OptimisticConcurrency"/> (checked by the
@@ -165,12 +165,6 @@ namespace Durable.Query
         }
 
         /// <inheritdoc />
-        public T? ReadFirstOrDefault(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null)
-        {
-            return ReadFirst(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public T ReadSingle(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -212,12 +206,6 @@ namespace Durable.Query
             QueryBuilder<T> query = NewQuery(transaction);
             if (predicate != null) query.Where(predicate);
             return (await query.Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
-        }
-
-        /// <inheritdoc />
-        public Task<T?> ReadFirstOrDefaultAsync(Expression<Func<T, bool>>? predicate = null, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return ReadFirstAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
@@ -552,12 +540,6 @@ namespace Durable.Query
         }
 
         /// <inheritdoc />
-        public int BatchDelete(Expression<Func<T, bool>> predicate, ITransaction? transaction = null)
-        {
-            return DeleteMany(predicate, transaction);
-        }
-
-        /// <inheritdoc />
         public async Task<bool> DeleteAsync(T entity, ITransaction? transaction = null, CancellationToken token = default)
         {
             ArgumentNullException.ThrowIfNull(entity);
@@ -582,12 +564,6 @@ namespace Durable.Query
         public Task<int> DeleteAllAsync(ITransaction? transaction = null, CancellationToken token = default)
         {
             return NewQuery(transaction).DeleteAsync(token);
-        }
-
-        /// <inheritdoc />
-        public Task<int> BatchDeleteAsync(Expression<Func<T, bool>> predicate, ITransaction? transaction = null, CancellationToken token = default)
-        {
-            return DeleteManyAsync(predicate, transaction, token);
         }
 
         /// <inheritdoc />
@@ -673,7 +649,7 @@ namespace Durable.Query
 
         /// <summary>
         /// Resolves the transaction an operation runs in: the explicit transaction, otherwise the ambient
-        /// <see cref="TransactionScope.Current"/> transaction when it is not completed and <see cref="AcceptsAmbientTransaction"/>
+        /// <see cref="AmbientTransactionScope.Current"/> transaction when it is not completed and <see cref="AcceptsAmbientTransaction"/>
         /// accepts it, otherwise null.
         /// </summary>
         /// <param name="transaction">Explicit transaction; may be null.</param>
@@ -681,7 +657,7 @@ namespace Durable.Query
         protected internal virtual ITransaction? ResolveTransaction(ITransaction? transaction)
         {
             if (transaction != null) return transaction;
-            TransactionScope? scope = TransactionScope.Current;
+            AmbientTransactionScope? scope = AmbientTransactionScope.Current;
             if (scope == null) return null;
             ITransaction ambient;
             try
@@ -835,7 +811,7 @@ namespace Durable.Query
             T? current = (await NewQuery(transaction).WhereKey(key).Take(1).ExecuteAsync(token).ConfigureAwait(false)).FirstOrDefault();
             T resolved = synchronousResolver
                 ? ResolveConflict(entity, current, key)
-                : await ResolveConflictAsync(entity, current, key).ConfigureAwait(false);
+                : await ResolveConflictAsync(entity, current, key, token).ConfigureAwait(false);
             return await UpdateCoreAsync(resolved, transaction, synchronousResolver, token).ConfigureAwait(false);
         }
 
@@ -933,11 +909,8 @@ namespace Durable.Query
                         false,
                         version.PropertyType)));
                     break;
-                case VersionColumnType.Timestamp:
-                    assignments.Add(new FieldAssignment(version, new ValueNode(DateTime.UtcNow, version, version.PropertyType)));
-                    break;
-                case VersionColumnType.Guid:
-                    assignments.Add(new FieldAssignment(version, new ValueNode(Guid.NewGuid(), version, version.PropertyType)));
+                default:
+                    assignments.Add(new FieldAssignment(version, new ValueNode(Metadata.VersionInfo.CreateSetBasedVersion(), version, version.PropertyType)));
                     break;
             }
         }
@@ -975,7 +948,7 @@ namespace Durable.Query
             return result;
         }
 
-        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key)
+        private async Task<T> ResolveConflictAsync(T incoming, T? current, object?[] key, CancellationToken token)
         {
             if (current == null)
                 throw new OptimisticConcurrencyException("Entity " + typeof(T).Name + " with key " + FormatKey(key) + " was deleted by another process.");
@@ -984,9 +957,13 @@ namespace Durable.Query
             TryResolveConflictResult<T> outcome;
             try
             {
-                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy).ConfigureAwait(false);
+                outcome = await _ConflictResolver.TryResolveConflictAsync(current, incoming, original, _ConflictResolver.DefaultStrategy, token).ConfigureAwait(false);
             }
             catch (OptimisticConcurrencyException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
             {
                 throw;
             }

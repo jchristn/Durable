@@ -10,7 +10,7 @@ namespace Durable.LiteGraph
     /// <see cref="IRepository{T}"/> surface from <see cref="RepositoryBase{T}"/>, with each entity row stored as a node
     /// labelled with the entity's table name and foreign keys maintained as edges. Repositories created over the same
     /// backend share the graph, so includes, navigation predicates and transactions work across entity types. An ambient
-    /// <see cref="TransactionScope"/> is used only when its transaction was created by the same backend. The repository
+    /// <see cref="AmbientTransactionScope"/> is used only when its transaction was created by the same backend. The repository
     /// never disposes the backend.
     /// Thread safety: safe for concurrent use once configured (see <see cref="RepositoryBase{T}"/>).
     /// </summary>

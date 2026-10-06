@@ -23,14 +23,12 @@
             </summary>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when set below 1.</exception>
         </member>
-        <member name="P:Durable.Sql.BatchInsertConfiguration.EnablePreparedStatementReuse">
-            <summary>
-            Gets or sets whether prepared statements are reused across batches where the provider benefits. Default: true.
-            </summary>
-        </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.EnableMultiRowInsert">
             <summary>
-            Gets or sets whether multi-row INSERT syntax is used. When false, rows are inserted one statement at a time. Default: true.
+            Gets or sets whether multi-row INSERT syntax (<c>INSERT ... VALUES (...), (...)</c>) is used for entities without a
+            generated key. When false, each row gets its own INSERT statement; the statements of one chunk
+            (<see cref="P:Durable.Sql.BatchInsertConfiguration.MaxRowsPerBatch"/> rows) are still sent as one command. Entities with a generated key always use one
+            statement per row so keys can be read back. Default: true.
             </summary>
         </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.Default">
@@ -50,7 +48,8 @@
         </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.Compatible">
             <summary>
-            Gets a new instance that inserts one row per statement.
+            Gets a new instance that inserts one row per statement and per command (no multi-row syntax), for databases or
+            proxies that reject batched statements.
             </summary>
         </member>
         <member name="T:Durable.Sql.ColumnReference">
@@ -452,32 +451,26 @@
         </member>
         <member name="T:Durable.Sql.IBatchInsertConfiguration">
             <summary>
-            Configuration interface for batch insert optimizations.
-            Repository implementations can optionally implement this to customize batch behavior.
+            Batch insert settings read by SQL repositories (<see cref="P:Durable.Sql.SqlRepositoryOptions.BatchConfiguration"/>) for
+            <c>CreateMany</c>. <see cref="T:Durable.Sql.BatchInsertConfiguration"/> is the standard implementation.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.MaxRowsPerBatch">
             <summary>
-            Gets the maximum number of rows to include in a single multi-row INSERT statement.
-            Default is typically 500-1000 depending on the database provider.
+            Gets the maximum number of rows per INSERT command (multi-row statement or batch of single-row statements).
+            Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.MaxParametersPerStatement">
             <summary>
-            Gets the maximum number of parameters per INSERT statement.
-            Some databases have limits (e.g., SQLite has a default limit of 999 parameters).
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.IBatchInsertConfiguration.EnablePreparedStatementReuse">
-            <summary>
-            Gets whether to use prepared statement reuse for batch operations.
-            When true, the same prepared statement is reused across batches.
+            Gets the maximum number of parameters per INSERT command. The effective limit never exceeds the dialect's
+            <see cref="P:Durable.Sql.ISqlDialect.MaxParameters"/>. Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.EnableMultiRowInsert">
             <summary>
-            Gets whether to use multi-row INSERT syntax when possible.
-            When false, falls back to individual INSERT statements in a transaction.
+            Gets whether to use multi-row INSERT syntax for entities without a generated key. When false, each row gets its
+            own INSERT statement (the statements of one chunk are still sent as one command).
             </summary>
         </member>
         <member name="T:Durable.Sql.ICaseExpressionBuilder`1">
@@ -494,6 +487,7 @@
             <param name="condition">Condition. Must not be null.</param>
             <param name="result">Result value; may be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when condition is null.</exception>
         </member>
         <member name="M:Durable.Sql.ICaseExpressionBuilder`1.WhenRaw(System.String,System.Object)">
             <summary>
@@ -502,6 +496,7 @@
             <param name="condition">Condition SQL. Must not be null.</param>
             <param name="result">Result value; may be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when condition is null.</exception>
         </member>
         <member name="M:Durable.Sql.ICaseExpressionBuilder`1.Else(System.Object)">
             <summary>
@@ -517,6 +512,7 @@
             <param name="alias">Column alias. Must not be null; letters, digits and underscores.</param>
             <returns>The query builder.</returns>
             <exception cref="T:System.ArgumentException">Thrown when alias is invalid or no WHEN branch was added.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when alias is null.</exception>
         </member>
         <member name="T:Durable.Sql.IConnectionFactory">
             <summary>
@@ -527,7 +523,8 @@
         </member>
         <member name="M:Durable.Sql.IConnectionFactory.OpenConnection">
             <summary>
-            Opens a connection.
+            Opens a connection. The caller owns and disposes it (disposal returns it to the driver's pool). When a
+            concurrency limit is configured, waits up to the factory's acquire timeout for a free slot.
             </summary>
             <returns>An open connection owned by the caller.</returns>
             <exception cref="T:System.ObjectDisposedException">Thrown when the factory is disposed.</exception>
@@ -629,7 +626,10 @@
         </member>
         <member name="T:Durable.Sql.ISavepoint">
             <summary>
-            A savepoint within an <see cref="T:Durable.Sql.ISqlTransaction"/>. Disposing an unreleased savepoint does nothing; roll back explicitly.
+            A savepoint within an <see cref="T:Durable.Sql.ISqlTransaction"/>. A savepoint is not a resource: it is not disposable and ends
+            with its transaction. Call <see cref="M:Durable.Sql.ISavepoint.Rollback"/> (or <see cref="M:Durable.Sql.ISavepoint.RollbackAsync(System.Threading.CancellationToken)"/>) to undo the work done after it,
+            or <see cref="M:Durable.Sql.ISavepoint.Release"/> (or <see cref="M:Durable.Sql.ISavepoint.ReleaseAsync(System.Threading.CancellationToken)"/>) to keep it; doing neither keeps the work, which then
+            commits or rolls back with the transaction.
             Thread safety: not thread-safe.
             </summary>
         </member>
@@ -642,30 +642,38 @@
             <summary>
             Releases the savepoint, keeping its changes. A no-op on databases without a release statement.
             </summary>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the transaction ended).</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.Rollback">
             <summary>
-            Rolls back changes made after the savepoint.
+            Rolls back changes made after the savepoint. The transaction stays active.
             </summary>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the savepoint was released).</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.ReleaseAsync(System.Threading.CancellationToken)">
             <summary>
-            Releases the savepoint, keeping its changes.
+            Releases the savepoint, keeping its changes. A no-op on databases without a release statement.
             </summary>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the transaction ended).</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.Sql.ISavepoint.RollbackAsync(System.Threading.CancellationToken)">
             <summary>
-            Rolls back changes made after the savepoint.
+            Rolls back changes made after the savepoint. The transaction stays active.
             </summary>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.Data.Common.DbException">Thrown when the database rejects the statement (for example the savepoint was released).</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="T:Durable.Sql.ISqlCapture">
             <summary>
-            Provides the ability to capture and expose the last executed SQL statement.
-            This interface is optional and can be implemented by repositories that support SQL tracking.
+            Exposes the last SQL statement a repository executed, for debugging and logging. Every SQL repository implements
+            it. Capture is per async flow: concurrent operations on one repository each see their own last statement. To get
+            the SQL of a single call without turning capture on, use the <c>*WithQuery</c> extensions or
+            <see cref="T:Durable.Sql.SqlCaptureScope"/>.
             </summary>
         </member>
         <member name="P:Durable.Sql.ISqlCapture.LastExecutedSql">
@@ -683,8 +691,8 @@
         </member>
         <member name="P:Durable.Sql.ISqlCapture.CaptureSql">
             <summary>
-            Gets or sets whether SQL statements should be captured and stored.
-            Default value is false for performance reasons.
+            Gets or sets whether executed SQL is captured for <see cref="P:Durable.Sql.ISqlCapture.LastExecutedSql"/>. Default: false (initialized from
+            <see cref="P:Durable.Sql.SqlRepositoryOptions.CaptureSql"/>).
             </summary>
         </member>
         <member name="T:Durable.Sql.ISqlCommandInterceptor">
@@ -995,6 +1003,19 @@
             Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsNthValue">
+            <summary>
+            Gets whether the NTH_VALUE window function is supported. When false,
+            <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets">
+            <summary>
+            Gets whether RANGE window frames accept numeric offsets (<c>RANGE BETWEEN n PRECEDING AND m FOLLOWING</c>).
+            When false, <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Range(System.Int32,System.Int32)"/> throws <see cref="T:System.NotSupportedException"/>;
+            UNBOUNDED and CURRENT ROW bounds remain available.
+            </summary>
+        </member>
         <member name="P:Durable.Sql.ISqlDialect.MaxIdentifierLength">
             <summary>
             Gets the maximum identifier length. Longer names are truncated (PostgreSQL) or rejected by the database;
@@ -1181,6 +1202,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.Intersect(Durable.IQueryBuilder{`0})">
             <summary>
@@ -1188,6 +1210,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.Except(Durable.IQueryBuilder{`0})">
             <summary>
@@ -1195,6 +1218,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereIn``2(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``1},System.Linq.Expressions.Expression{System.Func{``1,``0}})">
             <summary>
@@ -1206,6 +1230,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotIn``2(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``1},System.Linq.Expressions.Expression{System.Func{``1,``0}})">
             <summary>
@@ -1217,6 +1242,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String,System.Object[])">
             <summary>
@@ -1224,9 +1250,10 @@
             </summary>
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key on this entity. Must not be null.</param>
-            <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
+            <param name="subquerySql">Subquery SQL; <c>{0}</c>, <c>{1}</c>... bind <paramref name="parameters"/> (see <see cref="T:Durable.Sql.RawSql"/>). Must not be null.</param>
             <param name="parameters">Placeholder values.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String,System.Object[])">
             <summary>
@@ -1234,9 +1261,10 @@
             </summary>
             <typeparam name="TKey">Key type.</typeparam>
             <param name="keySelector">Key on this entity. Must not be null.</param>
-            <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
+            <param name="subquerySql">Subquery SQL; <c>{0}</c>, <c>{1}</c>... bind <paramref name="parameters"/> (see <see cref="T:Durable.Sql.RawSql"/>). Must not be null.</param>
             <param name="parameters">Placeholder values.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereExists``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{`0,``0,System.Boolean}})">
             <summary>
@@ -1247,6 +1275,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated EXISTS.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotExists``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{`0,``0,System.Boolean}})">
             <summary>
@@ -1256,14 +1285,28 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated NOT EXISTS.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereSql(System.FormattableString)">
+            <summary>
+            Adds a SQL condition written as an interpolated string, for example
+            <c>WhereSql($"t0.price BETWEEN {min} AND {max}")</c>. Every hole becomes a bound parameter (see
+            <see cref="T:Durable.Sql.RawSql"/>), so values cannot inject SQL; columns may be referenced unqualified or as <c>t0.column</c>.
+            </summary>
+            <param name="condition">Interpolated condition. Must not be null.</param>
+            <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when condition is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereRaw(System.String,System.Object[])">
             <summary>
-            Adds a raw SQL condition. <c>{0}</c>, <c>{1}</c>... placeholders are bound as parameters; columns may be
-            referenced unqualified or as <c>t0.column</c>.
+            Adds a SQL condition from text. <c>{0}</c>, <c>{1}</c>... bind the corresponding <paramref name="parameters"/>
+            and <c>{{</c>/<c>}}</c> are literal braces; without parameters the text is used verbatim (see
+            <see cref="T:Durable.Sql.RawSql"/>). Columns may be referenced unqualified or as <c>t0.column</c>. Never concatenate untrusted
+            values into <paramref name="sql"/>; prefer <see cref="M:Durable.Sql.ISqlQueryBuilder`1.WhereSql(System.FormattableString)"/>.
             </summary>
             <param name="sql">Condition SQL. Must not be null.</param>
-            <param name="parameters">Placeholder values.</param>
+            <param name="parameters">Placeholder values; may be empty.</param>
             <returns>This builder.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
@@ -1273,6 +1316,7 @@
             </summary>
             <param name="sql">Select list SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.FromRaw(System.String)">
             <summary>
@@ -1281,6 +1325,7 @@
             </summary>
             <param name="sql">FROM source SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.JoinRaw(System.String)">
             <summary>
@@ -1288,6 +1333,7 @@
             </summary>
             <param name="sql">JOIN clause including the JOIN keyword. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithCte(System.String,System.String)">
             <summary>
@@ -1296,6 +1342,7 @@
             <param name="cteName">CTE name. Must not be null.</param>
             <param name="cteQuery">CTE body SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName or cteQuery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithRecursiveCte(System.String,System.String,System.String)">
             <summary>
@@ -1305,6 +1352,7 @@
             <param name="anchorQuery">Anchor member SQL. Must not be null.</param>
             <param name="recursiveQuery">Recursive member SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName, anchorQuery or recursiveQuery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithWindowFunction(System.String,System.String,System.String)">
             <summary>
@@ -1314,6 +1362,7 @@
             <param name="partitionBy">Raw PARTITION BY list; null for none.</param>
             <param name="orderBy">Raw ORDER BY list; null for none.</param>
             <returns>A window builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when functionName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.SelectCase">
             <summary>
@@ -1383,149 +1432,295 @@
             <param name="token">Cancellation token.</param>
             <returns>The transaction.</returns>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromSql(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSql(System.FormattableString,Durable.ITransaction)">
             <summary>
-            Executes raw SQL and maps rows to entities by column name. Results are streamed.
+            Executes an interpolated SQL query and maps rows to entities by column name. Every interpolation hole becomes a
+            bound parameter (see <see cref="T:Durable.Sql.RawSql"/>), so values can never inject SQL; use <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/> when
+            the SQL text itself is dynamic. Results are streamed.
             </summary>
-            <param name="sql">SQL. Must not be null.</param>
+            <param name="sql">Interpolated SQL, for example <c>$"SELECT * FROM people WHERE age &gt; {minAge}"</c>. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Values for @p0, @p1...; <see cref="T:Durable.Sql.SqlParameterValue"/> instances keep their names.</param>
             <returns>Entities.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromSql``1(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Executes raw SQL and maps rows to <typeparamref name="TResult"/>: by column name for classes (matching
-            column names, property names, or names ignoring case and underscores), or the first column for scalar types
-            (including <see cref="T:System.String"/>). Class result types need a parameterless constructor.
+            Executes an interpolated SQL query and streams entities. Every hole becomes a bound parameter.
             </summary>
-            <typeparam name="TResult">Result type.</typeparam>
-            <param name="sql">SQL. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
-            <returns>Results, streamed.</returns>
-        </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSql(System.String,Durable.ITransaction,System.Object[])">
-            <summary>
-            Executes raw SQL that returns no rows.
-            </summary>
-            <param name="sql">SQL. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
-            <returns>Rows affected.</returns>
-        </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalar``1(System.String,Durable.ITransaction,System.Object[])">
-            <summary>
-            Executes raw SQL and returns the first column of the first row converted to <typeparamref name="TResult"/>.
-            </summary>
-            <typeparam name="TResult">Result type.</typeparam>
-            <param name="sql">SQL. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
-            <returns>The value, or default when no row or null.</returns>
-        </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
-            <summary>
-            Executes raw SQL and streams entities.
-            </summary>
-            <param name="sql">SQL. Must not be null.</param>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
             <returns>Entities.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSql``1(System.FormattableString,Durable.ITransaction)">
             <summary>
-            Executes raw SQL and streams <typeparamref name="TResult"/> rows.
+            Executes an interpolated SQL query and maps rows to <typeparamref name="TResult"/>: by column name for classes
+            (matching column names, property names, or names ignoring case and underscores), or the first column for scalar
+            types (including <see cref="T:System.String"/>). Class result types need a parameterless constructor. Every hole becomes a
+            bound parameter.
             </summary>
             <typeparam name="TResult">Result type.</typeparam>
-            <param name="sql">SQL. Must not be null.</param>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>Results, streamed.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync``1(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes an interpolated SQL query and streams <typeparamref name="TResult"/> rows (mapping as for
+            <see cref="M:Durable.Sql.ISqlRepository`1.FromSql``1(System.FormattableString,Durable.ITransaction)"/>).
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
             <returns>Results.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
             <summary>
-            Executes raw SQL that returns no rows.
+            Executes SQL text and maps rows to entities by column name. <c>{0}</c>, <c>{1}</c>... bind the corresponding
+            <paramref name="parameters"/> (see <see cref="T:Durable.Sql.RawSql"/>); without parameters the text is sent verbatim. Never
+            concatenate untrusted values into <paramref name="sql"/>. Results are streamed.
             </summary>
             <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none. <see cref="T:Durable.Sql.SqlParameterValue"/> values keep their names.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>Entities.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes SQL text and streams entities. Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
+            </summary>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
-            <returns>Rows affected.</returns>
+            <returns>Entities.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalarAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlRaw``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
             <summary>
-            Executes raw SQL and returns the first column of the first row.
+            Executes SQL text and maps rows to <typeparamref name="TResult"/> (mapping as for
+            <see cref="M:Durable.Sql.ISqlRepository`1.FromSql``1(System.FormattableString,Durable.ITransaction)"/>, placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>).
             </summary>
             <typeparam name="TResult">Result type.</typeparam>
             <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>Results, streamed.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.FromSqlRawAsync``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes SQL text and streams <typeparamref name="TResult"/> rows.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
-            <returns>The value, or default.</returns>
+            <returns>Results.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultiple(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSql(System.FormattableString,Durable.ITransaction)">
             <summary>
-            Executes raw SQL returning several result sets; read them in order from the returned reader.
+            Executes an interpolated SQL statement that returns no rows. Every hole becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSqlAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes an interpolated SQL statement that returns no rows. Every hole becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
+            <summary>
+            Executes SQL text that returns no rows (DDL, set-based DML). Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>;
+            without parameters the text is sent verbatim.
+            </summary>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteSqlRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes SQL text that returns no rows. Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
+            </summary>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalar``1(System.FormattableString,Durable.ITransaction)">
+            <summary>
+            Executes an interpolated SQL query and returns the first column of the first row converted to
+            <typeparamref name="TResult"/>. Every hole becomes a bound parameter.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The value, or default when there is no row or the value is null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalarAsync``1(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes an interpolated SQL query and returns the first column of the first row. Every hole becomes a bound
+            parameter.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The value, or default.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalarRaw``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
+            <summary>
+            Executes SQL text and returns the first column of the first row converted to <typeparamref name="TResult"/>.
+            Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The value, or default when there is no row or the value is null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalarRawAsync``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes SQL text and returns the first column of the first row. Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
+            </summary>
+            <typeparam name="TResult">Result type.</typeparam>
+            <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The value, or default.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultiple(System.FormattableString,Durable.ITransaction)">
+            <summary>
+            Executes interpolated SQL returning several result sets; read them in order from the returned reader. Every hole
+            becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL with multiple SELECT statements. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultipleAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes interpolated SQL returning several result sets. Every hole becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultipleRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
+            <summary>
+            Executes SQL text returning several result sets. Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
             </summary>
             <param name="sql">SQL with multiple SELECT statements. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
             <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultipleAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.QueryMultipleRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Executes raw SQL returning several result sets.
+            Executes SQL text returning several result sets. Placeholders as for <see cref="M:Durable.Sql.ISqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)"/>.
             </summary>
             <param name="sql">SQL. Must not be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Values for @p0, @p1....</param>
             <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteProcedure(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteProcedure(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction)">
             <summary>
             Executes a stored procedure that returns no rows. Output parameters are populated after execution.
             </summary>
             <param name="procedureName">Procedure name. Must not be null.</param>
+            <param name="parameters">Named parameters; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Named parameters.</param>
             <returns>Rows affected as reported by the database.</returns>
             <exception cref="T:System.NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromProcedure``1(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteProcedureAsync(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Executes a stored procedure that returns no rows. Output parameters are populated after execution.
+            </summary>
+            <param name="procedureName">Procedure name. Must not be null.</param>
+            <param name="parameters">Named parameters; null for none.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows affected.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.FromProcedure``1(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction)">
             <summary>
             Executes a stored procedure and maps its first result set to <typeparamref name="TResult"/>.
             </summary>
             <typeparam name="TResult">Result type.</typeparam>
             <param name="procedureName">Procedure name. Must not be null.</param>
+            <param name="parameters">Named parameters; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
-            <param name="parameters">Named parameters.</param>
             <returns>Results, buffered.</returns>
             <exception cref="T:System.NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ExecuteProcedureAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.ISqlRepository`1.FromProcedureAsync``1(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Executes a stored procedure that returns no rows.
-            </summary>
-            <param name="procedureName">Procedure name. Must not be null.</param>
-            <param name="transaction">Transaction; may be null.</param>
-            <param name="token">Cancellation token.</param>
-            <param name="parameters">Named parameters.</param>
-            <returns>Rows affected.</returns>
-        </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.FromProcedureAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,Durable.Sql.SqlParameterValue[])">
-            <summary>
-            Executes a stored procedure and maps its first result set.
+            Executes a stored procedure and maps its first result set to <typeparamref name="TResult"/>.
             </summary>
             <typeparam name="TResult">Result type.</typeparam>
             <param name="procedureName">Procedure name. Must not be null.</param>
+            <param name="parameters">Named parameters; null for none.</param>
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
-            <param name="parameters">Named parameters.</param>
             <returns>Results, buffered.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.BulkInsert(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
             <summary>
@@ -1536,6 +1731,7 @@
             <param name="entities">Entities. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
             <returns>Rows inserted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.BulkInsertAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1545,6 +1741,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>Rows inserted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
             <summary>
@@ -1563,6 +1760,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
             <summary>
@@ -1570,6 +1768,7 @@
             </summary>
             <param name="entityTypes">Entity types. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1579,25 +1778,51 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)">
             <summary>
             Validates an entity mapping and, when its table exists, compares it with the table's columns.
-            Missing mapped columns are errors; unmapped table columns are warnings.
+            Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+            are warnings. A missing table is not an error (<see cref="M:Durable.Sql.ISqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)"/> creates it).
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
-            <param name="errors">Errors. Never null.</param>
-            <param name="warnings">Warnings. Never null.</param>
-            <returns>True when there are no errors.</returns>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
-        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
-            Validates several entity mappings.
+            Validates an entity mapping and, when its table exists, compares it with the table's columns.
+            Mapping problems and mapped columns missing from the table are errors; table columns the entity does not map
+            are warnings. A missing table is not an error (<see cref="M:Durable.Sql.ISqlRepository`1.InitializeTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/> creates it).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <summary>
+            Validates several entity mappings against the database (see <see cref="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)"/>).
             </summary>
             <param name="entityTypes">Entity types. Must not be null.</param>
-            <param name="errors">Errors. Never null.</param>
-            <param name="warnings">Warnings. Never null.</param>
-            <returns>True when there are no errors.</returns>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>The combined validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+        </member>
+        <member name="M:Durable.Sql.ISqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
+            <summary>
+            Validates several entity mappings against the database (see <see cref="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/>).
+            </summary>
+            <param name="entityTypes">Entity types. Must not be null.</param>
+            <param name="transaction">Transaction; may be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The combined validation result. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when <paramref name="token"/> is canceled.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
             <summary>
@@ -1605,6 +1830,7 @@
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateIndexesAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1614,6 +1840,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.DropIndex(System.String,Durable.ITransaction)">
             <summary>
@@ -1621,6 +1848,7 @@
             </summary>
             <param name="indexName">Index name. Must not be null or empty.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.DropIndexAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1630,6 +1858,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.GetIndexes(System.Type)">
             <summary>
@@ -1637,6 +1866,7 @@
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
             <returns>Index names. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.GetIndexesAsync(System.Type,System.Threading.CancellationToken)">
             <summary>
@@ -1645,6 +1875,7 @@
             <param name="entityType">Entity type. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>Index names. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateDatabaseIfNotExists">
             <summary>
@@ -1657,20 +1888,6 @@
             </summary>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
-        </member>
-        <member name="T:Durable.Sql.ISqlTrackingConfiguration">
-            <summary>
-            Provides configuration options for SQL tracking behavior on repository instances.
-            This interface is optional and allows repositories to expose per-instance SQL tracking settings.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.ISqlTrackingConfiguration.IncludeQueryInResults">
-            <summary>
-            Gets or sets whether query results should automatically include the executed SQL statement.
-            When true, repository operations will return IDurableResult objects containing both results and SQL.
-            When false, repository operations return standard result types without SQL information.
-            Default value is false for performance and backward compatibility.
-            </summary>
         </member>
         <member name="T:Durable.Sql.ISqlTransaction">
             <summary>
@@ -1750,6 +1967,7 @@
             <param name="defaultValue">The default value to return if no subsequent row is found.</param>
             <param name="alias">The alias for the lead column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Lag``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)">
             <summary>
@@ -1761,6 +1979,7 @@
             <param name="defaultValue">The default value to return if no previous row is found.</param>
             <param name="alias">The alias for the lag column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.FirstValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1770,6 +1989,7 @@
             <param name="column">The column to get the first value from.</param>
             <param name="alias">The alias for the first value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.LastValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1779,6 +1999,7 @@
             <param name="column">The column to get the last value from.</param>
             <param name="alias">The alias for the last value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)">
             <summary>
@@ -1789,6 +2010,9 @@
             <param name="n">The position of the value to retrieve (1-based).</param>
             <param name="alias">The alias for the nth value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when n is less than 1.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database has no NTH_VALUE function (<see cref="P:Durable.Sql.ISqlDialect.SupportsNthValue"/>; SQL Server).</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1798,6 +2022,7 @@
             <param name="column">The column to sum.</param>
             <param name="alias">The alias for the sum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Avg``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1807,6 +2032,7 @@
             <param name="column">The column to average.</param>
             <param name="alias">The alias for the average column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Count(System.String)">
             <summary>
@@ -1823,6 +2049,7 @@
             <param name="column">The column to find the minimum value from.</param>
             <param name="alias">The alias for the minimum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1832,6 +2059,7 @@
             <param name="column">The column to find the maximum value from.</param>
             <param name="alias">The alias for the maximum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.PartitionBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1840,6 +2068,7 @@
             <typeparam name="TKey">The type of the partition key.</typeparam>
             <param name="keySelector">The expression to partition by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1848,6 +2077,7 @@
             <typeparam name="TKey">The type of the order key.</typeparam>
             <param name="keySelector">The expression to order by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1856,6 +2086,7 @@
             <typeparam name="TKey">The type of the order key.</typeparam>
             <param name="keySelector">The expression to order by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Rows(System.Int32,System.Int32)">
             <summary>
@@ -1864,6 +2095,7 @@
             <param name="preceding">The number of preceding rows to include.</param>
             <param name="following">The number of following rows to include.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.RowsUnboundedPreceding">
             <summary>
@@ -1884,6 +2116,8 @@
             <param name="start">The start boundary of the window frame.</param>
             <param name="end">The end boundary of the window frame.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when start or end is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Range(System.Int32,System.Int32)">
             <summary>
@@ -1892,6 +2126,8 @@
             <param name="preceding">The preceding value range to include.</param>
             <param name="following">The following value range to include.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not accept numeric RANGE offsets (<see cref="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets"/>; SQL Server).</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.RangeUnboundedPreceding">
             <summary>
@@ -1912,6 +2148,8 @@
             <param name="start">The start boundary of the window frame.</param>
             <param name="end">The end boundary of the window frame.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when start or end is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.EndWindow">
             <summary>
@@ -2030,6 +2268,20 @@
             INTEGER PRIMARY KEY row id alias). False when the dialect does not report it.
             </summary>
         </member>
+        <member name="M:Durable.Sql.ColumnSchema.#ctor(System.String,System.String,System.Boolean,System.Nullable{System.Int32},System.Boolean,System.Int32)">
+            <summary>
+            Instantiates a column description that is not auto-increment (the 0.4.0 signature).
+            </summary>
+            <param name="name">Column name. Must not be null or empty.</param>
+            <param name="dataType">Declared type. Must not be null.</param>
+            <param name="isNullable">Whether the column accepts null.</param>
+            <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
+            <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
+            <param name="ordinal">Zero-based position. Minimum: 0.</param>
+            <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when dataType is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
+        </member>
         <member name="M:Durable.Sql.ColumnSchema.#ctor(System.String,System.String,System.Boolean,System.Nullable{System.Int32},System.Boolean,System.Int32,System.Boolean)">
             <summary>
             Instantiates a column description.
@@ -2040,7 +2292,7 @@
             <param name="maxLength">Maximum character length; -1 for unbounded; null when not applicable.</param>
             <param name="isPrimaryKey">Whether the column is part of the primary key.</param>
             <param name="ordinal">Zero-based position. Minimum: 0.</param>
-            <param name="isAutoIncrement">Whether the database generates the value on insert. Default: false.</param>
+            <param name="isAutoIncrement">Whether the database generates the value on insert.</param>
             <exception cref="T:System.ArgumentException">Thrown when name is null or empty.</exception>
             <exception cref="T:System.ArgumentNullException">Thrown when dataType is null.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when ordinal is negative.</exception>
@@ -2284,7 +2536,7 @@
             parameterized SQL and synchronizes schema on the migration's connection and transaction.
             <para>
             While a script is being generated (<see cref="P:Durable.Sql.MigrationContext.IsScripting"/>), statements are written to the script instead of being
-            executed, schema reads still query the live database, and <see cref="M:Durable.Sql.MigrationContext.ExecuteScalar(System.String,System.Object[])"/> is unavailable.
+            executed, schema reads still query the live database, and <see cref="M:Durable.Sql.MigrationContext.ExecuteScalar(System.FormattableString)"/> is unavailable.
             </para>
             Thread safety: not thread-safe; valid only for the duration of the migration call.
             </summary>
@@ -2311,43 +2563,81 @@
             Null while scripting.
             </summary>
         </member>
-        <member name="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])">
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSql(System.FormattableString)">
             <summary>
-            Executes a statement that returns no rows. Parameters are referenced by the dialect's positional names
-            (@p0, @p1, ...), as with <see cref="M:Durable.Sql.ISqlRepository`1.ExecuteSql(System.String,Durable.ITransaction,System.Object[])"/>, and are always bound, never inlined
-            (except in generated scripts).
+            Executes an interpolated statement that returns no rows. Every interpolation hole becomes a bound parameter
+            (inlined as a literal only in generated scripts); see <see cref="T:Durable.Sql.RawSql"/>.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <returns>Rows affected; 0 while scripting.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the SQL is empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSqlAsync(System.FormattableString,System.Threading.CancellationToken)">
+            <summary>
+            Executes an interpolated statement that returns no rows. Every hole becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows affected; 0 while scripting.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the SQL is empty.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object})">
+            <summary>
+            Executes SQL text that returns no rows. <c>{0}</c>, <c>{1}</c>... bind the corresponding
+            <paramref name="parameters"/> (see <see cref="T:Durable.Sql.RawSql"/>); without parameters the text is used verbatim.
             </summary>
             <param name="sql">SQL. Must not be null or empty.</param>
-            <param name="parameters">Parameter values; may be empty.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <returns>Rows affected; 0 while scripting.</returns>
             <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
         </member>
-        <member name="M:Durable.Sql.MigrationContext.ExecuteSqlAsync(System.String,System.Object[],System.Threading.CancellationToken)">
+        <member name="M:Durable.Sql.MigrationContext.ExecuteSqlRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},System.Threading.CancellationToken)">
             <summary>
-            Executes a statement that returns no rows. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            Executes SQL text that returns no rows. Placeholders as for <see cref="M:Durable.Sql.MigrationContext.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object})"/>.
             </summary>
             <param name="sql">SQL. Must not be null or empty.</param>
-            <param name="parameters">Parameter values; may be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="token">Cancellation token.</param>
             <returns>Rows affected; 0 while scripting.</returns>
             <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
         </member>
-        <member name="M:Durable.Sql.MigrationContext.ExecuteScalar(System.String,System.Object[])">
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalar(System.FormattableString)">
             <summary>
-            Executes a query and returns the first column of the first row. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            Executes an interpolated query and returns the first column of the first row. Every hole becomes a bound parameter.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <returns>The value, or null for no row or a database null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalarAsync(System.FormattableString,System.Threading.CancellationToken)">
+            <summary>
+            Executes an interpolated query and returns the first column of the first row.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The value, or null for no row or a database null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown while scripting.</exception>
+        </member>
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalarRaw(System.String,System.Collections.Generic.IEnumerable{System.Object})">
+            <summary>
+            Executes a query and returns the first column of the first row. Placeholders as for <see cref="M:Durable.Sql.MigrationContext.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object})"/>.
             </summary>
             <param name="sql">SQL. Must not be null or empty.</param>
-            <param name="parameters">Parameter values; may be empty.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <returns>The value, or null for no row or a database null.</returns>
             <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
             <exception cref="T:System.InvalidOperationException">Thrown while scripting.</exception>
         </member>
-        <member name="M:Durable.Sql.MigrationContext.ExecuteScalarAsync(System.String,System.Object[],System.Threading.CancellationToken)">
+        <member name="M:Durable.Sql.MigrationContext.ExecuteScalarRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},System.Threading.CancellationToken)">
             <summary>
-            Executes a query and returns the first column of the first row. See <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> for parameter syntax.
+            Executes a query and returns the first column of the first row. Placeholders as for <see cref="M:Durable.Sql.MigrationContext.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object})"/>.
             </summary>
             <param name="sql">SQL. Must not be null or empty.</param>
-            <param name="parameters">Parameter values; may be null.</param>
+            <param name="parameters">Placeholder values; null for none.</param>
             <param name="token">Cancellation token.</param>
             <returns>The value, or null for no row or a database null.</returns>
             <exception cref="T:System.ArgumentException">Thrown when sql is null or empty.</exception>
@@ -3112,7 +3402,7 @@
             <summary>
             Generates a SQL script that creates the history table (if missing) and applies the currently pending migrations,
             each followed by its history insert and wrapped in a transaction where the database supports transactional DDL.
-            Nothing is executed. Statements issued with <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.String,System.Object[])"/> are scripted with their
+            Nothing is executed. Statements issued with <see cref="M:Durable.Sql.MigrationContext.ExecuteSql(System.FormattableString)"/> are scripted with their
             parameters inlined; <see cref="M:Durable.Sql.MigrationContext.EnsureSchema(System.Type[])"/> is evaluated against the database as it is
             now, so a later migration that depends on an earlier pending one may script differently than it would run.
             </summary>
@@ -3410,14 +3700,27 @@
         </member>
         <member name="T:Durable.Sql.RawSql">
             <summary>
-            Helpers for user-supplied SQL fragments.
+            The one placeholder convention for user-supplied SQL in Durable (raw-SQL repository methods, procedures' SQL
+            fragments, <c>ISqlQueryBuilder.WhereRaw</c>/<c>WhereInRaw</c>, <c>MigrationContext.ExecuteSqlRaw</c>):
+            <list type="bullet">
+            <item><description><c>{0}</c>, <c>{1}</c>... are replaced by bound parameters for the corresponding values, never by
+            the values' text. An index may be referenced several times and is bound once.</description></item>
+            <item><description><c>{{</c> and <c>}}</c> produce literal braces, as in <see cref="M:System.String.Format(System.String,System.Object[])"/>.</description></item>
+            <item><description>When no parameters are supplied (null or empty), the text is used verbatim: nothing is parsed or
+            unescaped, so parameterless DDL and JSON literals are never altered.</description></item>
+            <item><description>A <see cref="T:Durable.Sql.SqlParameterValue"/> value keeps its own name, direction and type; its placeholder is
+            replaced by that name.</description></item>
+            </list>
+            The <see cref="T:System.FormattableString"/> overloads (<c>FromSql($"... {value}")</c>, <c>ExecuteSql</c>, ...) use the same
+            rules: every interpolation hole becomes a parameter, so they are safe by construction. Holes can therefore not
+            supply identifiers or SQL text; use the <c>*Raw</c> methods with string concatenation for dynamic identifiers.
             Thread safety: stateless.
             </summary>
         </member>
-        <member name="M:Durable.Sql.RawSql.BindPlaceholders(System.String,System.Object[],Durable.Sql.SqlStatementBuilder,Durable.Sql.IDataTypeConverter)">
+        <member name="M:Durable.Sql.RawSql.BindPlaceholders(System.String,System.Collections.Generic.IReadOnlyList{System.Object},Durable.Sql.SqlStatementBuilder,Durable.Sql.IDataTypeConverter)">
             <summary>
-            Replaces <c>{0}</c>, <c>{1}</c>... placeholders with bound parameters. <c>{{</c> and <c>}}</c> produce literal braces;
-            other braces are left untouched. Each index is bound once even if referenced several times.
+            Replaces <c>{0}</c>, <c>{1}</c>... placeholders with bound parameters added to <paramref name="builder"/>.
+            When <paramref name="values"/> is null or empty the SQL is returned unchanged.
             </summary>
             <param name="sql">SQL fragment. Must not be null.</param>
             <param name="values">Placeholder values; may be null.</param>
@@ -3427,17 +3730,176 @@
             <exception cref="T:System.ArgumentNullException">Thrown when sql, builder or converter is null.</exception>
             <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
         </member>
-        <member name="M:Durable.Sql.RawSql.Positional(System.String,System.Object[],Durable.Sql.ISqlDialect,Durable.Sql.IDataTypeConverter)">
+        <member name="M:Durable.Sql.RawSql.ToStatement(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.Sql.ISqlDialect,Durable.Sql.IDataTypeConverter)">
             <summary>
-            Builds a statement for raw SQL using positional parameters named by the dialect (@p0, @p1...).
-            <see cref="T:Durable.Sql.SqlParameterValue"/> arguments keep their own names.
+            Builds a statement from SQL text and values using the placeholder convention described on <see cref="T:Durable.Sql.RawSql"/>.
             </summary>
             <param name="sql">SQL. Must not be null.</param>
-            <param name="values">Values; may be null.</param>
+            <param name="parameters">Placeholder values; null or empty sends the SQL verbatim.</param>
             <param name="dialect">Dialect. Must not be null.</param>
             <param name="converter">Converter. Must not be null.</param>
             <returns>The statement.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when sql, dialect or converter is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a placeholder index has no value.</exception>
+        </member>
+        <member name="M:Durable.Sql.RawSql.ToStatement(System.FormattableString,Durable.Sql.ISqlDialect,Durable.Sql.IDataTypeConverter)">
+            <summary>
+            Builds a statement from an interpolated string: every hole becomes a bound parameter and <c>{{</c>/<c>}}</c> are
+            literal braces.
+            </summary>
+            <param name="sql">Interpolated SQL. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="converter">Converter. Must not be null.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql, dialect or converter is null.</exception>
+            <exception cref="T:System.FormatException">Thrown when a hole uses an alignment or format specifier (format the value first).</exception>
+        </member>
+        <member name="T:Durable.Sql.RepositorySettings">
+            <summary>
+            Strongly-typed connection settings for a SQL provider (<c>SqliteRepositorySettings</c>, <c>MySqlRepositorySettings</c>,
+            <c>PostgresRepositorySettings</c>, <c>SqlServerRepositorySettings</c>). Each provider adds a static <c>Parse</c> and
+            implements <see cref="M:Durable.Sql.RepositorySettings.BuildConnectionString"/>; pass an instance to the provider's repository or connection factory
+            constructor instead of a connection string.
+            Thread safety: properties are init-only, so an instance is immutable after construction and safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Type">
+            <summary>
+            Gets the provider these settings are for (for example <see cref="F:Durable.Sql.RepositoryType.Postgres"/>). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Hostname">
+            <summary>
+            Gets the database server host name or address. Default: null. Required by the server providers; unused by SQLite.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Port">
+            <summary>
+            Gets the server port. Default: null (the provider's default port: 3306, 5432 or 1433). Minimum: 1. Maximum: 65535.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Username">
+            <summary>
+            Gets the user name for password authentication. Default: null (no user name is written).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Password">
+            <summary>
+            Gets the password for password authentication. Default: null (no password is written).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.Database">
+            <summary>
+            Gets the database (catalog) name. Default: null. Required by PostgreSQL and SQL Server; optional for MySQL;
+            unused by SQLite (see <c>SqliteRepositorySettings.DataSource</c>).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositorySettings.AdditionalProperties">
+            <summary>
+            Gets additional driver connection-string keywords, written verbatim after the typed settings (later values win).
+            Default: null (none). Parse collects keywords it has no typed property for here.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositorySettings.#ctor">
+            <summary>
+            Initializes the base settings.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositorySettings.BuildConnectionString">
+            <summary>
+            Builds the driver connection string from the settings.
+            </summary>
+            <returns>The connection string. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a setting the provider requires is missing.</exception>
+        </member>
+        <member name="T:Durable.Sql.RepositoryType">
+            <summary>
+            Represents a repository type in an extensible, type-safe manner.
+            This class provides built-in repository types (Sqlite, MySql, Postgres, SqlServer)
+            and allows users to define custom repository types.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositoryType.Identifier">
+            <summary>
+            Gets the lower-case identifier used for equality, for example "postgres". Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.RepositoryType.DisplayName">
+            <summary>
+            Gets the human-readable name, for example "PostgreSQL". Never null.
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.Sqlite">
+            <summary>
+            Represents a SQLite repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.MySql">
+            <summary>
+            Represents a MySQL repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.Postgres">
+            <summary>
+            Represents a PostgreSQL repository
+            </summary>
+        </member>
+        <member name="F:Durable.Sql.RepositoryType.SqlServer">
+            <summary>
+            Represents a SQL Server repository
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.#ctor(System.String,System.String)">
+            <summary>
+            Creates a new repository type with the specified identifier and display name
+            </summary>
+            <param name="identifier">The unique identifier for the repository type (case-insensitive)</param>
+            <param name="displayName">The display name for the repository type</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when identifier or displayName is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when identifier or displayName is empty or whitespace</exception>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.Equals(Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether this repository type is equal to another repository type
+            </summary>
+            <param name="other">The other repository type to compare</param>
+            <returns>True if the repository types are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.Equals(System.Object)">
+            <summary>
+            Determines whether this repository type is equal to another object
+            </summary>
+            <param name="obj">The object to compare</param>
+            <returns>True if the objects are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.GetHashCode">
+            <summary>
+            Gets the hash code for this repository type
+            </summary>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.ToString">
+            <summary>
+            Returns the display name of this repository type
+            </summary>
+            <returns>The display name</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.op_Equality(Durable.Sql.RepositoryType,Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether two repository types are equal
+            </summary>
+            <param name="left">The first repository type</param>
+            <param name="right">The second repository type</param>
+            <returns>True if the repository types are equal, false otherwise</returns>
+        </member>
+        <member name="M:Durable.Sql.RepositoryType.op_Inequality(Durable.Sql.RepositoryType,Durable.Sql.RepositoryType)">
+            <summary>
+            Determines whether two repository types are not equal
+            </summary>
+            <param name="left">The first repository type</param>
+            <param name="right">The second repository type</param>
+            <returns>True if the repository types are not equal, false otherwise</returns>
         </member>
         <member name="T:Durable.Sql.ResultMapper">
             <summary>
@@ -3562,6 +4024,41 @@
             <param name="inline">Whether converter conversions may be inlined.</param>
             <param name="resultType">Delegate return type: the entity type or <see cref="T:System.Object"/>.</param>
             <returns>A <c>Func&lt;DbDataReader, IDataTypeConverter, TResult&gt;</c>.</returns>
+        </member>
+        <member name="T:Durable.Sql.SchemaValidationResult">
+            <summary>
+            The outcome of validating several entity mappings (<see cref="M:Durable.Sql.ISqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)"/>): one
+            <see cref="T:Durable.Sql.TableValidationResult"/> per entity type, plus the combined errors and warnings, each prefixed with the
+            entity type name.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Tables">
+            <summary>
+            Gets the per-table results, in the order the entity types were given. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Errors">
+            <summary>
+            Gets all errors, each prefixed with "EntityTypeName: ". Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.Warnings">
+            <summary>
+            Gets all warnings, each prefixed with "EntityTypeName: ". Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.SchemaValidationResult.IsValid">
+            <summary>
+            Gets whether every table is valid.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.SchemaValidationResult.#ctor(System.Collections.Generic.IReadOnlyList{Durable.Sql.TableValidationResult})">
+            <summary>
+            Instantiates a result from per-table results.
+            </summary>
+            <param name="tables">Per-table results. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="tables"/> is null.</exception>
         </member>
         <member name="T:Durable.Sql.SelectModel">
             <summary>
@@ -3761,7 +4258,7 @@
         <member name="T:Durable.Sql.SqlCommandExecutor">
             <summary>
             Executes statements for a repository: resolves the connection (explicit transaction, ambient
-            <see cref="T:Durable.TransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
+            <see cref="T:Durable.AmbientTransactionScope"/>, or a new connection), binds parameters, applies the command timeout, and runs
             interceptors, logging, tracing and SQL capture around every command.
             Thread safety: safe for concurrent use; each call uses its own command.
             </summary>
@@ -3801,7 +4298,7 @@
         </member>
         <member name="M:Durable.Sql.SqlCommandExecutor.ResolveTransaction(Durable.ITransaction)">
             <summary>
-            Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="T:Durable.TransactionScope"/>, else null.
+            Resolves the transaction to use: the explicit one, else a compatible ambient <see cref="T:Durable.AmbientTransactionScope"/>, else null.
             </summary>
             <param name="transaction">Explicit transaction; may be null.</param>
             <returns>The SQL transaction, or null.</returns>
@@ -4060,6 +4557,12 @@
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsDropColumn">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsNthValue">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsRangeFrameOffsets">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.MaxIdentifierLength">
@@ -4694,6 +5197,9 @@
         <member name="M:Durable.Sql.SqlProjectionQueryBuilder`2.IgnoreQueryFilters">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Sql.SqlProjectionQueryBuilder`2.WhereSql(System.FormattableString)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sql.SqlProjectionQueryBuilder`2.WhereRaw(System.String,System.Object[])">
             <inheritdoc />
         </member>
@@ -4952,6 +5458,9 @@
         <member name="M:Durable.Sql.SqlQueryBuilder`1.WhereNotExists``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{`0,``0,System.Boolean}})">
             <inheritdoc />
         </member>
+        <member name="M:Durable.Sql.SqlQueryBuilder`1.WhereSql(System.FormattableString)">
+            <inheritdoc />
+        </member>
         <member name="M:Durable.Sql.SqlQueryBuilder`1.WhereRaw(System.String,System.Object[])">
             <inheritdoc />
         </member>
@@ -5120,11 +5629,6 @@
             Gets the converter in use (the options' converter, or the dialect's). Never null.
             </summary>
         </member>
-        <member name="P:Durable.Sql.SqlRepository`1.Executor">
-            <summary>
-            Gets the command executor. Never null.
-            </summary>
-        </member>
         <member name="P:Durable.Sql.SqlRepository`1.QueryFilters">
             <inheritdoc />
         </member>
@@ -5134,16 +5638,13 @@
         <member name="P:Durable.Sql.SqlRepository`1.CaptureSql">
             <inheritdoc />
         </member>
-        <member name="P:Durable.Sql.SqlRepository`1.IncludeQueryInResults">
-            <inheritdoc />
-        </member>
         <member name="P:Durable.Sql.SqlRepository`1.LastExecutedSql">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlRepository`1.LastExecutedSqlWithParameters">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.#ctor(Durable.Sql.ISqlDialect,Durable.Sql.IConnectionFactory,System.Boolean,System.Type,Durable.RepositorySettings,Durable.Sql.SqlRepositoryOptions)">
+        <member name="M:Durable.Sql.SqlRepository`1.#ctor(Durable.Sql.ISqlDialect,Durable.Sql.IConnectionFactory,System.Boolean,System.Type,Durable.Sql.RepositorySettings,Durable.Sql.SqlRepositoryOptions)">
             <summary>
             Instantiates the repository.
             </summary>
@@ -5174,9 +5675,6 @@
         <member name="M:Durable.Sql.SqlRepository`1.ReadFirst(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ReadFirstOrDefault(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadSingle(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
             <inheritdoc />
         </member>
@@ -5193,9 +5691,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadFirstAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ReadFirstOrDefaultAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.ReadSingleAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
@@ -5303,9 +5798,6 @@
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAll(Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.BatchDelete(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction)">
-            <inheritdoc />
-        </member>
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAsync(`0,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
@@ -5316,9 +5808,6 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.DeleteAllAsync(Durable.ITransaction,System.Threading.CancellationToken)">
-            <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlRepository`1.BatchDeleteAsync(System.Linq.Expressions.Expression{System.Func{`0,System.Boolean}},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.Upsert(`0,Durable.ITransaction)">
@@ -5333,46 +5822,76 @@
         <member name="M:Durable.Sql.SqlRepository`1.UpsertManyAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromSql(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSql(System.FormattableString,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromSql``1(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSql(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSql``1(System.FormattableString,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalar``1(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlAsync``1(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromSqlAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlRaw``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalarAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.FromSqlRawAsync``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.QueryMultiple(System.String,Durable.ITransaction,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSql(System.FormattableString,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.QueryMultipleAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSqlAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteProcedure(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSqlRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromProcedure``1(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteSqlRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ExecuteProcedureAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalar``1(System.FormattableString,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.FromProcedureAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,Durable.Sql.SqlParameterValue[])">
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalarAsync``1(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalarRaw``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteScalarRawAsync``1(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.QueryMultiple(System.FormattableString,Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.QueryMultipleAsync(System.FormattableString,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.QueryMultipleRaw(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.QueryMultipleRawAsync(System.String,System.Collections.Generic.IEnumerable{System.Object},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteProcedure(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ExecuteProcedureAsync(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.FromProcedure``1(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.FromProcedureAsync``1(System.String,System.Collections.Generic.IEnumerable{Durable.Sql.SqlParameterValue},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.BulkInsert(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction)">
@@ -5393,10 +5912,16 @@
         <member name="M:Durable.Sql.SqlRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ValidateTable(System.Type,System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)">
             <inheritdoc />
         </member>
-        <member name="M:Durable.Sql.SqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},System.Collections.Generic.List{System.String}@,System.Collections.Generic.List{System.String}@)">
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlRepository`1.ValidateTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlRepository`1.CreateIndexes(System.Type,Durable.ITransaction)">
@@ -5460,6 +5985,16 @@
             <param name="column">Column. Must not be null.</param>
             <returns>The database value (never null; <see cref="F:System.DBNull.Value"/> for null).</returns>
         </member>
+        <member name="M:Durable.Sql.SqlRepository`1.CreateCommand(Durable.Sql.ConnectionLease,Durable.Sql.SqlStatement)">
+            <summary>
+            Creates a command for a statement on a lease, with the statement's parameters bound, the lease's transaction
+            attached and the configured command timeout applied. Used by provider bulk-insert paths.
+            </summary>
+            <param name="lease">Lease. Must not be null.</param>
+            <param name="statement">Statement. Must not be null.</param>
+            <returns>The command; the caller disposes it.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lease or statement is null.</exception>
+        </member>
         <member name="M:Durable.Sql.SqlRepository`1.Dispose(System.Boolean)">
             <summary>
             Releases resources.
@@ -5503,11 +6038,6 @@
         <member name="P:Durable.Sql.SqlRepositoryOptions.CaptureSql">
             <summary>
             Gets or sets the initial value of <see cref="P:Durable.Sql.ISqlCapture.CaptureSql"/>. Default: false.
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.SqlRepositoryOptions.IncludeQueryInResults">
-            <summary>
-            Gets or sets the initial value of <see cref="P:Durable.Sql.ISqlTrackingConfiguration.IncludeQueryInResults"/>. Default: false.
             </summary>
         </member>
         <member name="P:Durable.Sql.SqlRepositoryOptions.IncludeStreamingBatchSize">
@@ -5649,31 +6179,6 @@
             <returns>A task representing the asynchronous operation with a durable result containing the number of deleted entities and the executed SQL query.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when repository or predicate is null.</exception>
         </member>
-        <member name="M:Durable.Sql.SqlRepositoryResultExtensions.CreateAuto``1(Durable.IRepository{``0},``0,Durable.ITransaction)">
-            <summary>
-            Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-            Respects global, thread-local, and instance-level SQL tracking settings.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository instance.</param>
-            <param name="entity">The entity to create.</param>
-            <param name="transaction">Optional transaction to use for the operation.</param>
-            <returns>Either T or IDurableResult&lt;T&gt; depending on configuration.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or entity is null.</exception>
-        </member>
-        <member name="M:Durable.Sql.SqlRepositoryResultExtensions.CreateAutoAsync``1(Durable.IRepository{``0},``0,Durable.ITransaction,System.Threading.CancellationToken)">
-            <summary>
-            Automatically determines whether to return standard results or SQL-enhanced results based on configuration.
-            Respects global, thread-local, and instance-level SQL tracking settings.
-            </summary>
-            <typeparam name="T">The entity type.</typeparam>
-            <param name="repository">The repository instance.</param>
-            <param name="entity">The entity to create.</param>
-            <param name="transaction">Optional transaction to use for the operation.</param>
-            <param name="token">Cancellation token.</param>
-            <returns>Either Task&lt;T&gt; or Task&lt;IDurableResult&lt;T&gt;&gt; depending on configuration.</returns>
-            <exception cref="T:System.ArgumentNullException">Thrown when repository or entity is null.</exception>
-        </member>
         <member name="T:Durable.Sql.SqlSavepoint">
             <summary>
             A savepoint implemented with dialect SQL on the transaction's connection.
@@ -5694,11 +6199,6 @@
         </member>
         <member name="M:Durable.Sql.SqlSavepoint.RollbackAsync(System.Threading.CancellationToken)">
             <inheritdoc />
-        </member>
-        <member name="M:Durable.Sql.SqlSavepoint.Dispose">
-            <summary>
-            Does nothing; savepoints end with their transaction.
-            </summary>
         </member>
         <member name="T:Durable.Sql.SqlStatement">
             <summary>
@@ -6038,6 +6538,57 @@
             <param name="qualifier">Column qualifier; null for none.</param>
             <param name="metadata">Metadata. Must not be null.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+        </member>
+        <member name="T:Durable.Sql.TableValidationResult">
+            <summary>
+            The outcome of validating one entity mapping against the database
+            (<see cref="M:Durable.Sql.ISqlRepository`1.ValidateTableAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)"/>): mapping errors (no key, duplicate columns, invalid
+            auto-increment type), mapped columns missing from an existing table (errors), and table columns the entity does not
+            map (warnings). A table that does not exist yet is not an error.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.EntityType">
+            <summary>
+            Gets the validated entity type. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.TableName">
+            <summary>
+            Gets the mapped table name, or null when the entity's mapping could not be read.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.TableExists">
+            <summary>
+            Gets whether the table exists in the database. False when it does not exist or the mapping is invalid
+            (the database is only queried for a valid mapping).
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.Errors">
+            <summary>
+            Gets the errors. Empty when valid. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.Warnings">
+            <summary>
+            Gets the warnings (table columns not mapped by the entity). Warnings do not make the result invalid. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.TableValidationResult.IsValid">
+            <summary>
+            Gets whether there are no errors.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.TableValidationResult.#ctor(System.Type,System.String,System.Boolean,System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Instantiates a result.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="tableName">Table name; null when the mapping could not be read.</param>
+            <param name="tableExists">Whether the table exists.</param>
+            <param name="errors">Errors; null is treated as empty.</param>
+            <param name="warnings">Warnings; null is treated as empty.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="entityType"/> is null.</exception>
         </member>
         <member name="T:Durable.Sql.TypedRowMapper`1">
             <summary>
