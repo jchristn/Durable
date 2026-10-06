@@ -11,6 +11,7 @@ namespace Durable.Postgres
 
     /// <summary>
     /// Connection settings for PostgreSQL repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class PostgresRepositorySettings : RepositorySettings
     {
@@ -18,7 +19,7 @@ namespace Durable.Postgres
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.Postgres"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.Postgres;
 
@@ -51,9 +52,6 @@ namespace Durable.Postgres
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -223,9 +221,6 @@ namespace Durable.Postgres
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

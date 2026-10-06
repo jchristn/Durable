@@ -2,6 +2,7 @@ namespace Durable
 {
     /// <summary>
     /// Contains information about a default value provider for a property.
+    /// Thread safety: holds the attribute and its provider; providers are shared and must be thread-safe.
     /// </summary>
     public class DefaultValueProviderInfo
     {

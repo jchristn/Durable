@@ -11,6 +11,7 @@ namespace Durable.SqlServer
 
     /// <summary>
     /// Connection settings for SQL Server repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class SqlServerRepositorySettings : RepositorySettings
     {
@@ -18,7 +19,7 @@ namespace Durable.SqlServer
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.SqlServer"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.SqlServer;
 
@@ -61,9 +62,6 @@ namespace Durable.SqlServer
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -275,9 +273,6 @@ namespace Durable.SqlServer
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

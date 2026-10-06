@@ -231,11 +231,12 @@
         <member name="T:Durable.Postgres.PostgresRepositorySettings">
             <summary>
             Connection settings for PostgreSQL repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.Postgres"/>.
             </summary>
         </member>
         <member name="P:Durable.Postgres.PostgresRepositorySettings.ConnectionTimeout">

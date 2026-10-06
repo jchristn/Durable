@@ -4,6 +4,7 @@ namespace Durable
 
     /// <summary>
     /// Represents the result of a database query operation containing both the query and its results.
+    /// Thread safety: immutable; safe to share once created.
     /// </summary>
     /// <typeparam name="T">The type of objects in the result set.</typeparam>
     public class DurableResult<T> : IDurableResult<T>

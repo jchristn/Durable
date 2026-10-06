@@ -70,6 +70,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="other">Other query. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null.</exception>
         ISqlQueryBuilder<T> UnionAll(IQueryBuilder<T> other);
 
         /// <summary>
@@ -77,6 +78,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="other">Other query. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null.</exception>
         ISqlQueryBuilder<T> Intersect(IQueryBuilder<T> other);
 
         /// <summary>
@@ -84,6 +86,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="other">Other query. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when other is null.</exception>
         ISqlQueryBuilder<T> Except(IQueryBuilder<T> other);
 
         #endregion
@@ -99,6 +102,7 @@ namespace Durable.Sql
         /// <param name="subquery">Subquery. Must not be null.</param>
         /// <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         ISqlQueryBuilder<T> WhereIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new();
 
         /// <summary>
@@ -110,6 +114,7 @@ namespace Durable.Sql
         /// <param name="subquery">Subquery. Must not be null.</param>
         /// <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         ISqlQueryBuilder<T> WhereNotIn<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey) where TOther : class, new();
 
         /// <summary>
@@ -120,6 +125,7 @@ namespace Durable.Sql
         /// <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
         /// <param name="parameters">Placeholder values.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         ISqlQueryBuilder<T> WhereInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql, params object?[] parameters);
 
         /// <summary>
@@ -130,6 +136,7 @@ namespace Durable.Sql
         /// <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
         /// <param name="parameters">Placeholder values.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         ISqlQueryBuilder<T> WhereNotInRaw<TKey>(Expression<Func<T, TKey>> keySelector, string subquerySql, params object?[] parameters);
 
         /// <summary>
@@ -140,6 +147,7 @@ namespace Durable.Sql
         /// <param name="subquery">Subquery. Must not be null.</param>
         /// <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated EXISTS.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null.</exception>
         ISqlQueryBuilder<T> WhereExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new();
 
         /// <summary>
@@ -149,6 +157,7 @@ namespace Durable.Sql
         /// <param name="subquery">Subquery. Must not be null.</param>
         /// <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated NOT EXISTS.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when subquery is null.</exception>
         ISqlQueryBuilder<T> WhereNotExists<[DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(IQueryBuilder<TOther> subquery, Expression<Func<T, TOther, bool>>? correlation = null) where TOther : class, new();
 
         #endregion
@@ -170,6 +179,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="sql">Select list SQL. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         ISqlQueryBuilder<T> SelectRaw(string sql);
 
         /// <summary>
@@ -178,6 +188,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="sql">FROM source SQL. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         ISqlQueryBuilder<T> FromRaw(string sql);
 
         /// <summary>
@@ -185,6 +196,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="sql">JOIN clause including the JOIN keyword. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         ISqlQueryBuilder<T> JoinRaw(string sql);
 
         /// <summary>
@@ -193,6 +205,7 @@ namespace Durable.Sql
         /// <param name="cteName">CTE name. Must not be null.</param>
         /// <param name="cteQuery">CTE body SQL. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName or cteQuery is null.</exception>
         ISqlQueryBuilder<T> WithCte(string cteName, string cteQuery);
 
         /// <summary>
@@ -202,6 +215,7 @@ namespace Durable.Sql
         /// <param name="anchorQuery">Anchor member SQL. Must not be null.</param>
         /// <param name="recursiveQuery">Recursive member SQL. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when cteName, anchorQuery or recursiveQuery is null.</exception>
         ISqlQueryBuilder<T> WithRecursiveCte(string cteName, string anchorQuery, string recursiveQuery);
 
         /// <summary>
@@ -211,6 +225,7 @@ namespace Durable.Sql
         /// <param name="partitionBy">Raw PARTITION BY list; null for none.</param>
         /// <param name="orderBy">Raw ORDER BY list; null for none.</param>
         /// <returns>A window builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when functionName is null.</exception>
         IWindowedQueryBuilder<T> WithWindowFunction(string functionName, string? partitionBy = null, string? orderBy = null);
 
         /// <summary>

@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Soft-deletable folder referenced by <see cref="CfDocument"/>. Storage: <c>cf_folders</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_folders")]
     public class CfFolder

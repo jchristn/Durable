@@ -68,6 +68,7 @@ namespace Durable
         /// <typeparam name="TProperty">Numeric type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The sum; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         decimal Sum<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -77,6 +78,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The sum; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<decimal> SumAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -85,6 +87,7 @@ namespace Durable
         /// <typeparam name="TProperty">Numeric type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The average; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         decimal Average<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -94,6 +97,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The average; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<decimal> AverageAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -102,6 +106,7 @@ namespace Durable
         /// <typeparam name="TResult">Value type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The maximum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         TResult Max<TResult>(Expression<Func<T, TResult>> selector);
 
         /// <summary>
@@ -111,6 +116,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The maximum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<TResult> MaxAsync<TResult>(Expression<Func<T, TResult>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -119,6 +125,7 @@ namespace Durable
         /// <typeparam name="TResult">Value type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The minimum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         TResult Min<TResult>(Expression<Func<T, TResult>> selector);
 
         /// <summary>
@@ -128,6 +135,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The minimum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<TResult> MinAsync<TResult>(Expression<Func<T, TResult>> selector, CancellationToken token = default);
     }
 }

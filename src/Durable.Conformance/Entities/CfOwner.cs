@@ -5,6 +5,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Owner of <see cref="CfItem"/> rows (collection navigation). Storage: <c>cf_owners</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_owners")]
     public class CfOwner

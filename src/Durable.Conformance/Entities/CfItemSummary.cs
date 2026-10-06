@@ -2,6 +2,7 @@ namespace Durable.Conformance
 {
     /// <summary>
     /// Projection target for <see cref="CfItem"/> (not an entity).
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     public class CfItemSummary
     {

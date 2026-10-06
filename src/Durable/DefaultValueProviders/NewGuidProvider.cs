@@ -5,6 +5,7 @@ namespace Durable.DefaultValueProviders
 
     /// <summary>
     /// Provides a new GUID as a default value
+    /// Thread safety: stateless; safe for concurrent use.
     /// </summary>
     public class NewGuidProvider : IDefaultValueProvider
     {

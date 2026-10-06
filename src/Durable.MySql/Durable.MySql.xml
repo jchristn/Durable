@@ -274,11 +274,12 @@
         <member name="T:Durable.MySql.MySqlRepositorySettings">
             <summary>
             Connection settings for MySQL repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.MySql"/>.
             </summary>
         </member>
         <member name="P:Durable.MySql.MySqlRepositorySettings.ConnectionTimeout">

@@ -5,6 +5,7 @@ namespace Durable.DefaultValueProviders
 
     /// <summary>
     /// Provides the current UTC date and time as a default value
+    /// Thread safety: stateless; safe for concurrent use.
     /// </summary>
     public class CurrentDateTimeUtcProvider : IDefaultValueProvider
     {

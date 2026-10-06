@@ -4,6 +4,7 @@ namespace Durable
 
     /// <summary>
     /// Represents an asynchronous durable result containing a query and its corresponding async enumerable result.
+    /// Thread safety: immutable; the wrapped stream should be enumerated once, on one flow.
     /// </summary>
     /// <typeparam name="T">The type of items in the result enumerable.</typeparam>
     public class AsyncDurableResult<T> : IAsyncDurableResult<T>

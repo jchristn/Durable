@@ -7,6 +7,7 @@ namespace Durable.DefaultValueProviders
     /// <summary>
     /// Provides a sequential GUID optimized for database indexing as a default value.
     /// Sequential GUIDs reduce index fragmentation compared to random GUIDs.
+    /// Thread safety: stateless (uses a thread-safe random number generator); safe for concurrent use.
     /// </summary>
     public class SequentialGuidProvider : IDefaultValueProvider
     {

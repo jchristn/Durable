@@ -12,6 +12,7 @@ namespace Durable.Sqlite
 
     /// <summary>
     /// Connection settings for SQLite repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class SqliteRepositorySettings : RepositorySettings
     {
@@ -19,12 +20,13 @@ namespace Durable.Sqlite
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.Sqlite"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.Sqlite;
 
         /// <summary>
-        /// The file path to the SQLite database file. Required for file-based databases.
+        /// Gets the database file path, or ":memory:" for a private in-memory database. Default: null. Required by
+        /// <see cref="BuildConnectionString"/>.
         /// </summary>
         public string? DataSource { get; init; }
 
@@ -45,9 +47,6 @@ namespace Durable.Sqlite
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -166,9 +165,6 @@ namespace Durable.Sqlite
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

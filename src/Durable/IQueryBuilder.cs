@@ -30,6 +30,7 @@ namespace Durable
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key selector. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IQueryBuilder<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector);
 
         /// <summary>
@@ -38,6 +39,7 @@ namespace Durable
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key selector. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IQueryBuilder<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
 
         /// <summary>
@@ -46,6 +48,7 @@ namespace Durable
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key selector. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IQueryBuilder<T> ThenBy<TKey>(Expression<Func<T, TKey>> keySelector);
 
         /// <summary>
@@ -54,6 +57,7 @@ namespace Durable
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key selector. Must not be null.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IQueryBuilder<T> ThenByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
 
         /// <summary>
@@ -102,6 +106,7 @@ namespace Durable
         /// <param name="navigationProperty">Navigation selector. Must not be null.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="ArgumentException">Thrown when the selector is not a mapped navigation property.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null.</exception>
         IQueryBuilder<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty);
 
         /// <summary>
@@ -112,6 +117,7 @@ namespace Durable
         /// <param name="navigationProperty">Navigation selector. Must not be null.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no Include precedes this call.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when navigationProperty is null.</exception>
         IQueryBuilder<T> ThenInclude<TPreviousProperty, TProperty>(Expression<Func<TPreviousProperty, TProperty>> navigationProperty);
 
         /// <summary>
@@ -120,6 +126,7 @@ namespace Durable
         /// <typeparam name="TKey">Key type.</typeparam>
         /// <param name="keySelector">Key selector. Must not be null.</param>
         /// <returns>A grouped builder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when keySelector is null.</exception>
         IGroupedQueryBuilder<T, TKey> GroupBy<TKey>(Expression<Func<T, TKey>> keySelector);
 
         /// <summary>
@@ -194,6 +201,7 @@ namespace Durable
         /// <typeparam name="TProperty">Numeric type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The sum; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         decimal Sum<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -203,6 +211,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The sum; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<decimal> SumAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -211,6 +220,7 @@ namespace Durable
         /// <typeparam name="TProperty">Numeric type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The average; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         decimal Average<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -220,6 +230,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The average; zero when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<decimal> AverageAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -228,6 +239,7 @@ namespace Durable
         /// <typeparam name="TProperty">Value type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The minimum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         TProperty Min<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -237,6 +249,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The minimum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<TProperty> MinAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>
@@ -245,6 +258,7 @@ namespace Durable
         /// <typeparam name="TProperty">Value type.</typeparam>
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <returns>The maximum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         TProperty Max<TProperty>(Expression<Func<T, TProperty>> selector);
 
         /// <summary>
@@ -254,6 +268,7 @@ namespace Durable
         /// <param name="selector">Value selector. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The maximum; default when no rows match.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when selector is null.</exception>
         Task<TProperty> MaxAsync<TProperty>(Expression<Func<T, TProperty>> selector, CancellationToken token = default);
 
         /// <summary>

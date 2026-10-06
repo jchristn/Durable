@@ -13,7 +13,8 @@ namespace Durable.Sql
     public interface IConnectionFactory : IDisposable, IAsyncDisposable
     {
         /// <summary>
-        /// Opens a connection.
+        /// Opens a connection. The caller owns and disposes it (disposal returns it to the driver's pool). When a
+        /// concurrency limit is configured, waits up to the factory's acquire timeout for a free slot.
         /// </summary>
         /// <returns>An open connection owned by the caller.</returns>
         /// <exception cref="ObjectDisposedException">Thrown when the factory is disposed.</exception>

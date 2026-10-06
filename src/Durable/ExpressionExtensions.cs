@@ -7,6 +7,7 @@ namespace Durable
 
     /// <summary>
     /// Provides extension methods for various expression operations and value comparisons.
+    /// Thread safety: stateless; safe for concurrent use.
     /// </summary>
     public static class ExpressionExtensions
     {

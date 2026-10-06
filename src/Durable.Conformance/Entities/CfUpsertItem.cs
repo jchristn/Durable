@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Entity with a natural (caller-assigned) string key, used by upsert cases. Storage: <c>cf_upsert_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_upsert_items")]
     public class CfUpsertItem

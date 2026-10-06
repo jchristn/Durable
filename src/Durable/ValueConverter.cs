@@ -5,6 +5,7 @@ namespace Durable
     /// <summary>
     /// Strongly-typed base class for <see cref="IValueConverter"/> implementations.
     /// Derived classes must have a public parameterless constructor when used with <see cref="ValueConverterAttribute"/>.
+    /// Thread safety: converters are shared by every repository for the property, so implementations must be stateless or thread-safe.
     /// </summary>
     /// <typeparam name="TModel">Property type.</typeparam>
     /// <typeparam name="TProvider">Stored type.</typeparam>

@@ -7,6 +7,7 @@ namespace Durable.Conformance
     /// Author: reference navigation to <see cref="CfPublisher"/>, collection navigations to <see cref="CfBook"/> and
     /// soft-deletable <see cref="CfNote"/> rows, and a many-to-many navigation to <see cref="CfTag"/> through
     /// <see cref="CfAuthorTag"/>. Storage: <c>cf_authors</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_authors")]
     public class CfAuthor

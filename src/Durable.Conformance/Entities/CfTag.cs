@@ -5,6 +5,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Tag: many-to-many with <see cref="CfAuthor"/> through <see cref="CfAuthorTag"/>. Storage: <c>cf_tags</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_tags")]
     public class CfTag

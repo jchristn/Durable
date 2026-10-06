@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Single nullable string column used by string-matching-mode cases. Storage: <c>cf_text_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_text_items")]
     public class CfTextItem

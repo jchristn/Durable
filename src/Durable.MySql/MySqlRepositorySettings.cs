@@ -11,6 +11,7 @@ namespace Durable.MySql
 
     /// <summary>
     /// Connection settings for MySQL repositories
+    /// Thread safety: immutable after construction (init-only properties); safe to share.
     /// </summary>
     public sealed class MySqlRepositorySettings : RepositorySettings
     {
@@ -18,7 +19,7 @@ namespace Durable.MySql
         #region Public-Members
 
         /// <summary>
-        /// The type of repository
+        /// Gets <see cref="RepositoryType.MySql"/>.
         /// </summary>
         public override RepositoryType Type => RepositoryType.MySql;
 
@@ -51,9 +52,6 @@ namespace Durable.MySql
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -226,9 +224,6 @@ namespace Durable.MySql
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 

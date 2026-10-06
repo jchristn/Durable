@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Entity with a composite primary key (<see cref="TenantId"/>, then <see cref="Sku"/>). Storage: <c>cf_composite_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_composite_items")]
     public class CfCompositeItem

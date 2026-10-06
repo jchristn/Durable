@@ -599,17 +599,20 @@ namespace Durable
         IQueryBuilder<T> Query(ITransaction? transaction = null);
 
         /// <summary>
-        /// Begins a transaction.
+        /// Begins a transaction owned by the caller. Pass it to repository calls (of this or another repository of the
+        /// same backend/provider) to run them inside it, or wrap it in an <see cref="AmbientTransactionScope"/>. Commit
+        /// explicitly; disposing an uncommitted transaction rolls it back. Requires
+        /// <see cref="RepositoryCapabilities.Transactions"/>.
         /// </summary>
-        /// <returns>The transaction. Dispose it; an uncommitted transaction rolls back on dispose.</returns>
+        /// <returns>The transaction. Dispose it (prefer <c>await using</c>).</returns>
         /// <exception cref="NotSupportedException">Thrown by backends without transaction support.</exception>
         ITransaction BeginTransaction();
 
         /// <summary>
-        /// Begins a transaction.
+        /// Begins a transaction owned by the caller (see <see cref="BeginTransaction"/>).
         /// </summary>
         /// <param name="token">Cancellation token.</param>
-        /// <returns>The transaction.</returns>
+        /// <returns>The transaction. Dispose it (prefer <c>await using</c>); an uncommitted transaction rolls back on dispose.</returns>
         /// <exception cref="NotSupportedException">Thrown by backends without transaction support.</exception>
         Task<ITransaction> BeginTransactionAsync(CancellationToken token = default);
 

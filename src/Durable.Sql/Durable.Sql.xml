@@ -487,6 +487,7 @@
             <param name="condition">Condition. Must not be null.</param>
             <param name="result">Result value; may be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when condition is null.</exception>
         </member>
         <member name="M:Durable.Sql.ICaseExpressionBuilder`1.WhenRaw(System.String,System.Object)">
             <summary>
@@ -495,6 +496,7 @@
             <param name="condition">Condition SQL. Must not be null.</param>
             <param name="result">Result value; may be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when condition is null.</exception>
         </member>
         <member name="M:Durable.Sql.ICaseExpressionBuilder`1.Else(System.Object)">
             <summary>
@@ -510,6 +512,7 @@
             <param name="alias">Column alias. Must not be null; letters, digits and underscores.</param>
             <returns>The query builder.</returns>
             <exception cref="T:System.ArgumentException">Thrown when alias is invalid or no WHEN branch was added.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when alias is null.</exception>
         </member>
         <member name="T:Durable.Sql.IConnectionFactory">
             <summary>
@@ -520,7 +523,8 @@
         </member>
         <member name="M:Durable.Sql.IConnectionFactory.OpenConnection">
             <summary>
-            Opens a connection.
+            Opens a connection. The caller owns and disposes it (disposal returns it to the driver's pool). When a
+            concurrency limit is configured, waits up to the factory's acquire timeout for a free slot.
             </summary>
             <returns>An open connection owned by the caller.</returns>
             <exception cref="T:System.ObjectDisposedException">Thrown when the factory is disposed.</exception>
@@ -666,8 +670,10 @@
         </member>
         <member name="T:Durable.Sql.ISqlCapture">
             <summary>
-            Provides the ability to capture and expose the last executed SQL statement.
-            This interface is optional and can be implemented by repositories that support SQL tracking.
+            Exposes the last SQL statement a repository executed, for debugging and logging. Every SQL repository implements
+            it. Capture is per async flow: concurrent operations on one repository each see their own last statement. To get
+            the SQL of a single call without turning capture on, use the <c>*WithQuery</c> extensions or
+            <see cref="T:Durable.Sql.SqlCaptureScope"/>.
             </summary>
         </member>
         <member name="P:Durable.Sql.ISqlCapture.LastExecutedSql">
@@ -685,8 +691,8 @@
         </member>
         <member name="P:Durable.Sql.ISqlCapture.CaptureSql">
             <summary>
-            Gets or sets whether SQL statements should be captured and stored.
-            Default value is false for performance reasons.
+            Gets or sets whether executed SQL is captured for <see cref="P:Durable.Sql.ISqlCapture.LastExecutedSql"/>. Default: false (initialized from
+            <see cref="P:Durable.Sql.SqlRepositoryOptions.CaptureSql"/>).
             </summary>
         </member>
         <member name="T:Durable.Sql.ISqlCommandInterceptor">
@@ -1196,6 +1202,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.Intersect(Durable.IQueryBuilder{`0})">
             <summary>
@@ -1203,6 +1210,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.Except(Durable.IQueryBuilder{`0})">
             <summary>
@@ -1210,6 +1218,7 @@
             </summary>
             <param name="other">Other query. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when other is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereIn``2(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``1},System.Linq.Expressions.Expression{System.Func{``1,``0}})">
             <summary>
@@ -1221,6 +1230,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotIn``2(System.Linq.Expressions.Expression{System.Func{`0,``0}},Durable.IQueryBuilder{``1},System.Linq.Expressions.Expression{System.Func{``1,``0}})">
             <summary>
@@ -1232,6 +1242,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="subqueryKey">Column selected by the subquery. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector, subquery or subqueryKey is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String,System.Object[])">
             <summary>
@@ -1242,6 +1253,7 @@
             <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
             <param name="parameters">Placeholder values.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotInRaw``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String,System.Object[])">
             <summary>
@@ -1252,6 +1264,7 @@
             <param name="subquerySql">Subquery SQL; may contain {0}-style placeholders. Must not be null.</param>
             <param name="parameters">Placeholder values.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector or subquerySql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereExists``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{`0,``0,System.Boolean}})">
             <summary>
@@ -1262,6 +1275,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated EXISTS.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereNotExists``1(Durable.IQueryBuilder{``0},System.Linq.Expressions.Expression{System.Func{`0,``0,System.Boolean}})">
             <summary>
@@ -1271,6 +1285,7 @@
             <param name="subquery">Subquery. Must not be null.</param>
             <param name="correlation">Correlation between the outer and inner rows; null for an uncorrelated NOT EXISTS.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when subquery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WhereRaw(System.String,System.Object[])">
             <summary>
@@ -1288,6 +1303,7 @@
             </summary>
             <param name="sql">Select list SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.FromRaw(System.String)">
             <summary>
@@ -1296,6 +1312,7 @@
             </summary>
             <param name="sql">FROM source SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.JoinRaw(System.String)">
             <summary>
@@ -1303,6 +1320,7 @@
             </summary>
             <param name="sql">JOIN clause including the JOIN keyword. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithCte(System.String,System.String)">
             <summary>
@@ -1311,6 +1329,7 @@
             <param name="cteName">CTE name. Must not be null.</param>
             <param name="cteQuery">CTE body SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName or cteQuery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithRecursiveCte(System.String,System.String,System.String)">
             <summary>
@@ -1320,6 +1339,7 @@
             <param name="anchorQuery">Anchor member SQL. Must not be null.</param>
             <param name="recursiveQuery">Recursive member SQL. Must not be null.</param>
             <returns>This builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when cteName, anchorQuery or recursiveQuery is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.WithWindowFunction(System.String,System.String,System.String)">
             <summary>
@@ -1329,6 +1349,7 @@
             <param name="partitionBy">Raw PARTITION BY list; null for none.</param>
             <param name="orderBy">Raw ORDER BY list; null for none.</param>
             <returns>A window builder.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when functionName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlQueryBuilder`1.SelectCase">
             <summary>
@@ -1428,6 +1449,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalar``1(System.String,Durable.ITransaction,System.Object[])">
             <summary>
@@ -1438,6 +1460,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>The value, or default when no row or null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
             <summary>
@@ -1448,6 +1471,7 @@
             <param name="token">Cancellation token.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>Entities.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.FromSqlAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
             <summary>
@@ -1469,6 +1493,7 @@
             <param name="token">Cancellation token.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.ExecuteScalarAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
             <summary>
@@ -1480,6 +1505,7 @@
             <param name="token">Cancellation token.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>The value, or default.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.QueryMultiple(System.String,Durable.ITransaction,System.Object[])">
             <summary>
@@ -1489,6 +1515,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.QueryMultipleAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken,System.Object[])">
             <summary>
@@ -1499,6 +1526,7 @@
             <param name="token">Cancellation token.</param>
             <param name="parameters">Values for @p0, @p1....</param>
             <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when sql is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.ExecuteProcedure(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
             <summary>
@@ -1509,6 +1537,7 @@
             <param name="parameters">Named parameters.</param>
             <returns>Rows affected as reported by the database.</returns>
             <exception cref="T:System.NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.FromProcedure``1(System.String,Durable.ITransaction,Durable.Sql.SqlParameterValue[])">
             <summary>
@@ -1530,6 +1559,7 @@
             <param name="token">Cancellation token.</param>
             <param name="parameters">Named parameters.</param>
             <returns>Rows affected.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when procedureName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.FromProcedureAsync``1(System.String,Durable.ITransaction,System.Threading.CancellationToken,Durable.Sql.SqlParameterValue[])">
             <summary>
@@ -1551,6 +1581,7 @@
             <param name="entities">Entities. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
             <returns>Rows inserted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.BulkInsertAsync(System.Collections.Generic.IEnumerable{`0},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1560,6 +1591,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>Rows inserted.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entities is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTable(System.Type,Durable.ITransaction)">
             <summary>
@@ -1578,6 +1610,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTables(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction)">
             <summary>
@@ -1585,6 +1618,7 @@
             </summary>
             <param name="entityTypes">Entity types. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.InitializeTablesAsync(System.Collections.Generic.IEnumerable{System.Type},Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1594,6 +1628,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityTypes is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.ValidateTable(System.Type,Durable.ITransaction)">
             <summary>
@@ -1645,6 +1680,7 @@
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateIndexesAsync(System.Type,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1654,6 +1690,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.DropIndex(System.String,Durable.ITransaction)">
             <summary>
@@ -1661,6 +1698,7 @@
             </summary>
             <param name="indexName">Index name. Must not be null or empty.</param>
             <param name="transaction">Transaction; may be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.DropIndexAsync(System.String,Durable.ITransaction,System.Threading.CancellationToken)">
             <summary>
@@ -1670,6 +1708,7 @@
             <param name="transaction">Transaction; may be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>A task.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when indexName is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.GetIndexes(System.Type)">
             <summary>
@@ -1677,6 +1716,7 @@
             </summary>
             <param name="entityType">Entity type. Must not be null.</param>
             <returns>Index names. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.GetIndexesAsync(System.Type,System.Threading.CancellationToken)">
             <summary>
@@ -1685,6 +1725,7 @@
             <param name="entityType">Entity type. Must not be null.</param>
             <param name="token">Cancellation token.</param>
             <returns>Index names. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlRepository`1.CreateDatabaseIfNotExists">
             <summary>
@@ -1776,6 +1817,7 @@
             <param name="defaultValue">The default value to return if no subsequent row is found.</param>
             <param name="alias">The alias for the lead column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Lag``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)">
             <summary>
@@ -1787,6 +1829,7 @@
             <param name="defaultValue">The default value to return if no previous row is found.</param>
             <param name="alias">The alias for the lag column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.FirstValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1796,6 +1839,7 @@
             <param name="column">The column to get the first value from.</param>
             <param name="alias">The alias for the first value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.LastValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1805,6 +1849,7 @@
             <param name="column">The column to get the last value from.</param>
             <param name="alias">The alias for the last value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)">
             <summary>
@@ -1815,6 +1860,9 @@
             <param name="n">The position of the value to retrieve (1-based).</param>
             <param name="alias">The alias for the nth value column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when n is less than 1.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database has no NTH_VALUE function (<see cref="P:Durable.Sql.ISqlDialect.SupportsNthValue"/>; SQL Server).</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Sum``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1824,6 +1872,7 @@
             <param name="column">The column to sum.</param>
             <param name="alias">The alias for the sum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Avg``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1833,6 +1882,7 @@
             <param name="column">The column to average.</param>
             <param name="alias">The alias for the average column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Count(System.String)">
             <summary>
@@ -1849,6 +1899,7 @@
             <param name="column">The column to find the minimum value from.</param>
             <param name="alias">The alias for the minimum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Max``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.String)">
             <summary>
@@ -1858,6 +1909,7 @@
             <param name="column">The column to find the maximum value from.</param>
             <param name="alias">The alias for the maximum column.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.PartitionBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1866,6 +1918,7 @@
             <typeparam name="TKey">The type of the partition key.</typeparam>
             <param name="keySelector">The expression to partition by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.OrderBy``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1874,6 +1927,7 @@
             <typeparam name="TKey">The type of the order key.</typeparam>
             <param name="keySelector">The expression to order by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.OrderByDescending``1(System.Linq.Expressions.Expression{System.Func{`0,``0}})">
             <summary>
@@ -1882,6 +1936,7 @@
             <typeparam name="TKey">The type of the order key.</typeparam>
             <param name="keySelector">The expression to order by.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when keySelector is null.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Rows(System.Int32,System.Int32)">
             <summary>
@@ -1890,6 +1945,7 @@
             <param name="preceding">The number of preceding rows to include.</param>
             <param name="following">The number of following rows to include.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.RowsUnboundedPreceding">
             <summary>
@@ -1910,6 +1966,8 @@
             <param name="start">The start boundary of the window frame.</param>
             <param name="end">The end boundary of the window frame.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when start or end is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.Range(System.Int32,System.Int32)">
             <summary>
@@ -1918,6 +1976,8 @@
             <param name="preceding">The preceding value range to include.</param>
             <param name="following">The following value range to include.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when preceding or following is negative.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not accept numeric RANGE offsets (<see cref="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets"/>; SQL Server).</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.RangeUnboundedPreceding">
             <summary>
@@ -1938,6 +1998,8 @@
             <param name="start">The start boundary of the window frame.</param>
             <param name="end">The end boundary of the window frame.</param>
             <returns>The current query builder for method chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when start or end is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when a bound is not UNBOUNDED PRECEDING/FOLLOWING, CURRENT ROW or "n PRECEDING/FOLLOWING".</exception>
         </member>
         <member name="M:Durable.Sql.IWindowedQueryBuilder`1.EndWindow">
             <summary>
@@ -3481,71 +3543,78 @@
         </member>
         <member name="T:Durable.Sql.RepositorySettings">
             <summary>
-            Abstract base class for repository connection settings.
-            Derived classes should implement provider-specific connection string parsing and building.
+            Strongly-typed connection settings for a SQL provider (<c>SqliteRepositorySettings</c>, <c>MySqlRepositorySettings</c>,
+            <c>PostgresRepositorySettings</c>, <c>SqlServerRepositorySettings</c>). Each provider adds a static <c>Parse</c> and
+            implements <see cref="M:Durable.Sql.RepositorySettings.BuildConnectionString"/>; pass an instance to the provider's repository or connection factory
+            constructor instead of a connection string.
+            Thread safety: properties are init-only, so an instance is immutable after construction and safe to share.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets the provider these settings are for (for example <see cref="F:Durable.Sql.RepositoryType.Postgres"/>). Never null.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Hostname">
             <summary>
-            The hostname or server address. Default: null
+            Gets the database server host name or address. Default: null. Required by the server providers; unused by SQLite.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Port">
             <summary>
-            The port number for the database server. Default: null (uses provider default)
+            Gets the server port. Default: null (the provider's default port: 3306, 5432 or 1433). Minimum: 1. Maximum: 65535.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Username">
             <summary>
-            The username for authentication. Default: null
+            Gets the user name for password authentication. Default: null (no user name is written).
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Password">
             <summary>
-            The password for authentication. Default: null
+            Gets the password for password authentication. Default: null (no password is written).
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.Database">
             <summary>
-            The database name. Default: null
+            Gets the database (catalog) name. Default: null. Required by PostgreSQL and SQL Server; optional for MySQL;
+            unused by SQLite (see <c>SqliteRepositorySettings.DataSource</c>).
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositorySettings.AdditionalProperties">
             <summary>
-            Additional provider-specific properties. Default: null
+            Gets additional driver connection-string keywords, written verbatim after the typed settings (later values win).
+            Default: null (none). Parse collects keywords it has no typed property for here.
             </summary>
         </member>
         <member name="M:Durable.Sql.RepositorySettings.#ctor">
             <summary>
-            Initializes a new instance of the RepositorySettings class
+            Initializes the base settings.
             </summary>
         </member>
         <member name="M:Durable.Sql.RepositorySettings.BuildConnectionString">
             <summary>
-            Builds a connection string from the current settings
+            Builds the driver connection string from the settings.
             </summary>
-            <returns>A connection string</returns>
+            <returns>The connection string. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a setting the provider requires is missing.</exception>
         </member>
         <member name="T:Durable.Sql.RepositoryType">
             <summary>
             Represents a repository type in an extensible, type-safe manner.
             This class provides built-in repository types (Sqlite, MySql, Postgres, SqlServer)
             and allows users to define custom repository types.
+            Thread safety: immutable; safe to share.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositoryType.Identifier">
             <summary>
-            The unique identifier for this repository type
+            Gets the lower-case identifier used for equality, for example "postgres". Never null.
             </summary>
         </member>
         <member name="P:Durable.Sql.RepositoryType.DisplayName">
             <summary>
-            The display name for this repository type
+            Gets the human-readable name, for example "PostgreSQL". Never null.
             </summary>
         </member>
         <member name="F:Durable.Sql.RepositoryType.Sqlite">

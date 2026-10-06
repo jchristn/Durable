@@ -6,6 +6,7 @@ namespace Durable.Conformance
     /// <summary>
     /// The main scalar entity: identity key, strings, numbers, booleans, dates, a Guid, enums stored by name and as integers,
     /// and a nullable reference navigation to <see cref="CfOwner"/>. Storage: <c>cf_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_items")]
     public class CfItem

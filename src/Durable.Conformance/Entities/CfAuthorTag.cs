@@ -4,6 +4,7 @@ namespace Durable.Conformance
 
     /// <summary>
     /// Junction entity linking <see cref="CfAuthor"/> and <see cref="CfTag"/>. Storage: <c>cf_author_tags</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_author_tags")]
     public class CfAuthorTag

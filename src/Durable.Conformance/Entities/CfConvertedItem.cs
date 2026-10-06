@@ -6,6 +6,7 @@ namespace Durable.Conformance
     /// <summary>
     /// Entity whose properties are stored through value converters (struct to integer, list to text, enum to code).
     /// Storage: <c>cf_converted_items</c>.
+    /// Thread safety: a plain conformance entity; not thread-safe.
     /// </summary>
     [Entity("cf_converted_items")]
     public class CfConvertedItem

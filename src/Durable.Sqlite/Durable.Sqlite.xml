@@ -237,16 +237,18 @@
         <member name="T:Durable.Sqlite.SqliteRepositorySettings">
             <summary>
             Connection settings for SQLite repositories
+            Thread safety: immutable after construction (init-only properties); safe to share.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.Type">
             <summary>
-            The type of repository
+            Gets <see cref="F:Durable.Sql.RepositoryType.Sqlite"/>.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.DataSource">
             <summary>
-            The file path to the SQLite database file. Required for file-based databases.
+            Gets the database file path, or ":memory:" for a private in-memory database. Default: null. Required by
+            <see cref="M:Durable.Sqlite.SqliteRepositorySettings.BuildConnectionString"/>.
             </summary>
         </member>
         <member name="P:Durable.Sqlite.SqliteRepositorySettings.CacheMode">

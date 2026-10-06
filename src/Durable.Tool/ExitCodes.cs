@@ -2,6 +2,7 @@ namespace Durable.Tool
 {
     /// <summary>
     /// Process exit codes returned by <see cref="DurableCli"/>.
+    /// Thread safety: constants only.
     /// </summary>
     public static class ExitCodes
     {

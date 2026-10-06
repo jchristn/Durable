@@ -5,6 +5,7 @@ namespace Durable.DefaultValueProviders
 
     /// <summary>
     /// Provides a static value as a default value
+    /// Thread safety: immutable; safe for concurrent use.
     /// </summary>
     public class StaticValueProvider : IDefaultValueProvider
     {

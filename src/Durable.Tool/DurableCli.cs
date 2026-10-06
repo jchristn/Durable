@@ -14,7 +14,7 @@ namespace Durable.Tool
     /// The <c>durable</c> command-line tool as a library: parses arguments, runs the command and returns the exit code.
     /// <c>Program.Main</c> is a one-line call to <see cref="RunAsync(string[], TextWriter, TextWriter, CancellationToken)"/>,
     /// and tests or other hosts can call it in-process. Output goes to the supplied writers only.
-    /// Each call is independent; concurrent calls are safe when they use different writers.
+    /// Thread safety: each call is independent; concurrent calls are safe when they use different writers.
     /// </summary>
     public static class DurableCli
     {

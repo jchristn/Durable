@@ -1,8 +1,10 @@
 namespace Durable.Sql
 {
     /// <summary>
-    /// Provides the ability to capture and expose the last executed SQL statement.
-    /// This interface is optional and can be implemented by repositories that support SQL tracking.
+    /// Exposes the last SQL statement a repository executed, for debugging and logging. Every SQL repository implements
+    /// it. Capture is per async flow: concurrent operations on one repository each see their own last statement. To get
+    /// the SQL of a single call without turning capture on, use the <c>*WithQuery</c> extensions or
+    /// <see cref="SqlCaptureScope"/>.
     /// </summary>
     public interface ISqlCapture
     {
@@ -20,8 +22,8 @@ namespace Durable.Sql
         string? LastExecutedSqlWithParameters { get; }
 
         /// <summary>
-        /// Gets or sets whether SQL statements should be captured and stored.
-        /// Default value is false for performance reasons.
+        /// Gets or sets whether executed SQL is captured for <see cref="LastExecutedSql"/>. Default: false (initialized from
+        /// <see cref="SqlRepositoryOptions.CaptureSql"/>).
         /// </summary>
         bool CaptureSql { get; set; }
 

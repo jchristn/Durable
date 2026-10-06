@@ -96,6 +96,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         int ExecuteSql(string sql, ITransaction? transaction = null, params object?[] parameters);
 
         /// <summary>
@@ -106,6 +107,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>The value, or default when no row or null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         TResult? ExecuteScalar<TResult>(string sql, ITransaction? transaction = null, params object?[] parameters);
 
         /// <summary>
@@ -116,6 +118,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Entities.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         IAsyncEnumerable<T> FromSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         /// <summary>
@@ -137,6 +140,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         Task<int> ExecuteSqlAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         /// <summary>
@@ -148,6 +152,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>The value, or default.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         Task<TResult?> ExecuteScalarAsync<TResult>(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         /// <summary>
@@ -157,6 +162,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         SqlMultipleResultReader QueryMultiple(string sql, ITransaction? transaction = null, params object?[] parameters);
 
         /// <summary>
@@ -167,6 +173,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Values for @p0, @p1....</param>
         /// <returns>A reader over the result sets. Dispose it to release the connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when sql is null.</exception>
         Task<SqlMultipleResultReader> QueryMultipleAsync(string sql, ITransaction? transaction = null, CancellationToken token = default, params object?[] parameters);
 
         #endregion
@@ -181,6 +188,7 @@ namespace Durable.Sql
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Rows affected as reported by the database.</returns>
         /// <exception cref="NotSupportedException">Thrown on databases without stored procedures (SQLite).</exception>
+        /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
         int ExecuteProcedure(string procedureName, ITransaction? transaction = null, params SqlParameterValue[] parameters);
 
         /// <summary>
@@ -202,6 +210,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <param name="parameters">Named parameters.</param>
         /// <returns>Rows affected.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when procedureName is null.</exception>
         Task<int> ExecuteProcedureAsync(string procedureName, ITransaction? transaction = null, CancellationToken token = default, params SqlParameterValue[] parameters);
 
         /// <summary>
@@ -227,6 +236,7 @@ namespace Durable.Sql
         /// <param name="entities">Entities. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
         /// <returns>Rows inserted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
         long BulkInsert(IEnumerable<T> entities, ITransaction? transaction = null);
 
         /// <summary>
@@ -236,6 +246,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Rows inserted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entities is null.</exception>
         Task<long> BulkInsertAsync(IEnumerable<T> entities, ITransaction? transaction = null, CancellationToken token = default);
 
         #endregion
@@ -258,6 +269,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         Task InitializeTableAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
@@ -265,6 +277,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="entityTypes">Entity types. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
         [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         void InitializeTables(IEnumerable<Type> entityTypes, ITransaction? transaction = null);
 
@@ -275,6 +288,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityTypes is null.</exception>
         [RequiresUnreferencedCode("Entity types passed in a collection cannot be analyzed by trimming, so their public properties may be removed. Under trimming or Native AOT, call the single-type overload for each entity type.")]
         Task InitializeTablesAsync(IEnumerable<Type> entityTypes, ITransaction? transaction = null, CancellationToken token = default);
 
@@ -329,6 +343,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="transaction">Transaction; may be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         void CreateIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null);
 
         /// <summary>
@@ -338,6 +353,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         Task CreateIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
@@ -345,6 +361,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="indexName">Index name. Must not be null or empty.</param>
         /// <param name="transaction">Transaction; may be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when indexName is null.</exception>
         void DropIndex(string indexName, ITransaction? transaction = null);
 
         /// <summary>
@@ -354,6 +371,7 @@ namespace Durable.Sql
         /// <param name="transaction">Transaction; may be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>A task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when indexName is null.</exception>
         Task DropIndexAsync(string indexName, ITransaction? transaction = null, CancellationToken token = default);
 
         /// <summary>
@@ -361,6 +379,7 @@ namespace Durable.Sql
         /// </summary>
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <returns>Index names. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         List<string> GetIndexes([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType);
 
         /// <summary>
@@ -369,6 +388,7 @@ namespace Durable.Sql
         /// <param name="entityType">Entity type. Must not be null.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Index names. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entityType is null.</exception>
         Task<List<string>> GetIndexesAsync([DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] Type entityType, CancellationToken token = default);
 
         /// <summary>

@@ -7,6 +7,7 @@ namespace Durable.Sql
     /// Represents a repository type in an extensible, type-safe manner.
     /// This class provides built-in repository types (Sqlite, MySql, Postgres, SqlServer)
     /// and allows users to define custom repository types.
+    /// Thread safety: immutable; safe to share.
     /// </summary>
     public sealed class RepositoryType : IEquatable<RepositoryType>
     {
@@ -14,12 +15,12 @@ namespace Durable.Sql
         #region Public-Members
 
         /// <summary>
-        /// The unique identifier for this repository type
+        /// Gets the lower-case identifier used for equality, for example "postgres". Never null.
         /// </summary>
         public string Identifier { get; }
 
         /// <summary>
-        /// The display name for this repository type
+        /// Gets the human-readable name, for example "PostgreSQL". Never null.
         /// </summary>
         public string DisplayName { get; }
 
@@ -45,9 +46,6 @@ namespace Durable.Sql
 
         #endregion
 
-        #region Private-Members
-
-        #endregion
 
         #region Constructors-and-Factories
 
@@ -158,9 +156,6 @@ namespace Durable.Sql
 
         #endregion
 
-        #region Private-Methods
-
-        #endregion
 
     }
 
