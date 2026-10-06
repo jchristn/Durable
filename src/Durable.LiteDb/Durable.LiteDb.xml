@@ -870,10 +870,12 @@
         </member>
         <member name="M:Durable.LiteDb.LiteDbTransaction.Commit">
             <inheritdoc />
+            <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="M:Durable.LiteDb.LiteDbTransaction.CommitAsync(System.Threading.CancellationToken)"/> in asynchronous code.</remarks>
             <exception cref="T:System.InvalidOperationException">Thrown when the transaction has completed, or was rolled back because an operation inside it failed.</exception>
         </member>
         <member name="M:Durable.LiteDb.LiteDbTransaction.Rollback">
             <inheritdoc />
+            <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="M:Durable.LiteDb.LiteDbTransaction.RollbackAsync(System.Threading.CancellationToken)"/> in asynchronous code.</remarks>
             <exception cref="T:System.InvalidOperationException">Thrown when the transaction has already completed.</exception>
         </member>
         <member name="M:Durable.LiteDb.LiteDbTransaction.CommitAsync(System.Threading.CancellationToken)">
@@ -886,7 +888,8 @@
         </member>
         <member name="M:Durable.LiteDb.LiteDbTransaction.Dispose">
             <summary>
-            Disposes the transaction, rolling it back when it was not completed, and ends its thread.
+            Disposes the transaction, rolling it back when it was not completed, and ends its thread. Blocks the calling
+            thread until the rollback completes; prefer <see cref="M:Durable.LiteDb.LiteDbTransaction.DisposeAsync"/> in asynchronous code.
             </summary>
         </member>
         <member name="M:Durable.LiteDb.LiteDbTransaction.DisposeAsync">

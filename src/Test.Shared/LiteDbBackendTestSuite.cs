@@ -633,6 +633,10 @@ namespace Test.Shared
             notes.Create(new LiteDbNote { Title = "again" });
             backend.Clear();
             Assert.Empty(backend.GetStoredRows(typeof(LiteDbNote)));
+            backend.QueryPlanned += (sender, plan) => throw new InvalidOperationException("handler failure");
+            Assert.Equal(0L, notes.Count());
+            Assert.Equal("Count", backend.LastQueryPlan!.Operation);
+            Assert.Equal(typeof(LiteDbNote), backend.LastQueryPlan.EntityType);
 
             using CancellationTokenSource canceled = new CancellationTokenSource();
             canceled.Cancel();

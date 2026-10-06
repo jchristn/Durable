@@ -1148,10 +1148,12 @@
         </member>
         <member name="M:Durable.LiteGraph.LiteGraphTransaction.Commit">
             <inheritdoc />
+            <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="M:Durable.LiteGraph.LiteGraphTransaction.CommitAsync(System.Threading.CancellationToken)"/> in asynchronous code.</remarks>
             <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed, when another writer changed a written node, or when LiteGraph rejects the writes; the transaction is then rolled back.</exception>
         </member>
         <member name="M:Durable.LiteGraph.LiteGraphTransaction.Rollback">
             <inheritdoc />
+            <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="M:Durable.LiteGraph.LiteGraphTransaction.RollbackAsync(System.Threading.CancellationToken)"/> in asynchronous code.</remarks>
             <exception cref="T:System.InvalidOperationException">Thrown when the transaction already completed.</exception>
         </member>
         <member name="M:Durable.LiteGraph.LiteGraphTransaction.CommitAsync(System.Threading.CancellationToken)">
@@ -1164,7 +1166,8 @@
         </member>
         <member name="M:Durable.LiteGraph.LiteGraphTransaction.Dispose">
             <summary>
-            Rolls back the transaction when it has not completed.
+            Rolls back the transaction when it has not completed. Blocks the calling thread while another operation of the
+            transaction is running; prefer <see cref="M:Durable.LiteGraph.LiteGraphTransaction.DisposeAsync"/> in asynchronous code.
             </summary>
         </member>
         <member name="M:Durable.LiteGraph.LiteGraphTransaction.DisposeAsync">

@@ -97,6 +97,7 @@ namespace Durable.LiteDb
         #region Public-Methods
 
         /// <inheritdoc />
+        /// <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="CommitAsync"/> in asynchronous code.</remarks>
         /// <exception cref="InvalidOperationException">Thrown when the transaction has completed, or was rolled back because an operation inside it failed.</exception>
         public void Commit()
         {
@@ -104,6 +105,7 @@ namespace Durable.LiteDb
         }
 
         /// <inheritdoc />
+        /// <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="RollbackAsync"/> in asynchronous code.</remarks>
         /// <exception cref="InvalidOperationException">Thrown when the transaction has already completed.</exception>
         public void Rollback()
         {
@@ -127,7 +129,8 @@ namespace Durable.LiteDb
         }
 
         /// <summary>
-        /// Disposes the transaction, rolling it back when it was not completed, and ends its thread.
+        /// Disposes the transaction, rolling it back when it was not completed, and ends its thread. Blocks the calling
+        /// thread until the rollback completes; prefer <see cref="DisposeAsync"/> in asynchronous code.
         /// </summary>
         public void Dispose()
         {

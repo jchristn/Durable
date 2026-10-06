@@ -59,6 +59,7 @@ namespace Durable.LiteGraph
         #region Public-Methods
 
         /// <inheritdoc />
+        /// <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="CommitAsync"/> in asynchronous code.</remarks>
         /// <exception cref="InvalidOperationException">Thrown when the transaction already completed, when another writer changed a written node, or when LiteGraph rejects the writes; the transaction is then rolled back.</exception>
         public void Commit()
         {
@@ -66,6 +67,7 @@ namespace Durable.LiteGraph
         }
 
         /// <inheritdoc />
+        /// <remarks>Blocks the calling thread until the transaction ends; prefer <see cref="RollbackAsync"/> in asynchronous code.</remarks>
         /// <exception cref="InvalidOperationException">Thrown when the transaction already completed.</exception>
         public void Rollback()
         {
@@ -105,7 +107,8 @@ namespace Durable.LiteGraph
         }
 
         /// <summary>
-        /// Rolls back the transaction when it has not completed.
+        /// Rolls back the transaction when it has not completed. Blocks the calling thread while another operation of the
+        /// transaction is running; prefer <see cref="DisposeAsync"/> in asynchronous code.
         /// </summary>
         public void Dispose()
         {
