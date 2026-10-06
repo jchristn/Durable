@@ -62,13 +62,6 @@
             Default: camelCase property names, not indented (the same as the SQL providers).
             </summary>
         </member>
-        <member name="M:Durable.InMemory.InMemoryBackend.#ctor(Durable.RepositoryCapabilities,System.Text.Json.JsonSerializerOptions)">
-            <summary>
-            Instantiates an empty in-memory backend.
-            </summary>
-            <param name="capabilities">Capabilities to advertise. Default: <see cref="F:Durable.RepositoryCapabilities.All"/>.</param>
-            <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
-        </member>
         <member name="M:Durable.InMemory.InMemoryBackend.Create(Durable.InMemory.InMemoryRepositorySettings)">
             <summary>
             Creates an empty in-memory backend.
@@ -320,11 +313,6 @@
         <member name="P:Durable.InMemory.InMemoryRepository`1.Backend">
             <summary>
             Gets the in-memory backend. Never null. The repository does not own or dispose it.
-            </summary>
-        </member>
-        <member name="P:Durable.InMemory.InMemoryRepository`1.Store">
-            <summary>
-            Gets the in-memory backend. Never null.
             </summary>
         </member>
         <member name="M:Durable.InMemory.InMemoryRepository`1.#ctor(Durable.InMemory.InMemoryBackend,Durable.RepositoryOptions)">

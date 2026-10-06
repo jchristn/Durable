@@ -573,9 +573,6 @@ namespace Test.Shared
             InMemoryRepository<RelUpsertItem> items = new InMemoryRepository<RelUpsertItem>(backend);
             Assert.Same(backend, notes.Backend);
             Assert.Same(backend, ((Durable.Query.RepositoryBase<RelTenantNote>)notes).Backend);
-#pragma warning disable CS0618
-            Assert.Same(backend, notes.Store);
-#pragma warning restore CS0618
 
             await using (InMemoryTransaction transaction = await backend.BeginTransactionAsync())
             {

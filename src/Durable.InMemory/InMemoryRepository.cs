@@ -23,12 +23,6 @@ namespace Durable.InMemory
         /// </summary>
         public new InMemoryBackend Backend { get; }
 
-        /// <summary>
-        /// Gets the in-memory backend. Never null.
-        /// </summary>
-        [Obsolete("Use Backend. Store will be removed in 0.6.0.")]
-        public InMemoryBackend Store => Backend;
-
         #endregion
 
         #region Constructors-and-Factories

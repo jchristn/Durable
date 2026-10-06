@@ -93,17 +93,6 @@ namespace Durable.InMemory
 
         #region Constructors-and-Factories
 
-        /// <summary>
-        /// Instantiates an empty in-memory backend.
-        /// </summary>
-        /// <param name="capabilities">Capabilities to advertise. Default: <see cref="RepositoryCapabilities.All"/>.</param>
-        /// <param name="jsonOptions">JSON options for JSON columns; null uses camelCase, non-indented output.</param>
-        [Obsolete("Use InMemoryBackend.Create(new InMemoryRepositorySettings { Capabilities = ..., JsonOptions = ... }). This constructor will be removed in 0.6.0.")]
-        public InMemoryBackend(RepositoryCapabilities capabilities = RepositoryCapabilities.All, JsonSerializerOptions? jsonOptions = null)
-            : this(new InMemoryRepositorySettings { Capabilities = capabilities, JsonOptions = jsonOptions })
-        {
-        }
-
         private InMemoryBackend(InMemoryRepositorySettings settings)
         {
             Capabilities = settings.Capabilities;
