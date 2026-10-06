@@ -131,9 +131,67 @@ namespace Test.Shared
             }
             finally
             {
-                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                using (Microsoft.Data.Sqlite.SqliteConnection connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + path))
+                {
+                    Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+                }
+
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
             }
+        }
+
+        /// <summary>
+        /// Disposing a factory must not clear the driver's connection pool for a connection string that other factories
+        /// share. It used to: clearing the shared pool raced with queries in flight on other factories and failed them with
+        /// <see cref="ObjectDisposedException"/> ("SQLitePCL.sqlite3"). Observed deterministically through the pooled native
+        /// handle, which survives another factory's disposal only when the pool is left alone.
+        /// </summary>
+        [Fact]
+        public async Task DisposingAFactoryKeepsThePoolOfASharedConnectionString()
+        {
+            string connectionString = "Data Source=file:/DurableFactoryDisposeTest" + Guid.NewGuid().ToString("N") + "?vfs=memdb";
+            using SqliteConnectionFactory factory = new SqliteConnectionFactory(connectionString);
+
+            SQLitePCL.sqlite3 before;
+            await using (DbConnection first = await factory.OpenConnectionAsync(CancellationToken.None))
+            {
+                before = ((Microsoft.Data.Sqlite.SqliteConnection)first).Handle!;
+            }
+
+            SqliteConnectionFactory other = new SqliteConnectionFactory(connectionString);
+            await using (DbConnection used = await other.OpenConnectionAsync(CancellationToken.None))
+            {
+            }
+
+            other.Dispose();
+
+            await using (DbConnection second = await factory.OpenConnectionAsync(CancellationToken.None))
+            {
+                Assert.Same(before, ((Microsoft.Data.Sqlite.SqliteConnection)second).Handle);
+            }
+        }
+
+        /// <summary>
+        /// Disposing a factory over ":memory:" releases its private database: a new factory starts empty.
+        /// </summary>
+        [Fact]
+        public async Task DisposingAPrivateMemoryFactoryReleasesItsDatabase()
+        {
+            string connectionString;
+            using (SqliteConnectionFactory factory = new SqliteConnectionFactory("Data Source=:memory:"))
+            {
+                connectionString = factory.ConnectionString;
+                await using DbConnection connection = await factory.OpenConnectionAsync(CancellationToken.None);
+                await using DbCommand create = connection.CreateCommand();
+                create.CommandText = "CREATE TABLE private_items (id INTEGER PRIMARY KEY)";
+                await create.ExecuteNonQueryAsync();
+            }
+
+            await using Microsoft.Data.Sqlite.SqliteConnection reopened = new Microsoft.Data.Sqlite.SqliteConnection(connectionString);
+            await reopened.OpenAsync();
+            await using DbCommand check = reopened.CreateCommand();
+            check.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE name = 'private_items'";
+            Assert.Equal(0L, Convert.ToInt64(await check.ExecuteScalarAsync()));
         }
 
         #endregion

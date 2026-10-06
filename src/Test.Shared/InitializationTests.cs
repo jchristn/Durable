@@ -43,6 +43,11 @@ namespace Test.Shared
             {
                 try
                 {
+                    using (Microsoft.Data.Sqlite.SqliteConnection connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + dbPath))
+                    {
+                        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+                    }
+
                     if (File.Exists(dbPath))
                     {
                         File.Delete(dbPath);

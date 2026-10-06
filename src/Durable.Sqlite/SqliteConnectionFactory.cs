@@ -18,6 +18,10 @@ namespace Durable.Sqlite
     /// surfaces as an <see cref="ArgumentOutOfRangeException"/>. Other connection strings are used as given, so raw
     /// connections opened with the same string see the same database; to share a named in-memory database safely under
     /// concurrency, use <c>Data Source=file:/name?vfs=memdb</c> rather than <c>Mode=Memory;Cache=Shared</c>.
+    /// Disposing the factory releases the private ":memory:" database. It does not clear the driver's connection pool for
+    /// other connection strings, because other factories may be using that pool concurrently; to release a database file or
+    /// a named in-memory database once nothing uses it, call <c>SqliteConnection.ClearPool</c> or
+    /// <c>SqliteConnection.ClearAllPools</c>.
     /// Thread safety: safe for concurrent use.
     /// </summary>
     public sealed class SqliteConnectionFactory : ConnectionFactory
@@ -57,6 +61,7 @@ namespace Durable.Sqlite
 
         private readonly object _KeepAliveLock = new object();
         private SqliteConnection? _KeepAlive;
+        private bool _OwnsPrivateDatabase;
         private int _BusyTimeoutMilliseconds = 30000;
 
         #endregion
@@ -90,6 +95,7 @@ namespace Durable.Sqlite
                 builder.DataSource = MemoryDatabaseUri("durable-" + Guid.NewGuid().ToString("N"));
                 builder.Mode = SqliteOpenMode.ReadWriteCreate;
                 builder.Cache = SqliteCacheMode.Default;
+                _OwnsPrivateDatabase = true;
             }
 
             IsInMemory = builder.Mode == SqliteOpenMode.Memory || builder.DataSource.Contains("vfs=memdb", StringComparison.OrdinalIgnoreCase);
@@ -163,9 +169,14 @@ namespace Durable.Sqlite
                     _KeepAlive = null;
                 }
 
-                using (SqliteConnection connection = new SqliteConnection(ConnectionString))
+                // Only the private database generated for ":memory:" is cleared: its connection string is unique to this
+                // factory. Clearing the pool of a shared connection string races with other factories still using it.
+                if (_OwnsPrivateDatabase)
                 {
-                    SqliteConnection.ClearPool(connection);
+                    using (SqliteConnection connection = new SqliteConnection(ConnectionString))
+                    {
+                        SqliteConnection.ClearPool(connection);
+                    }
                 }
             }
 

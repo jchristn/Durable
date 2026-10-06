@@ -6,6 +6,7 @@
     using Durable.Sql;
     using Durable.Sqlite;
     using Durable.ConcurrencyConflictResolvers;
+    using Microsoft.Data.Sqlite;
     using Xunit;
     
     /// <summary>
@@ -25,7 +26,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
                 
                 using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
                 {
@@ -61,7 +62,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -77,7 +78,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
                 
                 using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString))
                 {
@@ -113,7 +114,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -129,7 +130,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new ClientWinsResolver<Author>();
                 using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
@@ -163,7 +164,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -179,7 +180,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new DatabaseWinsResolver<Author>();
                 using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
@@ -215,7 +216,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -231,7 +232,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
                 
                 IConcurrencyConflictResolver<Author> resolver = new MergeChangesResolver<Author>("Id", "Version");
                 using (SqliteRepository<Author> repo = new SqliteRepository<Author>(connectionString) { ConflictResolver = resolver })
@@ -272,7 +273,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -288,7 +289,7 @@
             try
             {
                 // Clean up any existing database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
 
                 using (SqliteRepository<Company> repo = new SqliteRepository<Company>(connectionString))
                 {
@@ -318,7 +319,7 @@
             finally
             {
                 // Clean up database file
-                if (File.Exists(dbFile)) File.Delete(dbFile);
+                DeleteDatabase(connectionString, dbFile);
             }
         }
         
@@ -359,6 +360,17 @@
                     command.ExecuteNonQuery();
                 }
             }
+        }
+
+        private static void DeleteDatabase(string connectionString, string dbFile)
+        {
+            // Pooled connections keep the file open (Windows refuses to delete it); release this database's pool first.
+            using (SqliteConnection connection = new SqliteConnection(connectionString))
+            {
+                SqliteConnection.ClearPool(connection);
+            }
+
+            if (File.Exists(dbFile)) File.Delete(dbFile);
         }
     }
 }
