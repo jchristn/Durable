@@ -23,14 +23,12 @@
             </summary>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when set below 1.</exception>
         </member>
-        <member name="P:Durable.Sql.BatchInsertConfiguration.EnablePreparedStatementReuse">
-            <summary>
-            Gets or sets whether prepared statements are reused across batches where the provider benefits. Default: true.
-            </summary>
-        </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.EnableMultiRowInsert">
             <summary>
-            Gets or sets whether multi-row INSERT syntax is used. When false, rows are inserted one statement at a time. Default: true.
+            Gets or sets whether multi-row INSERT syntax (<c>INSERT ... VALUES (...), (...)</c>) is used for entities without a
+            generated key. When false, each row gets its own INSERT statement; the statements of one chunk
+            (<see cref="P:Durable.Sql.BatchInsertConfiguration.MaxRowsPerBatch"/> rows) are still sent as one command. Entities with a generated key always use one
+            statement per row so keys can be read back. Default: true.
             </summary>
         </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.Default">
@@ -50,7 +48,8 @@
         </member>
         <member name="P:Durable.Sql.BatchInsertConfiguration.Compatible">
             <summary>
-            Gets a new instance that inserts one row per statement.
+            Gets a new instance that inserts one row per statement and per command (no multi-row syntax), for databases or
+            proxies that reject batched statements.
             </summary>
         </member>
         <member name="T:Durable.Sql.ColumnReference">
@@ -452,32 +451,26 @@
         </member>
         <member name="T:Durable.Sql.IBatchInsertConfiguration">
             <summary>
-            Configuration interface for batch insert optimizations.
-            Repository implementations can optionally implement this to customize batch behavior.
+            Batch insert settings read by SQL repositories (<see cref="P:Durable.Sql.SqlRepositoryOptions.BatchConfiguration"/>) for
+            <c>CreateMany</c>. <see cref="T:Durable.Sql.BatchInsertConfiguration"/> is the standard implementation.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.MaxRowsPerBatch">
             <summary>
-            Gets the maximum number of rows to include in a single multi-row INSERT statement.
-            Default is typically 500-1000 depending on the database provider.
+            Gets the maximum number of rows per INSERT command (multi-row statement or batch of single-row statements).
+            Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.MaxParametersPerStatement">
             <summary>
-            Gets the maximum number of parameters per INSERT statement.
-            Some databases have limits (e.g., SQLite has a default limit of 999 parameters).
-            </summary>
-        </member>
-        <member name="P:Durable.Sql.IBatchInsertConfiguration.EnablePreparedStatementReuse">
-            <summary>
-            Gets whether to use prepared statement reuse for batch operations.
-            When true, the same prepared statement is reused across batches.
+            Gets the maximum number of parameters per INSERT command. The effective limit never exceeds the dialect's
+            <see cref="P:Durable.Sql.ISqlDialect.MaxParameters"/>. Minimum: 1.
             </summary>
         </member>
         <member name="P:Durable.Sql.IBatchInsertConfiguration.EnableMultiRowInsert">
             <summary>
-            Gets whether to use multi-row INSERT syntax when possible.
-            When false, falls back to individual INSERT statements in a transaction.
+            Gets whether to use multi-row INSERT syntax for entities without a generated key. When false, each row gets its
+            own INSERT statement (the statements of one chunk are still sent as one command).
             </summary>
         </member>
         <member name="T:Durable.Sql.ICaseExpressionBuilder`1">

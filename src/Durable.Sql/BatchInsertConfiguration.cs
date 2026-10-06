@@ -40,12 +40,10 @@ namespace Durable.Sql
         }
 
         /// <summary>
-        /// Gets or sets whether prepared statements are reused across batches where the provider benefits. Default: true.
-        /// </summary>
-        public bool EnablePreparedStatementReuse { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets whether multi-row INSERT syntax is used. When false, rows are inserted one statement at a time. Default: true.
+        /// Gets or sets whether multi-row INSERT syntax (<c>INSERT ... VALUES (...), (...)</c>) is used for entities without a
+        /// generated key. When false, each row gets its own INSERT statement; the statements of one chunk
+        /// (<see cref="MaxRowsPerBatch"/> rows) are still sent as one command. Entities with a generated key always use one
+        /// statement per row so keys can be read back. Default: true.
         /// </summary>
         public bool EnableMultiRowInsert { get; set; } = true;
 
@@ -65,9 +63,10 @@ namespace Durable.Sql
         public static BatchInsertConfiguration LargeBatch => new BatchInsertConfiguration { MaxRowsPerBatch = 1000 };
 
         /// <summary>
-        /// Gets a new instance that inserts one row per statement.
+        /// Gets a new instance that inserts one row per statement and per command (no multi-row syntax), for databases or
+        /// proxies that reject batched statements.
         /// </summary>
-        public static BatchInsertConfiguration Compatible => new BatchInsertConfiguration { MaxRowsPerBatch = 1, MaxParametersPerStatement = 50, EnablePreparedStatementReuse = false, EnableMultiRowInsert = false };
+        public static BatchInsertConfiguration Compatible => new BatchInsertConfiguration { MaxRowsPerBatch = 1, MaxParametersPerStatement = 50, EnableMultiRowInsert = false };
 
         #endregion
 

@@ -1176,8 +1176,7 @@ namespace Durable.Sql
             int maxParameters = Math.Min(config.MaxParametersPerStatement, Dialect.MaxParameters);
             int perRow = Math.Max(1, _InsertColumns.Count);
             int byParameters = Math.Max(1, maxParameters / perRow);
-            int rows = config.EnableMultiRowInsert ? Math.Min(config.MaxRowsPerBatch, byParameters) : Math.Min(config.MaxRowsPerBatch, byParameters);
-            return Math.Max(1, rows);
+            return Math.Max(1, Math.Min(config.MaxRowsPerBatch, byParameters));
         }
 
         private static IEnumerable<List<T>> Chunk(IReadOnlyList<T> source, int size)

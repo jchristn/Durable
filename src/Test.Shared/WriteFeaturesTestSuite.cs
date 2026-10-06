@@ -61,6 +61,52 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// The BatchInsertConfiguration presets and flags shape the INSERT commands: multi-row syntax puts a chunk in one
+        /// statement, EnableMultiRowInsert = false sends one statement per row in each command, and Compatible sends one
+        /// row per command. Every configuration stores all rows.
+        /// </summary>
+        [Fact]
+        public async Task BatchInsertConfigurationShapesInsertCommands()
+        {
+            List<KeyValuePair<BatchInsertConfiguration, int>> cases = new List<KeyValuePair<BatchInsertConfiguration, int>>
+            {
+                // Expected INSERT statements in the last command for 25 rows.
+                new KeyValuePair<BatchInsertConfiguration, int>(new BatchInsertConfiguration { MaxRowsPerBatch = 10 }, 1),
+                new KeyValuePair<BatchInsertConfiguration, int>(new BatchInsertConfiguration { MaxRowsPerBatch = 10, EnableMultiRowInsert = false }, 5),
+                new KeyValuePair<BatchInsertConfiguration, int>(BatchInsertConfiguration.Compatible, 1),
+                new KeyValuePair<BatchInsertConfiguration, int>(BatchInsertConfiguration.SmallBatch, 1),
+                new KeyValuePair<BatchInsertConfiguration, int>(BatchInsertConfiguration.LargeBatch, 1),
+                new KeyValuePair<BatchInsertConfiguration, int>(BatchInsertConfiguration.Default, 1)
+            };
+
+            Assert.Equal(1, BatchInsertConfiguration.Compatible.MaxRowsPerBatch);
+            Assert.False(BatchInsertConfiguration.Compatible.EnableMultiRowInsert);
+            Assert.Equal(100, BatchInsertConfiguration.SmallBatch.MaxRowsPerBatch);
+            Assert.Equal(200, BatchInsertConfiguration.SmallBatch.MaxParametersPerStatement);
+            Assert.Equal(1000, BatchInsertConfiguration.LargeBatch.MaxRowsPerBatch);
+            Assert.Equal(500, BatchInsertConfiguration.Default.MaxRowsPerBatch);
+            Assert.True(BatchInsertConfiguration.Default.EnableMultiRowInsert);
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BatchInsertConfiguration { MaxRowsPerBatch = 0 });
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BatchInsertConfiguration { MaxParametersPerStatement = 0 });
+
+            foreach (KeyValuePair<BatchInsertConfiguration, int> testCase in cases)
+            {
+                SqlRepositoryOptions options = new SqlRepositoryOptions { BatchConfiguration = testCase.Key, CaptureSql = true };
+                ISqlRepository<RelUpsertItem> repository = RelTestHelpers.CreateRepository<RelUpsertItem>(_Provider, options);
+                await RelTestHelpers.RecreateTableAsync(repository);
+
+                List<RelUpsertItem> rows = Enumerable.Range(0, 25).Select(i => new RelUpsertItem { Code = "c" + i.ToString("00", CultureInfo.InvariantCulture), Name = "n" + i, Quantity = i }).ToList();
+                await repository.CreateManyAsync(rows);
+
+                string sql = repository.LastExecutedSql ?? string.Empty;
+                int statements = CountOccurrences(sql, "INSERT INTO");
+                Assert.True(testCase.Value == statements, "Expected " + testCase.Value + " INSERT statement(s) in the last command but found " + statements + ": " + sql);
+                Assert.Equal(25, await repository.CountAsync());
+                Assert.Equal(Enumerable.Range(0, 25).Sum(), await repository.SumAsync(x => x.Quantity));
+            }
+        }
+
+        /// <summary>
         /// CreateMany with the default batch configuration and 1200 rows (more than one chunk) assigns keys in order.
         /// </summary>
         [Fact]
@@ -309,6 +355,19 @@ namespace Test.Shared
         #endregion
 
         #region Private-Methods
+
+        private static int CountOccurrences(string text, string value)
+        {
+            int count = 0;
+            int index = text.IndexOf(value, StringComparison.OrdinalIgnoreCase);
+            while (index >= 0)
+            {
+                count++;
+                index = text.IndexOf(value, index + value.Length, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return count;
+        }
 
         private static async Task AssertKeysMatchStoredRowsAsync(ISqlRepository<RelSequenceItem> repository, List<RelSequenceItem> result, string prefix)
         {
