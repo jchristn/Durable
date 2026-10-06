@@ -1,0 +1,123 @@
+# Full Durable test run on every push and pull request.
+#
+# - build:     the whole solution (Release) on Linux.
+# - sqlite:    the Touchstone CLI runner on SQLite (which also runs the in-memory backend and the
+#              conformance kit) on Linux, Windows and macOS, for net8.0 and net10.0.
+# - adapters:  the same suites through the xUnit and NUnit adapters (dotnet test, both frameworks).
+# - databases: PostgreSQL, MySQL and SQL Server in disposable docker containers (--docker), both frameworks.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore
+        run: dotnet restore src/Durable.sln
+      - name: Build
+        run: dotnet build src/Durable.sln -c Release --no-restore
+
+  sqlite:
+    name: SQLite (${{ matrix.os }}, ${{ matrix.framework }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        framework: [net8.0, net10.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Run test suites
+        run: dotnet run --project src/Test.Automated/Test.Automated.csproj -c Release -f ${{ matrix.framework }} -- --results test-results.json
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-sqlite-${{ matrix.os }}-${{ matrix.framework }}
+          path: test-results.json
+          if-no-files-found: ignore
+
+  adapters:
+    name: ${{ matrix.adapter }} adapter
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [Xunit, Nunit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: dotnet test
+        run: dotnet test src/Test.${{ matrix.adapter }}/Test.${{ matrix.adapter }}.csproj -c Release --logger "trx;LogFilePrefix=${{ matrix.adapter }}" --results-directory test-results
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.adapter }}
+          path: test-results
+          if-no-files-found: ignore
+
+  databases:
+    name: ${{ matrix.provider }} (${{ matrix.framework }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [postgres, mysql, sqlserver]
+        framework: [net8.0, net10.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Run test suites in a disposable ${{ matrix.provider }} container
+        run: dotnet run --project src/Test.Automated/Test.Automated.csproj -c Release -f ${{ matrix.framework }} -- --type ${{ matrix.provider }} --docker --results test-results.json
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.provider }}-${{ matrix.framework }}
+          path: test-results.json
+          if-no-files-found: ignore
