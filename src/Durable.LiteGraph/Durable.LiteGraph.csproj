@@ -2,6 +2,8 @@
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
+		<!-- Durable code here is trim/AOT-analyzed and warning-free; the LiteGraph dependency is not AOT-compatible, so the
+		     entry points (LiteGraphBackend.Create/CreateAsync) carry RequiresUnreferencedCode/RequiresDynamicCode. -->
 		<IsAotCompatible>true</IsAotCompatible>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Nullable>enable</Nullable>

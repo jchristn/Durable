@@ -61,6 +61,17 @@ namespace Durable.LiteGraph
     /// sequence: a key generated concurrently by two processes is rejected by LiteGraph for the second writer (the write
     /// fails; nothing is overwritten).
     /// </para>
+    /// <para>
+    /// Lifetime: create a backend with <see cref="CreateAsync"/> (or <see cref="Create"/>), share it across repositories,
+    /// and dispose it when done. It disposes the client only when it created it (<see cref="OwnsClient"/>); a client passed
+    /// in with <see cref="LiteGraphRepositorySettings.Client"/> is never disposed. Repositories never dispose the backend.
+    /// </para>
+    /// <para>
+    /// Trimming and Native AOT: not supported. The LiteGraph library uses reflection-based System.Text.Json for its own
+    /// records and <c>DataTable</c> for query results, so <see cref="CreateAsync"/> and <see cref="Create"/> carry
+    /// <see cref="RequiresUnreferencedCodeAttribute"/> and <see cref="RequiresDynamicCodeAttribute"/>. Durable's own code
+    /// in this package is trim-annotated and warning-free.
+    /// </para>
     /// Thread safety: safe for concurrent use by any number of repositories and threads.
     /// </summary>
     public sealed class LiteGraphBackend : IRepositoryBackend, IDisposable, IAsyncDisposable
@@ -128,6 +139,11 @@ namespace Durable.LiteGraph
 
         #region Private-Members
 
+        private const string _NotAotCompatible =
+            "The LiteGraph library serializes its own records with reflection-based System.Text.Json and loads query results "
+            + "through DataTable, which trimming and Native AOT do not support (the backend fails while LiteGraph initializes "
+            + "its repository). Durable.LiteGraph itself is trim-annotated; use LiteGraph on the JIT runtime.";
+
         private static readonly JsonSerializerOptions _DefaultJsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -181,6 +197,8 @@ namespace Durable.LiteGraph
         /// <returns>The backend. Never null. Dispose it when done.</returns>
         /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteGraphRepositorySettings.Validate"/>).</exception>
         /// <exception cref="OperationCanceledException">Thrown when the token is canceled.</exception>
+        [RequiresUnreferencedCode(_NotAotCompatible)]
+        [RequiresDynamicCode(_NotAotCompatible)]
         public static async Task<LiteGraphBackend> CreateAsync(LiteGraphRepositorySettings? settings = null, CancellationToken token = default)
         {
             settings ??= LiteGraphRepositorySettings.ForInMemory();
@@ -242,6 +260,8 @@ namespace Durable.LiteGraph
         /// <param name="settings">Settings; null uses <see cref="LiteGraphRepositorySettings.ForInMemory"/>.</param>
         /// <returns>The backend. Never null. Dispose it when done.</returns>
         /// <exception cref="ArgumentException">Thrown when the settings are invalid (see <see cref="LiteGraphRepositorySettings.Validate"/>).</exception>
+        [RequiresUnreferencedCode(_NotAotCompatible)]
+        [RequiresDynamicCode(_NotAotCompatible)]
         public static LiteGraphBackend Create(LiteGraphRepositorySettings? settings = null)
         {
             settings ??= LiteGraphRepositorySettings.ForInMemory();
