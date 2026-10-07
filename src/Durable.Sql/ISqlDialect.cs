@@ -67,6 +67,23 @@ namespace Durable.Sql
         /// </summary>
         bool DriverEnforcesCommandTimeout { get; }
 
+        /// <summary>
+        /// Gets how many times a statement that runs outside a transaction (autocommit) and fails with a
+        /// <see cref="IsRetryableConflict"/> error is run again, after a short randomized delay. Databases with optimistic
+        /// concurrency (DuckDB) fail a write that conflicts with a concurrent transaction instead of waiting for it; a
+        /// statement on its own was rolled back as a whole, so running it again gives the waiting behavior of other
+        /// databases. Statements inside a transaction are never retried (the transaction is aborted). Default: 0.
+        /// </summary>
+        int AutocommitConflictRetries { get; }
+
+        /// <summary>
+        /// Returns whether an exception is a transient write-write conflict with a concurrent transaction (see
+        /// <see cref="AutocommitConflictRetries"/>). Default: false.
+        /// </summary>
+        /// <param name="exception">Exception thrown by a statement. Must not be null.</param>
+        /// <returns>True when the statement may be run again.</returns>
+        bool IsRetryableConflict(Exception exception);
+
         #endregion
 
         #region Expressions

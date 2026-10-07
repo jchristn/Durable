@@ -261,6 +261,31 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// Concurrent autocommit writes to the same row succeed: a statement outside a transaction that hits a conflict is
+        /// run again (<see cref="DuckDbDialect.AutocommitConflictRetries"/>), as other databases would wait for the lock.
+        /// </summary>
+        [Fact]
+        public async Task ConcurrentAutocommitUpdates_AreRetried()
+        {
+            Assert.True(DuckDbDialect.Default.AutocommitConflictRetries > 0);
+            Assert.Throws<ArgumentOutOfRangeException>(() => new DuckDbDialect(autocommitConflictRetries: -1));
+            ISqlRepository<DuckTypesItem> repository = _Provider.CreateRepository<DuckTypesItem>();
+            await RelTestHelpers.RecreateTableAsync(repository);
+            DuckTypesItem row = await repository.CreateAsync(NewItem("hot"));
+
+            Task[] writers = Enumerable.Range(0, 6).Select(w => Task.Run(async () =>
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    Assert.Equal(1, await repository.UpdateFieldAsync(x => x.Id == row.Id, x => x.Medium, (uint)(w * 100 + i)));
+                    repository.UpdateField(x => x.Id == row.Id, x => x.Small, (ushort)(w * 100 + i));
+                }
+            })).ToArray();
+            await Task.WhenAll(writers);
+            Assert.Equal(1, await repository.CountAsync(x => x.Id == row.Id));
+        }
+
+        /// <summary>
         /// The migration lock is a row in the lock table: a second session cannot take it while it is held, a row left by
         /// another process is treated as stale, and the lock table is not reported as a user table.
         /// </summary>

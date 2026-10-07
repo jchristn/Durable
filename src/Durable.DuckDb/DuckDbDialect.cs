@@ -55,6 +55,14 @@ namespace Durable.DuckDb
         /// <remarks>DuckDB.NET ignores <see cref="DbCommand.CommandTimeout"/>; the engine cancels commands that exceed <see cref="SqlRepositoryOptions.CommandTimeoutSeconds"/>.</remarks>
         public override bool DriverEnforcesCommandTimeout => false;
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// DuckDB fails an UPDATE or DELETE of a row that a concurrent transaction changed ("Conflict on update") instead of
+        /// waiting. Statements outside a transaction are run again up to this many times, so concurrent autocommit writes to
+        /// the same rows behave as on other databases. Writes inside a transaction still fail with the conflict. Default: 10.
+        /// </remarks>
+        public override int AutocommitConflictRetries { get; }
+
         /// <summary>
         /// Gets the collation applied by <see cref="OrdinalCollation"/> for ordinal and ignore-case string matching.
         /// Default: binary. DuckDB compares strings by byte (code point) order unless a default collation such as
@@ -109,12 +117,16 @@ namespace Durable.DuckDb
         /// <param name="converter">Converter; null uses <see cref="DuckDbDataTypeConverter"/>.</param>
         /// <param name="ordinalCollation">Collation for ordinal string matching. Default: binary.</param>
         /// <param name="migrationLockTableName">Table holding migration locks. Default: durable_migration_lock.</param>
+        /// <param name="autocommitConflictRetries">How often a conflicting statement outside a transaction is run again (see <see cref="AutocommitConflictRetries"/>). Default: 10. Minimum: 0.</param>
         /// <exception cref="ArgumentException">Thrown when ordinalCollation or migrationLockTableName is not a simple identifier.</exception>
-        public DuckDbDialect(IDataTypeConverter? converter = null, string ordinalCollation = "binary", string migrationLockTableName = "durable_migration_lock")
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when autocommitConflictRetries is negative.</exception>
+        public DuckDbDialect(IDataTypeConverter? converter = null, string ordinalCollation = "binary", string migrationLockTableName = "durable_migration_lock", int autocommitConflictRetries = 10)
             : base(converter ?? new DuckDbDataTypeConverter())
         {
+            if (autocommitConflictRetries < 0) throw new ArgumentOutOfRangeException(nameof(autocommitConflictRetries), "autocommitConflictRetries cannot be negative.");
             OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
             MigrationLockTableName = SqlIdentifierValidator.RequireIdentifier(migrationLockTableName, nameof(migrationLockTableName));
+            AutocommitConflictRetries = autocommitConflictRetries;
         }
 
         #endregion
@@ -479,6 +491,24 @@ namespace Durable.DuckDb
             return new SqlStatement(
                 "DELETE FROM " + QuoteIdentifier(MigrationLockTableName) + " WHERE " + QuoteIdentifier("name") + " = $p0",
                 new[] { new SqlParameterValue(FormatParameterName(0), lockName) });
+        }
+
+        /// <inheritdoc />
+        /// <remarks>True for DuckDB write-write conflicts ("Conflict on update", "Conflict on tuple deletion", catalog write-write conflicts).</remarks>
+        public override bool IsRetryableConflict(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            for (Exception? current = exception; current != null; current = current.InnerException)
+            {
+                if (current is DuckDBException duck)
+                {
+                    string message = duck.Message ?? string.Empty;
+                    return message.Contains("Conflict on", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("write-write conflict", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return false;
         }
 
         /// <inheritdoc />

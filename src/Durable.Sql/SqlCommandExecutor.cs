@@ -185,6 +185,21 @@ namespace Durable.Sql
         /// <returns>Rows affected.</returns>
         public int ExecuteNonQuery(ConnectionLease lease, SqlStatement statement, string operation, CommandType commandType = CommandType.Text)
         {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return ExecuteNonQueryOnce(lease, statement, operation, commandType);
+                }
+                catch (Exception e) when (ShouldRetryConflict(lease, e, attempt))
+                {
+                    Thread.Sleep(ConflictRetryDelay(attempt));
+                }
+            }
+        }
+
+        private int ExecuteNonQueryOnce(ConnectionLease lease, SqlStatement statement, string operation, CommandType commandType)
+        {
             using DbCommand command = CreateCommand(lease, statement);
             command.CommandType = commandType;
             CommandScope scope = Begin(command, statement, operation);
@@ -231,6 +246,21 @@ namespace Durable.Sql
         /// <param name="commandType">Command type. Default: text.</param>
         /// <returns>Rows affected.</returns>
         public async Task<int> ExecuteNonQueryAsync(ConnectionLease lease, SqlStatement statement, string operation, CancellationToken token, CommandType commandType = CommandType.Text)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await ExecuteNonQueryOnceAsync(lease, statement, operation, token, commandType).ConfigureAwait(false);
+                }
+                catch (Exception e) when (ShouldRetryConflict(lease, e, attempt))
+                {
+                    await Task.Delay(ConflictRetryDelay(attempt), token).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private async Task<int> ExecuteNonQueryOnceAsync(ConnectionLease lease, SqlStatement statement, string operation, CancellationToken token, CommandType commandType)
         {
             DbCommand command = CreateCommand(lease, statement);
             await using (command.ConfigureAwait(false))
@@ -669,6 +699,19 @@ namespace Durable.Sql
                 DbParameter parameter = command.Parameters[value.Name];
                 value.Value = parameter.Value == DBNull.Value ? null : parameter.Value;
             }
+        }
+
+        private bool ShouldRetryConflict(ConnectionLease lease, Exception exception, int attempt)
+        {
+            // Only a statement that ran on its own (autocommit, no transaction) is retried: it was rolled back as a whole,
+            // so running it again is equivalent to a database that waits for the conflicting writer.
+            return lease.Transaction == null && attempt <= Dialect.AutocommitConflictRetries && Dialect.IsRetryableConflict(exception);
+        }
+
+        private static TimeSpan ConflictRetryDelay(int attempt)
+        {
+            int ceiling = Math.Min(50, 2 << Math.Min(attempt, 5));
+            return TimeSpan.FromMilliseconds(Random.Shared.Next(1, ceiling + 1));
         }
 
         private CommandScope Begin(DbCommand command, SqlStatement statement, string operation)

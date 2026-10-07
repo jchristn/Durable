@@ -63,6 +63,9 @@ namespace Durable.Sql
         /// <inheritdoc />
         public virtual bool DriverEnforcesCommandTimeout => true;
 
+        /// <inheritdoc />
+        public virtual int AutocommitConflictRetries => 0;
+
         // Migrations
 
         /// <inheritdoc />
@@ -425,6 +428,13 @@ namespace Durable.Sql
         public virtual SqlStatement? ReleaseMigrationLockSql(string lockName)
         {
             return null;
+        }
+
+        /// <inheritdoc />
+        public virtual bool IsRetryableConflict(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return false;
         }
 
         /// <inheritdoc />

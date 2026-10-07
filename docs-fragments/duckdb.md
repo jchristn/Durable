@@ -52,21 +52,26 @@ A repository created from a connection string owns its factory, so `new DuckDbRe
 is a private database for that one repository. Share one factory instead.
 
 Concurrency. DuckDB uses optimistic multi-version concurrency control: transactions never wait for each other, and a
-transaction that updates or deletes a row another concurrent transaction changed fails with
-`TransactionContext Error: Conflict on update` (a `DuckDBException`) instead of blocking. Retry such failures where
-several threads update the same rows; inserts of different rows do not conflict.
+write to a row another concurrent transaction changed fails with `TransactionContext Error: Conflict on update` (a
+`DuckDBException`) instead of blocking. Durable runs a conflicting statement that executes on its own (no
+transaction) again, up to `DuckDbDialect.AutocommitConflictRetries` times (default 10, a constructor parameter) after a
+short randomized delay, so concurrent autocommit updates and deletes of the same rows succeed as they would on a
+database that waits for row locks. Inside a transaction the conflict aborts the transaction and is thrown; retry the
+whole transaction there. Inserts of different rows do not conflict.
 
 ```csharp
 for (int attempt = 1; ; attempt++)
 {
+    await using ISqlTransaction transaction = await inMemoryPeople.BeginTransactionAsync();
     try
     {
-        await inMemoryPeople.UpdateFieldAsync(p => p.Id == first.Id, p => p.Age, 42);
+        await inMemoryPeople.UpdateFieldAsync(p => p.Id == first.Id, p => p.Age, 42, transaction);
+        await transaction.CommitAsync();
         break;
     }
     catch (DuckDBException e) when (attempt < 3 && e.Message.Contains("Conflict", StringComparison.OrdinalIgnoreCase))
     {
-        await Task.Delay(10 * attempt);   // another transaction changed the row first: retry
+        await Task.Delay(10 * attempt);   // another transaction changed the row first: retry the transaction
     }
 }
 ```
@@ -164,7 +169,7 @@ CI sentence: "CI tests against SQLite and DuckDB (both bundled, in-process, on L
 | `Capabilities` | All |
 | Full LINQ, Include, grouping, projections, aggregates | Yes |
 | Where queries run | Database |
-| Transactions | Database (optimistic MVCC: conflicting writers fail instead of waiting) |
+| Transactions | Database (optimistic MVCC: conflicting writers in transactions fail instead of waiting; autocommit statements are retried) |
 | Savepoints | No |
 | Upsert, `BatchUpdate`, `UpdateField` | Yes |
 | `StringMatchMode.Database` behaves as | Collation (binary by default: exact, case-sensitive `LIKE`) |
@@ -221,7 +226,7 @@ Add after the table: "On DuckDB, a value converter whose provider type is `Syste
 
 ### Troubleshooting and FAQ
 
-| DuckDB: `TransactionContext Error: Conflict on update` | DuckDB's concurrency control is optimistic: a transaction that updates a row another open transaction changed fails instead of waiting. Retry the operation (see [DuckDB](#duckdb)), or serialize writers to the same rows. |
+| DuckDB: `TransactionContext Error: Conflict on update` | DuckDB's concurrency control is optimistic: a write to a row another open transaction changed fails instead of waiting. Durable retries statements outside transactions (`AutocommitConflictRetries`); inside a transaction, retry the whole transaction (see [DuckDB](#duckdb)) or serialize writers to the same rows. |
 | DuckDB `:memory:` data disappears, or two repositories see different data | Each `DuckDbConnectionFactory` built from `:memory:` (and each repository created from a `:memory:` connection string) is its own database, alive while the factory lives. Share one factory, or use `:memory:?cache=shared` for one database per process. |
 | DuckDB: `Dependency Error: Cannot alter entry ... because there are entries that depend on it` | DuckDB cannot drop a column, make one NOT NULL or change its type while the table has indexes. Schema sync handles this for you; in a hand-written migration, drop the indexes first and re-create them afterwards. |
 | DuckDB: `Could not set lock on file` | A read-write DuckDB file is open in another process (including a still-running app or another factory's root connection). Dispose the factories (or repositories that own them) that use the file, or open it read-only (`AccessMode = DuckDBAccessMode.ReadOnly`) from the other processes. |
@@ -241,11 +246,12 @@ Add after the table: "On DuckDB, a value converter whose provider type is `Syste
 
 ### Durable.Sql
 
-- New `ISqlDialect` members, all with defaults on `SqlDialect` that keep existing behavior (custom dialects implementing `ISqlDialect` directly must add them): `SupportsSavepoints`, `DriverEnforcesCommandTimeout`, `SupportsStringMaxLength`, `AlterTableRequiresDroppingIndexes`, `IsMigrationLockContention(Exception)`.
+- New `ISqlDialect` members, all with defaults on `SqlDialect` that keep existing behavior (custom dialects implementing `ISqlDialect` directly must add them): `SupportsSavepoints`, `DriverEnforcesCommandTimeout`, `AutocommitConflictRetries`, `IsRetryableConflict(Exception)`, `SupportsStringMaxLength`, `AlterTableRequiresDroppingIndexes`, `IsMigrationLockContention(Exception)`.
 - `ISqlTransaction.CreateSavepoint(Async)` throws `NotSupportedException` when the dialect does not support savepoints.
 - The command executor enforces `SqlRepositoryOptions.CommandTimeoutSeconds` (cancel, then `TimeoutException`) for drivers that ignore `DbCommand.CommandTimeout`.
 - The migrator treats a lock attempt that fails with a dialect-reported contention error as "not acquired" and polls again.
 - Schema comparison wraps column drops and NOT NULL column additions with index drop/re-create for dialects that require it.
+- New `ISqlDialect.AutocommitConflictRetries` and `IsRetryableConflict(Exception)` (defaults: 0 and false): the executor runs a statement that executed outside a transaction and failed with a retryable write-write conflict again, after a short randomized delay (DuckDB: 10 retries).
 - `Sum`/`Average` results are converted through the data type converter (drivers may return aggregates as types without `IConvertible`, such as `BigInteger`).
 - `RepositoryType.DuckDb`.
 
@@ -259,7 +265,7 @@ Add after the table: "On DuckDB, a value converter whose provider type is `Syste
 
 ### Tests and CI
 
-- DuckDB runs every SQL suite (721 cases incl. the new `DuckDbProvider` suite) in process, in memory or on a file (`--type duckdb [--filename <path>]`); CI job "DuckDB" on Linux, Windows and macOS for net8.0 and net10.0.
+- DuckDB runs every SQL suite (722 cases incl. the new `DuckDbProvider` suite) in process, in memory or on a file (`--type duckdb [--filename <path>]`); CI job "DuckDB" on Linux, Windows and macOS for net8.0 and net10.0.
 - Suites gate on dialect capabilities instead of database names where DuckDB differs: savepoints (`SupportsSavepoints`, asserting `NotSupportedException`), stored procedures (`SupportsStoredProcedures`), string lengths (`SupportsStringMaxLength`); raw ADO.NET helpers use the dialect's parameter names.
 - `Test.Aot` runs a DuckDB scenario on .NET 9+ (DuckDB.NET.Data compiled in single-warn mode, like LiteDB); its ledger migration uses portable SQL.
 
@@ -286,7 +292,7 @@ Published packages list: add `Durable.DuckDb` (after `Durable.Sqlite`) and updat
 
 Notes (Important Implementation Notes or Common Patterns):
 
-- **DuckDB** (`Durable.DuckDb`) is in-process. `DuckDbConnectionFactory` keeps a root connection open for its lifetime (DuckDB has no pool; a database lives while a connection is open): `:memory:` is private to one factory (connections are `Duplicate()`s of the root), `:memory:?cache=shared` is process-wide, files hold DuckDB's single-writer-process lock until the factory is disposed. Concurrency is optimistic MVCC ("Conflict on update" instead of waiting). Dialect flags: `SupportsSavepoints`, `SupportsStoredProcedures`, `SupportsTransactionalDdl`, `SupportsStringMaxLength` false; `AlterTableRequiresDroppingIndexes` and `!DriverEnforcesCommandTimeout` true. Parameters are `$p0` (the dialect strips `$` for DuckDB.NET). Auto-increment keys are sequences `{table}_{column}_seq`; the migration lock is a row in `durable_migration_lock`. Gate tests on these dialect flags, never on `TestDatabaseType.DuckDb`.
+- **DuckDB** (`Durable.DuckDb`) is in-process. `DuckDbConnectionFactory` keeps a root connection open for its lifetime (DuckDB has no pool; a database lives while a connection is open): `:memory:` is private to one factory (connections are `Duplicate()`s of the root), `:memory:?cache=shared` is process-wide, files hold DuckDB's single-writer-process lock until the factory is disposed. Concurrency is optimistic MVCC ("Conflict on update" instead of waiting); the executor retries autocommit statements (`AutocommitConflictRetries`), never statements inside a transaction. Dialect flags: `SupportsSavepoints`, `SupportsStoredProcedures`, `SupportsTransactionalDdl`, `SupportsStringMaxLength` false; `AlterTableRequiresDroppingIndexes` and `!DriverEnforcesCommandTimeout` true. Parameters are `$p0` (the dialect strips `$` for DuckDB.NET). Auto-increment keys are sequences `{table}_{column}_seq`; the migration lock is a row in `durable_migration_lock`. Gate tests on these dialect flags, never on `TestDatabaseType.DuckDb`.
 - Dependencies: Durable.DuckDb uses DuckDB.NET.Data.Full 1.5.6 (not trim-annotated; Test.Aot compiles it single-warn on .NET 9+, like LiteDB).
 
 ## Limitations and capability gates (summary)
@@ -299,4 +305,5 @@ Notes (Important Implementation Notes or Common Patterns):
 | `SupportsStringMaxLength` | false | `VARCHAR(n)` lengths are not stored | "String lengths" |
 | `AlterTableRequiresDroppingIndexes` | true | `DROP COLUMN`, `SET NOT NULL`, type changes fail while indexes exist | "Altering indexed tables" |
 | `DriverEnforcesCommandTimeout` | false | DuckDB.NET ignores `CommandTimeout` | "Command timeout" |
+| `AutocommitConflictRetries` | 10 | Optimistic MVCC fails conflicting writers instead of waiting | "Concurrency" |
 | Native AOT on .NET 8 | not verified in Test.Aot | .NET 8 ILC cannot summarize DuckDB.NET's warnings | Native AOT provider-support row |

@@ -785,6 +785,23 @@
             enforced this way; without one, commands run until they finish. Default: true.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.AutocommitConflictRetries">
+            <summary>
+            Gets how many times a statement that runs outside a transaction (autocommit) and fails with a
+            <see cref="M:Durable.Sql.ISqlDialect.IsRetryableConflict(System.Exception)"/> error is run again, after a short randomized delay. Databases with optimistic
+            concurrency (DuckDB) fail a write that conflicts with a concurrent transaction instead of waiting for it; a
+            statement on its own was rolled back as a whole, so running it again gives the waiting behavior of other
+            databases. Statements inside a transaction are never retried (the transaction is aborted). Default: 0.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.IsRetryableConflict(System.Exception)">
+            <summary>
+            Returns whether an exception is a transient write-write conflict with a concurrent transaction (see
+            <see cref="P:Durable.Sql.ISqlDialect.AutocommitConflictRetries"/>). Default: false.
+            </summary>
+            <param name="exception">Exception thrown by a statement. Must not be null.</param>
+            <returns>True when the statement may be run again.</returns>
+        </member>
         <member name="M:Durable.Sql.ISqlDialect.BooleanLiteral(System.Boolean)">
             <summary>
             Returns the SQL literal for a boolean (TRUE/FALSE or 1/0).
@@ -4606,6 +4623,9 @@
         <member name="P:Durable.Sql.SqlDialect.DriverEnforcesCommandTimeout">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.AutocommitConflictRetries">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsTransactionalDdl">
             <inheritdoc />
         </member>
@@ -4746,6 +4766,9 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.IsRetryableConflict(System.Exception)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.IsMigrationLockContention(System.Exception)">

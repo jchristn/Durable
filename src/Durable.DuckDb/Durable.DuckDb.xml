@@ -137,6 +137,14 @@
             <inheritdoc />
             <remarks>DuckDB.NET ignores <see cref="P:System.Data.Common.DbCommand.CommandTimeout"/>; the engine cancels commands that exceed <see cref="P:Durable.Sql.SqlRepositoryOptions.CommandTimeoutSeconds"/>.</remarks>
         </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.AutocommitConflictRetries">
+            <inheritdoc />
+            <remarks>
+            DuckDB fails an UPDATE or DELETE of a row that a concurrent transaction changed ("Conflict on update") instead of
+            waiting. Statements outside a transaction are run again up to this many times, so concurrent autocommit writes to
+            the same rows behave as on other databases. Writes inside a transaction still fail with the conflict. Default: 10.
+            </remarks>
+        </member>
         <member name="P:Durable.DuckDb.DuckDbDialect.OrdinalCollationName">
             <summary>
             Gets the collation applied by <see cref="M:Durable.DuckDb.DuckDbDialect.OrdinalCollation(System.String)"/> for ordinal and ignore-case string matching.
@@ -171,14 +179,16 @@
         <member name="P:Durable.DuckDb.DuckDbDialect.CurrentUtcTimestampSql">
             <inheritdoc />
         </member>
-        <member name="M:Durable.DuckDb.DuckDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String,System.String)">
+        <member name="M:Durable.DuckDb.DuckDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String,System.String,System.Int32)">
             <summary>
             Instantiates the dialect.
             </summary>
             <param name="converter">Converter; null uses <see cref="T:Durable.DuckDb.DuckDbDataTypeConverter"/>.</param>
             <param name="ordinalCollation">Collation for ordinal string matching. Default: binary.</param>
             <param name="migrationLockTableName">Table holding migration locks. Default: durable_migration_lock.</param>
+            <param name="autocommitConflictRetries">How often a conflicting statement outside a transaction is run again (see <see cref="P:Durable.DuckDb.DuckDbDialect.AutocommitConflictRetries"/>). Default: 10. Minimum: 0.</param>
             <exception cref="T:System.ArgumentException">Thrown when ordinalCollation or migrationLockTableName is not a simple identifier.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when autocommitConflictRetries is negative.</exception>
         </member>
         <member name="M:Durable.DuckDb.DuckDbDialect.FormatParameterName(System.Int32)">
             <inheritdoc />
@@ -285,6 +295,10 @@
         </member>
         <member name="M:Durable.DuckDb.DuckDbDialect.ReleaseMigrationLockSql(System.String)">
             <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.IsRetryableConflict(System.Exception)">
+            <inheritdoc />
+            <remarks>True for DuckDB write-write conflicts ("Conflict on update", "Conflict on tuple deletion", catalog write-write conflicts).</remarks>
         </member>
         <member name="M:Durable.DuckDb.DuckDbDialect.IsMigrationLockContention(System.Exception)">
             <inheritdoc />
