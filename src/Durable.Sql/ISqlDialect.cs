@@ -209,6 +209,12 @@ namespace Durable.Sql
         /// </summary>
         bool SupportsStoredProcedures { get; }
 
+        /// <summary>
+        /// Gets whether stored procedure calls may pass arguments by name. When false (CockroachDB), procedure parameters are
+        /// sent positionally, in the order supplied, and their names are ignored.
+        /// </summary>
+        bool SupportsNamedProcedureArguments { get; }
+
         #endregion
 
         #region Transactions
@@ -443,6 +449,14 @@ namespace Durable.Sql
         /// <param name="waitSeconds">Seconds to wait inside the statement. Minimum: 0.</param>
         /// <returns>The statement, or null.</returns>
         SqlStatement? AcquireMigrationLockSql(string lockName, int waitSeconds);
+
+        /// <summary>
+        /// Returns a statement the migrator runs once, outside any transaction, before its first
+        /// <see cref="AcquireMigrationLockSql"/> attempt (for example creating a lock table on a database without session
+        /// locks), or null when nothing is needed (the default).
+        /// </summary>
+        /// <returns>The statement, or null.</returns>
+        SqlStatement? PrepareMigrationLockSql();
 
         /// <summary>
         /// Returns a statement releasing the lock taken by <see cref="AcquireMigrationLockSql"/>, or null when there is none.

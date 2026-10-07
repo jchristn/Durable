@@ -917,6 +917,12 @@
             Gets whether the database supports stored procedures.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsNamedProcedureArguments">
+            <summary>
+            Gets whether stored procedure calls may pass arguments by name. When false (CockroachDB), procedure parameters are
+            sent positionally, in the order supplied, and their names are ignored.
+            </summary>
+        </member>
         <member name="M:Durable.Sql.ISqlDialect.CreateSavepointSql(System.String)">
             <summary>
             Returns SQL that creates a savepoint.
@@ -1140,6 +1146,14 @@
             </summary>
             <param name="lockName">Lock name. Must not be null.</param>
             <param name="waitSeconds">Seconds to wait inside the statement. Minimum: 0.</param>
+            <returns>The statement, or null.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.PrepareMigrationLockSql">
+            <summary>
+            Returns a statement the migrator runs once, outside any transaction, before its first
+            <see cref="M:Durable.Sql.ISqlDialect.AcquireMigrationLockSql(System.String,System.Int32)"/> attempt (for example creating a lock table on a database without session
+            locks), or null when nothing is needed (the default).
+            </summary>
             <returns>The statement, or null.</returns>
         </member>
         <member name="M:Durable.Sql.ISqlDialect.ReleaseMigrationLockSql(System.String)">
@@ -4554,6 +4568,9 @@
         <member name="P:Durable.Sql.SqlDialect.SupportsStoredProcedures">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsNamedProcedureArguments">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.Sql.SqlDialect.StringCastType">
             <inheritdoc />
         </member>
@@ -4691,6 +4708,9 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.PrepareMigrationLockSql">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.AcquireMigrationLockSql(System.String,System.Int32)">

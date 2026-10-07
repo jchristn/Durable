@@ -184,7 +184,8 @@ namespace Test.Shared
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb:
                     NpgsqlConnection.ClearAllPools();
-                    await ExecuteOnServerAsync("DROP DATABASE IF EXISTS " + Q(name) + " WITH (FORCE)");
+                    // CockroachDB has no WITH (FORCE); CASCADE drops the database even while it has objects.
+                    await ExecuteOnServerAsync("DROP DATABASE IF EXISTS " + Q(name) + (_Provider.DatabaseType == TestDatabaseType.CockroachDb ? " CASCADE" : " WITH (FORCE)"));
                     return;
                 case TestDatabaseType.SqlServer:
                     SqlConnection.ClearAllPools();

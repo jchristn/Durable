@@ -186,7 +186,7 @@ namespace Durable.Sql
         public int ExecuteNonQuery(ConnectionLease lease, SqlStatement statement, string operation, CommandType commandType = CommandType.Text)
         {
             using DbCommand command = CreateCommand(lease, statement);
-            command.CommandType = commandType;
+            ApplyCommandType(command, commandType);
             CommandScope scope = Begin(command, statement, operation);
             try
             {
@@ -234,7 +234,7 @@ namespace Durable.Sql
             DbCommand command = CreateCommand(lease, statement);
             await using (command.ConfigureAwait(false))
             {
-                command.CommandType = commandType;
+                ApplyCommandType(command, commandType);
                 CommandScope scope = Begin(command, statement, operation);
                 try
                 {
@@ -399,7 +399,7 @@ namespace Durable.Sql
         public TResult ExecuteReader<TResult>(ConnectionLease lease, SqlStatement statement, string operation, Func<DbDataReader, TResult> consume, CommandType commandType = CommandType.Text)
         {
             using DbCommand command = CreateCommand(lease, statement);
-            command.CommandType = commandType;
+            ApplyCommandType(command, commandType);
             CommandScope scope = Begin(command, statement, operation);
             try
             {
@@ -456,7 +456,7 @@ namespace Durable.Sql
             DbCommand command = CreateCommand(lease, statement);
             await using (command.ConfigureAwait(false))
             {
-                command.CommandType = commandType;
+                ApplyCommandType(command, commandType);
                 CommandScope scope = Begin(command, statement, operation);
                 try
                 {
@@ -543,7 +543,7 @@ namespace Durable.Sql
             try
             {
                 using DbCommand command = CreateCommand(owned ?? lease!, statement);
-                command.CommandType = commandType;
+                ApplyCommandType(command, commandType);
                 CommandScope scope = Begin(command, statement, operation);
                 DbDataReader reader;
                 try
@@ -599,7 +599,7 @@ namespace Durable.Sql
                 DbCommand command = CreateCommand(owned ?? lease!, statement);
                 await using (command.ConfigureAwait(false))
                 {
-                    command.CommandType = commandType;
+                    ApplyCommandType(command, commandType);
                     CommandScope scope = Begin(command, statement, operation);
                     DbDataReader reader;
                     try
@@ -649,12 +649,24 @@ namespace Durable.Sql
             }
         }
 
-        private static void CopyOutputParameters(DbCommand command, SqlStatement statement)
+        private void ApplyCommandType(DbCommand command, CommandType commandType)
         {
-            foreach (SqlParameterValue value in statement.Parameters)
+            command.CommandType = commandType;
+            if (commandType != CommandType.StoredProcedure || Dialect.SupportsNamedProcedureArguments) return;
+
+            // Positional call: drivers derive CALL name($1, $2, ...) from unnamed parameters.
+            foreach (DbParameter parameter in command.Parameters) parameter.ParameterName = string.Empty;
+        }
+
+        private void CopyOutputParameters(DbCommand command, SqlStatement statement)
+        {
+            bool positional = command.CommandType == CommandType.StoredProcedure && !Dialect.SupportsNamedProcedureArguments;
+            IReadOnlyList<SqlParameterValue> values = statement.Parameters;
+            for (int i = 0; i < values.Count; i++)
             {
+                SqlParameterValue value = values[i];
                 if (value.Direction == ParameterDirection.Input) continue;
-                DbParameter parameter = command.Parameters[value.Name];
+                DbParameter parameter = positional ? command.Parameters[i] : command.Parameters[value.Name];
                 value.Value = parameter.Value == DBNull.Value ? null : parameter.Value;
             }
         }
