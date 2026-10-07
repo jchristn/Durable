@@ -31,8 +31,11 @@ namespace Durable.Sql
         /// <inheritdoc />
         public EntityMetadata Metadata { get; }
 
-        /// <inheritdoc />
-        public RepositoryCapabilities Capabilities => RepositoryCapabilities.All;
+        /// <summary>
+        /// Gets <see cref="RepositoryCapabilities.All"/>, without <see cref="RepositoryCapabilities.EmptyStrings"/> when the
+        /// dialect stores empty strings as NULL (<see cref="ISqlDialect.TreatsEmptyStringAsNull"/>).
+        /// </summary>
+        public RepositoryCapabilities Capabilities => Dialect.TreatsEmptyStringAsNull ? RepositoryCapabilities.All & ~RepositoryCapabilities.EmptyStrings : RepositoryCapabilities.All;
 
         /// <inheritdoc />
         public ISqlDialect Dialect { get; }
@@ -380,6 +383,13 @@ namespace Durable.Sql
                 return entity;
             }
 
+            if (Dialect.InsertKeyStrategy == InsertKeyStrategy.ReturningInto)
+            {
+                Executor.ExecuteNonQuery(statement, transaction, "INSERT");
+                AssignGeneratedKeys(new List<T> { entity }, OutputValues(statement));
+                return entity;
+            }
+
             object? key = Executor.ExecuteScalar(statement, transaction, "INSERT");
             AssignGeneratedKey(entity, key);
             return entity;
@@ -395,6 +405,13 @@ namespace Durable.Sql
             if (!returnsKeys)
             {
                 await Executor.ExecuteNonQueryAsync(statement, transaction, "INSERT", token).ConfigureAwait(false);
+                return entity;
+            }
+
+            if (Dialect.InsertKeyStrategy == InsertKeyStrategy.ReturningInto)
+            {
+                await Executor.ExecuteNonQueryAsync(statement, transaction, "INSERT", token).ConfigureAwait(false);
+                AssignGeneratedKeys(new List<T> { entity }, OutputValues(statement));
                 return entity;
             }
 
@@ -418,6 +435,13 @@ namespace Durable.Sql
                     if (!returnsKeys)
                     {
                         Executor.ExecuteNonQuery(lease, statement, "INSERT");
+                        continue;
+                    }
+
+                    if (Dialect.InsertKeyStrategy == InsertKeyStrategy.ReturningInto)
+                    {
+                        Executor.ExecuteNonQuery(lease, statement, "INSERT");
+                        AssignGeneratedKeys(chunk, OutputValues(statement));
                         continue;
                     }
 
@@ -447,6 +471,13 @@ namespace Durable.Sql
                     if (!returnsKeys)
                     {
                         await Executor.ExecuteNonQueryAsync(lease, statement, "INSERT", token).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (Dialect.InsertKeyStrategy == InsertKeyStrategy.ReturningInto)
+                    {
+                        await Executor.ExecuteNonQueryAsync(lease, statement, "INSERT", token).ConfigureAwait(false);
+                        AssignGeneratedKeys(chunk, OutputValues(statement));
                         continue;
                     }
 
@@ -1238,12 +1269,14 @@ namespace Durable.Sql
             if (!returnsKeys && Options.BatchConfiguration.EnableMultiRowInsert) return BuildMultiRowInsert(rows);
 
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
+            if (rows.Count > 1) builder.Append(Dialect.StatementBatchPrefix);
             for (int r = 0; r < rows.Count; r++)
             {
                 if (r > 0) builder.Append(Dialect.StatementSeparator).Append(" ");
                 AppendSingleInsert(builder, rows[r], generated);
             }
 
+            if (rows.Count > 1) builder.Append(Dialect.StatementBatchSuffix);
             return builder.Build();
         }
 
@@ -1270,22 +1303,59 @@ namespace Durable.Sql
 
             if (generated == null) return;
             if (Dialect.InsertKeyStrategy == InsertKeyStrategy.Returning)
+            {
                 builder.Append(" RETURNING ").AppendIdentifier(generated.Name);
+            }
             else if (Dialect.InsertKeyStrategy == InsertKeyStrategy.LastInsertId)
+            {
                 builder.Append(Dialect.StatementSeparator).Append(" ").Append(Dialect.LastInsertIdSql);
+            }
+            else if (Dialect.InsertKeyStrategy == InsertKeyStrategy.ReturningInto)
+            {
+                SqlParameterValue keyOutput = new SqlParameterValue(Dialect.FormatParameterName(builder.ParameterCount), null, generated)
+                {
+                    Direction = ParameterDirection.Output,
+                    DbType = GeneratedKeyDbType(generated)
+                };
+                builder.Append(" RETURNING ").AppendIdentifier(generated.Name).Append(" INTO ").Append(builder.AddNamedParameter(keyOutput));
+            }
+        }
+
+        private static DbType GeneratedKeyDbType(ColumnMetadata generated)
+        {
+            Type type = Nullable.GetUnderlyingType(generated.ClrType) ?? generated.ClrType;
+            if (type == typeof(short)) return DbType.Int16;
+            if (type == typeof(int)) return DbType.Int32;
+            return DbType.Int64;
+        }
+
+        private static List<object?> OutputValues(SqlStatement statement)
+        {
+            List<object?> values = new List<object?>();
+            foreach (SqlParameterValue parameter in statement.Parameters)
+            {
+                if (parameter.Direction != ParameterDirection.Input) values.Add(parameter.Value);
+            }
+
+            return values;
         }
 
         private SqlStatement BuildMultiRowInsert(IReadOnlyList<T> rows)
         {
             SqlStatementBuilder builder = new SqlStatementBuilder(Dialect);
-            if (_InsertColumns.Count == 0)
+            if (_InsertColumns.Count == 0 || (!Dialect.SupportsMultiRowInsert && rows.Count > 1))
             {
+                if (rows.Count > 1) builder.Append(Dialect.StatementBatchPrefix);
                 for (int r = 0; r < rows.Count; r++)
                 {
                     if (r > 0) builder.Append(Dialect.StatementSeparator).Append(" ");
-                    builder.Append("INSERT INTO ").AppendIdentifier(Metadata.TableName).Append(" ").Append(Dialect.InsertDefaultValuesClause);
+                    if (_InsertColumns.Count == 0)
+                        builder.Append("INSERT INTO ").AppendIdentifier(Metadata.TableName).Append(" ").Append(Dialect.InsertDefaultValuesClause);
+                    else
+                        AppendSingleInsert(builder, rows[r], null);
                 }
 
+                if (rows.Count > 1) builder.Append(Dialect.StatementBatchSuffix);
                 return builder.Build();
             }
 

@@ -98,9 +98,13 @@ namespace Test.Shared
                 List<RelUpsertItem> rows = Enumerable.Range(0, 25).Select(i => new RelUpsertItem { Code = "c" + i.ToString("00", CultureInfo.InvariantCulture), Name = "n" + i, Quantity = i }).ToList();
                 await repository.CreateManyAsync(rows);
 
+                // A dialect without multi-row INSERT (Oracle 19c) sends the rows of each chunk as one statement each.
+                int expected = testCase.Value;
+                if (testCase.Key.EnableMultiRowInsert && !repository.Dialect.SupportsMultiRowInsert)
+                    expected = 25 % testCase.Key.MaxRowsPerBatch == 0 ? Math.Min(25, testCase.Key.MaxRowsPerBatch) : 25 % testCase.Key.MaxRowsPerBatch;
                 string sql = repository.LastExecutedSql ?? string.Empty;
                 int statements = CountOccurrences(sql, "INSERT INTO");
-                Assert.True(testCase.Value == statements, "Expected " + testCase.Value + " INSERT statement(s) in the last command but found " + statements + ": " + sql);
+                Assert.True(expected == statements, "Expected " + expected + " INSERT statement(s) in the last command but found " + statements + ": " + sql);
                 Assert.Equal(25, await repository.CountAsync());
                 Assert.Equal(Enumerable.Range(0, 25).Sum(), await repository.SumAsync(x => x.Quantity));
             }

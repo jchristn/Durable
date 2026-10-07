@@ -259,11 +259,12 @@ namespace Durable.Sql
                         " maps to " + expectedType + "; change the column " + (lengthOnly ? "length" : "type") + " in a migration."));
                 }
 
-                if (!column.IsPrimaryKey && !existing.IsPrimaryKey && column.IsNullable != existing.IsNullable)
+                bool expectedNullable = dialect.ColumnAllowsNull(column);
+                if (!column.IsPrimaryKey && !existing.IsPrimaryKey && expectedNullable != existing.IsNullable)
                 {
                     differences.Add(new SchemaDifference(
                         SchemaDifferenceKind.NullabilityMismatch, tableName, column.Name,
-                        column.IsNullable ? "NULL" : "NOT NULL", existing.IsNullable ? "NULL" : "NOT NULL",
+                        expectedNullable ? "NULL" : "NOT NULL", existing.IsNullable ? "NULL" : "NOT NULL",
                         "Column " + qualified + " is " + (existing.IsNullable ? "NULL" : "NOT NULL") + " but property " + metadata.EntityType.Name + "." +
                         column.Property.Name + " is " + (column.IsNullable ? "nullable" : "non-nullable") + "; alter the column (backfilling nulls first) in a migration."));
                 }
@@ -332,7 +333,7 @@ namespace Durable.Sql
                 return;
             }
 
-            if (column.IsNullable)
+            if (dialect.ColumnAllowsNull(column))
             {
                 operations.Add(AddColumnOperation(dialect, tableName, column, true, null, "Add column " + qualified + " " + type + " NULL", null));
                 availableColumns.Add(column.Name);
@@ -471,7 +472,18 @@ namespace Durable.Sql
         {
             if (suffix.Length < 3 || suffix[suffix.Length - 1] != ')') return false;
             string inner = suffix.Substring(1, suffix.Length - 2);
-            return inner == "max" || int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out int _);
+            if (inner == "max") return true;
+
+            // A length may carry a unit after a space, as in Oracle's VARCHAR2(50 CHAR) or VARCHAR2(50 BYTE).
+            int space = inner.IndexOf(' ');
+            if (space > 0)
+            {
+                string unit = inner.Substring(space + 1);
+                if (unit.Length == 0 || !unit.All(char.IsLetter)) return false;
+                inner = inner.Substring(0, space);
+            }
+
+            return int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out int _);
         }
 
         private static string Truncate(string name, int maxLength)

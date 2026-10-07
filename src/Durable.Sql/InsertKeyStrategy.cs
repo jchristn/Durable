@@ -18,6 +18,11 @@ namespace Durable.Sql
         /// <summary>
         /// <c>INSERT ...; SELECT LAST_INSERT_ID()</c> (MySQL).
         /// </summary>
-        LastInsertId = 2
+        LastInsertId = 2,
+
+        /// <summary>
+        /// <c>INSERT ... RETURNING col INTO :out</c>, reading the key from an output parameter (Oracle).
+        /// </summary>
+        ReturningInto = 3
     }
 }

@@ -56,8 +56,15 @@ namespace Durable
         /// <summary>Upsert (insert or update by key).</summary>
         Upsert = 8192,
 
+        /// <summary>
+        /// Empty strings are stored, read back and compared as values distinct from null. No call throws without it: a
+        /// backend that lacks it (Oracle, which stores a zero-length string as NULL) returns null for an empty string
+        /// written to a nullable column and matches no row when comparing with an empty string.
+        /// </summary>
+        EmptyStrings = 16384,
+
         /// <summary>Every capability.</summary>
         All = Transactions | Include | ManyToMany | NavigationPredicates | Grouping | Projection | Distinct | Aggregates
-            | Functions | StringMatchModes | CompositeKeys | OptimisticConcurrency | BatchUpdate | Upsert
+            | Functions | StringMatchModes | CompositeKeys | OptimisticConcurrency | BatchUpdate | Upsert | EmptyStrings
     }
 }

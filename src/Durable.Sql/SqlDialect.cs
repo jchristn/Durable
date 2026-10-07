@@ -456,6 +456,69 @@ namespace Durable.Sql
             return false;
         }
 
+        // Statement shapes
+
+        /// <inheritdoc />
+        public virtual string StatementBatchPrefix => string.Empty;
+
+        /// <inheritdoc />
+        public virtual string StatementBatchSuffix => string.Empty;
+
+        /// <inheritdoc />
+        public virtual bool SupportsMultiRowInsert => true;
+
+        /// <inheritdoc />
+        public virtual string SingleRowFromClause => string.Empty;
+
+        /// <inheritdoc />
+        public virtual int MaxInListItems => int.MaxValue;
+
+        /// <inheritdoc />
+        public virtual bool TreatsEmptyStringAsNull => false;
+
+        /// <inheritdoc />
+        public virtual void ConfigureCommand(DbCommand command)
+        {
+        }
+
+        /// <inheritdoc />
+        public virtual bool ColumnAllowsNull(ColumnMetadata column)
+        {
+            ArgumentNullException.ThrowIfNull(column);
+            return column.IsNullable;
+        }
+
+        /// <inheritdoc />
+        public virtual string Modulo(string left, string right)
+        {
+            return "(" + left + " % " + right + ")";
+        }
+
+        /// <inheritdoc />
+        public virtual string SetOperationKeyword(SetOperationType operation)
+        {
+            switch (operation)
+            {
+                case SetOperationType.Union: return "UNION";
+                case SetOperationType.UnionAll: return "UNION ALL";
+                case SetOperationType.Intersect: return "INTERSECT";
+                case SetOperationType.Except: return "EXCEPT";
+                default: throw new NotSupportedException("Set operation " + operation + " is not supported by " + RepositoryType.DisplayName + ".");
+            }
+        }
+
+        /// <inheritdoc />
+        public virtual void AppendScriptStatement(StringBuilder script, string sql)
+        {
+            ArgumentNullException.ThrowIfNull(script);
+            ArgumentNullException.ThrowIfNull(sql);
+            string text = sql.TrimEnd();
+            script.Append(text);
+            if (!text.EndsWith(StatementSeparator, StringComparison.Ordinal)) script.Append(StatementSeparator);
+            script.AppendLine();
+            if (ScriptBatchSeparator != null) script.AppendLine(ScriptBatchSeparator);
+        }
+
         #endregion
 
         #region Private-Methods
@@ -529,7 +592,7 @@ namespace Durable.Sql
             }
 
             sb.Append(GetColumnType(column));
-            if (!column.IsNullable) sb.Append(" NOT NULL");
+            if (!ColumnAllowsNull(column)) sb.Append(" NOT NULL");
             if (inlinePrimaryKey) sb.Append(" PRIMARY KEY");
             return sb.ToString();
         }

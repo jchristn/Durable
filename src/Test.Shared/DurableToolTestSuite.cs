@@ -153,7 +153,7 @@ namespace Test.Shared
             await AssertErrorAsync(new[] { "migrations", "add", "Not-Valid" }, "not a valid migration name");
             await AssertErrorAsync(new[] { "status", "--assembly", _AssemblyPath }, "No database provider");
             await AssertErrorAsync(new[] { "status", "--provider", "sqlite", "--assembly", _AssemblyPath }, "No connection string");
-            await AssertErrorAsync(new[] { "status", "--provider", "oracle", "--connection", "x", "--assembly", _AssemblyPath }, "Unknown provider 'oracle'");
+            await AssertErrorAsync(new[] { "status", "--provider", "db2", "--connection", "x", "--assembly", _AssemblyPath }, "Unknown provider 'db2'");
             await AssertErrorAsync(Migrations("rollback"), "rollback requires --target");
             await AssertErrorAsync(Database("status", "--assembly", _AssemblyPath, "--migrations-namespace", _MigrationsNamespace, "--history-table", "bad name"), "Invalid --history-table");
             await AssertErrorAsync(Database("status", "--assembly", Path.Combine(Path.GetTempPath(), "no-such-assembly-" + Guid.NewGuid().ToString("N") + ".dll")), "was not found");
@@ -540,7 +540,9 @@ namespace Test.Shared
                 Assert.Contains("? Notes { get; set; }", code);
                 Assert.Contains("? Maybe { get; set; }", code);
                 Assert.Contains("byte[]? Data { get; set; }", code);
-                Assert.Contains("public string Name { get; set; } = string.Empty;", code);
+                // A dialect that declares string columns nullable (Oracle stores an empty string as NULL) scaffolds string?.
+                bool nameNullable = _Provider.Dialect.ColumnAllowsNull(EntityMetadata.For(typeof(CliScaffoldSource)).FindColumnByName("name")!);
+                Assert.Contains(nameNullable ? "public string? Name { get; set; }" : "public string Name { get; set; } = string.Empty;", code);
                 if (_Provider.Dialect.SupportsStringMaxLength) Assert.Contains("[Property(\"name\", Flags.String, 80)]", code);
                 if (_Provider.DatabaseType != TestDatabaseType.Sqlite)
                 {
@@ -712,6 +714,7 @@ namespace Test.Shared
                 case TestDatabaseType.MySql: return "mysql";
                 case TestDatabaseType.MariaDb: return "mariadb";
                 case TestDatabaseType.SqlServer: return "sqlserver";
+                case TestDatabaseType.Oracle: return "oracle";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }
         }
@@ -727,6 +730,7 @@ namespace Test.Shared
                 case TestDatabaseType.YugabyteDb: return "Postgres";
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "MySql";
+                case TestDatabaseType.Oracle: return "Oracle";
                 default: return "SqlServer";
             }
         }

@@ -9,6 +9,7 @@ namespace Test.Shared
     using Durable;
     using Durable.DuckDb;
     using Durable.MySql;
+    using Durable.Oracle;
     using Durable.Postgres;
     using Durable.Sql;
     using Durable.Sqlite;
@@ -18,6 +19,8 @@ namespace Test.Shared
     using MySqlConnector;
     using Npgsql;
     using Xunit;
+    using OracleConnection = global::Oracle.ManagedDataAccess.Client.OracleConnection;
+    using OracleConnectionStringBuilder = global::Oracle.ManagedDataAccess.Client.OracleConnectionStringBuilder;
 
     /// <summary>
     /// Creates a brand-new database on the configured provider with CreateDatabaseIfNotExistsAsync (twice, to prove it
@@ -59,6 +62,7 @@ namespace Test.Shared
             string connectionString = ConnectionStringFor(name);
             try
             {
+                await PrepareDatabaseAsync(name);
                 using (ISqlRepository<Product> repository = CreateRepository<Product>(connectionString))
                 {
                     await repository.CreateDatabaseIfNotExistsAsync();
@@ -112,6 +116,19 @@ namespace Test.Shared
 
         #region Private-Methods
 
+        private const string OracleSchemaPassword = "DurableLife123";
+
+        private async Task PrepareDatabaseAsync(string name)
+        {
+            // Oracle's CreateDatabaseIfNotExists only verifies the connection (a DBA creates pluggable databases and
+            // schemas), so the schema the lifecycle runs in is created here. The docker readiness probe grants the test user
+            // what this needs (CREATE USER, the granted privileges WITH ADMIN OPTION, DBMS_LOCK WITH GRANT OPTION).
+            if (_Provider.DatabaseType != TestDatabaseType.Oracle) return;
+            await ExecuteOnServerAsync("CREATE USER " + name + " IDENTIFIED BY \"" + OracleSchemaPassword + "\" QUOTA UNLIMITED ON USERS");
+            await ExecuteOnServerAsync("GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE TO " + name);
+            await ExecuteOnServerAsync("GRANT EXECUTE ON SYS.DBMS_LOCK TO " + name);
+        }
+
         private string Q(string identifier)
         {
             return _Provider.Dialect.QuoteIdentifier(identifier);
@@ -134,6 +151,9 @@ namespace Test.Shared
                     return new NpgsqlConnectionStringBuilder(_Provider.ConnectionString) { Database = database }.ConnectionString;
                 case TestDatabaseType.SqlServer:
                     return new SqlConnectionStringBuilder(_Provider.ConnectionString) { InitialCatalog = database }.ConnectionString;
+                case TestDatabaseType.Oracle:
+                    // An Oracle "database" here is a fresh schema (user) in the same pluggable database.
+                    return new OracleConnectionStringBuilder(_Provider.ConnectionString) { UserID = database, Password = OracleSchemaPassword }.ConnectionString;
                 default:
                     throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
@@ -151,6 +171,7 @@ namespace Test.Shared
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return new PostgresRepository<T>(PostgresRepositorySettings.Parse(connectionString, PostgresRepositoryProvider.FlavorFor(_Provider.DatabaseType)));
                 case TestDatabaseType.SqlServer: return new SqlServerRepository<T>(SqlServerRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.Oracle: return new OracleRepository<T>(OracleRepositorySettings.Parse(connectionString));
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
         }
@@ -167,6 +188,7 @@ namespace Test.Shared
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return new PostgresConnectionFactory(connectionString) { Flavor = PostgresRepositoryProvider.FlavorFor(_Provider.DatabaseType) };
                 case TestDatabaseType.SqlServer: return new SqlServerConnectionFactory(connectionString);
+                case TestDatabaseType.Oracle: return new OracleConnectionFactory(connectionString);
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
         }
@@ -200,6 +222,10 @@ namespace Test.Shared
                 case TestDatabaseType.SqlServer:
                     SqlConnection.ClearAllPools();
                     await ExecuteOnServerAsync("IF DB_ID(N'" + name + "') IS NOT NULL BEGIN ALTER DATABASE " + Q(name) + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE " + Q(name) + "; END");
+                    return;
+                case TestDatabaseType.Oracle:
+                    OracleConnection.ClearAllPools();
+                    await ExecuteOnServerAsync("BEGIN EXECUTE IMMEDIATE 'DROP USER " + name + " CASCADE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -1918 THEN RAISE; END IF; END;");
                     return;
             }
         }

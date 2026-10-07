@@ -5,6 +5,7 @@ namespace Test.Shared
     using Durable;
     using Durable.DuckDb;
     using Durable.MySql;
+    using Durable.Oracle;
     using Durable.Postgres;
     using Durable.Sql;
     using Durable.Sqlite;
@@ -20,7 +21,8 @@ namespace Test.Shared
         #region Public-Methods
 
         /// <summary>
-        /// Builds a provider-appropriate DROP TABLE IF EXISTS statement (with CASCADE on PostgreSQL).
+        /// Builds a provider-appropriate DROP TABLE IF EXISTS statement (with CASCADE on PostgreSQL; on Oracle a PL/SQL block
+        /// that drops with PURGE and ignores a missing table, since Oracle 19c has no IF EXISTS).
         /// </summary>
         /// <param name="dialect">Dialect used to quote the identifier. Must not be null.</param>
         /// <param name="tableName">Unquoted table name. Must not be null or empty.</param>
@@ -30,6 +32,7 @@ namespace Test.Shared
         {
             ArgumentNullException.ThrowIfNull(dialect);
             if (string.IsNullOrWhiteSpace(tableName)) throw new ArgumentNullException(nameof(tableName));
+            if (dialect.RepositoryType == RepositoryType.Oracle) return OracleRepositoryProvider.DropTableIfExistsSql(dialect.QuoteIdentifier(tableName));
             string sql = "DROP TABLE IF EXISTS " + dialect.QuoteIdentifier(tableName);
             if (dialect.RepositoryType == RepositoryType.Postgres) sql += " CASCADE";
             return sql;
@@ -70,6 +73,7 @@ namespace Test.Shared
             if (type == RepositoryType.MySql) return new MySqlRepository<T>(template.ConnectionFactory, options);
             if (type == RepositoryType.Postgres) return new PostgresRepository<T>(template.ConnectionFactory, options);
             if (type == RepositoryType.SqlServer) return new SqlServerRepository<T>(template.ConnectionFactory, options);
+            if (type == RepositoryType.Oracle) return new OracleRepository<T>(template.ConnectionFactory, options);
             throw new NotSupportedException("Unknown repository type " + type + ".");
         }
 

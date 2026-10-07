@@ -5,6 +5,7 @@ namespace Durable.Tool
     using System.Threading.Tasks;
     using Durable.DuckDb;
     using Durable.MySql;
+    using Durable.Oracle;
     using Durable.Postgres;
     using Durable.Sql;
     using Durable.Sqlite;
@@ -27,7 +28,8 @@ namespace Durable.Tool
             "yugabytedb",
             "mysql",
             "mariadb",
-            "sqlserver"
+            "sqlserver",
+            "oracle"
         };
 
         /// <summary>
@@ -80,7 +82,7 @@ namespace Durable.Tool
         /// <summary>
         /// Creates a target for a provider name and connection string.
         /// </summary>
-        /// <param name="provider">Provider name (sqlite, duckdb, postgres/postgresql, mysql, sqlserver/mssql, mariadb, cockroachdb/cockroach/crdb, yugabytedb/yugabyte/ysql). Must not be null.</param>
+        /// <param name="provider">Provider name (sqlite, duckdb, postgres/postgresql, mysql, sqlserver/mssql, mariadb, cockroachdb/cockroach/crdb, yugabytedb/yugabyte/ysql, oracle/odp/odpnet). Must not be null.</param>
         /// <param name="connectionString">Connection string. Must not be null.</param>
         /// <returns>The target.</returns>
         /// <exception cref="DurableCliException">Thrown when the provider is unknown or the connection string is invalid.</exception>
@@ -108,6 +110,8 @@ namespace Durable.Tool
                         return new DatabaseTarget(MariaDbDialect.Default, new MySqlConnectionFactory(connectionString) { Flavor = MySqlFlavor.MariaDb });
                     case "sqlserver":
                         return new DatabaseTarget(SqlServerDialect.Default, new SqlServerConnectionFactory(connectionString));
+                    case "oracle":
+                        return new DatabaseTarget(OracleDialect.Default, new OracleConnectionFactory(connectionString));
                     default:
                         throw new DurableCliException("Unknown provider '" + provider + "'. Use " + ProviderNames + ".", null, true);
                 }
@@ -144,6 +148,9 @@ namespace Durable.Tool
                 case "mariadb": return "mariadb";
                 case "sqlserver":
                 case "mssql": return "sqlserver";
+                case "oracle":
+                case "odp":
+                case "odpnet": return "oracle";
                 default: return null;
             }
         }

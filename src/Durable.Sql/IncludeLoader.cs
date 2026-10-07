@@ -119,7 +119,7 @@ namespace Durable.Sql
             if (keys.Count == 0) yield break;
 
             ISqlDialect dialect = _Executor.Dialect;
-            int chunkSize = Math.Max(1, dialect.MaxParameters - 50);
+            int chunkSize = Math.Max(1, Math.Min(dialect.MaxParameters - 50, dialect.MaxInListItems));
             List<object> values = keys.Values.ToList();
             EntityMetadata related = EntityMetadata.For(navigation.RelatedType);
 

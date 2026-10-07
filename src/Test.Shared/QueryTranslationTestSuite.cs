@@ -316,15 +316,27 @@ namespace Test.Shared
         public async Task EqualsNullOnBothSides()
         {
             using QueryTranslationFixture f = await SeedAsync();
-            string? noEmail = null;
             int? noDiscount = null;
             await CheckAsync(f, x => x.Discount == null, Beta, Nihon);
             await CheckAsync(f, x => null == x.Discount, Beta, Nihon);
+            await CheckAsync(f, x => x.Discount == noDiscount, Beta, Nihon);
+            await CheckAsync(f, x => x.DueDate != null, Alpha, OBrien, Zoe, Padded);
+        }
+
+        /// <summary>
+        /// == null on a string column with the null on either side and captured nulls; an empty string is not null.
+        /// </summary>
+        [Fact]
+        public async Task EqualsNullOnStringColumn()
+        {
+            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
+            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
+            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
+            using QueryTranslationFixture f = await SeedAsync();
+            string? noEmail = null;
             await CheckAsync(f, x => x.Email == null, Beta);
             await CheckAsync(f, x => null == x.Email, Beta);
             await CheckAsync(f, x => x.Email == noEmail, Beta);
-            await CheckAsync(f, x => x.Discount == noDiscount, Beta, Nihon);
-            await CheckAsync(f, x => x.DueDate != null, Alpha, OBrien, Zoe, Padded);
         }
 
         /// <summary>
@@ -368,8 +380,20 @@ namespace Test.Shared
         {
             using QueryTranslationFixture f = await SeedAsync();
             await CheckAsync(f, x => (x.Discount ?? 0) == 0, Beta, OBrien, Nihon);
-            await CheckAsync(f, x => (x.Email ?? "none") == "none", Beta);
             await CheckAsync(f, x => (x.Discount ?? 100) > 4, Beta, Zoe, Nihon);
+        }
+
+        /// <summary>
+        /// ?? on a string column replaces null but not an empty string.
+        /// </summary>
+        [Fact]
+        public async Task CoalesceOperatorOnStringColumn()
+        {
+            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
+            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
+            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
+            using QueryTranslationFixture f = await SeedAsync();
+            await CheckAsync(f, x => (x.Email ?? "none") == "none", Beta);
         }
 
         /// <summary>
@@ -452,6 +476,9 @@ namespace Test.Shared
         [Fact]
         public async Task CollectionContainsWithNullElement()
         {
+            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
+            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
+            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
             using QueryTranslationFixture f = await SeedAsync();
             List<string?> emails = new List<string?> { null, "alpha@x.com" };
             await CheckAsync(f, x => emails.Contains(x.Email), Alpha, Beta);

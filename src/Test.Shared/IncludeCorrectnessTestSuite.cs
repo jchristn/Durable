@@ -412,7 +412,7 @@ namespace Test.Shared
                 Assert.All(author.Books, b => Assert.Equal(author.Id, b.AuthorId));
             }
 
-            int chunkSize = Math.Max(1, authors.Dialect.MaxParameters - 50);
+            int chunkSize = Math.Max(1, Math.Min(authors.Dialect.MaxParameters - 50, authors.Dialect.MaxInListItems));
             int expectedStatements = (parentCount + chunkSize - 1) / chunkSize;
             Assert.Equal(expectedStatements, counter.CountOf("INCLUDE"));
             Console.WriteLine("     " + parentCount + " parents loaded with " + counter.CountOf("INCLUDE") + " include statement(s)");

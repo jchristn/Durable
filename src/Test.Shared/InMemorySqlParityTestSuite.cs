@@ -54,8 +54,6 @@ namespace Test.Shared
             DateTime cutoff = new DateTime(2024, 3, 1);
             List<Expression<Func<QtItem, bool>>> predicates = new List<Expression<Func<QtItem, bool>>>
             {
-                x => x.Email == null,
-                x => x.Email != null,
                 x => x.Discount != 2,
                 x => !(x.Discount > 1),
                 x => x.IsFeatured == true,
@@ -104,6 +102,36 @@ namespace Test.Shared
                 x => x.Name.Equals("alpha", StringComparison.OrdinalIgnoreCase),
                 x => x.Name.Substring(1, 3) == "lph",
                 x => x.Name + "-" + x.Category == "Alpha-Tools"
+            };
+
+            List<string> mismatches = new List<string>();
+            foreach (Expression<Func<QtItem, bool>> predicate in predicates)
+            {
+                string[] expected = Sorted((await sql.Items.Query().Where(predicate).ExecuteAsync()).Select(x => x.Name));
+                string[] actual = Sorted((await memory.Items.Query().Where(predicate).ExecuteAsync()).Select(x => x.Name));
+                if (!expected.SequenceEqual(actual, StringComparer.Ordinal))
+                    mismatches.Add(predicate + ": SQL [" + string.Join(", ", expected) + "] in-memory [" + string.Join(", ", actual) + "]");
+            }
+
+            Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+        }
+
+        /// <summary>
+        /// Null checks on a string column (the fixture holds an empty Email) return the same rows on both backends.
+        /// </summary>
+        [Fact]
+        public async Task StringNullChecksMatchSql()
+        {
+            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the empty Email reads as NULL
+            // there while the in-memory backend keeps it; the comparison only holds where empty strings are kept.
+            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
+
+            using QueryTranslationFixture sql = await QueryTranslationFixture.CreateAsync(_Provider);
+            InMemoryQtData memory = await InMemoryQtData.CreateAsync();
+            List<Expression<Func<QtItem, bool>>> predicates = new List<Expression<Func<QtItem, bool>>>
+            {
+                x => x.Email == null,
+                x => x.Email != null
             };
 
             List<string> mismatches = new List<string>();

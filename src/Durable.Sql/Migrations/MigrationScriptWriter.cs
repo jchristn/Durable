@@ -28,11 +28,7 @@ namespace Durable.Sql
 
         internal static void AppendStatement(StringBuilder script, ISqlDialect dialect, SqlStatement statement)
         {
-            string sql = Inline(dialect, statement).TrimEnd();
-            script.Append(sql);
-            if (!sql.EndsWith(dialect.StatementSeparator, StringComparison.Ordinal)) script.Append(dialect.StatementSeparator);
-            script.AppendLine();
-            if (dialect.ScriptBatchSeparator != null) script.AppendLine(dialect.ScriptBatchSeparator);
+            dialect.AppendScriptStatement(script, Inline(dialect, statement));
         }
 
         internal static void AppendComment(StringBuilder script, string text)

@@ -1,0 +1,563 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.Oracle</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.Oracle.OracleConnectionFactory">
+            <summary>
+            Opens Oracle connections, relying on ODP.NET's built-in pooling. Every connection binds parameters by name
+            (<see cref="P:Oracle.ManagedDataAccess.Client.OracleConnection.BindByName"/>) and truncates NUMBER values that exceed <see cref="T:System.Decimal"/> precision
+            instead of throwing (<see cref="P:Oracle.ManagedDataAccess.Client.OracleConnection.SuppressGetDecimalInvalidCastException"/>), which Durable relies on.
+            Trimming and Native AOT: the ODP.NET managed driver is not annotated for trimming and produces trim and AOT analysis
+            warnings when published (type names resolved by string, UDT assembly scanning, Assembly.Location in configuration
+            tracing), so the constructors and <see cref="M:Durable.Oracle.OracleConnectionFactory.CreateRawConnection(System.String)"/> carry <see cref="T:System.Diagnostics.CodeAnalysis.RequiresUnreferencedCodeAttribute"/>
+            and <see cref="T:System.Diagnostics.CodeAnalysis.RequiresDynamicCodeAttribute"/>. Durable's own code in this package is trim-annotated and warning-free.
+            Thread safety: safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleConnectionFactory.ConnectionString">
+            <summary>
+            Gets the connection string. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleConnectionFactory.#ctor(Durable.Oracle.OracleRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.Oracle.OracleRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack required values (see <see cref="M:Durable.Oracle.OracleRepositorySettings.BuildConnectionString"/>).</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory.
+            </summary>
+            <param name="connectionString">ODP.NET connection string. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleConnectionFactory.CreateConnection">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleConnectionFactory.CreateRawConnection(System.String)">
+            <summary>
+            Creates an unopened <see cref="T:Oracle.ManagedDataAccess.Client.OracleConnection"/> configured the way Durable expects (bind by name, NUMBER
+            values truncated to <see cref="T:System.Decimal"/> precision). Use it for connections handed to
+            <see cref="M:Durable.Sql.SqlTransactionContext.Wrap(System.Data.Common.DbConnection,System.Data.Common.DbTransaction,Durable.Sql.ISqlDialect)"/>.
+            </summary>
+            <param name="connectionString">ODP.NET connection string. Must not be null.</param>
+            <returns>The connection; the caller owns it.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+        </member>
+        <member name="T:Durable.Oracle.OracleDataTypeConverter">
+            <summary>
+            Oracle value conversion. Booleans are stored as NUMBER(1) (1/0) so the same schema works on Oracle 19c and later,
+            <see cref="T:System.Guid"/> values as RAW(16) in RFC 4122 (big-endian) byte order so the stored bytes read like the textual
+            form, <see cref="T:System.TimeOnly"/> as an INTERVAL DAY TO SECOND, <see cref="T:System.DateOnly"/> as DATE, and unsigned integers are
+            widened to the next signed type. <see cref="T:System.TimeSpan"/>, <see cref="T:System.DateTime"/> and <see cref="T:System.DateTimeOffset"/> pass
+            through to ODP.NET (INTERVAL DAY TO SECOND, TIMESTAMP, TIMESTAMP WITH TIME ZONE).
+            Oracle stores an empty string as NULL; see <see cref="P:Durable.Oracle.OracleDialect.TreatsEmptyStringAsNull"/>.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleDataTypeConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates the converter.
+            </summary>
+            <param name="jsonOptions">JSON options for JSON columns; null uses the defaults.</param>
+        </member>
+        <member name="M:Durable.Oracle.OracleDataTypeConverter.ToDatabaseCore(System.Object,System.Type,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDataTypeConverter.FromDatabaseCore(System.Object,System.Type,System.Type,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.Oracle.OracleDialect">
+            <summary>
+            Oracle Database dialect (Oracle 19c and later; tested on Oracle Database 23ai Free). Identifiers are quoted and, by
+            default, folded to upper case so they match unquoted names in hand-written SQL and in existing schemas; parameters
+            are bound by name (<c>:p0</c>); paging uses OFFSET/FETCH; identity keys come back through
+            <c>RETURNING ... INTO</c> output parameters; upsert uses MERGE; several statements in one command run as one PL/SQL
+            block; booleans are NUMBER(1); GUIDs are RAW(16); strings are VARCHAR2 with character length semantics.
+            Oracle stores an empty string as NULL (<see cref="P:Durable.Oracle.OracleDialect.TreatsEmptyStringAsNull"/>), commits DDL implicitly
+            (<see cref="P:Durable.Oracle.OracleDialect.SupportsTransactionalDdl"/> is false) and limits IN lists to 1000 items (<see cref="P:Durable.Oracle.OracleDialect.MaxInListItems"/>).
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.Default">
+            <summary>
+            Gets the shared default instance (identifiers folded to upper case, unbounded strings as VARCHAR2(4000 CHAR)).
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.RepositoryType">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.DbSystemName">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.MaxParameters">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.MaxInListItems">
+            <summary>
+            Gets 1000: Oracle rejects IN lists with more items (ORA-01795), so longer lists are split.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.RecursiveCteKeyword">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.InsertKeyStrategy">
+            <summary>
+            Gets <see cref="F:Durable.Sql.InsertKeyStrategy.ReturningInto"/>: generated keys are read from output parameters.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.InsertDefaultValuesClause">
+            <summary>
+            Gets "VALUES (DEFAULT)": Oracle has no DEFAULT VALUES clause; an entity whose only column is its identity key
+            inserts DEFAULT into that column.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.StringCastType">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.StatementBatchPrefix">
+            <summary>
+            Gets "BEGIN ": statements sent together run as one anonymous PL/SQL block.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.StatementBatchSuffix">
+            <summary>
+            Gets "; END;", closing the PL/SQL block opened by <see cref="P:Durable.Oracle.OracleDialect.StatementBatchPrefix"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.SupportsMultiRowInsert">
+            <summary>
+            Gets false: Oracle 19c has no multi-row VALUES list, so rows are inserted by one statement each inside a PL/SQL block.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.SingleRowFromClause">
+            <summary>
+            Gets " FROM DUAL".
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.TreatsEmptyStringAsNull">
+            <summary>
+            Gets true: Oracle treats a zero-length VARCHAR2 as NULL, so an empty string reads back as NULL and comparing a
+            column with an empty string matches no row.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.UpperCaseIdentifiers">
+            <summary>
+            Gets whether identifiers are folded to upper case before quoting. Default: true. When true, <c>[Entity("people")]</c>
+            maps to the table PEOPLE, which unquoted SQL (<c>SELECT * FROM people</c>) also resolves to; when false, names
+            keep their case and hand-written SQL must quote them.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.UnboundedStringType">
+            <summary>
+            Gets the column type used for strings without a maximum length. Default: "VARCHAR2(4000 CHAR)" (comparable,
+            sortable and groupable; Oracle limits it to 4000 bytes unless MAX_STRING_SIZE is EXTENDED). Strings with a
+            maximum length above 4000 and JSON columns are always CLOB.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.SupportsTransactionalDdl">
+            <summary>
+            Gets false: Oracle commits implicitly before and after every DDL statement.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.MaxIdentifierLength">
+            <summary>
+            Gets 128: the identifier limit of Oracle 12.2 and later.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.ScriptBeginTransactionSql">
+            <summary>
+            Gets "SET TRANSACTION READ WRITE": Oracle starts transactions implicitly.
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.#ctor(Durable.Sql.IDataTypeConverter,System.Boolean,System.String)">
+            <summary>
+            Instantiates the dialect.
+            </summary>
+            <param name="converter">Converter; null uses <see cref="T:Durable.Oracle.OracleDataTypeConverter"/>.</param>
+            <param name="upperCaseIdentifiers">Whether identifiers are folded to upper case before quoting. Default: true.</param>
+            <param name="unboundedStringType">Column type for strings without a maximum length. Default: "VARCHAR2(4000 CHAR)";
+            use "CLOB" for unlimited text (CLOB columns cannot be compared with =, sorted, grouped or indexed).</param>
+            <exception cref="T:System.ArgumentException">Thrown when unboundedStringType is null or whitespace.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.QuoteIdentifier(System.String)">
+            <summary>
+            Quotes an identifier, folding it to upper case first when <see cref="P:Durable.Oracle.OracleDialect.UpperCaseIdentifiers"/> is true.
+            Dotted names (owner.table) are quoted per part.
+            </summary>
+            <param name="identifier">Identifier. Must not be null or empty.</param>
+            <returns>The quoted identifier.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when identifier is null or empty.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.FoldIdentifier(System.String)">
+            <summary>
+            Returns an identifier as Oracle stores it in the data dictionary: upper case when
+            <see cref="P:Durable.Oracle.OracleDialect.UpperCaseIdentifiers"/> is true, unchanged otherwise.
+            </summary>
+            <param name="identifier">Identifier. Must not be null.</param>
+            <returns>The stored form.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when identifier is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.FormatParameterName(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ConfigureCommand(System.Data.Common.DbCommand)">
+            <summary>
+            Binds parameters by name (ODP.NET binds by position by default).
+            </summary>
+            <param name="command">The provider command. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when command is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ConfigureParameter(System.Data.Common.DbParameter,Durable.Sql.SqlParameterValue)">
+            <summary>
+            Types parameters for Oracle: <see cref="T:System.DateTime"/> as TIMESTAMP (the driver default, DATE, drops fractional
+            seconds), <see cref="T:System.DateTimeOffset"/> as TIMESTAMP WITH TIME ZONE, <see cref="T:System.TimeSpan"/> as INTERVAL DAY TO
+            SECOND, long text and JSON as CLOB, long binary as BLOB, and output parameters as .NET values.
+            </summary>
+            <param name="parameter">The provider parameter. Must not be null.</param>
+            <param name="value">The engine parameter. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.BooleanLiteral(System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.Divide(System.String,System.String,System.Boolean)">
+            <summary>
+            Divides two expressions; integer operands truncate toward zero like C# (<c>TRUNC(a / b)</c>).
+            </summary>
+            <param name="left">Dividend SQL.</param>
+            <param name="right">Divisor SQL.</param>
+            <param name="integerOperands">Whether both operands are integer-typed.</param>
+            <returns>The division expression.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.Modulo(System.String,System.String)">
+            <summary>
+            Returns <c>MOD(left, right)</c>; like C#, the sign follows the dividend.
+            </summary>
+            <param name="left">Dividend SQL.</param>
+            <param name="right">Divisor SQL.</param>
+            <returns>The remainder expression.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.IsEmptyString(System.String)">
+            <summary>
+            Returns <c>expression IS NULL</c>: Oracle stores an empty string as NULL, so no stored string has zero length.
+            </summary>
+            <param name="expression">String SQL expression.</param>
+            <returns>The condition.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.OrderDirection(System.Boolean)">
+            <summary>
+            Returns " ASC NULLS FIRST" or " DESC NULLS LAST", LINQ's null ordering (Oracle sorts NULLs last when ascending by default).
+            </summary>
+            <param name="descending">Whether the key sorts descending.</param>
+            <returns>The suffix.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.SetOperationKeyword(Durable.Sql.SetOperationType)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AppendPaging(Durable.Sql.SqlStatementBuilder,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Boolean)">
+            <summary>
+            Appends <c>OFFSET n ROWS</c> and <c>FETCH NEXT m ROWS ONLY</c> (Oracle 12c and later).
+            </summary>
+            <param name="builder">Statement builder. Must not be null.</param>
+            <param name="skip">Rows to skip; null for none.</param>
+            <param name="take">Rows to take; null for unlimited.</param>
+            <param name="hasOrderBy">Whether an ORDER BY was emitted.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when builder is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
+            <summary>
+            Appends a MERGE statement keyed on the conflict columns.
+            </summary>
+            <param name="builder">Statement builder. Must not be null.</param>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="insertColumns">Columns being inserted. Must not be null.</param>
+            <param name="placeholders">Placeholders aligned with insertColumns. Must not be null.</param>
+            <param name="conflictColumns">Key columns identifying the row. Must not be null or empty.</param>
+            <param name="updateColumns">Columns updated on conflict; may be empty.</param>
+            <param name="versionPlaceholder">Placeholder for the incremented version; null when there is no version column.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when builder or metadata is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ReleaseSavepointSql(System.String)">
+            <summary>
+            Returns null: Oracle has no RELEASE SAVEPOINT; savepoints end with the transaction.
+            </summary>
+            <param name="name">Savepoint name.</param>
+            <returns>Null.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.GetColumnType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the Oracle column type: NUMBER(p) for integers, NUMBER(1) for booleans, NUMBER(38,10) for decimals,
+            BINARY_FLOAT / BINARY_DOUBLE, TIMESTAMP(7), TIMESTAMP(7) WITH TIME ZONE, DATE for <see cref="T:System.DateOnly"/>,
+            INTERVAL DAY TO SECOND for <see cref="T:System.TimeSpan"/> and <see cref="T:System.TimeOnly"/>, RAW(16) for GUIDs, VARCHAR2(n CHAR)
+            for strings (<see cref="P:Durable.Oracle.OracleDialect.UnboundedStringType"/> without a maximum length, CLOB above 4000), CLOB for JSON, and
+            RAW or BLOB for binary data (RAW for keys, indexes, version counters and lengths up to 2000).
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The SQL type.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AppendCreateTable(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata)">
+            <summary>
+            Appends CREATE TABLE inside a PL/SQL block that ignores ORA-00955 (name already used), so it is a no-op when
+            the table exists (Oracle 19c has no CREATE TABLE IF NOT EXISTS).
+            </summary>
+            <param name="builder">Statement builder. Must not be null.</param>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ColumnAllowsNull(Durable.ColumnMetadata)">
+            <summary>
+            Returns true for nullable columns and for non-key string columns (VARCHAR2 and CLOB, including JSON and
+            string-converted columns): Oracle stores an empty string as NULL, so a NOT NULL string column would reject
+            empty strings that a non-nullable string property may hold.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>True when the column is declared NULL.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.TableExistsQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ColumnNamesQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.IndexNamesQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.CreateIndexSql(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Returns CREATE INDEX. Oracle has no covering (INCLUDE) columns, so includedColumns are ignored.
+            </summary>
+            <param name="indexName">Index name. Must not be null.</param>
+            <param name="tableName">Table name. Must not be null.</param>
+            <param name="columns">Column names in order. Must not be empty.</param>
+            <param name="unique">Whether the index is unique.</param>
+            <param name="includedColumns">Ignored.</param>
+            <returns>SQL text.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.FormatLiteral(System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <summary>
+            Returns a PL/SQL block that requests an exclusive DBMS_LOCK user lock (session-scoped, kept across commits) whose
+            id is a hash of the lock name, and returns 1 or 0 as an implicit result set. Requires
+            <c>GRANT EXECUTE ON SYS.DBMS_LOCK</c> to the connecting user; without it the block raises ORA-20901 naming the grant.
+            </summary>
+            <param name="lockName">Lock name. Must not be null.</param>
+            <param name="waitSeconds">Seconds to wait. Minimum: 0.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lockName is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.ReleaseMigrationLockSql(System.String)">
+            <summary>
+            Returns a PL/SQL block releasing the DBMS_LOCK user lock taken by <see cref="M:Durable.Oracle.OracleDialect.AcquireMigrationLockSql(System.String,System.Int32)"/>.
+            </summary>
+            <param name="lockName">Lock name. Must not be null.</param>
+            <returns>The statement.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when lockName is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AppendScriptStatement(System.Text.StringBuilder,System.String)">
+            <summary>
+            Writes a statement to a migration script for SQL*Plus, SQLcl or SQL Developer: PL/SQL blocks end with their own
+            semicolon and a "/" line; other statements end with a semicolon.
+            </summary>
+            <param name="script">Script being written. Must not be null.</param>
+            <param name="sql">Statement text with parameters inlined. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when script or sql is null.</exception>
+        </member>
+        <member name="P:Durable.Oracle.OracleDialect.AddColumnKeyword">
+            <summary>
+            Gets "ADD": Oracle's ALTER TABLE adds a column without the COLUMN keyword.
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Oracle.OracleDialect.BinaryLiteral(System.Byte[])">
+            <summary>
+            Renders a binary literal (HEXTORAW('...')); an empty array is NULL, as Oracle stores it.
+            </summary>
+            <param name="value">Bytes. Must not be null.</param>
+            <returns>The literal.</returns>
+        </member>
+        <member name="T:Durable.Oracle.OracleRepository`1">
+            <summary>
+            Oracle repository for <typeparamref name="T"/>. All behavior comes from <see cref="T:Durable.Sql.SqlRepository`1"/>; this class
+            supplies the Oracle dialect and connection handling, and bulk insert through ODP.NET array binding (one INSERT
+            executed for many rows per round trip).
+            Trimming and Native AOT: the constructors that open their own connections carry the driver's
+            <see cref="T:System.Diagnostics.CodeAnalysis.RequiresUnreferencedCodeAttribute"/> and <see cref="T:System.Diagnostics.CodeAnalysis.RequiresDynamicCodeAttribute"/> (see
+            <see cref="T:Durable.Oracle.OracleConnectionFactory"/>); the constructor taking a connection factory does not.
+            Thread safety: safe for concurrent use.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.#ctor(System.String,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from a connection string. The repository owns its connection factory and disposes it.
+            </summary>
+            <param name="connectionString">ODP.NET connection string. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.#ctor(Durable.Oracle.OracleRepositorySettings,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from settings. The repository owns its connection factory and disposes it.
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.#ctor(Durable.Sql.IConnectionFactory,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository on a shared connection factory. The factory is not disposed with the repository.
+            </summary>
+            <param name="connectionFactory">Factory producing <see cref="T:Oracle.ManagedDataAccess.Client.OracleConnection"/> instances. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.#ctor(Durable.Sql.IConnectionFactory,Durable.Oracle.OracleDialect,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository on a shared connection factory with a configured dialect, for example
+            <c>new OracleDialect(upperCaseIdentifiers: false)</c> for a schema whose quoted names are mixed case. The factory
+            is not disposed with the repository. Use the same dialect for <c>SqlMigrator</c> and <c>DatabaseSchemaReader</c>.
+            </summary>
+            <param name="connectionFactory">Factory producing <see cref="T:Oracle.ManagedDataAccess.Client.OracleConnection"/> instances. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.CreateDatabaseIfNotExists">
+            <summary>
+            Verifies that the configured database can be reached. Oracle databases (pluggable databases) and schemas
+            (users) are created by a DBA, so nothing is created; this keeps the call portable across providers.
+            </summary>
+            <exception cref="T:Oracle.ManagedDataAccess.Client.OracleException">Thrown when the database cannot be reached.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.CreateDatabaseIfNotExistsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Verifies that the configured database can be reached. Oracle databases and schemas are created by a DBA, so
+            nothing is created.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+            <exception cref="T:Oracle.ManagedDataAccess.Client.OracleException">Thrown when the database cannot be reached.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.BulkInsertCore(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{`0})">
+            <summary>
+            Inserts rows with ODP.NET array binding inside the transaction.
+            </summary>
+            <param name="lease">Lease inside a transaction.</param>
+            <param name="entities">Prepared entities.</param>
+            <returns>Rows inserted.</returns>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepository`1.BulkInsertCoreAsync(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{`0},System.Threading.CancellationToken)">
+            <summary>
+            Inserts rows with ODP.NET array binding inside the transaction.
+            </summary>
+            <param name="lease">Lease inside a transaction.</param>
+            <param name="entities">Prepared entities.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows inserted.</returns>
+        </member>
+        <member name="T:Durable.Oracle.OracleRepositorySettings">
+            <summary>
+            Connection settings for Oracle repositories (ODP.NET managed driver). The server is addressed either with
+            <see cref="P:Durable.Sql.RepositorySettings.Hostname"/>, <see cref="P:Durable.Sql.RepositorySettings.Port"/> and
+            <see cref="P:Durable.Sql.RepositorySettings.Database"/> (the service name, for example FREEPDB1), written as an EZConnect data
+            source <c>host:port/service</c>, or with <see cref="P:Durable.Oracle.OracleRepositorySettings.DataSource"/> (a TNS alias, EZConnect string or full connect
+            descriptor), which takes precedence.
+            Thread safety: immutable after construction (init-only properties); safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.Type">
+            <summary>
+            Gets <see cref="F:Durable.Sql.RepositoryType.Oracle"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.DataSource">
+            <summary>
+            Gets the driver data source (a TNS alias, an EZConnect string such as <c>db.example:1521/ORCLPDB1</c>, or a full
+            connect descriptor). Default: null (built from Hostname, Port and Database). When set it is written verbatim and
+            Hostname, Port and Database are ignored.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.ConnectionTimeout">
+            <summary>
+            Gets the connection (login) timeout in seconds. Default: null (the driver default, 15 seconds). Minimum: 0.
+            Maps to the driver's "Connection Timeout" keyword.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.MinPoolSize">
+            <summary>
+            Gets the minimum number of pooled connections the driver keeps open. Default: null (the driver default, 1).
+            Minimum: 0. Must not exceed <see cref="P:Durable.Oracle.OracleRepositorySettings.MaxPoolSize"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.MaxPoolSize">
+            <summary>
+            Gets the maximum number of pooled connections. Default: null (the driver default, 100). Minimum: 1.
+            </summary>
+        </member>
+        <member name="P:Durable.Oracle.OracleRepositorySettings.Pooling">
+            <summary>
+            Gets whether the driver pools connections. Default: null (the driver default, true).
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepositorySettings.#ctor">
+            <summary>
+            Initializes a new instance of the OracleRepositorySettings class.
+            </summary>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepositorySettings.Parse(System.String)">
+            <summary>
+            Parses an ODP.NET connection string. An EZConnect data source of the form <c>host[:port]/service</c> is split
+            into Hostname, Port and Database; any other data source is kept in <see cref="P:Durable.Oracle.OracleRepositorySettings.DataSource"/>. Keywords without a
+            typed property are kept in <see cref="P:Durable.Sql.RepositorySettings.AdditionalProperties"/>.
+            </summary>
+            <param name="connectionString">The connection string. Must not be null.</param>
+            <returns>The settings. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is empty, whitespace or invalid.</exception>
+        </member>
+        <member name="M:Durable.Oracle.OracleRepositorySettings.BuildConnectionString">
+            <summary>
+            Builds an ODP.NET connection string from the settings.
+            </summary>
+            <returns>The connection string. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when neither <see cref="P:Durable.Oracle.OracleRepositorySettings.DataSource"/> nor Hostname and
+            Database (the service name) are set.</exception>
+        </member>
+    </members>
+</doc>

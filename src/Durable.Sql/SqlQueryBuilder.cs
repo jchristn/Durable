@@ -594,7 +594,7 @@ namespace Durable.Sql
             {
                 SelectModel other = new SelectModel();
                 operation.Value.ApplyCore(other, Context.CreateTranslator(builder), new TableSource(RootAlias, Metadata));
-                model.SetOperations.Add(new KeyValuePair<string, string>(SetOperationKeyword(operation.Key), other.RenderCore()));
+                model.SetOperations.Add(new KeyValuePair<string, string>(Context.Dialect.SetOperationKeyword(operation.Key), other.RenderCore()));
             }
 
             if (includeOrderingAndPaging)
@@ -689,18 +689,6 @@ namespace Durable.Sql
             return this;
         }
 
-        private static string SetOperationKeyword(SetOperationType type)
-        {
-            switch (type)
-            {
-                case SetOperationType.Union: return "UNION";
-                case SetOperationType.UnionAll: return "UNION ALL";
-                case SetOperationType.Intersect: return "INTERSECT";
-                case SetOperationType.Except: return "EXCEPT";
-                default: throw new NotSupportedException("Unknown set operation " + type + ".");
-            }
-        }
-
         private ISqlQueryBuilder<T> AddInSubquery<TKey, [DynamicallyAccessedMembers(EntityMetadata.RequiredMemberTypes)] TOther>(Expression<Func<T, TKey>> keySelector, IQueryBuilder<TOther> subquery, Expression<Func<TOther, TKey>> subqueryKey, bool negate) where TOther : class, new()
         {
             ArgumentNullException.ThrowIfNull(keySelector);
@@ -784,7 +772,7 @@ namespace Durable.Sql
             SelectModel model = BuildModel(builder, HasPagingOrShaping);
             if (!model.Skip.HasValue && !model.Take.HasValue) model.OrderBy.Clear();
             if (!HasPagingOrShaping) model.SelectList = "1";
-            builder.Append("SELECT CASE WHEN EXISTS (").Append(model.Render(Context.Dialect)).Append(") THEN 1 ELSE 0 END");
+            builder.Append("SELECT CASE WHEN EXISTS (").Append(model.Render(Context.Dialect)).Append(") THEN 1 ELSE 0 END").Append(Context.Dialect.SingleRowFromClause);
             return builder.Build();
         }
 

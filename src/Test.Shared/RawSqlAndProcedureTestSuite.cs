@@ -6,6 +6,8 @@ namespace Test.Shared
     using System.Data.Common;
     using System.Diagnostics;
     using System.Linq;
+    using System.Runtime.CompilerServices;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
     using Durable.Sql;
@@ -107,7 +109,8 @@ namespace Test.Shared
             Assert.Equal(1, repository.ExecuteSql($"UPDATE people SET age = age - {1} WHERE department = {department} AND age = {24}"));
             repository.CaptureSql = false;
 
-            using (SqlMultipleResultReader reader = repository.QueryMultiple($"SELECT age FROM people WHERE department = {department} ORDER BY age; SELECT COUNT(*) FROM people WHERE department = {department}"))
+            using (SqlMultipleResultReader reader = repository.QueryMultiple(FormattableStringFactory.Create(
+                Batch("SELECT age FROM people WHERE department = {0} ORDER BY age", "SELECT COUNT(*) FROM people WHERE department = {1}"), department, department)))
             {
                 Assert.Equal(new List<int> { 21, 22, 23 }, reader.Read<int>());
                 Assert.Equal(new List<long> { 3 }, reader.Read<long>());
@@ -201,8 +204,8 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = await SeedAsync();
 
-            using (SqlMultipleResultReader reader = repository.QueryMultipleRaw("SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = {0} ORDER BY age; " +
-                "SELECT COUNT(*) FROM people WHERE department = {0}", new object?[] { Department }))
+            using (SqlMultipleResultReader reader = repository.QueryMultipleRaw(Batch("SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = {0} ORDER BY age",
+                "SELECT COUNT(*) FROM people WHERE department = {0}"), new object?[] { Department }))
             {
                 List<PersonNameDto> people = reader.Read<PersonNameDto>();
                 Assert.True(reader.HasMoreResults);
@@ -225,8 +228,8 @@ namespace Test.Shared
         {
             ISqlRepository<Person> repository = await SeedAsync();
 
-            SqlMultipleResultReader reader = await repository.QueryMultipleRawAsync("SELECT age FROM people WHERE department = {0} ORDER BY age; " +
-                "SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = {0} AND age >= {1} ORDER BY age", new object?[] { Department, 22 });
+            SqlMultipleResultReader reader = await repository.QueryMultipleRawAsync(Batch("SELECT age FROM people WHERE department = {0} ORDER BY age",
+                "SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = {0} AND age >= {1} ORDER BY age"), new object?[] { Department, 22 });
             await using (reader)
             {
                 List<int> ages = await reader.ReadAsync<int>();
@@ -294,6 +297,14 @@ namespace Test.Shared
                         List<long> rows = await repository.FromProcedureAsync<long>("durable_count_by_dept", new SqlParameterValue[] { new SqlParameterValue("dept", Department), new SqlParameterValue("total", null) { Direction = ParameterDirection.InputOutput, DbType = DbType.Int64 } });
                         Assert.Equal(new List<long> { 3 }, rows);
                         break;
+
+                    case TestDatabaseType.Oracle:
+                        // Oracle procedures return rows as implicit result sets (DBMS_SQL.RETURN_RESULT, Oracle 12c and later).
+                        await repository.ExecuteSqlRawAsync("CREATE OR REPLACE PROCEDURE durable_people_by_dept(dept IN VARCHAR2) AS c SYS_REFCURSOR; BEGIN " +
+                            "OPEN c FOR SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = dept ORDER BY age; " +
+                            "DBMS_SQL.RETURN_RESULT(c); END;");
+                        await AssertProcedureRowsAsync(repository, new SqlParameterValue("dept", Department));
+                        break;
                 }
             }
             finally
@@ -344,6 +355,14 @@ namespace Test.Shared
                         await repository.ExecuteSqlRawAsync("CREATE PROCEDURE durable_count_by_dept(IN dept VARCHAR, INOUT total BIGINT) LANGUAGE plpgsql AS $$ " +
                             "BEGIN SELECT COUNT(*) INTO total FROM people WHERE department = dept; END $$");
                         output = new SqlParameterValue("total", null) { Direction = ParameterDirection.InputOutput, DbType = DbType.Int64 };
+                        await repository.ExecuteProcedureAsync("durable_count_by_dept", new SqlParameterValue[] { new SqlParameterValue("dept", Department), output });
+                        Assert.Equal(3L, Convert.ToInt64(output.Value));
+                        break;
+
+                    case TestDatabaseType.Oracle:
+                        await repository.ExecuteSqlRawAsync("CREATE OR REPLACE PROCEDURE durable_count_by_dept(dept IN VARCHAR2, total OUT NUMBER) AS BEGIN " +
+                            "SELECT COUNT(*) INTO total FROM people WHERE department = dept; END;");
+                        output = new SqlParameterValue("total", null) { Direction = ParameterDirection.Output, DbType = DbType.Int32 };
                         await repository.ExecuteProcedureAsync("durable_count_by_dept", new SqlParameterValue[] { new SqlParameterValue("dept", Department), output });
                         Assert.Equal(3L, Convert.ToInt64(output.Value));
                         break;
@@ -496,6 +515,13 @@ namespace Test.Shared
         {
             try
             {
+                if (_Provider.DatabaseType == TestDatabaseType.Oracle)
+                {
+                    foreach (string procedure in new[] { "durable_people_by_dept", "durable_count_by_dept" })
+                        await repository.ExecuteSqlRawAsync("BEGIN EXECUTE IMMEDIATE 'DROP PROCEDURE " + procedure + "'; EXCEPTION WHEN OTHERS THEN IF SQLCODE <> -4043 THEN RAISE; END IF; END;");
+                    return;
+                }
+
                 await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_people_by_dept");
                 await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_count_by_dept");
             }
@@ -518,8 +544,24 @@ namespace Test.Shared
                 case TestDatabaseType.SqlServer: return "WAITFOR DELAY '00:00:0" + seconds + "'";
                 // DuckDB has no sleep function; a cross join of this size runs for far longer than the tests wait.
                 case TestDatabaseType.DuckDb: return "SELECT SUM(a.range * b.range) FROM range(300000) a CROSS JOIN range(300000) b";
+                // DBMS_SESSION.SLEEP ignores a cancel until it wakes up, and a SELECT sent as a non-query is never fetched,
+                // so run a long cross join inside PL/SQL, which Oracle interrupts with ORA-01013.
+                case TestDatabaseType.Oracle: return "DECLARE n NUMBER; BEGIN SELECT COUNT(*) INTO n FROM all_objects a CROSS JOIN all_objects b CROSS JOIN all_objects c; END;";
                 default: throw new NotSupportedException("No sleep statement for " + _Provider.DatabaseType);
             }
+        }
+
+        private string Batch(params string[] selects)
+        {
+            // Oracle runs one statement per command, so several result sets come from a PL/SQL block returning implicit
+            // result sets (DBMS_SQL.RETURN_RESULT); the other databases accept semicolon-separated SELECTs.
+            if (_Provider.DatabaseType != TestDatabaseType.Oracle) return string.Join("; ", selects);
+            StringBuilder sql = new StringBuilder("DECLARE ");
+            for (int i = 0; i < selects.Length; i++) sql.Append("c").Append(i).Append(" SYS_REFCURSOR; ");
+            sql.Append("BEGIN ");
+            for (int i = 0; i < selects.Length; i++)
+                sql.Append("OPEN c").Append(i).Append(" FOR ").Append(selects[i]).Append("; DBMS_SQL.RETURN_RESULT(c").Append(i).Append("); ");
+            return sql.Append("END;").ToString();
         }
 
         #endregion

@@ -150,15 +150,21 @@ namespace Durable.Conformance
         public async Task EqualsNull()
         {
             ItemFixture f = await SeedItemsAsync();
-            string? noEmail = null;
             int? noDiscount = null;
             await CheckAsync(f, x => x.Discount == null, B, E);
             await CheckAsync(f, x => null == x.Discount, B, E);
+            await CheckAsync(f, x => x.Discount == noDiscount, B, E);
+            await CheckAsync(f, x => x.DueDate != null, A, O, D, F);
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.EmptyStrings, Description = "== null and != null on a string column; an empty string is not null")]
+        public async Task EqualsNullOnStrings()
+        {
+            ItemFixture f = await SeedItemsAsync();
+            string? noEmail = null;
             await CheckAsync(f, x => x.Email == null, B);
             await CheckAsync(f, x => null == x.Email, B);
             await CheckAsync(f, x => x.Email == noEmail, B);
-            await CheckAsync(f, x => x.Discount == noDiscount, B, E);
-            await CheckAsync(f, x => x.DueDate != null, A, O, D, F);
             await CheckAsync(f, x => x.Email != null, A, O, D, E, F);
         }
 
@@ -202,8 +208,14 @@ namespace Durable.Conformance
         {
             ItemFixture f = await SeedItemsAsync();
             await CheckAsync(f, x => (x.Discount ?? 0) == 0, B, O, E);
-            await CheckAsync(f, x => (x.Email ?? "none") == "none", B);
             await CheckAsync(f, x => (x.Discount ?? 100) > 4, B, D, E);
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.EmptyStrings, Description = "The ?? operator on a string column; an empty string is not replaced")]
+        public async Task CoalesceOperatorOnStrings()
+        {
+            ItemFixture f = await SeedItemsAsync();
+            await CheckAsync(f, x => (x.Email ?? "none") == "none", B);
         }
 
         [ConformanceTest(Description = "NOT keeps AND/OR grouping")]
@@ -257,11 +269,17 @@ namespace Durable.Conformance
         public async Task CollectionContainsNull()
         {
             ItemFixture f = await SeedItemsAsync();
-            List<string?> emails = new List<string?> { null, "alpha@x.com" };
             List<int?> discounts = new List<int?> { null, 5 };
+            await CheckAsync(f, x => discounts.Contains(x.Discount), B, D, E);
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.EmptyStrings, Description = "Contains over a string list holding null matches null rows but not empty strings; the negation excludes them")]
+        public async Task CollectionContainsNullOnStrings()
+        {
+            ItemFixture f = await SeedItemsAsync();
+            List<string?> emails = new List<string?> { null, "alpha@x.com" };
             await CheckAsync(f, x => emails.Contains(x.Email), A, B);
             await CheckAsync(f, x => !emails.Contains(x.Email), O, D, E, F);
-            await CheckAsync(f, x => discounts.Contains(x.Discount), B, D, E);
         }
 
         [ConformanceTest(Description = "Contains over a large list (600 values)")]

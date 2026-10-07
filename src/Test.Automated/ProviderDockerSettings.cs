@@ -230,7 +230,68 @@ namespace Test.Automated
 
         private static ProviderDockerSettings CreateOracle(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "docker settings");
+            // gvenzl/oracle-free (Oracle Database 23ai Free, multi-arch). APP_USER is created in the FREEPDB1 pluggable
+            // database; the readiness probe then grants it what the suites need as SYS (DBMS_LOCK for migration locking,
+            // and user management for the database lifecycle suite, which creates a fresh schema).
+            string username = string.IsNullOrWhiteSpace(configuration.Username) ? "durable" : configuration.Username;
+            string password = string.IsNullOrWhiteSpace(configuration.Password) ? "Durable123" : configuration.Password;
+            string service = string.IsNullOrWhiteSpace(configuration.DatabaseName) || configuration.DatabaseName == "durable_touchstone" ? "FREEPDB1" : configuration.DatabaseName;
+            string adminPassword = "DurableAdmin123";
+
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "oracle",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "gvenzl/oracle-free:23-slim-faststart" : dockerImageOverride,
+                ContainerPort = 1521,
+                HostPort = configuration.Port,
+                EnvironmentVariables = new Dictionary<string, string>
+                {
+                    ["ORACLE_PASSWORD"] = adminPassword,
+                    ["APP_USER"] = username,
+                    ["APP_USER_PASSWORD"] = password
+                },
+                DatabaseType = TestDatabaseType.Oracle,
+                DatabaseName = service,
+                Username = username,
+                Password = password,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema,
+                ExtraRunArguments = new[] { "--memory", "2560m", "--shm-size", "1g" },
+                StartupTimeout = TimeSpan.FromMinutes(8),
+                ReadinessProbe = (effective, token) => PrepareOracleAsync(effective, adminPassword, token)
+            };
+        }
+
+        private static async Task PrepareOracleAsync(TestRuntimeConfiguration configuration, string adminPassword, CancellationToken token)
+        {
+            string user = configuration.Username!.ToUpperInvariant();
+            global::Oracle.ManagedDataAccess.Client.OracleConnectionStringBuilder admin = new global::Oracle.ManagedDataAccess.Client.OracleConnectionStringBuilder
+            {
+                DataSource = configuration.Hostname + ":" + configuration.Port + "/" + configuration.DatabaseName,
+                UserID = "sys",
+                Password = adminPassword,
+                DBAPrivilege = "SYSDBA",
+                Pooling = false
+            };
+
+            await using (global::Oracle.ManagedDataAccess.Client.OracleConnection connection = new global::Oracle.ManagedDataAccess.Client.OracleConnection(admin.ConnectionString))
+            {
+                await connection.OpenAsync(token);
+                foreach (string grant in new[]
+                {
+                    "GRANT EXECUTE ON SYS.DBMS_LOCK TO " + user + " WITH GRANT OPTION",
+                    "GRANT CREATE USER, DROP USER, ALTER USER, CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, CREATE VIEW, CREATE PROCEDURE TO " + user + " WITH ADMIN OPTION",
+                    "GRANT UNLIMITED TABLESPACE TO " + user + " WITH ADMIN OPTION"
+                })
+                {
+                    await using global::Oracle.ManagedDataAccess.Client.OracleCommand command = connection.CreateCommand();
+                    command.CommandText = grant;
+                    await command.ExecuteNonQueryAsync(token);
+                }
+            }
+
+            using IRepositoryProvider provider = RepositoryProviderFactory.Create(configuration);
+            if (!await provider.IsDatabaseAvailableAsync()) throw new InvalidOperationException("Oracle is not accepting connections for " + user + " yet.");
         }
 
         private static ProviderDockerSettings CreateMariaDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)

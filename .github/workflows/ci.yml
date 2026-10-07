@@ -140,7 +140,7 @@ jobs:
           - mysql
           - sqlserver
 
-          # oracle
+          - oracle
 
           - mariadb
 

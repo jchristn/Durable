@@ -68,24 +68,46 @@ namespace Durable.Conformance
             stored.Discount = 0;
             stored.IsFeatured = true;
             stored.DueDate = new DateTime(2021, 6, 7);
-            stored.Email = string.Empty;
+            stored.Email = "back@x.com";
             repository.Update(stored);
             CfItem? updated = repository.ReadById(created.Id);
             Assert.NotNull(updated);
             Assert.Equal(0, updated.Discount);
             Assert.True(updated.IsFeatured);
-            Assert.Equal(string.Empty, updated.Email);
+            Assert.Equal("back@x.com", updated.Email);
             ConformanceAssert.SameInstant(new DateTime(2021, 6, 7), updated.DueDate!.Value, "DueDate");
         }
 
-        [ConformanceTest(Description = "Unicode, quotes, backslashes, control characters and empty strings round-trip exactly")]
+        [ConformanceTest(Requires = RepositoryCapabilities.EmptyStrings, Description = "Empty strings round-trip as empty strings, not null, through create and update")]
+        public async Task EmptyStringsRoundTrip()
+        {
+            await ResetAsync(typeof(CfItem));
+            IRepository<CfItem> repository = Repository<CfItem>();
+            CfItem created = await repository.CreateAsync(new CfItem { Name = string.Empty, Code = string.Empty, Category = "s" }, null, Token);
+            CfItem? stored = await repository.ReadByIdAsync(created.Id, null, Token);
+            Assert.NotNull(stored);
+            Assert.True(stored.Name == string.Empty, "Name should round-trip \"\" but was " + (stored.Name == null ? "null" : "\"" + stored.Name + "\""));
+            Assert.True(stored.Code == string.Empty, "Code should round-trip \"\" (not null) but was " + (stored.Code == null ? "null" : "\"" + stored.Code + "\""));
+
+            CfItem nulls = repository.Create(new CfItem { Name = "Nulls", Category = "c", CreatedUtc = new DateTime(2020, 1, 1) });
+            CfItem? reread = repository.ReadById(nulls.Id);
+            Assert.NotNull(reread);
+            Assert.Null(reread.Email);
+            reread.Email = string.Empty;
+            repository.Update(reread);
+            CfItem? updated = repository.ReadById(nulls.Id);
+            Assert.NotNull(updated);
+            Assert.Equal(string.Empty, updated.Email);
+        }
+
+        [ConformanceTest(Description = "Unicode, quotes, backslashes and control characters round-trip exactly (empty strings: EmptyStringsRoundTrip)")]
         public async Task StringsRoundTripExactly()
         {
             await ResetAsync(typeof(CfItem));
             IRepository<CfItem> repository = Repository<CfItem>();
             string[] values = new[]
             {
-                "Zoë", "日本語", "O'Brien", "say \"hi\"", "back\\slash", "line1\nline2", "tab\there", "emoji \U0001F600", "50%_[x]", string.Empty
+                "Zoë", "日本語", "O'Brien", "say \"hi\"", "back\\slash", "line1\nline2", "tab\there", "emoji \U0001F600", "50%_[x]"
             };
 
             foreach (string value in values)

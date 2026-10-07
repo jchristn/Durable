@@ -442,6 +442,7 @@ namespace Test.Shared
                 case TestDatabaseType.MySql: return "mysql";
                 case TestDatabaseType.MariaDb: return "mariadb";
                 case TestDatabaseType.SqlServer: return "mssql";
+                case TestDatabaseType.Oracle: return "oracle";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }
         }

@@ -118,7 +118,7 @@ namespace Test.Shared
             MsAuthor? read = await authors.ReadByIdAsync(austen.Id);
             Assert.Equal("Austen", read!.Name);
             Assert.Equal(string.Empty, read.Scratch);
-            Assert.Contains("author_id", authors.LastExecutedSql ?? string.Empty, StringComparison.Ordinal);
+            Assert.Contains(authors.Dialect.QuoteIdentifier("author_id"), authors.LastExecutedSql ?? string.Empty, StringComparison.Ordinal);
 
             read.Name = "Jane Austen";
             await authors.UpdateAsync(read);

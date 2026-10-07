@@ -311,8 +311,10 @@ namespace Test.Shared
         public async Task RecursiveCte()
         {
             using QueryTranslationFixture f = await SeedAsync();
+            // Oracle requires the column list of a recursive WITH element and FROM DUAL in a SELECT without a table.
+            bool oracle = _Provider.DatabaseType == TestDatabaseType.Oracle;
             ISqlQueryBuilder<QtItem> query = f.Items.Query()
-                .WithRecursiveCte("nums", "SELECT 1 AS n", "SELECT n + 1 FROM nums WHERE n < 5")
+                .WithRecursiveCte(oracle ? "nums (n)" : "nums", oracle ? "SELECT 1 AS n FROM DUAL" : "SELECT 1 AS n", "SELECT n + 1 FROM nums WHERE n < 5")
                 .WhereRaw("t0.quantity IN (SELECT n FROM nums)");
             await QueryTranslationFixture.AssertNamesAsync(query, Alpha, Zoe, Padded);
         }

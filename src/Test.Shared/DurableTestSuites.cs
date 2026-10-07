@@ -65,8 +65,13 @@ namespace Test.Shared
                 // against the configured SQL provider (SqlConformanceTarget resets storage by dropping and recreating tables).
                 if (!documentBackend)
                 {
+                    // Oracle stores an empty string as NULL (OracleDialect.TreatsEmptyStringAsNull), so its repositories lack
+                    // RepositoryCapabilities.EmptyStrings and the kit skips the cases that need it, naming the capability.
+                    RepositoryCapabilities sqlCapabilities = configuration.DatabaseType == TestDatabaseType.Oracle
+                        ? RepositoryCapabilities.All & ~RepositoryCapabilities.EmptyStrings
+                        : RepositoryCapabilities.All;
                     foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(
-                        new SqlConformanceTarget(TestDatabaseTypes.ProviderName(configuration.DatabaseType), DurableTestRuntime.RequireProvider),
+                        new SqlConformanceTarget(TestDatabaseTypes.ProviderName(configuration.DatabaseType), DurableTestRuntime.RequireProvider, sqlCapabilities),
                         "Conformance",
                         new List<string> { providerTag, "conformance" },
                         BeforeEach))
@@ -231,6 +236,7 @@ namespace Test.Shared
             switch (databaseType)
             {
                 case TestDatabaseType.Oracle:
+                    suites.Add(SharedSuite<OracleProviderTestSuite>("Oracle.Provider", "Oracle Provider (Type Storage / Empty Strings / IN Lists / Bulk / Identifier Case / Scripts) Tests", providerTag, beforeEach));
                     break;
 
                 case TestDatabaseType.DuckDb:

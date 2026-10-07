@@ -61,6 +61,7 @@
 		<ProjectReference Include="..\Durable.Postgres\Durable.Postgres.csproj" />
 		<ProjectReference Include="..\Durable.MySql\Durable.MySql.csproj" />
 		<ProjectReference Include="..\Durable.SqlServer\Durable.SqlServer.csproj" />
+		<ProjectReference Include="..\Durable.Oracle\Durable.Oracle.csproj" />
 	</ItemGroup>
 
 </Project>
