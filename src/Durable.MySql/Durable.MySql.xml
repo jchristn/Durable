@@ -4,6 +4,54 @@
         <name>Durable.MySql</name>
     </assembly>
     <members>
+        <member name="T:Durable.MySql.MariaDbDialect">
+            <summary>
+            MariaDB dialect (MariaDB 10.11+; tested on 11.4 LTS). Differences from <see cref="T:Durable.MySql.MySqlDialect"/>:
+            upserts use <c>VALUES(column)</c> (MariaDB has no row alias), empty-string tests use <c>CHAR_LENGTH</c> (MariaDB
+            collations pad trailing spaces), ordinal matching uses the NO PAD binary collation <c>utf8mb4_nopad_bin</c>,
+            LEAD/LAG defaults are emulated (MariaDB has no default argument), and JSON columns (a LONGTEXT alias) introspect as
+            <c>longtext</c>.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.MySql.MariaDbDialect.Default">
+            <summary>
+            Gets the shared default instance.
+            </summary>
+        </member>
+        <member name="P:Durable.MySql.MariaDbDialect.Flavor">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.MySql.MariaDbDialect.DbSystemName">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.MySql.MariaDbDialect.SupportsOffsetFunctionDefault">
+            <summary>
+            Gets false: MariaDB's LEAD and LAG take no default argument, so the engine emulates it.
+            </summary>
+        </member>
+        <member name="M:Durable.MySql.MariaDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
+            <summary>
+            Instantiates the dialect.
+            </summary>
+            <param name="converter">Converter; null uses <see cref="T:Durable.MySql.MySqlDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Binary collation for ordinal string matching; must be valid for the character set of
+            the compared columns. Default: utf8mb4_nopad_bin (binary and NO PAD, so trailing spaces are significant as in
+            .NET ordinal comparison).</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        </member>
+        <member name="M:Durable.MySql.MariaDbDialect.IsEmptyString(System.String)">
+            <inheritdoc />
+            <remarks>MariaDB's PAD SPACE collations treat <c>'   '</c> as equal to <c>''</c>; the character length does not.</remarks>
+        </member>
+        <member name="M:Durable.MySql.MariaDbDialect.AppendUpsert(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata,System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.Collections.Generic.IReadOnlyList{Durable.ColumnMetadata},System.String)">
+            <inheritdoc />
+            <remarks>MariaDB does not support the <c>AS alias</c> row reference of MySQL 8.0.19+; <c>VALUES(column)</c> is used instead.</remarks>
+        </member>
+        <member name="M:Durable.MySql.MariaDbDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+            <remarks>MariaDB's JSON type is an alias of LONGTEXT (with a JSON_VALID check) and is reported as <c>longtext</c>.</remarks>
+        </member>
         <member name="T:Durable.MySql.MySqlConnectionFactory">
             <summary>
             Opens MySQL connections through MySqlConnector's pooling, either from a connection string or a caller-supplied
@@ -20,6 +68,13 @@
         <member name="P:Durable.MySql.MySqlConnectionFactory.ConnectionString">
             <summary>
             Gets the connection string, or null when the factory wraps a caller-supplied data source.
+            </summary>
+        </member>
+        <member name="P:Durable.MySql.MySqlConnectionFactory.Flavor">
+            <summary>
+            Gets the database flavor of the connections this factory opens. Repositories created on this factory without an
+            explicit dialect use the flavor's dialect (<see cref="M:Durable.MySql.MySqlDialect.For(Durable.MySql.MySqlFlavor)"/>). Default: <see cref="F:Durable.MySql.MySqlFlavor.MySql"/>, or
+            <see cref="P:Durable.MySql.MySqlRepositorySettings.Flavor"/> when the factory is built from settings.
             </summary>
         </member>
         <member name="M:Durable.MySql.MySqlConnectionFactory.#ctor(Durable.MySql.MySqlRepositorySettings,System.Nullable{System.Int32})">
@@ -79,6 +134,12 @@
             Gets the shared default instance.
             </summary>
         </member>
+        <member name="P:Durable.MySql.MySqlDialect.Flavor">
+            <summary>
+            Gets the database flavor this dialect targets. Default: <see cref="F:Durable.MySql.MySqlFlavor.MySql"/>;
+            <see cref="T:Durable.MySql.MariaDbDialect"/> overrides it.
+            </summary>
+        </member>
         <member name="P:Durable.MySql.MySqlDialect.RepositoryType">
             <inheritdoc />
         </member>
@@ -128,6 +189,14 @@
             <param name="ordinalCollation">Binary collation for ordinal string matching; must be valid for the character set of
             the compared columns. Default: utf8mb4_bin.</param>
             <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlDialect.For(Durable.MySql.MySqlFlavor)">
+            <summary>
+            Returns the shared default dialect for a flavor: <see cref="P:Durable.MySql.MySqlDialect.Default"/> or <see cref="P:Durable.MySql.MariaDbDialect.Default"/>.
+            </summary>
+            <param name="flavor">Database flavor.</param>
+            <returns>The shared dialect instance. Never null.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
         </member>
         <member name="M:Durable.MySql.MySqlDialect.OrdinalCollation(System.String)">
             <inheritdoc />
@@ -205,6 +274,22 @@
             <param name="value">Text. Must not be null.</param>
             <returns>The literal.</returns>
         </member>
+        <member name="T:Durable.MySql.MySqlFlavor">
+            <summary>
+            The MySQL-compatible database a repository talks to. Each flavor selects a dialect
+            (<see cref="M:Durable.MySql.MySqlDialect.For(Durable.MySql.MySqlFlavor)"/>) that adjusts the SQL Durable generates for that database.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.MySqlFlavor.MySql">
+            <summary>
+            MySQL (default). Uses <see cref="T:Durable.MySql.MySqlDialect"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.MySql.MySqlFlavor.MariaDb">
+            <summary>
+            MariaDB. Uses <see cref="T:Durable.MySql.MariaDbDialect"/>.
+            </summary>
+        </member>
         <member name="T:Durable.MySql.MySqlRepository`1">
             <summary>
             MySQL repository for <typeparamref name="T"/>. All behavior comes from <see cref="T:Durable.Sql.SqlRepository`1"/>; this class
@@ -224,6 +309,18 @@
             <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
             <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.#ctor(System.String,Durable.MySql.MySqlFlavor,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from a connection string for a MySQL-compatible database. The repository owns its
+            connection factory and disposes it.
+            </summary>
+            <param name="connectionString">MySqlConnector connection string. Must not be null.</param>
+            <param name="flavor">Database flavor; selects the dialect (<see cref="M:Durable.MySql.MySqlDialect.For(Durable.MySql.MySqlFlavor)"/>).</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        </member>
         <member name="M:Durable.MySql.MySqlRepository`1.#ctor(Durable.MySql.MySqlRepositorySettings,Durable.Sql.SqlRepositoryOptions)">
             <summary>
             Creates a repository from settings. The repository owns its connection factory and disposes it.
@@ -239,6 +336,16 @@
             <param name="connectionFactory">Factory producing <see cref="T:MySqlConnector.MySqlConnection"/> instances. Must not be null.</param>
             <param name="options">Options; null uses defaults.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory is null.</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepository`1.#ctor(Durable.Sql.IConnectionFactory,Durable.MySql.MySqlDialect,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository on a shared connection factory with an explicit dialect (for example a flavor's dialect, or
+            a <see cref="T:Durable.MySql.MySqlDialect"/> with a custom ordinal collation). The factory is not disposed with the repository.
+            </summary>
+            <param name="connectionFactory">Factory producing <see cref="T:MySqlConnector.MySqlConnection"/> instances. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
         </member>
         <member name="M:Durable.MySql.MySqlRepository`1.CreateDatabaseIfNotExists">
             <summary>
@@ -309,6 +416,14 @@
             Gets the TLS mode (MySqlConnector's <see cref="T:MySqlConnector.MySqlSslMode"/>). Default: null (the driver default, Preferred).
             </summary>
         </member>
+        <member name="P:Durable.MySql.MySqlRepositorySettings.Flavor">
+            <summary>
+            Gets the MySQL-compatible database the settings connect to, which selects the dialect of repositories and
+            connection factories built from these settings (<see cref="M:Durable.MySql.MySqlDialect.For(Durable.MySql.MySqlFlavor)"/>).
+            Default: <see cref="F:Durable.MySql.MySqlFlavor.MySql"/>. Not part of the connection string: <c>Parse(connectionString)</c> returns the default,
+            <c>Parse(connectionString, flavor)</c> sets it, and <see cref="M:Durable.MySql.MySqlRepositorySettings.BuildConnectionString"/> ignores it.
+            </summary>
+        </member>
         <member name="M:Durable.MySql.MySqlRepositorySettings.#ctor">
             <summary>
             Initializes a new instance of the MySqlRepositorySettings class
@@ -321,6 +436,17 @@
             <param name="connectionString">The connection string to parse</param>
             <returns>A MySqlRepositorySettings instance</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
+        </member>
+        <member name="M:Durable.MySql.MySqlRepositorySettings.Parse(System.String,Durable.MySql.MySqlFlavor)">
+            <summary>
+            Parses a MySQL connection string and returns a MySqlRepositorySettings instance
+            </summary>
+            <param name="connectionString">The connection string to parse</param>
+            <param name="flavor">Database flavor stored in <see cref="P:Durable.MySql.MySqlRepositorySettings.Flavor"/>.</param>
+            <returns>A MySqlRepositorySettings instance</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
             <exception cref="T:System.ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
         </member>
         <member name="M:Durable.MySql.MySqlRepositorySettings.BuildConnectionString">

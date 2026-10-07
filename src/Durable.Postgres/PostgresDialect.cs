@@ -24,6 +24,12 @@ namespace Durable.Postgres
         /// </summary>
         public static PostgresDialect Default { get; } = new PostgresDialect();
 
+        /// <summary>
+        /// Gets the database flavor this dialect targets. Default: <see cref="PostgresFlavor.PostgreSql"/>;
+        /// <see cref="CockroachDbDialect"/> and <see cref="YugabyteDbDialect"/> override it.
+        /// </summary>
+        public virtual PostgresFlavor Flavor => PostgresFlavor.PostgreSql;
+
         /// <inheritdoc />
         public override RepositoryType RepositoryType => RepositoryType.Postgres;
 
@@ -60,6 +66,24 @@ namespace Durable.Postgres
         public PostgresDialect(IDataTypeConverter? converter = null, string ordinalCollation = "C") : base(converter ?? new PostgresDataTypeConverter())
         {
             OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
+        }
+
+        /// <summary>
+        /// Returns the shared default dialect for a flavor: <see cref="Default"/>, <see cref="CockroachDbDialect.Default"/>
+        /// or <see cref="YugabyteDbDialect.Default"/>.
+        /// </summary>
+        /// <param name="flavor">Database flavor.</param>
+        /// <returns>The shared dialect instance. Never null.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        public static PostgresDialect For(PostgresFlavor flavor)
+        {
+            switch (flavor)
+            {
+                case PostgresFlavor.PostgreSql: return Default;
+                case PostgresFlavor.CockroachDb: return CockroachDbDialect.Default;
+                case PostgresFlavor.YugabyteDb: return YugabyteDbDialect.Default;
+                default: throw new ArgumentOutOfRangeException(nameof(flavor), flavor, "Unknown PostgreSQL flavor.");
+            }
         }
 
         #endregion
@@ -217,7 +241,7 @@ namespace Durable.Postgres
                 "CROSS JOIN LATERAL unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord) " +
                 "JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum " +
                 "WHERE n.nspname = current_schema() AND t.relname = @p0 AND NOT ix.indisprimary " +
-                "AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = ix.indexrelid) " +
+                IndexSchemaConstraintFilter +
                 "ORDER BY ic.relname, k.ord",
                 new[] { new SqlParameterValue("@p0", tableName) });
         }
@@ -275,6 +299,12 @@ namespace Durable.Postgres
         #endregion
 
         #region Private-Methods
+
+        /// <summary>
+        /// Gets the condition (with a trailing space) that <see cref="IndexSchemaQuery"/> uses to leave out indexes backing
+        /// constraints. Default: indexes referenced by <c>pg_constraint.conindid</c> are excluded.
+        /// </summary>
+        protected virtual string IndexSchemaConstraintFilter => "AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = ix.indexrelid) ";
 
         /// <inheritdoc />
         protected override string AutoIncrementColumnType(ColumnMetadata column, bool inlinePrimaryKey)

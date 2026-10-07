@@ -50,6 +50,14 @@ namespace Durable.Postgres
         /// </summary>
         public SslMode? SslMode { get; init; }
 
+        /// <summary>
+        /// Gets the PostgreSQL-compatible database the settings connect to, which selects the dialect of repositories and
+        /// connection factories built from these settings (<see cref="PostgresDialect.For(PostgresFlavor)"/>).
+        /// Default: <see cref="PostgresFlavor.PostgreSql"/>. Not part of the connection string: <c>Parse(connectionString)</c> returns the default,
+        /// <c>Parse(connectionString, flavor)</c> sets it, and <see cref="BuildConnectionString"/> ignores it.
+        /// </summary>
+        public PostgresFlavor Flavor { get; init; } = PostgresFlavor.PostgreSql;
+
         #endregion
 
 
@@ -71,6 +79,21 @@ namespace Durable.Postgres
         /// <exception cref="ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
         public static PostgresRepositorySettings Parse(string connectionString)
         {
+            return Parse(connectionString, PostgresFlavor.PostgreSql);
+        }
+
+        /// <summary>
+        /// Parses a PostgreSQL connection string and returns a PostgresRepositorySettings instance
+        /// </summary>
+        /// <param name="connectionString">The connection string to parse</param>
+        /// <param name="flavor">Database flavor stored in <see cref="Flavor"/>.</param>
+        /// <returns>A PostgresRepositorySettings instance</returns>
+        /// <exception cref="ArgumentNullException">Thrown when connectionString is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        /// <exception cref="ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
+        public static PostgresRepositorySettings Parse(string connectionString, PostgresFlavor flavor)
+        {
+            if (!Enum.IsDefined(flavor)) throw new ArgumentOutOfRangeException(nameof(flavor), flavor, "Unknown PostgreSQL flavor.");
             ArgumentNullException.ThrowIfNull(connectionString);
 
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -137,7 +160,8 @@ namespace Durable.Postgres
                 MaxPoolSize = builder.MaxPoolSize != 100 ? builder.MaxPoolSize : null,
                 Pooling = builder.Pooling != true ? builder.Pooling : null,
                 SslMode = builder.SslMode != Npgsql.SslMode.Prefer ? builder.SslMode : null,
-                AdditionalProperties = additionalProperties
+                AdditionalProperties = additionalProperties,
+                Flavor = flavor
             };
         }
 

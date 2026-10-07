@@ -142,11 +142,11 @@ jobs:
 
           # oracle
 
-          # mariadb
+          - mariadb
 
-          # cockroachdb
+          - cockroachdb
 
-          # yugabytedb
+          - yugabytedb
 
           - mongodb
 

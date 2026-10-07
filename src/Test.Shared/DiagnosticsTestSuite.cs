@@ -435,11 +435,12 @@ namespace Test.Shared
             {
                 case TestDatabaseType.Sqlite: return "sqlite";
                 case TestDatabaseType.DuckDb: return "duckdb";
+                // OpenTelemetry well-known db.system values; YugabyteDB has none and reports its YSQL (PostgreSQL) API.
                 case TestDatabaseType.Postgres:
-                case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return "postgresql";
-                case TestDatabaseType.MySql:
-                case TestDatabaseType.MariaDb: return "mysql";
+                case TestDatabaseType.CockroachDb: return "cockroachdb";
+                case TestDatabaseType.MySql: return "mysql";
+                case TestDatabaseType.MariaDb: return "mariadb";
                 case TestDatabaseType.SqlServer: return "mssql";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }

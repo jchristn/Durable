@@ -30,7 +30,22 @@ namespace Durable.MySql
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         public MySqlRepository(string connectionString, SqlRepositoryOptions? options = null)
-            : this(MySqlRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, options)
+            : this(MySqlDialect.Default, MySqlRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, MySqlFlavor.MySql, options)
+        {
+        }
+
+        /// <summary>
+        /// Creates a repository from a connection string for a MySQL-compatible database. The repository owns its
+        /// connection factory and disposes it.
+        /// </summary>
+        /// <param name="connectionString">MySqlConnector connection string. Must not be null.</param>
+        /// <param name="flavor">Database flavor; selects the dialect (<see cref="MySqlDialect.For(MySqlFlavor)"/>).</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        public MySqlRepository(string connectionString, MySqlFlavor flavor, SqlRepositoryOptions? options = null)
+            : this(MySqlDialect.For(flavor), MySqlRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), flavor), connectionString, flavor, options)
         {
         }
 
@@ -41,7 +56,7 @@ namespace Durable.MySql
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
         public MySqlRepository(MySqlRepositorySettings settings, SqlRepositoryOptions? options = null)
-            : this(settings ?? throw new ArgumentNullException(nameof(settings)), settings.BuildConnectionString(), options)
+            : this(MySqlDialect.For((settings ?? throw new ArgumentNullException(nameof(settings))).Flavor), settings, settings.BuildConnectionString(), settings.Flavor, options)
         {
         }
 
@@ -52,12 +67,25 @@ namespace Durable.MySql
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionFactory is null.</exception>
         public MySqlRepository(IConnectionFactory connectionFactory, SqlRepositoryOptions? options = null)
-            : base(MySqlDialect.Default, connectionFactory, false, typeof(MySqlConnection), null, options)
+            : base(DialectFor(connectionFactory), connectionFactory, false, typeof(MySqlConnection), null, options)
         {
         }
 
-        private MySqlRepository(MySqlRepositorySettings settings, string connectionString, SqlRepositoryOptions? options)
-            : base(MySqlDialect.Default, new MySqlConnectionFactory(connectionString), true, typeof(MySqlConnection), settings, options)
+        /// <summary>
+        /// Creates a repository on a shared connection factory with an explicit dialect (for example a flavor's dialect, or
+        /// a <see cref="MySqlDialect"/> with a custom ordinal collation). The factory is not disposed with the repository.
+        /// </summary>
+        /// <param name="connectionFactory">Factory producing <see cref="MySqlConnection"/> instances. Must not be null.</param>
+        /// <param name="dialect">Dialect. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        public MySqlRepository(IConnectionFactory connectionFactory, MySqlDialect dialect, SqlRepositoryOptions? options = null)
+            : base(dialect ?? throw new ArgumentNullException(nameof(dialect)), connectionFactory, false, typeof(MySqlConnection), null, options)
+        {
+        }
+
+        private MySqlRepository(MySqlDialect dialect, MySqlRepositorySettings settings, string connectionString, MySqlFlavor flavor, SqlRepositoryOptions? options)
+            : base(dialect, new MySqlConnectionFactory(connectionString) { Flavor = flavor }, true, typeof(MySqlConnection), settings, options)
         {
         }
 
@@ -104,6 +132,11 @@ namespace Durable.MySql
         #endregion
 
         #region Private-Methods
+
+        private static MySqlDialect DialectFor(IConnectionFactory connectionFactory)
+        {
+            return connectionFactory is MySqlConnectionFactory typed ? MySqlDialect.For(typed.Flavor) : MySqlDialect.Default;
+        }
 
         /// <summary>
         /// Inserts rows with <see cref="MySqlBulkCopy"/> when local infile is allowed; otherwise uses batched multi-row INSERT.

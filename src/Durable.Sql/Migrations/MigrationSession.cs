@@ -203,6 +203,8 @@ namespace Durable.Sql
         internal void AcquireLock(string lockName, int timeoutSeconds, int pollMilliseconds, CancellationToken token)
         {
             if (Dialect.AcquireMigrationLockSql(lockName, 0) == null) return;
+            SqlStatement? setup = Dialect.PrepareMigrationLockSql();
+            if (setup != null) Scalar(setup, "MIGRATION LOCK SETUP");
             Stopwatch elapsed = Stopwatch.StartNew();
             while (true)
             {
@@ -223,6 +225,8 @@ namespace Durable.Sql
         internal async Task AcquireLockAsync(string lockName, int timeoutSeconds, int pollMilliseconds, CancellationToken token)
         {
             if (Dialect.AcquireMigrationLockSql(lockName, 0) == null) return;
+            SqlStatement? setup = Dialect.PrepareMigrationLockSql();
+            if (setup != null) await ScalarAsync(setup, "MIGRATION LOCK SETUP", token).ConfigureAwait(false);
             Stopwatch elapsed = Stopwatch.StartNew();
             while (true)
             {

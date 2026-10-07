@@ -223,32 +223,55 @@ namespace Test.Shared
 
         private static IRepositoryProvider CreateMariaDbProvider(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "repository provider");
+            return new MySqlRepositoryProvider(BuildMariaDbConnectionString(configuration), TestDatabaseType.MariaDb);
         }
 
         private static string BuildMariaDbConnectionString(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "connection string builder");
+            // MariaDB speaks the MySQL protocol; the same MySqlConnector settings apply.
+            return BuildMySqlConnectionString(configuration);
         }
 
         private static IRepositoryProvider CreateCockroachDbProvider(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "repository provider");
+            return new PostgresRepositoryProvider(BuildCockroachDbConnectionString(configuration), TestDatabaseType.CockroachDb);
         }
 
         private static string BuildCockroachDbConnectionString(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "connection string builder");
+            // CockroachDB defaults: SQL port 26257 and the root user (an insecure single node has no password).
+            NpgsqlConnectionStringBuilder builder = new NpgsqlConnectionStringBuilder
+            {
+                Host = string.IsNullOrWhiteSpace(configuration.Hostname) ? "127.0.0.1" : configuration.Hostname,
+                Port = configuration.Port ?? 26257,
+                Username = string.IsNullOrWhiteSpace(configuration.Username) ? "root" : configuration.Username,
+                Database = configuration.DatabaseName,
+                Pooling = true
+            };
+
+            if (!string.IsNullOrEmpty(configuration.Password)) builder.Password = configuration.Password;
+            return builder.ConnectionString;
         }
 
         private static IRepositoryProvider CreateYugabyteDbProvider(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "repository provider");
+            return new PostgresRepositoryProvider(BuildYugabyteDbConnectionString(configuration), TestDatabaseType.YugabyteDb);
         }
 
         private static string BuildYugabyteDbConnectionString(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "connection string builder");
+            // YugabyteDB YSQL defaults: port 5433 and the yugabyte user.
+            NpgsqlConnectionStringBuilder builder = new NpgsqlConnectionStringBuilder
+            {
+                Host = string.IsNullOrWhiteSpace(configuration.Hostname) ? "127.0.0.1" : configuration.Hostname,
+                Port = configuration.Port ?? 5433,
+                Username = string.IsNullOrWhiteSpace(configuration.Username) ? "yugabyte" : configuration.Username,
+                Password = string.IsNullOrEmpty(configuration.Password) ? "yugabyte" : configuration.Password,
+                Database = configuration.DatabaseName,
+                Pooling = true
+            };
+
+            return builder.ConnectionString;
         }
 
         #endregion

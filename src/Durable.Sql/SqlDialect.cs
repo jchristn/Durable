@@ -52,6 +52,9 @@ namespace Durable.Sql
         public virtual bool SupportsStoredProcedures => true;
 
         /// <inheritdoc />
+        public virtual bool SupportsNamedProcedureArguments => true;
+
+        /// <inheritdoc />
         public virtual string StringCastType => "TEXT";
 
         /// <inheritdoc />
@@ -82,6 +85,9 @@ namespace Durable.Sql
 
         /// <inheritdoc />
         public virtual bool SupportsNthValue => true;
+
+        /// <inheritdoc />
+        public virtual bool SupportsOffsetFunctionDefault => true;
 
         /// <inheritdoc />
         public virtual bool SupportsRangeFrameOffsets => true;
@@ -416,6 +422,12 @@ namespace Durable.Sql
                 + QuoteIdentifier("description") + " VARCHAR(1000) NULL, "
                 + QuoteIdentifier("applied_utc") + " TIMESTAMP NOT NULL, "
                 + QuoteIdentifier("duration_ms") + " BIGINT NOT NULL)";
+        }
+
+        /// <inheritdoc />
+        public virtual SqlStatement? PrepareMigrationLockSql()
+        {
+            return null;
         }
 
         /// <inheritdoc />

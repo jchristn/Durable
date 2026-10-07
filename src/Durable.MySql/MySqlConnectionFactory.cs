@@ -25,6 +25,13 @@ namespace Durable.MySql
         /// </summary>
         public string? ConnectionString { get; }
 
+        /// <summary>
+        /// Gets the database flavor of the connections this factory opens. Repositories created on this factory without an
+        /// explicit dialect use the flavor's dialect (<see cref="MySqlDialect.For(MySqlFlavor)"/>). Default: <see cref="MySqlFlavor.MySql"/>, or
+        /// <see cref="MySqlRepositorySettings.Flavor"/> when the factory is built from settings.
+        /// </summary>
+        public MySqlFlavor Flavor { get; init; } = MySqlFlavor.MySql;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -39,6 +46,7 @@ namespace Durable.MySql
         public MySqlConnectionFactory(MySqlRepositorySettings settings, int? maxConcurrentConnections = null)
             : this(BuildConnectionString(settings), maxConcurrentConnections)
         {
+            Flavor = settings.Flavor;
         }
 
         /// <summary>

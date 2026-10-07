@@ -948,6 +948,10 @@
             <summary>
             Gets whether the database supports savepoints inside a transaction. When false (DuckDB),
             <see cref="M:Durable.Sql.ISqlTransaction.CreateSavepoint(System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
+        <member name="P:Durable.Sql.ISqlDialect.SupportsNamedProcedureArguments">
+            <summary>
+            Gets whether stored procedure calls may pass arguments by name. When false (CockroachDB), procedure parameters are
+            sent positionally, in the order supplied, and their names are ignored.
             </summary>
         </member>
         <member name="M:Durable.Sql.ISqlDialect.CreateSavepointSql(System.String)">
@@ -1054,6 +1058,13 @@
             <summary>
             Gets whether the NTH_VALUE window function is supported. When false,
             <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsOffsetFunctionDefault">
+            <summary>
+            Gets whether LEAD and LAG accept a third (default value) argument. When false (MariaDB), a default passed to
+            <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Lead``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)"/> or <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Lag``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)"/> is applied with an
+            equivalent CASE over a one-row frame at the offset, so a NULL value at an existing row is still returned as NULL.
             </summary>
         </member>
         <member name="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets">
@@ -1180,6 +1191,14 @@
             </summary>
             <param name="lockName">Lock name. Must not be null.</param>
             <param name="waitSeconds">Seconds to wait inside the statement. Minimum: 0.</param>
+            <returns>The statement, or null.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.PrepareMigrationLockSql">
+            <summary>
+            Returns a statement the migrator runs once, outside any transaction, before its first
+            <see cref="M:Durable.Sql.ISqlDialect.AcquireMigrationLockSql(System.String,System.Int32)"/> attempt (for example creating a lock table on a database without session
+            locks), or null when nothing is needed (the default).
+            </summary>
             <returns>The statement, or null.</returns>
         </member>
         <member name="M:Durable.Sql.ISqlDialect.ReleaseMigrationLockSql(System.String)">
@@ -4611,6 +4630,9 @@
         <member name="P:Durable.Sql.SqlDialect.SupportsStoredProcedures">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsNamedProcedureArguments">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.Sql.SqlDialect.StringCastType">
             <inheritdoc />
         </member>
@@ -4639,6 +4661,9 @@
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsNthValue">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsOffsetFunctionDefault">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsRangeFrameOffsets">
@@ -4760,6 +4785,9 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.CreateMigrationHistoryTableSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.PrepareMigrationLockSql">
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.AcquireMigrationLockSql(System.String,System.Int32)">

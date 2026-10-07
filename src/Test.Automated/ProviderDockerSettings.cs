@@ -235,17 +235,119 @@ namespace Test.Automated
 
         private static ProviderDockerSettings CreateMariaDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "docker settings");
+            string username = string.IsNullOrWhiteSpace(configuration.Username) ? "root" : configuration.Username;
+            string password = string.IsNullOrWhiteSpace(configuration.Password) ? "password" : configuration.Password;
+            string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
+
+            Dictionary<string, string> environmentVariables = new Dictionary<string, string>
+            {
+                ["MARIADB_ROOT_PASSWORD"] = password,
+                ["MARIADB_DATABASE"] = databaseName
+            };
+
+            if (!username.Equals("root", StringComparison.OrdinalIgnoreCase))
+            {
+                environmentVariables["MARIADB_USER"] = username;
+                environmentVariables["MARIADB_PASSWORD"] = password;
+                environmentVariables["MARIADB_ROOT_PASSWORD"] = "root-password";
+            }
+
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "mariadb",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "mariadb:11.4" : dockerImageOverride,
+                ContainerPort = 3306,
+                HostPort = configuration.Port,
+                EnvironmentVariables = environmentVariables,
+                ExtraRunArguments = new[] { "--memory", "1g" },
+                DatabaseType = TestDatabaseType.MariaDb,
+                DatabaseName = databaseName,
+                Username = username,
+                Password = password,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema
+            };
         }
 
         private static ProviderDockerSettings CreateCockroachDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "docker settings");
+            // An insecure single node: the root user has no password (a supplied --pass is ignored by the server).
+            string username = string.IsNullOrWhiteSpace(configuration.Username) ? "root" : configuration.Username;
+            string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
+
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "cockroachdb",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "cockroachdb/cockroach:latest-v26.3" : dockerImageOverride,
+                ContainerPort = 26257,
+                HostPort = configuration.Port,
+                ExtraRunArguments = new[] { "--memory", "2g" },
+                ContainerCommand = new[] { "start-single-node", "--insecure", "--cache=.25", "--max-sql-memory=.25" },
+                DatabaseType = TestDatabaseType.CockroachDb,
+                DatabaseName = databaseName,
+                Username = username,
+                Password = string.Empty,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema,
+                ReadinessProbe = (effective, token) => CreatePostgresFamilyDatabaseAsync(effective, "defaultdb", token)
+            };
         }
 
         private static ProviderDockerSettings CreateYugabyteDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "docker settings");
+            // ysql_sequence_cache_minval=1: YugabyteDB caches 100 sequence values per connection by default, so identity
+            // keys would jump between connections; the suites expect consecutive keys.
+            string username = string.IsNullOrWhiteSpace(configuration.Username) ? "yugabyte" : configuration.Username;
+            string password = string.IsNullOrWhiteSpace(configuration.Password) ? "yugabyte" : configuration.Password;
+            string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
+
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "yugabytedb",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "yugabytedb/yugabyte:2026.1.2.0-b137" : dockerImageOverride,
+                ContainerPort = 5433,
+                HostPort = configuration.Port,
+                ExtraRunArguments = new[] { "--memory", "3g" },
+                ContainerCommand = new[] { "bin/yugabyted", "start", "--background=false", "--ui=false", "--tserver_flags=ysql_sequence_cache_minval=1" },
+                StartupTimeout = TimeSpan.FromMinutes(6),
+                DatabaseType = TestDatabaseType.YugabyteDb,
+                DatabaseName = databaseName,
+                Username = username,
+                Password = password,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema,
+                ReadinessProbe = (effective, token) => CreatePostgresFamilyDatabaseAsync(effective, "yugabyte", token)
+            };
+        }
+
+        private static async Task CreatePostgresFamilyDatabaseAsync(TestRuntimeConfiguration configuration, string maintenanceDatabase, CancellationToken token)
+        {
+            // Connects to the server's built-in database, creates the test database when missing, then checks that the
+            // test database accepts connections.
+            TestRuntimeConfiguration maintenance = configuration.Copy();
+            maintenance.DatabaseName = maintenanceDatabase;
+            Npgsql.NpgsqlConnectionStringBuilder builder = new Npgsql.NpgsqlConnectionStringBuilder(RepositoryProviderFactory.BuildConnectionString(maintenance))
+            {
+                Pooling = false
+            };
+
+            await using (Npgsql.NpgsqlConnection connection = new Npgsql.NpgsqlConnection(builder.ConnectionString))
+            {
+                await connection.OpenAsync(token);
+                await using Npgsql.NpgsqlCommand exists = new Npgsql.NpgsqlCommand("SELECT 1 FROM pg_database WHERE datname = @name", connection);
+                exists.Parameters.AddWithValue("name", configuration.DatabaseName);
+                if (await exists.ExecuteScalarAsync(token) == null)
+                {
+                    await using Npgsql.NpgsqlCommand create = new Npgsql.NpgsqlCommand("CREATE DATABASE \"" + configuration.DatabaseName.Replace("\"", "\"\"") + "\"", connection);
+                    await create.ExecuteNonQueryAsync(token);
+                }
+            }
+
+            using IRepositoryProvider provider = RepositoryProviderFactory.Create(configuration);
+            if (!await provider.IsDatabaseAvailableAsync())
+            {
+                throw new InvalidOperationException(provider.ProviderName + " is not accepting connections to " + configuration.DatabaseName + " yet.");
+            }
         }
 
         private static ProviderDockerSettings CreateMongoDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)

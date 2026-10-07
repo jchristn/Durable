@@ -17,6 +17,7 @@ namespace Test.Shared
 
         private readonly string _ConnectionString;
         private readonly TestDatabaseType _DatabaseType;
+        private readonly PostgresFlavor _Flavor;
         private bool _Disposed = false;
 
         #endregion
@@ -41,7 +42,12 @@ namespace Test.Shared
         /// <summary>
         /// Gets the SQL dialect of this provider.
         /// </summary>
-        public ISqlDialect Dialect => PostgresDialect.Default;
+        public ISqlDialect Dialect => PostgresDialect.For(_Flavor);
+
+        /// <summary>
+        /// Gets the driver flavor used for the served database type.
+        /// </summary>
+        public PostgresFlavor Flavor => _Flavor;
 
         #endregion
 
@@ -59,11 +65,24 @@ namespace Test.Shared
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             if (!TestDatabaseTypes.IsPostgresFamily(databaseType)) throw new ArgumentOutOfRangeException(nameof(databaseType), databaseType, "Not served by PostgresRepositoryProvider.");
             _DatabaseType = databaseType;
+            _Flavor = FlavorFor(databaseType);
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <summary>
+        /// Returns the driver flavor for a PostgreSQL-family database type.
+        /// </summary>
+        /// <param name="databaseType">Database type.</param>
+        /// <returns>The flavor; <see cref="PostgresFlavor.PostgreSql"/> for anything that is not CockroachDB or YugabyteDB.</returns>
+        public static PostgresFlavor FlavorFor(TestDatabaseType databaseType)
+        {
+            if (databaseType == TestDatabaseType.CockroachDb) return PostgresFlavor.CockroachDb;
+            if (databaseType == TestDatabaseType.YugabyteDb) return PostgresFlavor.YugabyteDb;
+            return PostgresFlavor.PostgreSql;
+        }
 
         /// <summary>
         /// Creates and configures a repository for the specified entity type.
@@ -72,7 +91,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new PostgresRepository<T>(_ConnectionString);
+            return new PostgresRepository<T>(_ConnectionString, _Flavor);
         }
 
         /// <summary>
@@ -82,7 +101,7 @@ namespace Test.Shared
         /// <returns>A new connection factory.</returns>
         public IConnectionFactory CreateConnectionFactory(int? maxConcurrentConnections = null)
         {
-            return new PostgresConnectionFactory(_ConnectionString, maxConcurrentConnections);
+            return new PostgresConnectionFactory(_ConnectionString, maxConcurrentConnections) { Flavor = _Flavor };
         }
 
         /// <summary>
@@ -105,7 +124,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepositoryWithOptions<T>(SqlRepositoryOptions options) where T : class, new()
         {
-            return new PostgresRepository<T>(_ConnectionString, options);
+            return new PostgresRepository<T>(_ConnectionString, _Flavor, options);
         }
 
         /// <summary>
@@ -138,10 +157,10 @@ namespace Test.Shared
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE people (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     first VARCHAR(64) NOT NULL,
                     last VARCHAR(64) NOT NULL,
-                    age INT NOT NULL,
+                    age INT4 NOT NULL,
                     email VARCHAR(128),
                     salary NUMERIC(15,2) NOT NULL,
                     department VARCHAR(32)
@@ -150,53 +169,53 @@ namespace Test.Shared
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE complex_entities (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     name VARCHAR(100) NOT NULL,
                     created_date TIMESTAMP NOT NULL,
                     updated_date TIMESTAMPTZ,
                     unique_id UUID NOT NULL,
                     duration INTERVAL NOT NULL,
                     status VARCHAR(50) NOT NULL,
-                    status_int INT NOT NULL,
+                    status_int INT4 NOT NULL,
                     tags JSONB,
                     scores JSONB,
                     metadata JSONB,
                     address JSONB,
                     is_active BOOLEAN NOT NULL,
-                    nullable_int INT,
+                    nullable_int INT4,
                     price NUMERIC(15,2) NOT NULL
                 )
             ");
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE authors (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     name VARCHAR(200) NOT NULL,
-                    company_id INT,
-                    version INT NOT NULL DEFAULT 1
+                    company_id INT4,
+                    version INT4 NOT NULL DEFAULT 1
                 )
             ");
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE books (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     title VARCHAR(200) NOT NULL,
-                    author_id INT NOT NULL,
-                    publisher_id INT
+                    author_id INT4 NOT NULL,
+                    publisher_id INT4
                 )
             ");
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE author_categories (
-                    id SERIAL PRIMARY KEY,
-                    author_id INT NOT NULL,
-                    category_id INT NOT NULL
+                    id " + KeyColumnType + @",
+                    author_id INT4 NOT NULL,
+                    category_id INT4 NOT NULL
                 )
             ");
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE categories (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     name VARCHAR(100) NOT NULL,
                     description VARCHAR(255)
                 )
@@ -204,7 +223,7 @@ namespace Test.Shared
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE companies (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     name VARCHAR(100) NOT NULL,
                     industry VARCHAR(50)
                 )
@@ -212,7 +231,7 @@ namespace Test.Shared
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE employees (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     first_name VARCHAR(100) NOT NULL,
                     last_name VARCHAR(100) NOT NULL,
                     email VARCHAR(255) NOT NULL,
@@ -224,12 +243,12 @@ namespace Test.Shared
 
             await personRepo.ExecuteSqlRawAsync(@"
                 CREATE TABLE products (
-                    id SERIAL PRIMARY KEY,
+                    id " + KeyColumnType + @",
                     name VARCHAR(200) NOT NULL,
                     sku VARCHAR(50) NOT NULL,
                     category VARCHAR(100) NOT NULL,
                     price NUMERIC(15,2) NOT NULL,
-                    stock_quantity INT NOT NULL,
+                    stock_quantity INT4 NOT NULL,
                     description VARCHAR(1000)
                 )
             ");
@@ -291,6 +310,11 @@ namespace Test.Shared
         #endregion
 
         #region Private-Methods
+
+        // Integer columns are INT4 (PostgreSQL's INT; CockroachDB's INT is 64-bit and binary COPY needs exact types).
+        // PostgreSQL keeps SERIAL; CockroachDB's SERIAL is a 64-bit unique_rowid() (not sequential, too large for int keys),
+        // so the wire-compatible databases use a 32-bit identity column.
+        private string KeyColumnType => _Flavor == PostgresFlavor.PostgreSql ? "SERIAL PRIMARY KEY" : "INT4 GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY";
 
         private void Dispose(bool disposing)
         {

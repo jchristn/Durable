@@ -4,6 +4,99 @@
         <name>Durable.Postgres</name>
     </assembly>
     <members>
+        <member name="T:Durable.Postgres.CockroachDbDialect">
+            <summary>
+            CockroachDB dialect (CockroachDB 24.1+ over the PostgreSQL wire protocol; tested on 26.3). Differences from
+            <see cref="T:Durable.Postgres.PostgresDialect"/>: 32-bit integers are declared <c>INT4</c> (CockroachDB's <c>INTEGER</c> is 64-bit),
+            integer division uses <c>div()</c> (CockroachDB's <c>/</c> returns DECIMAL), floating-point functions cast their
+            argument to <c>FLOAT8</c>, and the migration lock is a row in a lock table (CockroachDB accepts
+            <c>pg_try_advisory_lock</c> but does not lock).
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.Default">
+            <summary>
+            Gets the shared default instance.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.Flavor">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.DbSystemName">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.SupportsTransactionalDdl">
+            <summary>
+            Gets false: CockroachDB commits an open transaction before a schema change (the <c>autocommit_before_ddl</c>
+            session default), so migrations and schema synchronization run without a transaction and a failed migration may
+            leave earlier statements applied.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.SupportsNamedProcedureArguments">
+            <summary>
+            Gets false: CockroachDB's CALL accepts positional arguments only, so procedure parameters are sent in order.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.MigrationLockTableName">
+            <summary>
+            Gets the table holding migration locks (one row per held lock; created on first use). Default: durable_migration_locks.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.MigrationLockExpirySeconds">
+            <summary>
+            Gets the age in seconds after which a migration lock row left behind by a crashed migrator may be taken over.
+            Default: 900. Minimum: 1. Must exceed the longest expected migration run.
+            </summary>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String,System.String,System.Int32)">
+            <summary>
+            Instantiates the dialect.
+            </summary>
+            <param name="converter">Converter; null uses <see cref="T:Durable.Postgres.PostgresDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Binary collation for ordinal string matching. Default: C.</param>
+            <param name="migrationLockTableName">Table holding migration locks. Default: durable_migration_locks.</param>
+            <param name="migrationLockExpirySeconds">Seconds after which an abandoned migration lock may be taken over. Default: 900. Minimum: 1.</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation or migrationLockTableName is not a simple identifier.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when migrationLockExpirySeconds is less than 1.</exception>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.Divide(System.String,System.String,System.Boolean)">
+            <inheritdoc />
+            <remarks>CockroachDB evaluates <c>int / int</c> as DECIMAL; <c>div()</c> truncates toward zero like C#.</remarks>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+            <inheritdoc />
+            <remarks>CockroachDB has no implicit integer-to-float conversion for SQRT, so the argument is cast to FLOAT8.</remarks>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.GetColumnType(Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.PrepareMigrationLockSql">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+            <remarks>
+            Inserts the lock row for this session, or takes it over when this session already owns it or it is older than
+            <see cref="P:Durable.Postgres.CockroachDbDialect.MigrationLockExpirySeconds"/>; returns 1 when the row is now owned by this session.
+            </remarks>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.IndexSchemaConstraintFilter">
+            <summary>
+            Gets an empty filter: CockroachDB reports every unique index as a unique constraint, so indexes cannot be told
+            apart from constraint-backed ones and all secondary indexes are introspected.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.CockroachDbDialect.SessionIdentitySql">
+            <summary>
+            Gets a SQL expression that identifies the current session uniquely across the cluster.
+            </summary>
+        </member>
+        <member name="M:Durable.Postgres.CockroachDbDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
+            <inheritdoc />
+        </member>
         <member name="T:Durable.Postgres.PostgresConnectionFactory">
             <summary>
             Opens PostgreSQL connections through Npgsql's pooling, either from a connection string or a caller-supplied
@@ -20,6 +113,13 @@
         <member name="P:Durable.Postgres.PostgresConnectionFactory.ConnectionString">
             <summary>
             Gets the connection string, or null when the factory wraps a caller-supplied data source.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.PostgresConnectionFactory.Flavor">
+            <summary>
+            Gets the database flavor of the connections this factory opens. Repositories created on this factory without an
+            explicit dialect use the flavor's dialect (<see cref="M:Durable.Postgres.PostgresDialect.For(Durable.Postgres.PostgresFlavor)"/>). Default: <see cref="F:Durable.Postgres.PostgresFlavor.PostgreSql"/>, or
+            <see cref="P:Durable.Postgres.PostgresRepositorySettings.Flavor"/> when the factory is built from settings.
             </summary>
         </member>
         <member name="M:Durable.Postgres.PostgresConnectionFactory.#ctor(Durable.Postgres.PostgresRepositorySettings,System.Nullable{System.Int32})">
@@ -81,6 +181,12 @@
             Gets the shared default instance.
             </summary>
         </member>
+        <member name="P:Durable.Postgres.PostgresDialect.Flavor">
+            <summary>
+            Gets the database flavor this dialect targets. Default: <see cref="F:Durable.Postgres.PostgresFlavor.PostgreSql"/>;
+            <see cref="T:Durable.Postgres.CockroachDbDialect"/> and <see cref="T:Durable.Postgres.YugabyteDbDialect"/> override it.
+            </summary>
+        </member>
         <member name="P:Durable.Postgres.PostgresDialect.RepositoryType">
             <inheritdoc />
         </member>
@@ -109,6 +215,15 @@
             <param name="converter">Converter; null uses <see cref="T:Durable.Postgres.PostgresDataTypeConverter"/>.</param>
             <param name="ordinalCollation">Binary collation for ordinal string matching. Default: C (byte order of UTF-8, which is code-point order).</param>
             <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
+        </member>
+        <member name="M:Durable.Postgres.PostgresDialect.For(Durable.Postgres.PostgresFlavor)">
+            <summary>
+            Returns the shared default dialect for a flavor: <see cref="P:Durable.Postgres.PostgresDialect.Default"/>, <see cref="P:Durable.Postgres.CockroachDbDialect.Default"/>
+            or <see cref="P:Durable.Postgres.YugabyteDbDialect.Default"/>.
+            </summary>
+            <param name="flavor">Database flavor.</param>
+            <returns>The shared dialect instance. Never null.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
         </member>
         <member name="M:Durable.Postgres.PostgresDialect.OrderDirection(System.Boolean)">
             <inheritdoc />
@@ -156,11 +271,38 @@
         <member name="M:Durable.Postgres.PostgresDialect.ReleaseMigrationLockSql(System.String)">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Postgres.PostgresDialect.IndexSchemaConstraintFilter">
+            <summary>
+            Gets the condition (with a trailing space) that <see cref="M:Durable.Postgres.PostgresDialect.IndexSchemaQuery(System.String)"/> uses to leave out indexes backing
+            constraints. Default: indexes referenced by <c>pg_constraint.conindid</c> are excluded.
+            </summary>
+        </member>
         <member name="M:Durable.Postgres.PostgresDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
             <inheritdoc />
         </member>
         <member name="M:Durable.Postgres.PostgresDialect.BinaryLiteral(System.Byte[])">
             <inheritdoc />
+        </member>
+        <member name="T:Durable.Postgres.PostgresFlavor">
+            <summary>
+            The PostgreSQL-compatible database a repository talks to. Each flavor selects a dialect
+            (<see cref="M:Durable.Postgres.PostgresDialect.For(Durable.Postgres.PostgresFlavor)"/>) that adjusts the SQL Durable generates for that database.
+            </summary>
+        </member>
+        <member name="F:Durable.Postgres.PostgresFlavor.PostgreSql">
+            <summary>
+            PostgreSQL (default). Uses <see cref="T:Durable.Postgres.PostgresDialect"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Postgres.PostgresFlavor.CockroachDb">
+            <summary>
+            CockroachDB (PostgreSQL wire protocol). Uses <see cref="T:Durable.Postgres.CockroachDbDialect"/>.
+            </summary>
+        </member>
+        <member name="F:Durable.Postgres.PostgresFlavor.YugabyteDb">
+            <summary>
+            YugabyteDB YSQL (PostgreSQL wire protocol). Uses <see cref="T:Durable.Postgres.YugabyteDbDialect"/>.
+            </summary>
         </member>
         <member name="T:Durable.Postgres.PostgresRepository`1">
             <summary>
@@ -181,6 +323,18 @@
             <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
             <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         </member>
+        <member name="M:Durable.Postgres.PostgresRepository`1.#ctor(System.String,Durable.Postgres.PostgresFlavor,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from a connection string for a PostgreSQL-compatible database. The repository owns its
+            connection factory and disposes it.
+            </summary>
+            <param name="connectionString">Npgsql connection string. Must not be null.</param>
+            <param name="flavor">Database flavor; selects the dialect (<see cref="M:Durable.Postgres.PostgresDialect.For(Durable.Postgres.PostgresFlavor)"/>).</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        </member>
         <member name="M:Durable.Postgres.PostgresRepository`1.#ctor(Durable.Postgres.PostgresRepositorySettings,Durable.Sql.SqlRepositoryOptions)">
             <summary>
             Creates a repository from settings. The repository owns its connection factory and disposes it.
@@ -196,6 +350,16 @@
             <param name="connectionFactory">Factory producing <see cref="T:Npgsql.NpgsqlConnection"/> instances. Must not be null.</param>
             <param name="options">Options; null uses defaults.</param>
             <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory is null.</exception>
+        </member>
+        <member name="M:Durable.Postgres.PostgresRepository`1.#ctor(Durable.Sql.IConnectionFactory,Durable.Postgres.PostgresDialect,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository on a shared connection factory with an explicit dialect (for example a flavor's dialect, or
+            a <see cref="T:Durable.Postgres.PostgresDialect"/> with a custom ordinal collation). The factory is not disposed with the repository.
+            </summary>
+            <param name="connectionFactory">Factory producing <see cref="T:Npgsql.NpgsqlConnection"/> instances. Must not be null.</param>
+            <param name="dialect">Dialect. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
         </member>
         <member name="M:Durable.Postgres.PostgresRepository`1.CreateDatabaseIfNotExists">
             <summary>
@@ -266,6 +430,14 @@
             Gets the TLS mode (Npgsql's <see cref="T:Npgsql.SslMode"/>). Default: null (the driver default, Prefer).
             </summary>
         </member>
+        <member name="P:Durable.Postgres.PostgresRepositorySettings.Flavor">
+            <summary>
+            Gets the PostgreSQL-compatible database the settings connect to, which selects the dialect of repositories and
+            connection factories built from these settings (<see cref="M:Durable.Postgres.PostgresDialect.For(Durable.Postgres.PostgresFlavor)"/>).
+            Default: <see cref="F:Durable.Postgres.PostgresFlavor.PostgreSql"/>. Not part of the connection string: <c>Parse(connectionString)</c> returns the default,
+            <c>Parse(connectionString, flavor)</c> sets it, and <see cref="M:Durable.Postgres.PostgresRepositorySettings.BuildConnectionString"/> ignores it.
+            </summary>
+        </member>
         <member name="M:Durable.Postgres.PostgresRepositorySettings.#ctor">
             <summary>
             Initializes a new instance of the PostgresRepositorySettings class
@@ -280,12 +452,54 @@
             <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null</exception>
             <exception cref="T:System.ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
         </member>
+        <member name="M:Durable.Postgres.PostgresRepositorySettings.Parse(System.String,Durable.Postgres.PostgresFlavor)">
+            <summary>
+            Parses a PostgreSQL connection string and returns a PostgresRepositorySettings instance
+            </summary>
+            <param name="connectionString">The connection string to parse</param>
+            <param name="flavor">Database flavor stored in <see cref="P:Durable.Postgres.PostgresRepositorySettings.Flavor"/>.</param>
+            <returns>A PostgresRepositorySettings instance</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
+        </member>
         <member name="M:Durable.Postgres.PostgresRepositorySettings.BuildConnectionString">
             <summary>
             Builds a PostgreSQL connection string from the current settings
             </summary>
             <returns>A PostgreSQL connection string</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when required properties (Hostname, Database) are null or empty</exception>
+        </member>
+        <member name="T:Durable.Postgres.YugabyteDbDialect">
+            <summary>
+            YugabyteDB YSQL dialect (YugabyteDB 2025.1+ over the PostgreSQL wire protocol; tested on 2026.1). The only
+            difference from <see cref="T:Durable.Postgres.PostgresDialect"/> is that DDL is treated as non-transactional. Advisory locks (used for
+            the migration lock) require <c>yb_enable_advisory_locks</c>, which is on by default in the tested release.
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.YugabyteDbDialect.Default">
+            <summary>
+            Gets the shared default instance.
+            </summary>
+        </member>
+        <member name="P:Durable.Postgres.YugabyteDbDialect.Flavor">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Postgres.YugabyteDbDialect.SupportsTransactionalDdl">
+            <summary>
+            Gets false: YugabyteDB runs DDL inside a transaction block in its own transaction unless
+            <c>yb_ddl_transaction_block_enabled</c> is on (off by default), so migrations and schema synchronization run
+            without a transaction and a failed migration may leave earlier statements applied.
+            </summary>
+        </member>
+        <member name="M:Durable.Postgres.YugabyteDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String)">
+            <summary>
+            Instantiates the dialect.
+            </summary>
+            <param name="converter">Converter; null uses <see cref="T:Durable.Postgres.PostgresDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Binary collation for ordinal string matching. Default: C.</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation is not a simple collation name.</exception>
         </member>
     </members>
 </doc>

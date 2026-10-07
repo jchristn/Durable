@@ -21,6 +21,12 @@ namespace Durable.MySql
         /// </summary>
         public static MySqlDialect Default { get; } = new MySqlDialect();
 
+        /// <summary>
+        /// Gets the database flavor this dialect targets. Default: <see cref="MySqlFlavor.MySql"/>;
+        /// <see cref="MariaDbDialect"/> overrides it.
+        /// </summary>
+        public virtual MySqlFlavor Flavor => MySqlFlavor.MySql;
+
         /// <inheritdoc />
         public override RepositoryType RepositoryType => RepositoryType.MySql;
 
@@ -78,6 +84,22 @@ namespace Durable.MySql
         public MySqlDialect(IDataTypeConverter? converter = null, string ordinalCollation = "utf8mb4_bin") : base(converter ?? new MySqlDataTypeConverter())
         {
             OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
+        }
+
+        /// <summary>
+        /// Returns the shared default dialect for a flavor: <see cref="Default"/> or <see cref="MariaDbDialect.Default"/>.
+        /// </summary>
+        /// <param name="flavor">Database flavor.</param>
+        /// <returns>The shared dialect instance. Never null.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        public static MySqlDialect For(MySqlFlavor flavor)
+        {
+            switch (flavor)
+            {
+                case MySqlFlavor.MySql: return Default;
+                case MySqlFlavor.MariaDb: return MariaDbDialect.Default;
+                default: throw new ArgumentOutOfRangeException(nameof(flavor), flavor, "Unknown MySQL flavor.");
+            }
         }
 
         #endregion
