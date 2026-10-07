@@ -829,15 +829,20 @@ namespace Durable.MongoDb
             if (model.Take.HasValue && model.Take.Value == 0) return null;
             string field = schema.Field(column!);
             List<BsonDocument> stages = new List<BsonDocument>();
-            if (pushdown.Conjuncts.Count > 0) stages.Add(new BsonDocument("$match", pushdown.Combined()));
+            BsonDocument notNull = new BsonDocument(field, new BsonDocument("$ne", BsonNull.Value));
             if (paged)
             {
+                if (pushdown.Conjuncts.Count > 0) stages.Add(new BsonDocument("$match", pushdown.Combined()));
                 stages.Add(new BsonDocument("$sort", sort!));
                 if (model.Skip.HasValue && model.Skip.Value > 0) stages.Add(new BsonDocument("$skip", model.Skip.Value));
                 if (model.Take.HasValue) stages.Add(new BsonDocument("$limit", model.Take.Value));
+                stages.Add(new BsonDocument("$match", notNull));
             }
-
-            stages.Add(new BsonDocument("$match", new BsonDocument(field, new BsonDocument("$ne", BsonNull.Value))));
+            else
+            {
+                List<BsonDocument> conditions = new List<BsonDocument>(pushdown.Conjuncts) { notNull };
+                stages.Add(new BsonDocument("$match", conditions.Count == 1 ? notNull : new BsonDocument("$and", new BsonArray(conditions))));
+            }
             BsonDocument group = new BsonDocument(MongoDbCollectionSchema.IdField, BsonNull.Value);
             switch (function)
             {
