@@ -45,7 +45,7 @@ namespace Durable.Postgres
         /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         public PostgresRepository(string connectionString, PostgresFlavor flavor, SqlRepositoryOptions? options = null)
-            : this(PostgresDialect.For(flavor), PostgresRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, flavor, options)
+            : this(PostgresDialect.For(flavor), PostgresRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), flavor), connectionString, flavor, options)
         {
         }
 

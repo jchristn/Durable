@@ -123,6 +123,62 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// A flavor selects the wire-compatible dialect through settings, Parse, connection factories and repository
+        /// constructors; without one the providers keep the MySQL and PostgreSQL dialects. The flavor never reaches the
+        /// connection string.
+        /// </summary>
+        [Fact]
+        public void FlavorsSelectWireCompatibleDialects()
+        {
+            Assert.Same(PostgresDialect.Default, PostgresDialect.For(PostgresFlavor.PostgreSql));
+            Assert.Same(CockroachDbDialect.Default, PostgresDialect.For(PostgresFlavor.CockroachDb));
+            Assert.Same(YugabyteDbDialect.Default, PostgresDialect.For(PostgresFlavor.YugabyteDb));
+            Assert.Same(MySqlDialect.Default, MySqlDialect.For(MySqlFlavor.MySql));
+            Assert.Same(MariaDbDialect.Default, MySqlDialect.For(MySqlFlavor.MariaDb));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PostgresDialect.For((PostgresFlavor)99));
+            Assert.Throws<ArgumentOutOfRangeException>(() => MySqlRepositorySettings.Parse("Server=h;Database=d", (MySqlFlavor)99));
+
+            const string pgConnection = "Host=h;Port=26257;Username=root;Database=d";
+            const string myConnection = "Server=h;Database=d;User ID=root";
+            Assert.Equal(PostgresFlavor.PostgreSql, PostgresRepositorySettings.Parse(pgConnection).Flavor);
+            PostgresRepositorySettings cockroach = PostgresRepositorySettings.Parse(pgConnection, PostgresFlavor.CockroachDb);
+            Assert.Equal(PostgresFlavor.CockroachDb, cockroach.Flavor);
+            Assert.Equal(PostgresRepositorySettings.Parse(pgConnection).BuildConnectionString(), cockroach.BuildConnectionString());
+
+            using (PostgresConnectionFactory factory = new PostgresConnectionFactory(cockroach))
+            using (PostgresRepository<Person> onFactory = new PostgresRepository<Person>(factory))
+            using (PostgresRepository<Person> explicitDialect = new PostgresRepository<Person>(factory, YugabyteDbDialect.Default))
+            {
+                Assert.Equal(PostgresFlavor.CockroachDb, factory.Flavor);
+                Assert.IsType<CockroachDbDialect>(onFactory.Dialect);
+                Assert.IsType<YugabyteDbDialect>(explicitDialect.Dialect);
+            }
+
+            using (PostgresRepository<Person> plain = new PostgresRepository<Person>(pgConnection))
+            using (PostgresRepository<Person> fromSettings = new PostgresRepository<Person>(cockroach))
+            using (PostgresRepository<Person> fromString = new PostgresRepository<Person>(pgConnection, PostgresFlavor.YugabyteDb))
+            {
+                Assert.Same(PostgresDialect.Default, plain.Dialect);
+                Assert.Same(CockroachDbDialect.Default, fromSettings.Dialect);
+                Assert.Same(YugabyteDbDialect.Default, fromString.Dialect);
+                Assert.Equal(PostgresFlavor.YugabyteDb, ((PostgresConnectionFactory)fromString.ConnectionFactory).Flavor);
+            }
+
+            using (MySqlConnectionFactory factory = new MySqlConnectionFactory(myConnection) { Flavor = MySqlFlavor.MariaDb })
+            using (MySqlRepository<Person> onFactory = new MySqlRepository<Person>(factory))
+            using (MySqlRepository<Person> plain = new MySqlRepository<Person>(myConnection))
+            using (MySqlRepository<Person> fromString = new MySqlRepository<Person>(myConnection, MySqlFlavor.MariaDb))
+            using (MySqlRepository<Person> fromSettings = new MySqlRepository<Person>(MySqlRepositorySettings.Parse(myConnection, MySqlFlavor.MariaDb)))
+            {
+                Assert.IsType<MariaDbDialect>(onFactory.Dialect);
+                Assert.Same(MySqlDialect.Default, plain.Dialect);
+                Assert.Same(MariaDbDialect.Default, fromString.Dialect);
+                Assert.Same(MariaDbDialect.Default, fromSettings.Dialect);
+                Assert.Equal("mariadb", fromString.Dialect.DbSystemName);
+            }
+        }
+
+        /// <summary>
         /// SQL Server pool, timeout and TLS settings reach the SqlClient connection string and parse back.
         /// </summary>
         [Fact]

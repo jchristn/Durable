@@ -45,7 +45,7 @@ namespace Durable.MySql
         /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         public MySqlRepository(string connectionString, MySqlFlavor flavor, SqlRepositoryOptions? options = null)
-            : this(MySqlDialect.For(flavor), MySqlRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, flavor, options)
+            : this(MySqlDialect.For(flavor), MySqlRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), flavor), connectionString, flavor, options)
         {
         }
 
