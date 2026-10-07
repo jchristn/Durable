@@ -26,6 +26,7 @@ Entity mapping sources: Durable can map classes that cannot carry its attributes
 - `MappingSourceTestSuite` (all four SQL providers): translated metadata, CRUD, composite and auto-increment keys, reference, collection and many-to-many includes, a version conflict, soft delete, a value converter, a generated default, indexes created by `InitializeTable`, an empty schema diff, the in-memory and LiteDB backends over the same classes, the global source, and the registration rules. The classes carry only test-only attributes translated by an adapter.
 - `DurableToolTestSuite` covers `--mapping-source`: discovery, schema diff, a generated migration that compiles and applies the mapped schema, and errors.
 - `Test.Aot` checks that a source-mapped class (with a converter attached by the source) round-trips through SQLite under Native AOT.
+- The SQL Server test connection uses a 120 s command timeout. SqlClient applies it to `COMMIT`, and a containerized server on a shared CI runner once stalled a commit in the connection-pool stress suite past the 30 s default.
 
 **Breaking changes**
 

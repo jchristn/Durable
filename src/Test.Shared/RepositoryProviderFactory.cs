@@ -133,7 +133,10 @@ namespace Test.Shared
                 InitialCatalog = configuration.DatabaseName,
                 Encrypt = false,
                 TrustServerCertificate = true,
-                MultipleActiveResultSets = true
+                MultipleActiveResultSets = true,
+                // SqlClient applies the connection's command timeout (default 30 s) to COMMIT; under the stress suites a
+                // containerized server on a shared CI runner has stalled a commit's log flush past 30 s.
+                CommandTimeout = 120
             };
 
             // "integrated" uses Windows authentication (e.g. LocalDB: host "(localdb)", instance "MSSQLLocalDB")
