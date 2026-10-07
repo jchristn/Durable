@@ -124,7 +124,7 @@ Add a README section with a complete adapter example and the registration rules,
 - [x] README, CHANGELOG and CLAUDE.md updated and accurate.
 - [x] Version number approved by the maintainer and recorded in the progress log before it is applied.
 
-**Notes:** README gained "Mapping classes you don't own" (complete adapter example and the rules), the CLI option row, the `durable.json` key and a Native AOT note; CHANGELOG has v0.6.0; both copies of CLAUDE.md note the seam. All 11 packages and their package release notes are at 0.6.0.
+**Notes:** README gained "Mapping classes you don't own" (when to use a source and when not to, examples for generated classes, an adapter for another attribute system, adding to a class's own attributes and the CLI, all compiled and run against the 0.6.0 build, and the rules), the CLI option row, the `durable.json` key and a Native AOT note; CHANGELOG has v0.6.0; both copies of CLAUDE.md note the seam. All 11 packages and their package release notes are at 0.6.0.
 
 ## Out of scope
 

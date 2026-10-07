@@ -416,10 +416,81 @@ Converters also apply to values compared with the column in `Where` predicates.
 
 ### Mapping classes you don't own
 
-Some classes can't carry Durable's attributes: generated code, models owned by another team or package, or models already annotated for another library. For those, implement `IEntityMappingSource` and register it once at startup. A source answers with the same attribute objects you would otherwise write on the class (`EntityAttribute`, `PropertyAttribute`, `ForeignKeyAttribute`, `NavigationPropertyAttribute`, `VersionColumnAttribute` and the rest), constructed in code, so an adapter is a translation table rather than a second mapping language. Everything downstream (queries, includes, migrations, the CLI, every backend) uses the result exactly as if the attributes were on the class.
+Durable normally learns a class's mapping from its attributes (or from conventions). Some classes can't carry those attributes: generated code that is overwritten on every regeneration, models owned by another team or package, or models already annotated for another library. For those, write an `IEntityMappingSource` and register it once at startup.
+
+A source answers with the same attribute objects you would otherwise put on the class (`EntityAttribute`, `PropertyAttribute`, `ForeignKeyAttribute`, `NavigationPropertyAttribute`, `VersionColumnAttribute` and the rest), constructed in code. It is a translation table, not a second mapping language. Everything downstream (queries, includes, migrations, the CLI and every backend) then treats the class exactly as if the attributes were written on it.
+
+#### When to use it
+
+| Situation | What to use |
+|---|---|
+| You own the class and can edit it | Attributes on the class. No mapping source |
+| A plain class whose property names fit the conventions | Conventions (`DurableMapping.NamingConvention`, `Id` keys). No mapping source |
+| Generated classes (database-first, OpenAPI, protobuf) that regeneration would overwrite | A per-type source: `DurableMapping.Register<T>(source)` ([example](#example-generated-classes)) |
+| Models from another package or team that you can't change | A per-type source for each class you persist |
+| Many classes already annotated for another library (`[Table]`, `[Column]` or your own) | One adapter set as `DurableMapping.MappingSource` ([example](#example-an-adapter-for-another-attribute-system)) |
+| A Durable entity from a shared package that needs one application-specific change | A source that starts from `DurableMapping.AttributeSource` and adds to it ([example](#example-adding-to-a-classs-own-attributes)) |
+
+Don't use it to map the same class two different ways in one process, or to change a class's mapping while the application runs: mapping is fixed per type once the type is first used. If all you want is different column names (`first_name` for `FirstName`), set `DurableMapping.NamingConvention` instead.
+
+#### Example: generated classes
+
+The generated class stays untouched; the mapping lives next to it in code you own:
 
 ```csharp
-// Their model, which you can't change
+// Generated: any attribute added here is lost on the next regeneration
+public partial class Invoice
+{
+    public long InvoiceNo { get; set; }
+    public long CustomerNo { get; set; }
+    public decimal Amount { get; set; }
+    public int Revision { get; set; }
+    public Customer? Customer { get; set; }
+}
+
+public sealed class InvoiceMapping : IEntityMappingSource
+{
+    public bool Describes(Type type) => type == typeof(Invoice);
+
+    public EntityAttribute? GetEntityAttribute(Type type) => new EntityAttribute("invoices");
+
+    public IEnumerable<Attribute>? GetPropertyAttributes(Type type, PropertyInfo property) => property.Name switch
+    {
+        nameof(Invoice.InvoiceNo) => new Attribute[] { new PropertyAttribute("invoice_no", Flags.PrimaryKey | Flags.AutoIncrement) },
+        nameof(Invoice.CustomerNo) => new Attribute[]
+        {
+            new PropertyAttribute("customer_no"),
+            new ForeignKeyAttribute(typeof(Customer), nameof(Customer.Id)),
+            new IndexAttribute("idx_invoices_customer")
+        },
+        nameof(Invoice.Amount) => new Attribute[] { new PropertyAttribute("amount") },
+        nameof(Invoice.Revision) => new Attribute[] { new PropertyAttribute("revision"), new VersionColumnAttribute() },
+        nameof(Invoice.Customer) => new Attribute[] { new NavigationPropertyAttribute(nameof(Invoice.CustomerNo)) },
+        _ => null   // anything else is not mapped
+    };
+
+    public IEnumerable<CompositeIndexAttribute>? GetCompositeIndexes(Type type) => null;
+}
+
+// Startup, before the first repository or query for Invoice. Customer (mapped in the next example) must be
+// registered at startup too: loading an Invoice include builds Customer's metadata.
+DurableMapping.Register<Invoice>(new InvoiceMapping());
+
+// From here on Invoice is an ordinary entity: tables, includes, version checks, migrations
+SqliteRepository<Invoice> invoices = new SqliteRepository<Invoice>(factory);
+invoices.InitializeTable(typeof(Invoice));
+List<Invoice> large = (await invoices.Query()
+    .Include(i => i.Customer)
+    .Where(i => i.Amount > 1000m)
+    .ExecuteAsync()).ToList();
+```
+
+#### Example: an adapter for another attribute system
+
+When your models already carry another library's attributes, one adapter maps all of them. Set it as the global source; its `Describes` decides which classes it handles, and every other class keeps its Durable attributes:
+
+```csharp
+// Models annotated for another library
 [Table("customers")]
 public class Customer
 {
@@ -427,7 +498,7 @@ public class Customer
     [Column("display_name")] public string Name { get; set; } = "";
 }
 
-public class TheirAttributesMappingSource : IEntityMappingSource
+public sealed class TableColumnMappingSource : IEntityMappingSource
 {
     public bool Describes(Type type) => type.GetCustomAttribute<TableAttribute>() != null;
 
@@ -445,21 +516,55 @@ public class TheirAttributesMappingSource : IEntityMappingSource
     public IEnumerable<CompositeIndexAttribute>? GetCompositeIndexes(Type type) => null;
 }
 
-// Startup, before the first repository or query for these types
-DurableMapping.Register<Customer>(new TheirAttributesMappingSource());       // one type
-DurableMapping.MappingSource = new TheirAttributesMappingSource();           // or every type the source Describes
+// Startup: every [Table] class is mapped by the adapter
+DurableMapping.MappingSource = new TableColumnMappingSource();
 ```
 
-Rules:
+#### Example: adding to a class's own attributes
 
-- **Lookup order.** A source registered for the type with `Register<T>` / `Register(Type, source)` wins; otherwise `DurableMapping.MappingSource` is used when its `Describes(type)` returns true; otherwise Durable reads the class's own attributes. `DurableMapping.GetMappingSource(type)` tells you which one applies, and `EntityMetadata.For<T>().MappingSource` which one was used.
-- **`Describes` matters for the global source.** `MappingSource` is asked about every entity and projection type, so return false for types you don't know; they keep their own attributes.
-- **Conventions still apply.** If no property gets a `PropertyAttribute`, the class is convention-mapped exactly like an unannotated class (`Id` key, `DurableMapping.NamingConvention`, `NotMappedAttribute` to skip a property).
-- **Mapping is fixed once used.** Metadata is cached per type, so registering a different source for a type whose metadata is already built throws `InvalidOperationException` naming the type. Registering the source it already uses again is allowed.
-- **Combine instead of replace.** `DurableMapping.AttributeSource` is the built-in attribute reader; call it from your source to keep a class's Durable attributes and add your own.
+`DurableMapping.AttributeSource` reads a class's Durable attributes. Start from it to change one thing and keep the rest, for example soft delete for an entity from a shared package:
+
+```csharp
+// From a shared package: [Entity("audit_log")] with [Property] on every column, including "archived"
+public sealed class AuditLogMapping : IEntityMappingSource
+{
+    private static readonly IEntityMappingSource Own = DurableMapping.AttributeSource;
+
+    public bool Describes(Type type) => type == typeof(AuditLog);
+
+    public EntityAttribute? GetEntityAttribute(Type type) => Own.GetEntityAttribute(type);
+
+    public IEnumerable<Attribute>? GetPropertyAttributes(Type type, PropertyInfo property)
+    {
+        IEnumerable<Attribute> attributes = Own.GetPropertyAttributes(type, property) ?? Enumerable.Empty<Attribute>();
+        return property.Name == nameof(AuditLog.Archived) ? attributes.Append(new SoftDeleteAttribute()) : attributes;
+    }
+
+    public IEnumerable<CompositeIndexAttribute>? GetCompositeIndexes(Type type) => Own.GetCompositeIndexes(type);
+}
+
+DurableMapping.Register<AuditLog>(new AuditLogMapping());
+```
+
+#### From the command line
+
+The `durable` tool finds classes only by `[Entity]`, so name your source with `--mapping-source`. The tool creates it from your assembly (it needs a public parameterless constructor), registers it for the classes it describes, and treats them as entities:
+
+```bash
+durable schema diff --mapping-source MyApp.Data.TableColumnMappingSource
+durable migrations add AddInvoices --mapping-source InvoiceMapping --entities-namespace MyApp.Generated
+```
+
+Or put `"mappingSource": "MyApp.Data.TableColumnMappingSource"` in `durable.json`.
+
+#### Rules
+
+- **Register at startup.** Register before the first repository, query or `EntityMetadata.For` call for the type, for example at the top of `Program.cs` before building the service provider. Metadata is cached per type, so registering a *different* source for a type that has already been used throws `InvalidOperationException` naming the type. Registering the source it already uses again is allowed.
+- **Lookup order.** A source registered for the type with `Register<T>` / `Register(Type, source)` wins; otherwise `DurableMapping.MappingSource` applies when its `Describes(type)` returns true; otherwise Durable reads the class's own attributes. `DurableMapping.GetMappingSource(type)` tells you which one applies, and `EntityMetadata.For<T>().MappingSource` which one was used.
+- **Return false from `Describes` for types you don't know.** The global source is asked about every entity and projection type; the types it declines keep their own attributes.
+- **Conventions still apply.** If no property gets a `PropertyAttribute`, the class is convention-mapped exactly like an unannotated class (`Id` key, `DurableMapping.NamingConvention`, `NotMappedAttribute` to skip a property). A source can return only an `EntityAttribute` to rename the table and leave the rest to conventions.
+- **Native AOT.** Sources work under Native AOT; see [Keeping entity types](#keeping-entity-types).
 - **Thread safety.** Registration is thread-safe but meant for startup. Durable calls a source only while building a type's metadata, once per type, possibly from any thread.
-
-The CLI finds source-mapped classes with `--mapping-source` (see [Command-Line Tool](#command-line-tool)).
 
 ## CRUD Operations
 
