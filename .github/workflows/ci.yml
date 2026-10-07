@@ -118,7 +118,7 @@ jobs:
 
           # yugabytedb
 
-          # mongodb
+          - mongodb
 
           # cosmosdb
         framework: [net8.0, net10.0]
