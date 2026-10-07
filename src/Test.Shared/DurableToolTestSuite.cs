@@ -132,7 +132,7 @@ namespace Test.Shared
             await AssertErrorAsync(new[] { "migrations", "add", "Not-Valid" }, "not a valid migration name");
             await AssertErrorAsync(new[] { "status", "--assembly", _AssemblyPath }, "No database provider");
             await AssertErrorAsync(new[] { "status", "--provider", "sqlite", "--assembly", _AssemblyPath }, "No connection string");
-            await AssertErrorAsync(new[] { "status", "--provider", "oracle", "--connection", "x", "--assembly", _AssemblyPath }, "Unknown provider 'oracle'");
+            await AssertErrorAsync(new[] { "status", "--provider", "db2", "--connection", "x", "--assembly", _AssemblyPath }, "Unknown provider 'db2'");
             await AssertErrorAsync(Migrations("rollback"), "rollback requires --target");
             await AssertErrorAsync(Database("status", "--assembly", _AssemblyPath, "--migrations-namespace", _MigrationsNamespace, "--history-table", "bad name"), "Invalid --history-table");
             await AssertErrorAsync(Database("status", "--assembly", Path.Combine(Path.GetTempPath(), "no-such-assembly-" + Guid.NewGuid().ToString("N") + ".dll")), "was not found");
@@ -690,6 +690,7 @@ namespace Test.Shared
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "mysql";
                 case TestDatabaseType.SqlServer: return "sqlserver";
+                case TestDatabaseType.Oracle: return "oracle";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }
         }
@@ -704,6 +705,7 @@ namespace Test.Shared
                 case TestDatabaseType.YugabyteDb: return "Postgres";
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "MySql";
+                case TestDatabaseType.Oracle: return "Oracle";
                 default: return "SqlServer";
             }
         }

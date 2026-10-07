@@ -143,6 +143,7 @@ namespace Durable.Sql
             ArgumentNullException.ThrowIfNull(statement);
             DbCommand command = lease.Connection.CreateCommand();
             command.Transaction = lease.Transaction;
+            Dialect.ConfigureCommand(command);
             command.CommandText = statement.Sql;
             if (Options.CommandTimeoutSeconds.HasValue) command.CommandTimeout = Options.CommandTimeoutSeconds.Value;
             IReadOnlyList<SqlParameterValue> parameters = statement.Parameters;

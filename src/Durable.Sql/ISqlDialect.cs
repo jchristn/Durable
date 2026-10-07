@@ -445,5 +445,92 @@ namespace Durable.Sql
         SqlStatement? ReleaseMigrationLockSql(string lockName);
 
         #endregion
+
+        #region Statement-Shapes
+
+        /// <summary>
+        /// Applies provider-specific settings to every command before its parameters are bound (for example, binding
+        /// parameters by name on Oracle). The default does nothing.
+        /// </summary>
+        /// <param name="command">The provider command. Must not be null.</param>
+        void ConfigureCommand(DbCommand command);
+
+        /// <summary>
+        /// Gets the text written before several statements sent in one command (for example "BEGIN " to open a PL/SQL
+        /// block on Oracle). Default: empty, statements are simply joined with <see cref="StatementSeparator"/>. Never null.
+        /// </summary>
+        string StatementBatchPrefix { get; }
+
+        /// <summary>
+        /// Gets the text written after several statements sent in one command (for example "; END;" on Oracle).
+        /// Default: empty. Never null.
+        /// </summary>
+        string StatementBatchSuffix { get; }
+
+        /// <summary>
+        /// Gets whether one INSERT may carry several rows (<c>VALUES (...), (...)</c>). When false the engine sends one
+        /// INSERT per row as a statement batch (see <see cref="StatementBatchPrefix"/>). Default: true.
+        /// </summary>
+        bool SupportsMultiRowInsert { get; }
+
+        /// <summary>
+        /// Gets the clause completing a SELECT that reads no table (for example " FROM DUAL" on Oracle). Default: empty.
+        /// Never null.
+        /// </summary>
+        string SingleRowFromClause { get; }
+
+        /// <summary>
+        /// Gets the maximum number of items in one <c>IN (...)</c> list. Longer lists are split into several lists joined
+        /// with OR (AND for NOT IN), and include loading chunks keys to it. Default: <see cref="int.MaxValue"/> (only
+        /// <see cref="MaxParameters"/> applies); Oracle: 1000. Minimum: 1.
+        /// </summary>
+        int MaxInListItems { get; }
+
+        /// <summary>
+        /// Returns the remainder of dividing two SQL expressions, with C# semantics (the sign follows the dividend).
+        /// Default: <c>(left % right)</c>.
+        /// </summary>
+        /// <param name="left">Dividend SQL.</param>
+        /// <param name="right">Divisor SQL.</param>
+        /// <returns>The remainder expression.</returns>
+        string Modulo(string left, string right);
+
+        /// <summary>
+        /// Returns the keyword for a set operation (for example "EXCEPT", or "MINUS" on Oracle).
+        /// </summary>
+        /// <param name="operation">Set operation.</param>
+        /// <returns>The keyword.</returns>
+        string SetOperationKeyword(SetOperationType operation);
+
+        /// <summary>
+        /// Returns whether the column created for a mapped column accepts NULL. Default: <see cref="ColumnMetadata.IsNullable"/>.
+        /// A dialect that stores empty strings as NULL (<see cref="TreatsEmptyStringAsNull"/>) also declares non-key string
+        /// columns nullable, so a non-nullable string property can still hold an empty string. Used by CREATE TABLE, ADD
+        /// COLUMN and schema comparison.
+        /// </summary>
+        /// <param name="column">Column. Must not be null.</param>
+        /// <returns>True when the column is declared NULL.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when column is null.</exception>
+        bool ColumnAllowsNull(ColumnMetadata column);
+
+        /// <summary>
+        /// Gets whether the database stores an empty string as NULL (Oracle). When true, an empty string written to a
+        /// column reads back as NULL (a null or unchanged property), and a comparison with an empty string matches no row;
+        /// the database cannot tell the two apart. Default: false.
+        /// </summary>
+        bool TreatsEmptyStringAsNull { get; }
+
+        /// <summary>
+        /// Appends one statement, already rendered with literals, to a generated migration script, including its
+        /// terminator and any batch separator. The default writes the statement, <see cref="StatementSeparator"/> when the
+        /// statement does not already end with it, a line break, and <see cref="ScriptBatchSeparator"/> on its own line
+        /// when set.
+        /// </summary>
+        /// <param name="script">Script being written. Must not be null.</param>
+        /// <param name="sql">Statement text with parameters inlined. Must not be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when script or sql is null.</exception>
+        void AppendScriptStatement(System.Text.StringBuilder script, string sql);
+
+        #endregion
     }
 }

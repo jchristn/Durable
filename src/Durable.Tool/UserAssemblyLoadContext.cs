@@ -18,7 +18,7 @@ namespace Durable.Tool
         /// </summary>
         public static IReadOnlySet<string> SharedAssemblyNames { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "Durable", "Durable.Sql", "Durable.Sqlite", "Durable.Postgres", "Durable.MySql", "Durable.SqlServer"
+            "Durable", "Durable.Sql", "Durable.Sqlite", "Durable.Postgres", "Durable.MySql", "Durable.SqlServer", "Durable.Oracle"
         };
 
         private readonly AssemblyDependencyResolver? _Resolver;

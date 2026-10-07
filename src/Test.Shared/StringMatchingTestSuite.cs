@@ -131,15 +131,16 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// The Database mode keeps each database's collation: exact on SQLite and PostgreSQL, case-insensitive on SQL
-        /// Server, and case- and accent-insensitive on MySQL with their default collations.
+        /// The Database mode keeps each database's collation: exact on SQLite, PostgreSQL and Oracle (binary NLS_COMP and
+        /// NLS_SORT, the defaults), case-insensitive on SQL Server, and case- and accent-insensitive on MySQL with their
+        /// default collations.
         /// </summary>
         [Fact]
         public async Task DatabaseModeFollowsCollation()
         {
             ISqlRepository<StrMatchItem> repository = await SeedAsync(StringMatchMode.Database);
             RepositoryType type = repository.Dialect.RepositoryType;
-            if (type == RepositoryType.Sqlite || type == RepositoryType.Postgres)
+            if (type == RepositoryType.Sqlite || type == RepositoryType.Postgres || type == RepositoryType.Oracle)
             {
                 AssertNames(repository, x => x.Name == "alpha", "alpha");
                 AssertNames(repository, x => x.Name == "cafe");

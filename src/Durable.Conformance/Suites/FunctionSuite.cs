@@ -38,6 +38,12 @@ namespace Durable.Conformance
             await CheckAsync(f, x => x.Code!.Trim() == "100%", F);
             await CheckAsync(f, x => x.Code!.TrimStart() == "100%  ", F);
             await CheckAsync(f, x => x.Code!.TrimEnd() == "  100%", F);
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.Functions | RepositoryCapabilities.EmptyStrings, Description = "Trim of an empty or blank string has length 0 and is not null")]
+        public async Task TrimToEmptyString()
+        {
+            ItemFixture f = await SeedItemsAsync();
             await CheckAsync(f, x => x.Email != null && x.Email.Trim().Length == 0, E, F);
         }
 

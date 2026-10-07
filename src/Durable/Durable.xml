@@ -6366,6 +6366,13 @@
         <member name="F:Durable.RepositoryCapabilities.Upsert">
             <summary>Upsert (insert or update by key).</summary>
         </member>
+        <member name="F:Durable.RepositoryCapabilities.EmptyStrings">
+            <summary>
+            Empty strings are stored, read back and compared as values distinct from null. No call throws without it: a
+            backend that lacks it (Oracle, which stores a zero-length string as NULL) returns null for an empty string
+            written to a nullable column and matches no row when comparing with an empty string.
+            </summary>
+        </member>
         <member name="F:Durable.RepositoryCapabilities.All">
             <summary>Every capability.</summary>
         </member>

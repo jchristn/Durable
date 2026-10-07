@@ -12,7 +12,9 @@ namespace Test.Shared
     /// <summary>
     /// Runs the Durable.Conformance kit against a SQL provider: repositories come from an <see cref="IRepositoryProvider"/>,
     /// and resetting storage drops each table and recreates it with <see cref="ISqlRepository{T}.InitializeTable"/>.
-    /// SQL repositories support <see cref="RepositoryCapabilities.All"/>.
+    /// SQL repositories support <see cref="RepositoryCapabilities.All"/>, except <see cref="RepositoryCapabilities.EmptyStrings"/>
+    /// on a dialect that stores empty strings as NULL (Oracle); the capabilities are passed in because the kit reads them
+    /// before the provider is initialized, and every repository created is checked against them.
     /// Thread safety: stateless apart from the provider accessor; the kit calls it sequentially.
     /// </summary>
     public sealed class SqlConformanceTarget : IConformanceTarget
@@ -25,9 +27,9 @@ namespace Test.Shared
         public string Name { get; }
 
         /// <summary>
-        /// Gets <see cref="RepositoryCapabilities.All"/>.
+        /// Gets the capabilities given to the constructor (default <see cref="RepositoryCapabilities.All"/>).
         /// </summary>
-        public RepositoryCapabilities Capabilities => RepositoryCapabilities.All;
+        public RepositoryCapabilities Capabilities { get; }
 
         #endregion
 
@@ -48,12 +50,14 @@ namespace Test.Shared
         /// </summary>
         /// <param name="name">Display name. Must not be null or empty.</param>
         /// <param name="providerAccessor">Returns the initialized provider. Must not be null.</param>
+        /// <param name="capabilities">Capabilities of the provider's repositories. Default: <see cref="RepositoryCapabilities.All"/>.</param>
         /// <exception cref="ArgumentNullException">Thrown when an argument is null or empty.</exception>
-        public SqlConformanceTarget(string name, Func<IRepositoryProvider> providerAccessor)
+        public SqlConformanceTarget(string name, Func<IRepositoryProvider> providerAccessor, RepositoryCapabilities capabilities = RepositoryCapabilities.All)
         {
             if (string.IsNullOrEmpty(name)) throw new ArgumentNullException(nameof(name));
             Name = name;
             _ProviderAccessor = providerAccessor ?? throw new ArgumentNullException(nameof(providerAccessor));
+            Capabilities = capabilities;
         }
 
         #endregion
@@ -69,15 +73,30 @@ namespace Test.Shared
         public IRepository<T> CreateRepository<T>(RepositoryOptions? options = null) where T : class, new()
         {
             IRepositoryProvider provider = _ProviderAccessor();
-            if (options == null) return provider.CreateRepository<T>();
-            SqlRepositoryOptions sqlOptions = new SqlRepositoryOptions
+            ISqlRepository<T> repository;
+            if (options == null)
             {
-                Logger = options.Logger,
-                LogParameterValues = options.LogParameterValues,
-                StringMatching = options.StringMatching,
-                SlowCommandThreshold = options.SlowCommandThreshold
-            };
-            return provider.CreateRepositoryWithOptions<T>(sqlOptions);
+                repository = provider.CreateRepository<T>();
+            }
+            else
+            {
+                SqlRepositoryOptions sqlOptions = new SqlRepositoryOptions
+                {
+                    Logger = options.Logger,
+                    LogParameterValues = options.LogParameterValues,
+                    StringMatching = options.StringMatching,
+                    SlowCommandThreshold = options.SlowCommandThreshold
+                };
+                repository = provider.CreateRepositoryWithOptions<T>(sqlOptions);
+            }
+
+            if (repository.Capabilities != Capabilities)
+            {
+                repository.Dispose();
+                throw new InvalidOperationException("The " + Name + " repository reports " + repository.Capabilities + " but the conformance target declares " + Capabilities + ".");
+            }
+
+            return repository;
         }
 
         /// <summary>

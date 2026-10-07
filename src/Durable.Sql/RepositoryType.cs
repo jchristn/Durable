@@ -44,6 +44,11 @@ namespace Durable.Sql
         /// </summary>
         public static readonly RepositoryType SqlServer = new RepositoryType("sqlserver", "SQL Server");
 
+        /// <summary>
+        /// Represents an Oracle Database repository
+        /// </summary>
+        public static readonly RepositoryType Oracle = new RepositoryType("oracle", "Oracle");
+
         #endregion
 
 

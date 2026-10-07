@@ -284,7 +284,7 @@ namespace Test.Shared
             string? withParameters = repository.LastExecutedSqlWithParameters;
             Assert.False(string.IsNullOrWhiteSpace(sql));
             Assert.DoesNotContain(literal, sql!, StringComparison.Ordinal);
-            Assert.Contains("@", sql!, StringComparison.Ordinal);
+            Assert.Contains(_Provider.Dialect.FormatParameterName(0).Substring(0, 1), sql!, StringComparison.Ordinal);
             Assert.NotNull(withParameters);
             Assert.Contains(literal, withParameters!, StringComparison.Ordinal);
         }
@@ -440,6 +440,7 @@ namespace Test.Shared
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "mysql";
                 case TestDatabaseType.SqlServer: return "mssql";
+                case TestDatabaseType.Oracle: return "oracle";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }
         }

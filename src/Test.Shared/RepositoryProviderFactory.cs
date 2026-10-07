@@ -1,6 +1,7 @@
 namespace Test.Shared
 {
     using System;
+    using Durable.Oracle;
     using Microsoft.Data.SqlClient;
     using MySqlConnector;
     using Npgsql;
@@ -196,12 +197,23 @@ namespace Test.Shared
 
         private static IRepositoryProvider CreateOracleProvider(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "repository provider");
+            return new OracleRepositoryProvider(BuildOracleConnectionString(configuration));
         }
 
         private static string BuildOracleConnectionString(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "connection string builder");
+            // The database name is the service name (the gvenzl/oracle-free image serves FREEPDB1).
+            OracleRepositorySettings settings = new OracleRepositorySettings
+            {
+                Hostname = string.IsNullOrWhiteSpace(configuration.Hostname) ? "127.0.0.1" : configuration.Hostname,
+                Port = configuration.Port ?? 1521,
+                Database = string.IsNullOrWhiteSpace(configuration.DatabaseName) || configuration.DatabaseName == "durable_touchstone" ? "FREEPDB1" : configuration.DatabaseName,
+                Username = string.IsNullOrWhiteSpace(configuration.Username) ? "durable" : configuration.Username,
+                Password = configuration.Password ?? string.Empty,
+                Pooling = true
+            };
+
+            return settings.BuildConnectionString();
         }
 
         private static IRepositoryProvider CreateDuckDbProvider(TestRuntimeConfiguration configuration)

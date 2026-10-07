@@ -624,6 +624,11 @@
             <c>INSERT ...; SELECT LAST_INSERT_ID()</c> (MySQL).
             </summary>
         </member>
+        <member name="F:Durable.Sql.InsertKeyStrategy.ReturningInto">
+            <summary>
+            <c>INSERT ... RETURNING col INTO :out</c>, reading the key from an output parameter (Oracle).
+            </summary>
+        </member>
         <member name="T:Durable.Sql.ISavepoint">
             <summary>
             A savepoint within an <see cref="T:Durable.Sql.ISqlTransaction"/>. A savepoint is not a resource: it is not disposable and ends
@@ -1141,6 +1146,89 @@
             </summary>
             <param name="lockName">Lock name. Must not be null.</param>
             <returns>The statement, or null.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.ConfigureCommand(System.Data.Common.DbCommand)">
+            <summary>
+            Applies provider-specific settings to every command before its parameters are bound (for example, binding
+            parameters by name on Oracle). The default does nothing.
+            </summary>
+            <param name="command">The provider command. Must not be null.</param>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.StatementBatchPrefix">
+            <summary>
+            Gets the text written before several statements sent in one command (for example "BEGIN " to open a PL/SQL
+            block on Oracle). Default: empty, statements are simply joined with <see cref="P:Durable.Sql.ISqlDialect.StatementSeparator"/>. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.StatementBatchSuffix">
+            <summary>
+            Gets the text written after several statements sent in one command (for example "; END;" on Oracle).
+            Default: empty. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsMultiRowInsert">
+            <summary>
+            Gets whether one INSERT may carry several rows (<c>VALUES (...), (...)</c>). When false the engine sends one
+            INSERT per row as a statement batch (see <see cref="P:Durable.Sql.ISqlDialect.StatementBatchPrefix"/>). Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SingleRowFromClause">
+            <summary>
+            Gets the clause completing a SELECT that reads no table (for example " FROM DUAL" on Oracle). Default: empty.
+            Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.MaxInListItems">
+            <summary>
+            Gets the maximum number of items in one <c>IN (...)</c> list. Longer lists are split into several lists joined
+            with OR (AND for NOT IN), and include loading chunks keys to it. Default: <see cref="F:System.Int32.MaxValue"/> (only
+            <see cref="P:Durable.Sql.ISqlDialect.MaxParameters"/> applies); Oracle: 1000. Minimum: 1.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.Modulo(System.String,System.String)">
+            <summary>
+            Returns the remainder of dividing two SQL expressions, with C# semantics (the sign follows the dividend).
+            Default: <c>(left % right)</c>.
+            </summary>
+            <param name="left">Dividend SQL.</param>
+            <param name="right">Divisor SQL.</param>
+            <returns>The remainder expression.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.SetOperationKeyword(Durable.Sql.SetOperationType)">
+            <summary>
+            Returns the keyword for a set operation (for example "EXCEPT", or "MINUS" on Oracle).
+            </summary>
+            <param name="operation">Set operation.</param>
+            <returns>The keyword.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.ColumnAllowsNull(Durable.ColumnMetadata)">
+            <summary>
+            Returns whether the column created for a mapped column accepts NULL. Default: <see cref="P:Durable.ColumnMetadata.IsNullable"/>.
+            A dialect that stores empty strings as NULL (<see cref="P:Durable.Sql.ISqlDialect.TreatsEmptyStringAsNull"/>) also declares non-key string
+            columns nullable, so a non-nullable string property can still hold an empty string. Used by CREATE TABLE, ADD
+            COLUMN and schema comparison.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>True when the column is declared NULL.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when column is null.</exception>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.TreatsEmptyStringAsNull">
+            <summary>
+            Gets whether the database stores an empty string as NULL (Oracle). When true, an empty string written to a
+            column reads back as NULL (a null or unchanged property), and a comparison with an empty string matches no row;
+            the database cannot tell the two apart. Default: false.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.AppendScriptStatement(System.Text.StringBuilder,System.String)">
+            <summary>
+            Appends one statement, already rendered with literals, to a generated migration script, including its
+            terminator and any batch separator. The default writes the statement, <see cref="P:Durable.Sql.ISqlDialect.StatementSeparator"/> when the
+            statement does not already end with it, a line break, and <see cref="P:Durable.Sql.ISqlDialect.ScriptBatchSeparator"/> on its own line
+            when set.
+            </summary>
+            <param name="script">Script being written. Must not be null.</param>
+            <param name="sql">Statement text with parameters inlined. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when script or sql is null.</exception>
         </member>
         <member name="T:Durable.Sql.ISqlQueryBuilder`1">
             <summary>
@@ -3850,6 +3938,11 @@
             Represents a SQL Server repository
             </summary>
         </member>
+        <member name="F:Durable.Sql.RepositoryType.Oracle">
+            <summary>
+            Represents an Oracle Database repository
+            </summary>
+        </member>
         <member name="M:Durable.Sql.RepositoryType.#ctor(System.String,System.String)">
             <summary>
             Creates a new repository type with the specified identifier and display name
@@ -4687,6 +4780,39 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.StatementBatchPrefix">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.StatementBatchSuffix">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsMultiRowInsert">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SingleRowFromClause">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.MaxInListItems">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.TreatsEmptyStringAsNull">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.ConfigureCommand(System.Data.Common.DbCommand)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.ColumnAllowsNull(Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.Modulo(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.SetOperationKeyword(Durable.Sql.SetOperationType)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.AppendScriptStatement(System.Text.StringBuilder,System.String)">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.IdentifierOpen">
@@ -5610,7 +5736,10 @@
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlRepository`1.Capabilities">
-            <inheritdoc />
+            <summary>
+            Gets <see cref="F:Durable.RepositoryCapabilities.All"/>, without <see cref="F:Durable.RepositoryCapabilities.EmptyStrings"/> when the
+            dialect stores empty strings as NULL (<see cref="P:Durable.Sql.ISqlDialect.TreatsEmptyStringAsNull"/>).
+            </summary>
         </member>
         <member name="P:Durable.Sql.SqlRepository`1.Dialect">
             <inheritdoc />

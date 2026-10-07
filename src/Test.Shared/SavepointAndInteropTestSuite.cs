@@ -369,29 +369,37 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private static async Task InsertRawAsync(DbConnection connection, DbTransaction transaction, string email, string department)
+        private async Task InsertRawAsync(DbConnection connection, DbTransaction transaction, string email, string department)
         {
+            string p = ParameterPrefix();
             await using DbCommand command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = "INSERT INTO people (first, last, age, email, salary, department) VALUES (@first, @last, @age, @email, @salary, @department)";
-            AddParameter(command, "@first", "Raw");
-            AddParameter(command, "@last", "Ado");
-            AddParameter(command, "@age", 33);
-            AddParameter(command, "@email", email);
-            AddParameter(command, "@salary", 1000m);
-            AddParameter(command, "@department", department);
+            command.CommandText = "INSERT INTO people (first, last, age, email, salary, department) VALUES (" + p + "first, " + p + "last, " + p + "age, " + p + "email, " + p + "salary, " + p + "department)";
+            AddParameter(command, p + "first", "Raw");
+            AddParameter(command, p + "last", "Ado");
+            AddParameter(command, p + "age", 33);
+            AddParameter(command, p + "email", email);
+            AddParameter(command, p + "salary", 1000m);
+            AddParameter(command, p + "department", department);
             int rows = await command.ExecuteNonQueryAsync();
             Assert.Equal(1, rows);
         }
 
-        private static async Task<long> CountRawAsync(DbConnection connection, DbTransaction? transaction, string department)
+        private async Task<long> CountRawAsync(DbConnection connection, DbTransaction? transaction, string department)
         {
+            string p = ParameterPrefix();
             await using DbCommand command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = "SELECT COUNT(*) FROM people WHERE department = @department";
-            AddParameter(command, "@department", department);
+            command.CommandText = "SELECT COUNT(*) FROM people WHERE department = " + p + "department";
+            AddParameter(command, p + "department", department);
             object? value = await command.ExecuteScalarAsync();
             return Convert.ToInt64(value);
+        }
+
+        private string ParameterPrefix()
+        {
+            // The provider's bind-variable prefix ("@", or ":" on Oracle).
+            return _Provider.Dialect.FormatParameterName(0).Substring(0, 1);
         }
 
         private static void AddParameter(DbCommand command, string name, object value)

@@ -72,11 +72,17 @@ namespace Durable.Conformance
             ItemFixture f = await SeedItemsAsync();
             Assert.Equal(2, await f.Items.UpdateFieldAsync(x => x.Category == "Garden", x => x.Price, 1.25m, null, Token));
             Assert.Equal(2L, f.Items.Count(x => x.Price == 1.25m));
-            Assert.Equal(5, f.Items.UpdateField(x => x.Email != null, x => x.Email, (string?)null));
-            Assert.Equal(6L, f.Items.Count(x => x.Email == null));
             Assert.Equal(0, f.Items.UpdateField(x => x.Category == "None", x => x.Quantity, 1));
             Assert.Equal(1, f.Items.UpdateField(x => x.Name == ItemFixture.Echo, x => x.Status, CfStatus.Closed));
             Assert.Equal(CfStatus.Closed, f.Items.ReadSingle(x => x.Name == ItemFixture.Echo).Status);
+        }
+
+        [ConformanceTest(Requires = RepositoryCapabilities.BatchUpdate | RepositoryCapabilities.EmptyStrings, Description = "UpdateField sets null on every non-null string, including empty strings")]
+        public async Task UpdateFieldSetsNull()
+        {
+            ItemFixture f = await SeedItemsAsync();
+            Assert.Equal(5, f.Items.UpdateField(x => x.Email != null, x => x.Email, (string?)null));
+            Assert.Equal(6L, f.Items.Count(x => x.Email == null));
         }
 
         [ConformanceTest(Requires = RepositoryCapabilities.BatchUpdate, Description = "BatchUpdate assigns members from expressions over the current row and captured values")]

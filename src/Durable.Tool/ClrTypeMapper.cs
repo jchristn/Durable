@@ -37,6 +37,7 @@ namespace Durable.Tool
             else if (repository == RepositoryType.Postgres) mapped = MapPostgres(name, arguments);
             else if (repository == RepositoryType.MySql) mapped = MapMySql(name, arguments, unsigned);
             else if (repository == RepositoryType.SqlServer) mapped = MapSqlServer(name, arguments);
+            else if (repository == RepositoryType.Oracle) mapped = MapOracle(name, arguments);
 
             return mapped ?? new ScaffoldColumnType("string", true, true, "string.Empty", "Database type " + column.DataType + " has no direct CLR mapping; review this property.");
         }
@@ -157,6 +158,50 @@ namespace Durable.Tool
                 case "varbinary":
                 case "image":
                 case "timestamp": return _Bytes;
+                default: return null;
+            }
+        }
+
+        private static ScaffoldColumnType? MapOracle(string name, string arguments)
+        {
+            switch (name)
+            {
+                case "number":
+                    {
+                        // Mirrors OracleDialect.GetColumnType: NUMBER(1) bool, (3) byte, (5) short, (10) int, (19) long.
+                        if (arguments.Contains(',', StringComparison.Ordinal) || arguments.Length == 0) return Value("decimal");
+                        switch (arguments)
+                        {
+                            case "(1)": return Value("bool");
+                            case "(3)": return Value("byte");
+                            case "(5)": return Value("short");
+                            case "(10)": return Value("int");
+                            case "(19)": return Value("long");
+                            default: return Value("decimal");
+                        }
+                    }
+
+                case "integer":
+                case "int":
+                case "smallint": return Value("decimal");
+                case "binary_float": return Value("float");
+                case "binary_double":
+                case "float": return Value("double");
+                case "timestamp": return arguments.EndsWith(" with time zone", StringComparison.Ordinal) ? Value("DateTimeOffset") : Value("DateTime");
+                case "date": return Value("DateTime");
+                case "interval day": return arguments.StartsWith("(0)", StringComparison.Ordinal) ? Value("TimeOnly") : Value("TimeSpan");
+                case "raw": return arguments == "(16)" ? Value("Guid") : _Bytes;
+                case "blob":
+                case "long raw": return _Bytes;
+                case "varchar2":
+                case "nvarchar2":
+                case "char":
+                case "nchar":
+                    return arguments == "(1 char)" || arguments == "(1)" || arguments == "(1 byte)" ? Value("char") : _String;
+                case "clob":
+                case "nclob":
+                case "long":
+                case "json": return _String;
                 default: return null;
             }
         }

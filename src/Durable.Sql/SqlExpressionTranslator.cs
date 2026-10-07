@@ -397,7 +397,7 @@ namespace Durable.Sql
                     : Parameter(value, column));
             }
 
-            string condition = nonNull.Count == 0 ? string.Empty : compared + (node.Negated ? " NOT IN (" : " IN (") + string.Join(", ", placeholders) + ")";
+            string condition = nonNull.Count == 0 ? string.Empty : InList(compared, placeholders, node.Negated);
             if (hasNull)
             {
                 string nullCheck = itemSql + (node.Negated ? " IS NOT NULL" : " IS NULL");
@@ -466,7 +466,7 @@ namespace Durable.Sql
                 case ArithmeticOperator.Subtract: return "(" + left + " - " + right + ")";
                 case ArithmeticOperator.Multiply: return "(" + left + " * " + right + ")";
                 case ArithmeticOperator.Divide: return Dialect.Divide(left, right, node.IntegerDivision);
-                default: return "(" + left + " % " + right + ")";
+                default: return Dialect.Modulo(left, right);
             }
         }
 
@@ -582,6 +582,18 @@ namespace Durable.Sql
         #endregion
 
         #region Private-Methods
+
+        private string InList(string compared, List<string> placeholders, bool negated)
+        {
+            int limit = Math.Max(1, Dialect.MaxInListItems);
+            string keyword = negated ? " NOT IN (" : " IN (";
+            if (placeholders.Count <= limit) return compared + keyword + string.Join(", ", placeholders) + ")";
+
+            List<string> lists = new List<string>();
+            for (int offset = 0; offset < placeholders.Count; offset += limit)
+                lists.Add(compared + keyword + string.Join(", ", placeholders.GetRange(offset, Math.Min(limit, placeholders.Count - offset))) + ")");
+            return "(" + string.Join(negated ? " AND " : " OR ", lists) + ")";
+        }
 
         private TableSource TableFor(QuerySource source)
         {

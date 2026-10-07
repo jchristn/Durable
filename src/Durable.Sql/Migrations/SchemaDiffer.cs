@@ -257,11 +257,12 @@ namespace Durable.Sql
                         " maps to " + expectedType + "; change the column " + (lengthOnly ? "length" : "type") + " in a migration."));
                 }
 
-                if (!column.IsPrimaryKey && !existing.IsPrimaryKey && column.IsNullable != existing.IsNullable)
+                bool expectedNullable = dialect.ColumnAllowsNull(column);
+                if (!column.IsPrimaryKey && !existing.IsPrimaryKey && expectedNullable != existing.IsNullable)
                 {
                     differences.Add(new SchemaDifference(
                         SchemaDifferenceKind.NullabilityMismatch, tableName, column.Name,
-                        column.IsNullable ? "NULL" : "NOT NULL", existing.IsNullable ? "NULL" : "NOT NULL",
+                        expectedNullable ? "NULL" : "NOT NULL", existing.IsNullable ? "NULL" : "NOT NULL",
                         "Column " + qualified + " is " + (existing.IsNullable ? "NULL" : "NOT NULL") + " but property " + metadata.EntityType.Name + "." +
                         column.Property.Name + " is " + (column.IsNullable ? "nullable" : "non-nullable") + "; alter the column (backfilling nulls first) in a migration."));
                 }
@@ -330,7 +331,7 @@ namespace Durable.Sql
                 return;
             }
 
-            if (column.IsNullable)
+            if (dialect.ColumnAllowsNull(column))
             {
                 operations.Add(AddColumnOperation(dialect, tableName, column, true, null, "Add column " + qualified + " " + type + " NULL", null));
                 availableColumns.Add(column.Name);
