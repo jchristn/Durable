@@ -10,7 +10,7 @@
 		<DocumentationFile>Durable.InMemory.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.InMemory</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>In-memory backend for Durable ORM: the reference IRepositoryBackend implementation with snapshot-isolation transactions, value converters, JSON columns, includes and full LINQ query evaluation. Ideal for tests and prototyping.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;inmemory;in-memory;testing;repository</PackageTags>
-		<PackageReleaseNotes>v0.7.0: supports RepositoryCapabilities.EmptyStrings (part of All). See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

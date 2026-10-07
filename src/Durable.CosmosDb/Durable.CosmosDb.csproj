@@ -11,7 +11,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.CosmosDb</PackageId>
 		<Title>Durable.CosmosDb</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Azure Cosmos DB for NoSQL backend for Durable ORM: store entities as JSON documents with the full IRepository surface, LINQ filters, ordering, paging and aggregates pushed down to parameterized Cosmos DB SQL queries where the semantics match C#, lossless value round-trips, configurable partition keys, ETag-based optimistic concurrency without lost updates, includes and counter-document auto-increment keys.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;cosmosdb;cosmos;azure;nosql;document;repository</PackageTags>
-		<PackageReleaseNotes>v0.7.0: new Azure Cosmos DB for NoSQL backend on Microsoft.Azure.Cosmos 3.63.2: partition keys, Cosmos DB SQL push-down, ETag-checked writes, query plans with RU charges (no transactions). See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

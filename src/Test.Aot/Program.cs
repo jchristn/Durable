@@ -53,6 +53,15 @@ namespace Test.Aot
                 runner.Fail("[mapping] scenario aborted", ex);
             }
 
+            try
+            {
+                await LiteGraphScenario.RunAsync(runner).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                runner.Fail("[litegraph] scenario aborted", ex);
+            }
+
 #if NET9_0_OR_GREATER
             try
             {

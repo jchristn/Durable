@@ -10,7 +10,7 @@
 		<ApplicationIcon>logo.ico</ApplicationIcon>
 		<DocumentationFile>Durable.xml</DocumentationFile>
 		<Title>Durable</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>A lightweight .NET ORM with full LINQ support: the backend-neutral core of Durable (IRepository, IQueryBuilder, attribute and convention mapping, transactions, optimistic concurrency, the neutral query model and RepositoryBase for non-SQL backends). Trim- and Native AOT-compatible. Use with Durable.Sqlite, Durable.Postgres, Durable.MySql, Durable.SqlServer, Durable.InMemory, Durable.LiteDb or Durable.LiteGraph.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>v0.7.0: RepositoryCapabilities.EmptyStrings (included in All) for stores that keep empty strings distinct from null. New providers and backends: Oracle, DuckDB, MariaDB, CockroachDB, YugabyteDB, MongoDB, Azure Cosmos DB. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

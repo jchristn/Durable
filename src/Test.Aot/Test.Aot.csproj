@@ -32,6 +32,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Durable.Sqlite\Durable.Sqlite.csproj" />
 		<ProjectReference Include="..\Durable.InMemory\Durable.InMemory.csproj" />
+		<ProjectReference Include="..\Durable.LiteGraph\Durable.LiteGraph.csproj" />
 	</ItemGroup>
 
 	<!-- LiteDB and DuckDB.NET run under Native AOT on .NET 8 too, but the .NET 8 ILC cannot collapse their IL2067/IL3050

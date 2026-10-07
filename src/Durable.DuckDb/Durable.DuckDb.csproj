@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.DuckDb.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.DuckDb</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>DuckDB provider for the Durable ORM (DuckDB.NET): dialect, embedded in-process connection factory, repository and Appender bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>duckdb;linq;orm;database;analytics;olap;embedded;sql</PackageTags>
-		<PackageReleaseNotes>v0.7.0: new DuckDB provider (embedded, in-process) on DuckDB.NET.Data.Full 1.5.6: native types, sequence keys, Appender bulk insert, conflict retries, migrations. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

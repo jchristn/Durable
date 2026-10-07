@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.Oracle.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Oracle</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Oracle Database provider for the Durable ORM (Oracle.ManagedDataAccess.Core): dialect, connection factory, repository and array-bound bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>oracle;linq;orm;database;odp.net;ef;sql</PackageTags>
-		<PackageReleaseNotes>v0.7.0: new Oracle Database provider on Oracle.ManagedDataAccess.Core 23.26.301 (Oracle 19c SQL, identity keys, MERGE upsert, array-bound bulk insert, DBMS_LOCK migrations; empty strings are NULL). See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

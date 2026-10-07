@@ -4,6 +4,29 @@ All notable changes to Durable are listed here, newest first. The format follows
 
 ## Current Version
 
+### v0.7.1 (2026-10-07)
+
+`Durable.LiteGraph` now works in trimmed and Native AOT applications.
+
+**`Durable.LiteGraph`**
+
+- Depends on LiteGraph 10.2.0, which is AOT-compatible (10.1.0 used reflection-based System.Text.Json and `DataTable`).
+- `LiteGraphBackend.Create`/`CreateAsync` no longer carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`, so trimmed and AOT builds no longer warn at the call site.
+
+**Tests**
+
+- `Test.Aot` runs the shared repository scenario on LiteGraph (42 checks) on .NET 8 and .NET 10, with zero trim/AOT warnings from LiteGraph or its dependencies.
+
+**Other packages**
+
+- No code changes; republished at 0.7.1 to keep one shared version number.
+
+**Breaking changes**
+
+None.
+
+## Previous Versions
+
 ### v0.7.0 (2026-10-07) - breaking
 
 New databases: two SQL providers (Oracle, DuckDB), three wire-compatible databases on the existing providers (MariaDB on `Durable.MySql`; CockroachDB and YugabyteDB on `Durable.Postgres`), and two non-SQL backends (MongoDB, Azure Cosmos DB for NoSQL). Fifteen packages now share the version number.
@@ -111,8 +134,6 @@ New databases: two SQL providers (Oracle, DuckDB), three wire-compatible databas
 - `RepositoryCapabilities.All` now includes `EmptyStrings`. A custom backend that returns `All` now claims it (correct for any store that keeps `""` distinct from null); code that stores or compares capability values numerically sees a new bit.
 - Conformance kit cases that use empty strings were split into new cases that require `RepositoryCapabilities.EmptyStrings`, so test reports of a custom backend show new case names (`EqualsNullOnStrings`, ...) and a new `Capabilities.EmptyStrings` case.
 - Aggregate `Sum`/`Average` results are converted through the repository's data type converter instead of `Convert.ToDecimal`; a custom `IDataTypeConverter` must convert the driver's aggregate type to `decimal`.
-
-## Previous Versions
 
 ### v0.6.0 (2026-10-06)
 

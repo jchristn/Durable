@@ -11,7 +11,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.MongoDb</PackageId>
 		<Title>Durable.MongoDb</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>MongoDB backend for Durable ORM: store entities in MongoDB collections with the full IRepository surface, LINQ predicates, ordering, paging, counts and aggregates pushed down to the server where the semantics match C#, exact value round-trips, includes, indexes, optimistic concurrency and multi-document transactions on replica sets.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;mongodb;mongo;nosql;document;repository</PackageTags>
-		<PackageReleaseNotes>v0.7.0: new MongoDB backend on MongoDB.Driver 3.12.0: lossless BSON encoding, exact server-side push-down, transactions on replica sets, indexes, query plans. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

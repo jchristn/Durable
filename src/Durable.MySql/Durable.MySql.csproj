@@ -9,7 +9,7 @@
 		<DocumentationFile>Durable.MySql.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.MySql</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>MySQL provider for the Durable ORM (MySqlConnector): dialect, connection factory, repository and MySqlBulkCopy bulk insert.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>v0.7.0: MariaDB support through MySqlFlavor.MariaDb and MariaDbDialect (settings, factory and repository constructors). See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

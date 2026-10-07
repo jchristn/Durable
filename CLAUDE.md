@@ -54,7 +54,7 @@ src/
 ├── Durable.Oracle/            # Oracle implementation (ODP.NET managed driver; driver not trim-annotated)
 ├── Durable.InMemory/          # In-memory IRepositoryBackend (reference non-SQL backend)
 ├── Durable.LiteDb/            # LiteDB IRepositoryBackend (embedded document database)
-├── Durable.LiteGraph/         # LiteGraph IRepositoryBackend (property graph; not AOT-capable: LiteGraph lib)
+├── Durable.LiteGraph/         # LiteGraph IRepositoryBackend (property graph; AOT-capable since LiteGraph 10.2.0)
 ├── Durable.MongoDb/           # MongoDB IRepositoryBackend (document server; not AOT-capable: MongoDB driver)
 ├── Durable.CosmosDb/          # Azure Cosmos DB for NoSQL IRepositoryBackend (not AOT-capable: Cosmos DB SDK)
 ├── Durable.Conformance/       # Conformance kit: capability-gated suites for any IRepository<T> backend
@@ -551,7 +551,7 @@ Every library project sets `<IsAotCompatible>true</IsAotCompatible>` (Durable.To
 - No runtime code generation on the AOT path: no `Reflection.Emit`, no `Expression.Compile` without the `RuntimeFeature.IsDynamicCodeSupported` fallback that `MemberAccessorFactory` uses, `MakeGenericType`/`MakeGenericMethod` only where the analyzer is satisfied (annotated, or on the JIT-only path behind `IsDynamicCodeSupported`), no delegate types built at runtime on the AOT path, no `MetadataToken` ordering.
 - JSON goes through `DurableJson` (`CreateOptions`, `Serialize`, `Deserialize`) with the configured `JsonSerializerOptions`; never call reflection-based `JsonSerializer` overloads directly.
 - `[UnconditionalSuppressMessage]` only with a precise `Justification` explaining why the code is safe (for example navigation targets kept through `[ForeignKey(typeof(X))]` or `EntityMetadata.For<X>()`).
-- Durable.LiteGraph is annotated, but the LiteGraph library is not AOT-compatible; its `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. Do not add it to Test.Aot until LiteGraph is fixed. Durable.MongoDb (MongoDB driver) and Durable.CosmosDb (Cosmos DB SDK: Newtonsoft.Json and reflection) are in the same position: their backends' `Create`/`CreateAsync` carry the same attributes; do not add them to Test.Aot.
+- Durable.LiteGraph is AOT-compatible with LiteGraph 10.2.0+ (no annotations on `Create`/`CreateAsync`); Test.Aot runs its LiteGraph scenario on both frameworks, so a LiteGraph update that reintroduces trim/AOT warnings fails the AOT build. Durable.MongoDb (MongoDB driver) and Durable.CosmosDb (Cosmos DB SDK: Newtonsoft.Json and reflection) are not AOT-compatible: their backends' `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`; do not add them to Test.Aot.
 - ODP.NET is not trim-annotated: `OracleConnectionFactory` constructors, `CreateRawConnection` and the self-connecting `OracleRepository<T>` constructors carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`; Oracle is not in Test.Aot (it needs a server). Do not set `OracleCommand.InitialLOBFetchSize` (throws under native AOT).
 - DuckDB.NET.Data is not trim-annotated either; Test.Aot runs its DuckDB scenario on .NET 9+ only, with DuckDB.NET.Data compiled single-warn (like LiteDB).
 - Behavior that matters under AOT gets a check in `src/Test.Aot` (it publishes with `PublishAot` and trim/AOT warnings as errors). Run it (publish + run the binary) for changes to metadata, accessors, materialization, JSON or annotations.

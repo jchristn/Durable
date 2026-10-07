@@ -18,7 +18,7 @@
 		<PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
 		<PackageId>Durable.Tool</PackageId>
 		<Title>Durable.Tool</Title>
-		<Version>0.7.0</Version>
+		<Version>0.7.1</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>The durable command-line tool for the Durable ORM: apply, roll back and script migrations, scaffold migrations from schema differences, diff and sync schemas, and reverse-engineer entity classes from SQLite, PostgreSQL, MySQL and SQL Server databases.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -28,7 +28,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql;migrations;cli;tool</PackageTags>
-		<PackageReleaseNotes>v0.7.0: --provider duckdb, oracle, mariadb, cockroachdb and yugabytedb (mariadb now selects the MariaDB dialect). See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.1: no changes in this package (republished with the shared version; Durable.LiteGraph now supports Native AOT). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

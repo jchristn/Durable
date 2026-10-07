@@ -174,7 +174,7 @@ Durable sits between Dapper and Entity Framework.
 | `Durable.Oracle` | Oracle Database provider | Durable.Sql, Oracle.ManagedDataAccess.Core 23.26.301 |
 | `Durable.InMemory` | In-memory backend for tests and prototypes; the reference non-SQL backend | Durable |
 | `Durable.LiteDb` | LiteDB (embedded document database) backend | Durable, LiteDB 5.0.21 |
-| `Durable.LiteGraph` | LiteGraph (property graph) backend | Durable, LiteGraph 10.1.0 (and its ~20 transitive packages) |
+| `Durable.LiteGraph` | LiteGraph (property graph) backend | Durable, LiteGraph 10.2.0 (and its ~20 transitive packages) |
 | `Durable.MongoDb` | MongoDB (document database server) backend | Durable, MongoDB.Driver 3.12.0 |
 | `Durable.CosmosDb` | Azure Cosmos DB for NoSQL backend | Durable, Microsoft.Azure.Cosmos 3.63.2, Newtonsoft.Json 13.0.4 |
 | `Durable.Conformance` | Conformance kit: capability-gated suites any `IRepository<T>` backend runs to prove itself | Durable, Touchstone.Core, xunit.assert |
@@ -199,7 +199,7 @@ Durable sits between Dapper and Entity Framework.
 
 ## Requirements
 
-- **.NET 8.0** or later. Libraries target `net8.0` and are tested on .NET 8 and .NET 10; `Durable.Conformance` and `Durable.Tool` target `net8.0` and `net10.0`. Every library except `Durable.LiteGraph`, `Durable.MongoDb` and `Durable.CosmosDb` (whose LiteGraph, MongoDB driver and Cosmos DB SDK dependencies are not AOT-compatible) and the `Durable.Tool` executable works in trimmed and Native AOT applications; `Durable.Oracle` and `Durable.DuckDb` are warning-free themselves, but their drivers are not trim-annotated ([Native AOT](#native-aot)).
+- **.NET 8.0** or later. Libraries target `net8.0` and are tested on .NET 8 and .NET 10; `Durable.Conformance` and `Durable.Tool` target `net8.0` and `net10.0`. Every library except `Durable.MongoDb` and `Durable.CosmosDb` (whose MongoDB driver and Cosmos DB SDK dependencies are not AOT-compatible) and the `Durable.Tool` executable works in trimmed and Native AOT applications; `Durable.Oracle` and `Durable.DuckDb` are warning-free themselves, but their drivers are not trim-annotated ([Native AOT](#native-aot)).
 - **SQLite native library**: `Durable.Sqlite` references Microsoft.Data.Sqlite 10.0.12 with **SQLitePCLRaw 3.x** (`SQLitePCLRaw.bundle_e_sqlite3` 3.0.5), the same SQLite stack `Durable.LiteGraph` uses. If your application references SQLitePCLRaw 2.x packages directly (for example another bundle or provider), update them to 3.x so every SQLitePCLRaw package resolves to the same major version.
 - **Databases**:
 
@@ -215,7 +215,7 @@ Durable sits between Dapper and Entity Framework.
 | CockroachDB | 26.3 (tested) | Npgsql 10.0.3 | `PostgresFlavor.CockroachDb`; identity columns, PL/pgSQL procedures |
 | YugabyteDB | 2026.1 (tested) | Npgsql 10.0.3 | `PostgresFlavor.YugabyteDb`; advisory locks (`yb_enable_advisory_locks`) for the migration lock |
 | LiteDB | 5.0.21 | LiteDB (managed, no native code) | |
-| LiteGraph | 10.1.0 | LiteGraph | |
+| LiteGraph | 10.2.0 | LiteGraph | |
 | MongoDB | 4.4 (tested with 8.0; multi-document transactions need a replica set or sharded cluster) | MongoDB.Driver 3.12.0 | Implicit collection creation inside transactions (`hello` topology detection falls back to `isMaster` on older servers) |
 | Azure Cosmos DB for NoSQL | Service (any API version the SDK supports); Linux emulator `vnext-preview` for tests | Microsoft.Azure.Cosmos 3.63.2 | |
 
@@ -1895,8 +1895,8 @@ await foreach (LiteGraph.Node node in backend.Client.Node.ReadParents(backend.Te
 - **Queries**: labels and primary keys are always pushed down; exact (ordinal) string equality/`IN` and non-negative integer equality are pushed as LiteGraph data filters. Everything is re-evaluated client-side, so results follow C# semantics. Every candidate node is read before results are returned. `QueryPlanned`, `LastQueryPlan` and the logger show push-down.
 - **Transactions**: interactive with read-your-writes; they commit atomically as one LiteGraph graph transaction, first committer wins. A transaction (including the implicit one in `CreateMany`, `UpsertMany` and `UpdateMany`) is limited to `MaxOperationsPerTransaction` operations: split larger batches.
 - **Limits**: auto-increment keys are generated per process, so several processes writing one graph should not rely on generated keys (a collision fails; nothing is overwritten). Do not change key values or data of Durable nodes outside Durable.
-- **Native AOT**: not supported yet. The LiteGraph library itself is not AOT-compatible (it uses reflection-based System.Text.Json); `Durable.LiteGraph`'s own code is annotated, and `LiteGraphBackend.Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` so a trimmed or AOT build warns.
-- **Dependencies**: LiteGraph 10.1.0 brings about 20 packages (Npgsql, Microsoft.Data.Sqlite, SQLitePCLRaw 3, HnswLite, Pgvector, ...).
+- **Native AOT**: supported since 0.7.1 (LiteGraph 10.2.0 is AOT-compatible) and verified end to end on .NET 8 and .NET 10. Pass `JsonOptions = DurableJson.CreateOptions(yourContext)` when entities have JSON columns.
+- **Dependencies**: LiteGraph 10.2.0 brings about 20 packages (Npgsql, Microsoft.Data.Sqlite, SQLitePCLRaw 3, HnswLite, Pgvector, ...).
 - Capabilities: all. Passes the full conformance kit.
 
 ## Writing a Custom Backend
@@ -2094,7 +2094,7 @@ On SQLite, Durable reads 10,000 rows in about 10.9 ms (Dapper 12.1 ms, ADO.NET 1
 
 ## Native AOT
 
-Durable runs in trimmed and Native AOT applications. Every library (except the `Durable.Tool` executable) is marked `IsAotCompatible` and builds with zero trim/AOT warnings, and CI publishes and runs an AOT test application on every push. `Durable.LiteGraph`, `Durable.MongoDb` and `Durable.CosmosDb` are annotated too, but the LiteGraph library, the MongoDB driver and the Cosmos DB SDK they depend on are not AOT-compatible. Under AOT nothing is generated at runtime: entity accessors and row readers use reflection invokers instead of compiled expression trees (a 10,000-row SQLite read takes about 11 ms under AOT versus 12 ms JIT on .NET 10), and the client-side parts of LINQ run on the expression interpreter.
+Durable runs in trimmed and Native AOT applications. Every library (except the `Durable.Tool` executable) is marked `IsAotCompatible` and builds with zero trim/AOT warnings, and CI publishes and runs an AOT test application on every push. `Durable.MongoDb` and `Durable.CosmosDb` are annotated too, but the MongoDB driver and the Cosmos DB SDK they depend on are not AOT-compatible. Under AOT nothing is generated at runtime: entity accessors and row readers use reflection invokers instead of compiled expression trees (a 10,000-row SQLite read takes about 11 ms under AOT versus 12 ms JIT on .NET 10), and the client-side parts of LINQ run on the expression interpreter.
 
 ### Setup
 
@@ -2174,7 +2174,7 @@ Overloads that take `Type` collections or scan assemblies are marked `[RequiresU
 | `Durable.DuckDb` | Yes, verified end to end on .NET 10 (osx-arm64 locally, linux-x64 in CI); the test runs on .NET 9+. DuckDB.NET.Data is not trim-annotated: the AOT compiler prints summary warnings (IL2104/IL3053) for it, from its LIST/STRUCT/MAP readers, collection parameters and connection-string property descriptors, which Durable.DuckDb does not use (it maps scalar columns, binds scalar parameters and reads with `GetValue`). On .NET 8 the AOT compiler cannot summarize those warnings, so a warnings-as-errors .NET 8 AOT build needs them suppressed for DuckDB.NET.Data |
 | `Durable.Postgres`, `Durable.MySql`, `Durable.SqlServer` | Durable's code is warning-free (including the MariaDB, CockroachDB and YugabyteDB dialects); the drivers are not verified by Durable's CI (Npgsql needs its slim data source builder for full AOT; Microsoft.Data.SqlClient has known trim warnings) |
 | `Durable.Oracle` | Durable's code is warning-free. ODP.NET (`Oracle.ManagedDataAccess.Core`) is not annotated for trimming and the AOT compiler reports trim and AOT warnings for it (IL2104/IL3053: type names resolved by string, UDT assembly scanning, `Assembly.Location` in configuration tracing), so `OracleConnectionFactory`'s constructors, `OracleConnectionFactory.CreateRawConnection` and the `OracleRepository<T>` constructors that open their own connections carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. A native AOT probe (osx-arm64, .NET 8: `InitializeTable`, `CreateMany`, LINQ queries) ran correctly; it is not part of `Test.Aot` because it needs a server. Setting `OracleCommand.InitialLOBFetchSize` throws `NullReferenceException` inside the driver under native AOT, so Durable does not set it |
-| `Durable.LiteGraph` | Not supported yet: the LiteGraph library itself is not AOT-compatible (reflection-based System.Text.Json); Durable.LiteGraph's own code is annotated, and `LiteGraphBackend.Create`/`CreateAsync` warn in trimmed builds |
+| `Durable.LiteGraph` | Yes, verified end to end (.NET 8 and 10), with LiteGraph 10.2.0 or later; no trim/AOT warnings from LiteGraph or its dependencies |
 | `Durable.MongoDb` | Not supported: the MongoDB driver produces trim and AOT warnings; `MongoDbBackend.Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` (Durable.MongoDb's own code is annotated and warning-free) |
 | `Durable.CosmosDb` | Not supported: the Cosmos DB SDK uses Newtonsoft.Json and reflection; `CosmosDbBackend.Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` (Durable.CosmosDb's own code is annotated and warning-free) |
 | `Durable.Tool` | Not applicable (a .NET tool that builds and loads your assembly) |

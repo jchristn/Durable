@@ -54,10 +54,8 @@
             in with <see cref="P:Durable.LiteGraph.LiteGraphRepositorySettings.Client"/> is never disposed. Repositories never dispose the backend.
             </para>
             <para>
-            Trimming and Native AOT: not supported. The LiteGraph library uses reflection-based System.Text.Json for its own
-            records and <c>DataTable</c> for query results, so <see cref="M:Durable.LiteGraph.LiteGraphBackend.CreateAsync(Durable.LiteGraph.LiteGraphRepositorySettings,System.Threading.CancellationToken)"/> and <see cref="M:Durable.LiteGraph.LiteGraphBackend.Create(Durable.LiteGraph.LiteGraphRepositorySettings)"/> carry
-            <see cref="T:System.Diagnostics.CodeAnalysis.RequiresUnreferencedCodeAttribute"/> and <see cref="T:System.Diagnostics.CodeAnalysis.RequiresDynamicCodeAttribute"/>. Durable's own code
-            in this package is trim-annotated and warning-free.
+            Trimming and Native AOT: supported with LiteGraph 10.2.0 or later. Pass <see cref="P:Durable.LiteGraph.LiteGraphRepositorySettings.JsonOptions"/>
+            with a source-generated context (<see cref="M:Durable.DurableJson.CreateOptions(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver)"/>) when entities have JSON columns.
             </para>
             Thread safety: safe for concurrent use by any number of repositories and threads.
             </summary>

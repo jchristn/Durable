@@ -79,7 +79,7 @@ namespace Test.Shared
             CliRunResult version = await RunAsync(null, "--version");
             Expect(version, ExitCodes.Success);
             Assert.Equal(DurableCli.Version, version.Output.Trim());
-            Assert.StartsWith("0.7.0", DurableCli.Version);
+            Assert.StartsWith("0.7.1", DurableCli.Version);
 
             CliRunResult migrate = await RunAsync(null, "migrate", "--help");
             Expect(migrate, ExitCodes.Success);
