@@ -66,9 +66,10 @@ namespace Test.Shared
                 // against the configured SQL provider (SqlConformanceTarget resets storage by dropping and recreating tables).
                 if (!documentBackend)
                 {
-                    // Oracle stores an empty string as NULL (OracleDialect.TreatsEmptyStringAsNull), so its repositories lack
-                    // RepositoryCapabilities.EmptyStrings and the kit skips the cases that need it, naming the capability.
-                    RepositoryCapabilities sqlCapabilities = configuration.DatabaseType == TestDatabaseType.Oracle
+                    // A dialect that stores an empty string as NULL (Oracle: TreatsEmptyStringAsNull) gives repositories without
+                    // RepositoryCapabilities.EmptyStrings, and the kit skips the cases that need it, naming the capability.
+                    // The target checks every repository it creates against these capabilities.
+                    RepositoryCapabilities sqlCapabilities = RepositoryProviderFactory.DialectFor(configuration.DatabaseType).TreatsEmptyStringAsNull
                         ? RepositoryCapabilities.All & ~RepositoryCapabilities.EmptyStrings
                         : RepositoryCapabilities.All;
                     foreach (TestSuiteDescriptor conformance in ConformanceSuites.Build(

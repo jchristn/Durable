@@ -81,6 +81,7 @@ namespace Test.Automated
 
             try
             {
+                await EnsureImageAsync(settings.ImageName);
                 await RunDockerCommandAsync(BuildRunArguments(containerName, settings).ToArray());
                 RegisterActiveContainer(containerName, keepContainer);
 
@@ -411,6 +412,35 @@ namespace Test.Automated
             arguments.Add(settings.ImageName);
             arguments.AddRange(settings.ContainerCommand);
             return arguments;
+        }
+
+        private static async Task EnsureImageAsync(string imageName)
+        {
+            // Pull explicitly, with retries, so a transient registry error (seen on CI runners) does not fail the run;
+            // "docker run" would pull once and give up.
+            try
+            {
+                await RunDockerCommandAsync("image", "inspect", "--format", "{{.Id}}", imageName);
+                return;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            int[] delaysSeconds = { 5, 15, 30, 60 };
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    await RunDockerCommandAsync("pull", imageName);
+                    return;
+                }
+                catch (InvalidOperationException e) when (attempt < delaysSeconds.Length)
+                {
+                    Console.Error.WriteLine("docker pull " + imageName + " failed (attempt " + (attempt + 1).ToString(CultureInfo.InvariantCulture) + "), retrying in " + delaysSeconds[attempt].ToString(CultureInfo.InvariantCulture) + " s: " + e.Message);
+                    await Task.Delay(TimeSpan.FromSeconds(delaysSeconds[attempt]));
+                }
+            }
         }
 
         private static async Task EnsureDockerIsAvailableAsync()

@@ -247,9 +247,10 @@ namespace Test.Shared
                 Username = string.IsNullOrWhiteSpace(configuration.Username) ? "durable" : configuration.Username,
                 Password = configuration.Password ?? string.Empty,
                 Pooling = true,
-                // ODP.NET self-tuning resizes each pooled connection's statement cache in the background, which makes
-                // process memory oscillate by megabytes; the stress suites measure memory growth, so keep it fixed.
-                AdditionalProperties = new System.Collections.Generic.Dictionary<string, string> { ["Self Tuning"] = "false" }
+                // ODP.NET self-tuning resizes each pooled connection's statement cache in the background, and when the pool
+                // has no idle connection it opens "Incr Pool Size" (default 5) at once, about 2 MB each; both make process
+                // memory jump by megabytes while the stress suites measure growth, so keep them fixed and incremental.
+                AdditionalProperties = new System.Collections.Generic.Dictionary<string, string> { ["Self Tuning"] = "false", ["Incr Pool Size"] = "1" }
             };
 
             return settings.BuildConnectionString();

@@ -233,6 +233,11 @@ namespace Test.Shared
             await repository.CreateAsync(testPerson);
 
             int cycleCount = 3000;
+
+            // Warm-up pass, as in the other memory measurements here: one-time growth (JIT, driver caches, ODP.NET's
+            // per-connection statement cache and pool bookkeeping) is excluded, so the measured pass reflects leaks.
+            for (int i = 0; i < 100; i++) await repository.ReadByIdAsync(1);
+
             long initialMemory = GC.GetTotalMemory(true);
 
             for (int i = 0; i < cycleCount; i++)
