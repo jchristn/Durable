@@ -250,7 +250,30 @@ namespace Test.Automated
 
         private static ProviderDockerSettings CreateMongoDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MongoDb, "docker settings");
+            // A single-node replica set (multi-document transactions need one), without authentication. The readiness
+            // probe initiates the replica set, waits for a writable primary, then runs the default document-backend probe.
+            string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "mongodb",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "mongo:8" : dockerImageOverride,
+                ContainerPort = 27017,
+                HostPort = configuration.Port,
+                DatabaseType = TestDatabaseType.MongoDb,
+                DatabaseName = databaseName,
+                Username = string.Empty,
+                Password = string.Empty,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema,
+                ExtraRunArguments = new[] { "--memory", "1g" },
+                ContainerCommand = new[] { "--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25" },
+                StartupTimeout = TimeSpan.FromMinutes(3),
+                ReadinessProbe = async (effective, token) =>
+                {
+                    await MongoDbTestTarget.InitiateReplicaSetAsync(effective, token).ConfigureAwait(false);
+                    await DocumentBackendTestTargets.ProbeAsync(effective, token).ConfigureAwait(false);
+                }
+            };
         }
 
         private static ProviderDockerSettings CreateCosmosDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)

@@ -30,7 +30,7 @@ namespace Test.Shared
             switch (configuration.DatabaseType)
             {
                 case TestDatabaseType.MongoDb:
-                    throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MongoDb, "document backend test target");
+                    return new MongoDbTestTarget(configuration);
 
                 case TestDatabaseType.CosmosDb:
                     throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CosmosDb, "document backend test target");

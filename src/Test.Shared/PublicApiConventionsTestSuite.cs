@@ -12,6 +12,7 @@ namespace Test.Shared
     using Durable.InMemory;
     using Durable.LiteDb;
     using Durable.LiteGraph;
+    using Durable.MongoDb;
     using Durable.MySql;
     using Durable.Postgres;
     using Durable.Sql;
@@ -43,6 +44,7 @@ namespace Test.Shared
             typeof(InMemoryBackend).Assembly,
             typeof(LiteDbBackend).Assembly,
             typeof(LiteGraphBackend).Assembly,
+            typeof(MongoDbBackend).Assembly,
             typeof(ConformanceSuites).Assembly,
             typeof(DurableCli).Assembly
         };
@@ -57,6 +59,7 @@ namespace Test.Shared
             { "TokenWithoutDefault:InMemoryBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:LiteDbBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:LiteGraphBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
+            { "TokenWithoutDefault:MongoDbBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:BackendIncludeLoader.*", "Backend SPI helper called by RepositoryBase with its token." },
 
 

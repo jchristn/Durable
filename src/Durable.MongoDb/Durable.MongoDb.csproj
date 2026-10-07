@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<IsAotCompatible>true</IsAotCompatible>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<ApplicationIcon>logo.ico</ApplicationIcon>
+		<DocumentationFile>Durable.MongoDb.xml</DocumentationFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<PackageId>Durable.MongoDb</PackageId>
+		<Title>Durable.MongoDb</Title>
+		<Version>0.7.0</Version>
+		<Authors>jchristn,joshclopton</Authors>
+		<Description>MongoDB backend for Durable ORM: store entities in MongoDB collections with the full IRepository surface, LINQ predicates, ordering, paging, counts and aggregates pushed down to the server where the semantics match C#, exact value round-trips, includes, indexes, optimistic concurrency and multi-document transactions on replica sets.</Description>
+		<Copyright>(c)2025 Durable Community</Copyright>
+		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
+		<PackageIcon>logo.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageTags>linq;orm;database;mongodb;mongo;nosql;document;repository</PackageTags>
+		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+		<IncludeSymbols>True</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Content Include="logo.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="..\..\assets\logo.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\LICENSE.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\README.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MongoDB.Driver" Version="3.12.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable\Durable.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="Durable.MongoDb.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>

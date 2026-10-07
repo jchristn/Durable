@@ -49,6 +49,7 @@
 	</ItemGroup>
 
 	<ItemGroup Label="MongoDb">
+		<ProjectReference Include="..\..\src\Durable.MongoDb\Durable.MongoDb.csproj" />
 	</ItemGroup>
 
 	<ItemGroup Label="CosmosDb">
