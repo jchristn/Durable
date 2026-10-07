@@ -4,8 +4,9 @@ namespace Durable.Postgres
     using Durable.Sql;
 
     /// <summary>
-    /// YugabyteDB YSQL dialect (YugabyteDB 2024.2+ over the PostgreSQL wire protocol). Differences from
-    /// <see cref="PostgresDialect"/> are limited to what YSQL does not support.
+    /// YugabyteDB YSQL dialect (YugabyteDB 2025.1+ over the PostgreSQL wire protocol; tested on 2026.1). The only
+    /// difference from <see cref="PostgresDialect"/> is that DDL is treated as non-transactional. Advisory locks (used for
+    /// the migration lock) require <c>yb_enable_advisory_locks</c>, which is on by default in the tested release.
     /// Thread safety: immutable; safe to share.
     /// </summary>
     public class YugabyteDbDialect : PostgresDialect
@@ -19,6 +20,13 @@ namespace Durable.Postgres
 
         /// <inheritdoc />
         public override PostgresFlavor Flavor => PostgresFlavor.YugabyteDb;
+
+        /// <summary>
+        /// Gets false: YugabyteDB runs DDL inside a transaction block in its own transaction unless
+        /// <c>yb_ddl_transaction_block_enabled</c> is on (off by default), so migrations and schema synchronization run
+        /// without a transaction and a failed migration may leave earlier statements applied.
+        /// </summary>
+        public override bool SupportsTransactionalDdl => false;
 
         #endregion
 

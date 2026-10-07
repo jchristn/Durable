@@ -114,6 +114,27 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// The wire-compatible databases are providers of their own (MariaDB, CockroachDB, YugabyteDB, with aliases):
+        /// help lists them and each name is accepted (an invalid connection string fails in the driver, not as an unknown provider).
+        /// </summary>
+        [Fact]
+        public async Task WireCompatibleProviders_AreListedAndAccepted()
+        {
+            CliRunResult help = await RunAsync(null, "status", "--help");
+            Expect(help, ExitCodes.Success);
+            foreach (string name in new[] { "mariadb", "cockroachdb", "yugabytedb" })
+                Assert.True(help.Output.Contains(name, StringComparison.Ordinal), "Expected '" + name + "' in: " + help.Output);
+
+            foreach (string alias in new[] { "mariadb", "cockroachdb", "cockroach", "crdb", "yugabytedb", "yugabyte", "ysql" })
+            {
+                CliRunResult result = await RunAsync(null, "status", "--provider", alias, "--connection", "not a connection string", "--assembly", _AssemblyPath);
+                Assert.True(result.ExitCode != ExitCodes.Success, "Expected a failure for provider '" + alias + "' but got " + result);
+                Assert.True(result.Error.StartsWith("error: ", StringComparison.Ordinal), "Errors start with 'error: ': " + result);
+                Assert.False(result.Error.Contains("Unknown provider", StringComparison.Ordinal), "Provider '" + alias + "' was not recognized: " + result);
+            }
+        }
+
+        /// <summary>
         /// Invalid arguments and missing settings exit 1 with a clear message on the error stream and nothing on the output.
         /// </summary>
         [Fact]

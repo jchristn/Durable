@@ -295,6 +295,8 @@ namespace Test.Automated
 
         private static ProviderDockerSettings CreateYugabyteDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
+            // ysql_sequence_cache_minval=1: YugabyteDB caches 100 sequence values per connection by default, so identity
+            // keys would jump between connections; the suites expect consecutive keys.
             string username = string.IsNullOrWhiteSpace(configuration.Username) ? "yugabyte" : configuration.Username;
             string password = string.IsNullOrWhiteSpace(configuration.Password) ? "yugabyte" : configuration.Password;
             string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
@@ -306,7 +308,7 @@ namespace Test.Automated
                 ContainerPort = 5433,
                 HostPort = configuration.Port,
                 ExtraRunArguments = new[] { "--memory", "3g" },
-                ContainerCommand = new[] { "bin/yugabyted", "start", "--background=false", "--ui=false" },
+                ContainerCommand = new[] { "bin/yugabyted", "start", "--background=false", "--ui=false", "--tserver_flags=ysql_sequence_cache_minval=1" },
                 StartupTimeout = TimeSpan.FromMinutes(6),
                 DatabaseType = TestDatabaseType.YugabyteDb,
                 DatabaseName = databaseName,
