@@ -22,7 +22,7 @@ A lightweight .NET ORM with full LINQ support. Typed queries, CRUD, relationship
 | Durable.Conformance | [![NuGet](https://img.shields.io/nuget/v/Durable.Conformance.svg)](https://www.nuget.org/packages/Durable.Conformance/) | [![Downloads](https://img.shields.io/nuget/dt/Durable.Conformance.svg)](https://www.nuget.org/packages/Durable.Conformance/) |
 | Durable.Tool | [![NuGet](https://img.shields.io/nuget/v/Durable.Tool.svg)](https://www.nuget.org/packages/Durable.Tool/) | [![Downloads](https://img.shields.io/nuget/dt/Durable.Tool.svg)](https://www.nuget.org/packages/Durable.Tool/) |
 
-> **Durable is in alpha.** The API may change between minor versions; every breaking change is listed in the [CHANGELOG](CHANGELOG.md). Feedback, issues and constructive criticism are welcome in [Issues](https://github.com/jchristn/durable/issues) and [Discussions](https://github.com/jchristn/durable/discussions).
+> **Durable is in beta.** The API may change between minor versions; every breaking change is listed in the [CHANGELOG](CHANGELOG.md). Feedback, issues and constructive criticism are welcome in [Issues](https://github.com/jchristn/durable/issues) and [Discussions](https://github.com/jchristn/durable/discussions).
 
 ## Table of Contents
 
@@ -1742,7 +1742,7 @@ Overloads that take `Type` collections or scan assemblies are marked `[RequiresU
 
 ## Versioning and Stability
 
-- Durable is **alpha** (0.x). Minor versions may contain breaking changes; each is listed under "Breaking changes" in the [CHANGELOG](CHANGELOG.md).
+- Durable is **beta** (0.x). Minor versions may contain breaking changes; each is listed under "Breaking changes" in the [CHANGELOG](CHANGELOG.md).
 - All packages in this repository share one version number and are released together; use the same version of every `Durable.*` package.
 - The SQL generated for a query is not part of the public contract and may change between versions; results are.
 
@@ -1806,5 +1806,5 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 Special thanks to the following contributors:
 
-- [@joshclopton](https://github.com/JoshClopton) - Josh Clopton
 - [@jchristn](https://github.com/jchristn) - Joel Christner
+- [@joshclopton](https://github.com/JoshClopton) - Josh Clopton

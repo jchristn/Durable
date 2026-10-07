@@ -1,6 +1,6 @@
 # Change Log
 
-All notable changes to Durable are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) loosely: each version lists what was added, changed and fixed, grouped by area, and ends with a **Breaking changes** list that names every change that can break code compiled against the previous version. Durable is in alpha (0.x), so minor versions may break. Since 0.2.0 all packages share one version number and are released together. Dates are release dates (YYYY-MM-DD).
+All notable changes to Durable are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) loosely: each version lists what was added, changed and fixed, grouped by area, and ends with a **Breaking changes** list that names every change that can break code compiled against the previous version. Durable is in beta (0.x), so minor versions may break. Since 0.2.0 all packages share one version number and are released together. Dates are release dates (YYYY-MM-DD).
 
 ## Current Version
 
