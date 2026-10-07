@@ -1317,6 +1317,8 @@ durable --help
 durable <command> --help
 ```
 
+DuckDB needs your project. The tool package does not bundle DuckDB's native engine (`libduckdb`, 40 to 120 MB per platform), so with `--provider duckdb` the tool loads it from your build output: the project it builds (`--project`) or the assembly it loads (`--assembly`) must reference `Durable.DuckDb`, which places `libduckdb` in `bin` (`runtimes/<rid>/native/`, or next to the dll for a RID-specific build). `scaffold` uses the current project's output when it has been built. Without a project, set `DURABLE_DUCKDB_NATIVE` to the library file (`libduckdb.so`, `libduckdb.dylib` or `duckdb.dll`) or the directory that contains it, for example from the `DuckDB.NET.Bindings.Full` package or a DuckDB release. When the library cannot be found, the command fails with a message that says this. SQLite's native library is bundled with the tool; the other providers are fully managed.
+
 | Command | Purpose | Example |
 |---|---|---|
 | `migrate [--target <id>]` | Apply pending migrations from your assembly, in Id order, under the database lock | `durable migrate --target 20261005120000_AddOrders` |
@@ -1340,6 +1342,7 @@ Common options:
 | `--migrations-namespace <ns>`, `--entities-namespace <ns>`, `--entities A,B` | Limit discovery of migrations and `[Entity]` types |
 | `--mapping-source <type>` | An `IEntityMappingSource` class in your assembly (full or simple name, public parameterless constructor). It is registered for the classes it describes, which are then discovered as entities alongside `[Entity]` types (`schema diff`, `schema sync`, `migrations add`). See [Mapping classes you don't own](#mapping-classes-you-dont-own) |
 | `--config <path>` | Settings file (default `./durable.json`) |
+| `DURABLE_DUCKDB_NATIVE` (environment) | Path of the DuckDB native library (or its directory), used when your build output has none (see above) |
 | `--verbose` | Build output, executed SQL and stack traces |
 
 `durable.json` (optional; command-line options win):
@@ -2186,6 +2189,7 @@ Overloads that take `Type` collections or scan assemblies are marked `[RequiresU
 
 | Symptom / question | Cause and fix |
 |---|---|
+| `durable --provider duckdb`: "the DuckDB native library ... was not found" | The tool does not bundle `libduckdb`. Reference `Durable.DuckDb` in the project the tool builds (or the `--assembly` you pass) and build it, or set `DURABLE_DUCKDB_NATIVE` to the library file or its directory. See [Command-Line Tool](#command-line-tool). |
 | SQLite: "database is locked" | Another connection holds the write lock. The factory waits `BusyTimeoutMilliseconds` (default 30 s) before failing; keep transactions short, raise the timeout, or share one `SqliteConnectionFactory`. |
 | SQLite `:memory:` data disappears, or two repositories see different data | Each factory created from `:memory:` is its own database, alive while the factory lives. Create one `SqliteConnectionFactory` and pass it to every repository; for a database shared by name use `Data Source=file:/name?vfs=memdb`. |
 | `Where(x => x.Name == "abc")` returns different rows on SQL Server/MySQL than on PostgreSQL/SQLite | Collations. SQL Server's and MySQL's defaults are case-insensitive. Set `StringMatching = StringMatchMode.Ordinal` (or `IgnoreCase`), or pass a `StringComparison`. |

@@ -87,6 +87,7 @@ New databases: two SQL providers (Oracle, DuckDB), three wire-compatible databas
 **Command-line tool (`Durable.Tool`)**
 
 - `--provider duckdb`, `oracle` (aliases `odp`, `odpnet`), `cockroachdb` (aliases `cockroach`, `crdb`), `yugabytedb` (aliases `yugabyte`, `ysql`) and `mariadb` for every command, with scaffolding of each database's types. Help and error texts list the providers from one place.
+- The tool package does not bundle DuckDB's native library (with it the package was 292 MB, over nuget.org's limit; it is now about 72 MB). With `--provider duckdb` the tool loads `libduckdb` from your build output (the `--project` or `--assembly` must reference `Durable.DuckDb`; `scaffold` uses the current project's output when built) or from `DURABLE_DUCKDB_NATIVE` (the library file or its directory), and fails with a command error that says how to fix it when the library cannot be found. SQLite's native library is still bundled.
 
 **Tests**
 

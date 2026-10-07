@@ -54,7 +54,7 @@ namespace Durable.Tool
             string? to = invocation.Arguments.GetValue(CliOptions.To);
             string? output = invocation.Arguments.GetValue(CliOptions.Output);
 
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Migration> migrations = await invocation.LoadMigrationsAsync(token).ConfigureAwait(false);
             string? fromId = from == "0" ? null : from;
             RequireKnown(migrations, fromId, "--from");

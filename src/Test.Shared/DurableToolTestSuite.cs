@@ -648,6 +648,48 @@ namespace Test.Shared
             }
         }
 
+        /// <summary>
+        /// The tool does not bundle DuckDB's native library: it probes the user's build output (the assembly directory, then
+        /// runtimes/&lt;rid&gt;/native/), takes DURABLE_DUCKDB_NATIVE as a file or a directory, and reports a missing library
+        /// (also when wrapped by a type initializer) with a message that says how to fix it. A missing library cannot be
+        /// produced in this process (the test host has libduckdb), so the probing and reporting are checked directly.
+        /// </summary>
+        [Fact]
+        public async Task DuckDbNativeLibrary_ProbesUserOutputAndExplainsMissingLibrary()
+        {
+            string directory = CreateTempDirectory();
+            try
+            {
+                string assembly = Path.Combine(directory, "App.dll");
+                await File.WriteAllTextAsync(assembly, string.Empty);
+                string fileName = DuckDbNativeLibrary.LibraryFileName;
+                string os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
+                List<string> candidates = DuckDbNativeLibrary.GetCandidates(assembly);
+                int besideAssembly = candidates.IndexOf(Path.Combine(directory, fileName));
+                int portable = candidates.IndexOf(Path.Combine(directory, "runtimes", os, "native", fileName));
+                int ridSpecific = candidates.IndexOf(Path.Combine(directory, "runtimes", System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier, "native", fileName));
+                Assert.True(besideAssembly >= 0 && portable > besideAssembly && ridSpecific > besideAssembly && ridSpecific < portable,
+                    "Unexpected probe order: " + string.Join(", ", candidates));
+
+                Assert.Null(DuckDbNativeLibrary.GetOverridePath(null));
+                Assert.Null(DuckDbNativeLibrary.GetOverridePath("  "));
+                Assert.Equal(Path.Combine(directory, fileName), DuckDbNativeLibrary.GetOverridePath(directory));
+                Assert.Equal(Path.Combine(directory, "custom.lib"), DuckDbNativeLibrary.GetOverridePath(Path.Combine(directory, "custom.lib")));
+
+                DllNotFoundException missing = new DllNotFoundException("Unable to load shared library 'duckdb' or one of its dependencies.");
+                Assert.True(DuckDbNativeLibrary.IsMissingLibrary(missing));
+                Assert.True(DuckDbNativeLibrary.IsMissingLibrary(new TypeInitializationException("DuckDB.NET.Data.DuckDBConnectionStringBuilder", missing)));
+                Assert.False(DuckDbNativeLibrary.IsMissingLibrary(new DllNotFoundException("Unable to load shared library 'e_sqlite3'.")));
+                Assert.Contains("Durable.DuckDb", DuckDbNativeLibrary.MissingMessage);
+                Assert.Contains(DuckDbNativeLibrary.EnvironmentVariable, DuckDbNativeLibrary.MissingMessage);
+                Assert.Contains(fileName, DuckDbNativeLibrary.MissingMessage);
+            }
+            finally
+            {
+                DeleteDirectory(directory);
+            }
+        }
+
         #endregion
 
         #region Private-Methods

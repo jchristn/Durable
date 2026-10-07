@@ -118,6 +118,10 @@ namespace Durable.Tool
                 context.Error.WriteLine("error: cancelled.");
                 return ExitCodes.CommandError;
             }
+            catch (Exception e) when (DuckDbNativeLibrary.IsMissingLibrary(e))
+            {
+                return ReportCommandError(context, DuckDbNativeLibrary.MissingMessage, e, verbose);
+            }
             catch (MigrationException e)
             {
                 return ReportCommandError(context, e.Message, e, verbose);

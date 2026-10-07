@@ -31,7 +31,7 @@ namespace Durable.Tool
         /// <returns>The exit code.</returns>
         public static async Task<int> RunAsync(CommandInvocation invocation, CancellationToken token)
         {
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Migration> migrations = await invocation.LoadMigrationsAsync(token).ConfigureAwait(false);
             SqlMigrator migrator = invocation.CreateMigrator(database, migrations);
             List<AppliedMigration> history = await migrator.GetAppliedMigrationsAsync(token).ConfigureAwait(false);

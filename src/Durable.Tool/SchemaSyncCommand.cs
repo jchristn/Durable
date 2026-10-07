@@ -48,7 +48,7 @@ namespace Durable.Tool
         public static async Task<int> RunAsync(CommandInvocation invocation, CancellationToken token)
         {
             SchemaSyncOptions options = new SchemaSyncOptions { AllowDestructive = invocation.Arguments.HasFlag(CliOptions.AllowDestructive) };
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Type> entities = await invocation.LoadEntitiesAsync(token).ConfigureAwait(false);
             SqlMigrator migrator = invocation.CreateMigrator(database, Array.Empty<Migration>());
 

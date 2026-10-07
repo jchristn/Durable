@@ -55,7 +55,7 @@ namespace Durable.Tool
             bool force = invocation.Arguments.HasFlag(CliOptions.Force);
             bool singularize = !invocation.Arguments.HasFlag(CliOptions.NoSingularize);
 
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(false, token).ConfigureAwait(false);
             DatabaseSchemaReader reader = new DatabaseSchemaReader(database.ConnectionFactory, database.Dialect);
             List<string> tableNames;
             if (tablesOption != null)

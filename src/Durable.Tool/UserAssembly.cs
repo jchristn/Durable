@@ -51,6 +51,7 @@ namespace Durable.Tool
             string key = path + "|" + File.GetLastWriteTimeUtc(path).Ticks;
             lock (_CacheLock)
             {
+                DuckDbNativeLibrary.AddAssembly(path);
                 if (_Cache.TryGetValue(key, out UserAssembly? cached)) return cached;
                 try
                 {

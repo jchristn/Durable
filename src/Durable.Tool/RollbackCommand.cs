@@ -51,7 +51,7 @@ namespace Durable.Tool
             if (target == null)
                 throw new DurableCliException("rollback requires --target <id> (the migration to keep) or --target 0 (revert everything).", null, true);
 
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Migration> migrations = await invocation.LoadMigrationsAsync(token).ConfigureAwait(false);
             SqlMigrator migrator = invocation.CreateMigrator(database, migrations);
             List<AppliedMigration> history = await migrator.GetAppliedMigrationsAsync(token).ConfigureAwait(false);

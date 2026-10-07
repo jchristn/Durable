@@ -77,7 +77,7 @@ namespace Durable.Tool
             else
             {
                 bool allowDestructive = invocation.Arguments.HasFlag(CliOptions.AllowDestructive);
-                await using DatabaseTarget database = invocation.OpenDatabase();
+                await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
                 List<Type> entities = await invocation.LoadEntitiesAsync(token).ConfigureAwait(false);
                 UserAssembly assembly = await invocation.LoadAssemblyAsync(token).ConfigureAwait(false);
                 List<Migration> migrations = assembly.DiscoverMigrations(invocation.Settings.MigrationsNamespace);

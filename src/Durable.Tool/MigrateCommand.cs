@@ -49,7 +49,7 @@ namespace Durable.Tool
         public static async Task<int> RunAsync(CommandInvocation invocation, CancellationToken token)
         {
             string? target = invocation.Arguments.GetValue(CliOptions.MigrateTarget);
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Migration> migrations = await invocation.LoadMigrationsAsync(token).ConfigureAwait(false);
             if (target != null)
             {

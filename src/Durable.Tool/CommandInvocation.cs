@@ -54,16 +54,29 @@ namespace Durable.Tool
         }
 
         /// <summary>
-        /// Creates the database target from the settings.
+        /// Creates the database target from the settings. For DuckDB, whose native library the tool does not bundle, the
+        /// user's build output is made known to <see cref="DuckDbNativeLibrary"/> first: the user's assembly is loaded (and
+        /// built) when the command uses it, otherwise the output of the project, when one is found and built, is probed.
         /// </summary>
+        /// <param name="loadsAssembly">Whether the command loads the user's assembly anyway.</param>
+        /// <param name="token">Cancellation token.</param>
         /// <returns>The target; dispose it when done.</returns>
-        /// <exception cref="DurableCliException">Thrown when the provider or connection string is missing or invalid.</exception>
-        public DatabaseTarget OpenDatabase()
+        /// <exception cref="DurableCliException">Thrown when the provider or connection string is missing or invalid, or the
+        /// provider's native library cannot be found.</exception>
+        public async Task<DatabaseTarget> OpenDatabaseAsync(bool loadsAssembly, CancellationToken token)
         {
             if (Settings.Provider == null)
                 throw new DurableCliException("No database provider. Pass --provider <" + DatabaseTarget.ProviderChoices + ">, set DURABLE_PROVIDER, or add \"provider\" to durable.json.", null, true);
             if (Settings.Connection == null)
                 throw new DurableCliException("No connection string. Pass --connection \"<connection string>\", set DURABLE_CONNECTION, or add \"connection\" to durable.json.", null, true);
+            if (DatabaseTarget.NormalizeProvider(Settings.Provider) == "duckdb")
+            {
+                if (loadsAssembly) await LoadAssemblyAsync(token).ConfigureAwait(false);
+                else await AddProjectOutputProbeAsync(token).ConfigureAwait(false);
+                string? nativeOverride = Context.GetEnvironmentVariable(DuckDbNativeLibrary.EnvironmentVariable);
+                DuckDbNativeLibrary.EnsureLoaded(string.IsNullOrWhiteSpace(nativeOverride) ? null : Context.ResolvePath(nativeOverride.Trim()));
+            }
+
             DatabaseTarget target = DatabaseTarget.Create(Settings.Provider, Settings.Connection);
             if (Settings.Verbose) Error.WriteLine("Using " + target.DisplayName + ".");
             return target;
@@ -215,6 +228,25 @@ namespace Durable.Tool
         {
             if (Settings.AssemblyPath != null) return null;
             return await GetProjectAsync(Settings.ProjectPath != null, token).ConfigureAwait(false);
+        }
+
+        private async Task AddProjectOutputProbeAsync(CancellationToken token)
+        {
+            if (Settings.AssemblyPath != null)
+            {
+                if (File.Exists(Settings.AssemblyPath)) DuckDbNativeLibrary.AddAssembly(Settings.AssemblyPath);
+                return;
+            }
+
+            try
+            {
+                ProjectInfo? project = await GetProjectAsync(false, token).ConfigureAwait(false);
+                if (project != null && File.Exists(project.TargetPath)) DuckDbNativeLibrary.AddAssembly(project.TargetPath);
+            }
+            catch (DurableCliException)
+            {
+                // No usable project: the environment variable and the default probing still apply.
+            }
         }
     }
 }

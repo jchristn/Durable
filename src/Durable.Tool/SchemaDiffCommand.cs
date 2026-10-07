@@ -50,7 +50,7 @@ namespace Durable.Tool
         public static async Task<int> RunAsync(CommandInvocation invocation, CancellationToken token)
         {
             bool allowDestructive = invocation.Arguments.HasFlag(CliOptions.AllowDestructive);
-            await using DatabaseTarget database = invocation.OpenDatabase();
+            await using DatabaseTarget database = await invocation.OpenDatabaseAsync(true, token).ConfigureAwait(false);
             List<Type> entities = await invocation.LoadEntitiesAsync(token).ConfigureAwait(false);
             SqlMigrator migrator = invocation.CreateMigrator(database, Array.Empty<Migration>());
             SchemaDiff diff = await migrator.DiffSchemaAsync(entities, new SchemaSyncOptions { AllowDestructive = allowDestructive }, token).ConfigureAwait(false);
