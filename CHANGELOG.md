@@ -94,6 +94,8 @@ The public API of the core and SQL packages was reviewed for duplicates, naming,
 - New suites: `QueryEvaluator` (a dictionary-row evaluator), LiteDB backend (persistence, shared mode, push-down, parity with in-memory, precision, concurrency, settings, collation, disposal, transactions), LiteGraph backend (edges, traversal, persistence, round-trips, push-down parity, transactions, concurrency, settings, disposal), and the `durable` CLI (driven in-process on every provider; generated migrations and entities are compiled with Roslyn).
 - The conformance kit now also runs against LiteDB and LiteGraph, with no skipped cases.
 - Migration suite covers table enumeration, auto-increment detection, range scripts and inline SQL rendering.
+- `ProviderRegression` suite (all four providers): chained `Where`/`Having` with `||` stay grouped, enums stored as text compare by name, `byte[]` binds and renders as a binary literal, custom-typed (value-converter) and `Guid` keys work with every by-key operation, synchronous `Execute` loads includes, empty `Contains` lists, and schema-qualified tables on PostgreSQL and SQL Server.
+- SQL Server tests accept `DURABLE_TEST_USER=integrated` (or `--user integrated`) for Windows authentication, e.g. LocalDB.
 
 **Documentation**
 

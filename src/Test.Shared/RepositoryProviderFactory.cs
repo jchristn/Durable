@@ -131,12 +131,21 @@ namespace Test.Shared
             {
                 DataSource = dataSource,
                 InitialCatalog = configuration.DatabaseName,
-                UserID = string.IsNullOrWhiteSpace(configuration.Username) ? "sa" : configuration.Username,
-                Password = configuration.Password ?? string.Empty,
                 Encrypt = false,
                 TrustServerCertificate = true,
                 MultipleActiveResultSets = true
             };
+
+            // "integrated" uses Windows authentication (e.g. LocalDB: host "(localdb)", instance "MSSQLLocalDB")
+            if (string.Equals(configuration.Username, "integrated", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.IntegratedSecurity = true;
+            }
+            else
+            {
+                builder.UserID = string.IsNullOrWhiteSpace(configuration.Username) ? "sa" : configuration.Username;
+                builder.Password = configuration.Password ?? string.Empty;
+            }
 
             return builder.ConnectionString;
         }

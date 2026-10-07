@@ -87,6 +87,7 @@ namespace Test.Shared
                 suites.Add(SharedSuite<QueryTranslationAdvancedTestSuite>("QueryTranslationAdvanced", "Query Translation (Navigation / Subqueries / Windows / Projections) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<StringMatchingTestSuite>("StringMatching", "String Matching Mode (Ordinal / IgnoreCase / Database) Tests", providerTag, BeforeEach));
                 suites.Add(SharedSuite<WindowFrameTestSuite>("WindowFrame", "Window Frame (ROWS / RANGE / FIRST_VALUE / LAST_VALUE / NTH_VALUE / DENSE_RANK / AVG) Tests", providerTag, BeforeEach));
+                suites.Add(SharedSuite<ProviderRegressionTestSuite>("ProviderRegression", "Provider Regression (Where/Having Grouping / Text Enums / Binary / Custom Keys / Sync Include / Schema-Qualified Tables) Tests", providerTag, BeforeEach));
 
                 // Backend-neutral unit suites (no database).
                 suites.Add(TouchstoneBridge.BuildSuite<QueryNormalizerTestSuite>(

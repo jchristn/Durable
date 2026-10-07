@@ -1609,6 +1609,7 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --typ
 dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type sqlserver --docker
 
 # An existing server: --type <provider> --host <h> --port <p> --user <u> --pass <p> --database <db>; --help lists all options
+# SQL Server with Windows authentication (e.g. LocalDB): --type sqlserver --host "(localdb)" --instance MSSQLLocalDB --user integrated
 
 # Native AOT end-to-end check (needs the platform's native toolchain; use your RID, e.g. osx-arm64, win-x64)
 dotnet publish src/Test.Aot/Test.Aot.csproj -c Release -r linux-x64 -f net10.0 -o aot-out
