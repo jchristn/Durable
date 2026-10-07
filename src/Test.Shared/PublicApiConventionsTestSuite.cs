@@ -40,6 +40,7 @@ namespace Test.Shared
             typeof(MySqlRepository<>).Assembly,
             typeof(PostgresRepository<>).Assembly,
             typeof(SqlServerRepository<>).Assembly,
+            typeof(Durable.Oracle.OracleRepository<>).Assembly,
             typeof(InMemoryBackend).Assembly,
             typeof(LiteDbBackend).Assembly,
             typeof(LiteGraphBackend).Assembly,

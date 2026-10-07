@@ -186,16 +186,14 @@ namespace Durable.Oracle
         }
 
         /// <summary>
-        /// Binds parameters by name and fetches LOBs with the row.
+        /// Binds parameters by name (ODP.NET binds by position by default).
         /// </summary>
         /// <param name="command">The provider command. Must not be null.</param>
         /// <exception cref="ArgumentNullException">Thrown when command is null.</exception>
         public override void ConfigureCommand(DbCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            if (command is not OracleCommand oracleCommand) return;
-            oracleCommand.BindByName = true;
-            oracleCommand.InitialLOBFetchSize = -1;
+            if (command is OracleCommand oracleCommand) oracleCommand.BindByName = true;
         }
 
         /// <summary>

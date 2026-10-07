@@ -236,6 +236,7 @@ namespace Test.Shared
             switch (databaseType)
             {
                 case TestDatabaseType.Oracle:
+                    suites.Add(SharedSuite<OracleProviderTestSuite>("Oracle.Provider", "Oracle Provider (Type Storage / Empty Strings / IN Lists / Bulk / Identifier Case / Scripts) Tests", providerTag, beforeEach));
                     break;
 
                 case TestDatabaseType.DuckDb:

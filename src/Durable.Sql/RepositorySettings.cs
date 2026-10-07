@@ -27,7 +27,7 @@ namespace Durable.Sql
         public string? Hostname { get; init; }
 
         /// <summary>
-        /// Gets the server port. Default: null (the provider's default port: 3306, 5432 or 1433). Minimum: 1. Maximum: 65535.
+        /// Gets the server port. Default: null (the provider's default port: 3306, 5432, 1433 or 1521). Minimum: 1. Maximum: 65535.
         /// </summary>
         public int? Port { get; init; }
 

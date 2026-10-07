@@ -16,6 +16,9 @@ namespace Durable.Oracle
     /// Oracle repository for <typeparamref name="T"/>. All behavior comes from <see cref="SqlRepository{T}"/>; this class
     /// supplies the Oracle dialect and connection handling, and bulk insert through ODP.NET array binding (one INSERT
     /// executed for many rows per round trip).
+    /// Trimming and Native AOT: the constructors that open their own connections carry the driver's
+    /// <see cref="RequiresUnreferencedCodeAttribute"/> and <see cref="RequiresDynamicCodeAttribute"/> (see
+    /// <see cref="OracleConnectionFactory"/>); the constructor taking a connection factory does not.
     /// Thread safety: safe for concurrent use.
     /// </summary>
     /// <typeparam name="T">Entity type.</typeparam>
@@ -30,6 +33,8 @@ namespace Durable.Oracle
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        [RequiresUnreferencedCode(OracleConnectionFactory.DriverTrimWarning)]
+        [RequiresDynamicCode(OracleConnectionFactory.DriverTrimWarning)]
         public OracleRepository(string connectionString, SqlRepositoryOptions? options = null)
             : this(OracleRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, options)
         {
@@ -41,6 +46,8 @@ namespace Durable.Oracle
         /// <param name="settings">Settings. Must not be null.</param>
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
+        [RequiresUnreferencedCode(OracleConnectionFactory.DriverTrimWarning)]
+        [RequiresDynamicCode(OracleConnectionFactory.DriverTrimWarning)]
         public OracleRepository(OracleRepositorySettings settings, SqlRepositoryOptions? options = null)
             : this(settings ?? throw new ArgumentNullException(nameof(settings)), settings.BuildConnectionString(), options)
         {
@@ -57,6 +64,22 @@ namespace Durable.Oracle
         {
         }
 
+        /// <summary>
+        /// Creates a repository on a shared connection factory with a configured dialect, for example
+        /// <c>new OracleDialect(upperCaseIdentifiers: false)</c> for a schema whose quoted names are mixed case. The factory
+        /// is not disposed with the repository. Use the same dialect for <c>SqlMigrator</c> and <c>DatabaseSchemaReader</c>.
+        /// </summary>
+        /// <param name="connectionFactory">Factory producing <see cref="OracleConnection"/> instances. Must not be null.</param>
+        /// <param name="dialect">Dialect. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        public OracleRepository(IConnectionFactory connectionFactory, OracleDialect dialect, SqlRepositoryOptions? options = null)
+            : base(dialect ?? throw new ArgumentNullException(nameof(dialect)), connectionFactory, false, typeof(OracleConnection), null, options)
+        {
+        }
+
+        [RequiresUnreferencedCode(OracleConnectionFactory.DriverTrimWarning)]
+        [RequiresDynamicCode(OracleConnectionFactory.DriverTrimWarning)]
         private OracleRepository(OracleRepositorySettings settings, string connectionString, SqlRepositoryOptions? options)
             : base(OracleDialect.Default, new OracleConnectionFactory(connectionString), true, typeof(OracleConnection), settings, options)
         {
