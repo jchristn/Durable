@@ -210,7 +210,10 @@ namespace Test.Shared
                 Database = string.IsNullOrWhiteSpace(configuration.DatabaseName) || configuration.DatabaseName == "durable_touchstone" ? "FREEPDB1" : configuration.DatabaseName,
                 Username = string.IsNullOrWhiteSpace(configuration.Username) ? "durable" : configuration.Username,
                 Password = configuration.Password ?? string.Empty,
-                Pooling = true
+                Pooling = true,
+                // ODP.NET self-tuning resizes each pooled connection's statement cache in the background, which makes
+                // process memory oscillate by megabytes; the stress suites measure memory growth, so keep it fixed.
+                AdditionalProperties = new System.Collections.Generic.Dictionary<string, string> { ["Self Tuning"] = "false" }
             };
 
             return settings.BuildConnectionString();

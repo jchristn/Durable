@@ -67,7 +67,9 @@ namespace Test.Shared
             Assert.Equal(16, table!.Columns.Count);
             Assert.Equal(new[] { "id" }, table.PrimaryKeyColumns);
             Assert.Equal("id", table.Columns[0].Name, StringComparer.OrdinalIgnoreCase);
-            Assert.False(table.FindColumn("name")!.IsNullable);
+            // A non-nullable string is NOT NULL except where the dialect declares string columns nullable (Oracle stores
+            // an empty string as NULL, so a NOT NULL column could not hold one); ColumnAllowsNull states which applies.
+            Assert.Equal(_Provider.Dialect.ColumnAllowsNull(EntityMetadata.For(typeof(MigAllTypes)).FindColumnByName("name")!), table.FindColumn("name")!.IsNullable);
             Assert.True(table.FindColumn("code")!.IsNullable);
             Assert.True(table.FindColumn("maybe")!.IsNullable);
             Assert.False(table.FindColumn("count")!.IsNullable);
@@ -116,39 +118,54 @@ namespace Test.Shared
             migrator.SyncSchema(new[] { typeof(MigWidgetV1) });
             await ExecuteAsync(factory, "INSERT INTO " + Q("mig_widgets") + " (" + Q("name") + ") VALUES ('existing')");
 
+            // The non-nullable string "label" has no derivable default. Where the dialect declares string columns nullable
+            // (Oracle, which stores an empty string as NULL) it is simply added as a nullable column; elsewhere it is
+            // reported as NOT NULL without a default and only added on request.
+            bool labelNullable = _Provider.Dialect.ColumnAllowsNull(EntityMetadata.For(typeof(MigWidgetV2)).FindColumnByName("label")!);
             SchemaDiff diff = migrator.DiffSchema(new[] { typeof(MigWidgetV2) });
             Assert.Empty(diff.DestructiveOperations);
             Assert.Contains(diff.Operations, o => o.Kind == MigrationOperationKind.AddColumn && o.ColumnName == "email");
             Assert.Contains(diff.Operations, o => o.Kind == MigrationOperationKind.AddColumn && o.ColumnName == "quantity" && o.Description.Contains("DEFAULT 0"));
             Assert.Contains(diff.Operations, o => o.Kind == MigrationOperationKind.AddColumn && o.ColumnName == "is_active");
             Assert.Contains(diff.Operations, o => o.Kind == MigrationOperationKind.CreateIndex && o.IndexName == "idx_mig_widgets_email");
-            Assert.DoesNotContain(diff.Operations, o => o.ColumnName == "label");
-            SchemaDifference label = Assert.Single(diff.Differences);
-            Assert.Equal(SchemaDifferenceKind.NotNullColumnWithoutDefault, label.Kind);
-            Assert.Equal("label", label.ColumnName);
+            if (labelNullable)
+            {
+                Assert.Contains(diff.Operations, o => o.Kind == MigrationOperationKind.AddColumn && o.ColumnName == "label" && o.Description.EndsWith(" NULL", StringComparison.Ordinal));
+                Assert.Empty(diff.Differences);
+            }
+            else
+            {
+                Assert.DoesNotContain(diff.Operations, o => o.ColumnName == "label");
+                SchemaDifference label = Assert.Single(diff.Differences);
+                Assert.Equal(SchemaDifferenceKind.NotNullColumnWithoutDefault, label.Kind);
+                Assert.Equal("label", label.ColumnName);
+            }
 
             SchemaSyncResult result = await migrator.SyncSchemaAsync(new[] { typeof(MigWidgetV2) });
-            Assert.Equal(4, result.AppliedOperations.Count);
-            Assert.Single(result.Differences);
-            Assert.False(result.IsInSync);
+            Assert.Equal(labelNullable ? 5 : 4, result.AppliedOperations.Count);
+            Assert.Equal(labelNullable ? 0 : 1, result.Differences.Count);
+            Assert.Equal(labelNullable, result.IsInSync);
             Assert.Equal(0L, ToInt64(await ScalarAsync(factory, "SELECT " + Q("quantity") + " FROM " + Q("mig_widgets"))));
             Assert.Equal(1L, ToInt64(await ScalarAsync(factory, "SELECT " + Q("is_active") + " FROM " + Q("mig_widgets"))));
             Assert.Null(await ScalarAsync(factory, "SELECT " + Q("email") + " FROM " + Q("mig_widgets")));
 
             SchemaSyncResult idempotent = migrator.SyncSchema(new[] { typeof(MigWidgetV2) });
             Assert.Empty(idempotent.AppliedOperations);
-            Assert.Single(idempotent.Differences);
+            Assert.Equal(labelNullable ? 0 : 1, idempotent.Differences.Count);
 
-            SchemaSyncResult nullable = migrator.SyncSchema(new[] { typeof(MigWidgetV2) }, new SchemaSyncOptions { AddUnresolvableNotNullColumnsAsNullable = true });
-            MigrationOperation added = Assert.Single(nullable.AppliedOperations);
-            Assert.Equal("label", added.ColumnName);
-            Assert.NotNull(added.Warning);
+            if (!labelNullable)
+            {
+                SchemaSyncResult nullable = migrator.SyncSchema(new[] { typeof(MigWidgetV2) }, new SchemaSyncOptions { AddUnresolvableNotNullColumnsAsNullable = true });
+                MigrationOperation added = Assert.Single(nullable.AppliedOperations);
+                Assert.Equal("label", added.ColumnName);
+                Assert.NotNull(added.Warning);
 
-            SchemaDiff after = migrator.DiffSchema(new[] { typeof(MigWidgetV2) });
-            Assert.Empty(after.Operations);
-            SchemaDifference nullability = Assert.Single(after.Differences);
-            Assert.Equal(SchemaDifferenceKind.NullabilityMismatch, nullability.Kind);
-            Assert.Equal("label", nullability.ColumnName);
+                SchemaDiff after = migrator.DiffSchema(new[] { typeof(MigWidgetV2) });
+                Assert.Empty(after.Operations);
+                SchemaDifference nullability = Assert.Single(after.Differences);
+                Assert.Equal(SchemaDifferenceKind.NullabilityMismatch, nullability.Kind);
+                Assert.Equal("label", nullability.ColumnName);
+            }
 
             SchemaSyncResult reverted = migrator.SyncSchema(new[] { typeof(MigWidgetV1) }, new SchemaSyncOptions { AllowDestructive = true });
             Assert.Equal(5, reverted.AppliedOperations.Count);
@@ -174,7 +191,11 @@ namespace Test.Shared
             SchemaDiff diff = await migrator.DiffSchemaAsync(new[] { typeof(MigTypedV2) });
             Assert.Empty(diff.Operations);
             Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.TypeMismatch && d.ColumnName == "count");
-            Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.NullabilityMismatch && d.ColumnName == "note" && d.Expected == "NULL" && d.Actual == "NOT NULL");
+            // V1's non-nullable string "note" is NOT NULL unless the dialect declares string columns nullable (Oracle).
+            if (_Provider.Dialect.ColumnAllowsNull(EntityMetadata.For(typeof(MigTypedV1)).FindColumnByName("note")!))
+                Assert.DoesNotContain(diff.Differences, d => d.ColumnName == "note");
+            else
+                Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.NullabilityMismatch && d.ColumnName == "note" && d.Expected == "NULL" && d.Actual == "NOT NULL");
             if (_Provider.DatabaseType == TestDatabaseType.Sqlite)
                 Assert.DoesNotContain(diff.Differences, d => d.ColumnName == "name");
             else

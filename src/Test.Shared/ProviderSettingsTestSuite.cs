@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Collections.Generic;
     using Durable.MySql;
+    using Durable.Oracle;
     using Durable.Postgres;
     using Durable.Sql;
     using Durable.Sqlite;
@@ -12,6 +13,7 @@ namespace Test.Shared
     using MySqlConnector;
     using Npgsql;
     using Xunit;
+    using OracleConnectionStringBuilder = global::Oracle.ManagedDataAccess.Client.OracleConnectionStringBuilder;
 
     /// <summary>
     /// The four providers' repository settings share one shape for pool and timeout settings (ConnectionTimeout,
@@ -173,6 +175,67 @@ namespace Test.Shared
         }
 
         /// <summary>
+        /// Oracle pool and timeout settings reach the ODP.NET connection string and parse back; host, port and service
+        /// become an EZConnect data source, a TNS alias or descriptor is kept in DataSource, and unknown keywords are kept.
+        /// </summary>
+        [Fact]
+        public void OracleSettingsMapToConnectionString()
+        {
+            OracleRepositorySettings settings = new OracleRepositorySettings
+            {
+                Hostname = "ora.example",
+                Port = 1522,
+                Username = "app",
+                Password = "secret",
+                Database = "ORCLPDB1",
+                ConnectionTimeout = 24,
+                MinPoolSize = 2,
+                MaxPoolSize = 40,
+                Pooling = false
+            };
+
+            OracleConnectionStringBuilder builder = new OracleConnectionStringBuilder(settings.BuildConnectionString());
+            Assert.Equal("ora.example:1522/ORCLPDB1", builder.DataSource);
+            Assert.Equal("app", builder.UserID);
+            Assert.Equal(24, builder.ConnectionTimeout);
+            Assert.Equal(2, builder.MinPoolSize);
+            Assert.Equal(40, builder.MaxPoolSize);
+            Assert.False(builder.Pooling);
+
+            OracleRepositorySettings parsed = OracleRepositorySettings.Parse(settings.BuildConnectionString() + ";Statement Cache Size=25");
+            Assert.Equal("ora.example", parsed.Hostname);
+            Assert.Equal(1522, parsed.Port);
+            Assert.Equal("ORCLPDB1", parsed.Database);
+            Assert.Null(parsed.DataSource);
+            Assert.Equal(24, parsed.ConnectionTimeout);
+            Assert.Equal(2, parsed.MinPoolSize);
+            Assert.Equal(40, parsed.MaxPoolSize);
+            Assert.False(parsed.Pooling);
+            Assert.NotNull(parsed.AdditionalProperties);
+            Assert.Equal(25, new OracleConnectionStringBuilder(parsed.BuildConnectionString()).StatementCacheSize);
+            Assert.Equal(RepositoryType.Oracle, parsed.Type);
+
+            OracleRepositorySettings defaults = OracleRepositorySettings.Parse("User Id=u;Password=p;Data Source=h/svc");
+            Assert.Equal("h", defaults.Hostname);
+            Assert.Null(defaults.Port);
+            Assert.Equal("svc", defaults.Database);
+            Assert.Null(defaults.ConnectionTimeout);
+            Assert.Null(defaults.MinPoolSize);
+            Assert.Null(defaults.MaxPoolSize);
+            Assert.Null(defaults.Pooling);
+
+            OracleRepositorySettings alias = OracleRepositorySettings.Parse("User Id=u;Password=p;Data Source=PRODDB");
+            Assert.Equal("PRODDB", alias.DataSource);
+            Assert.Null(alias.Hostname);
+            Assert.Equal("PRODDB", new OracleConnectionStringBuilder(alias.BuildConnectionString()).DataSource);
+            Assert.Throws<InvalidOperationException>(() => new OracleRepositorySettings { Hostname = "h" }.BuildConnectionString());
+
+            using OracleConnectionFactory factory = new OracleConnectionFactory(settings);
+            Assert.Equal(settings.BuildConnectionString(), factory.ConnectionString);
+            Assert.Throws<ArgumentNullException>(() => new OracleConnectionFactory((OracleRepositorySettings)null!));
+        }
+
+        /// <summary>
         /// SQLite's Pooling setting reaches the Microsoft.Data.Sqlite connection string and parses back, and the SQLite
         /// factory accepts settings.
         /// </summary>
@@ -208,7 +271,7 @@ namespace Test.Shared
                 { "Pooling", typeof(bool?) }
             };
 
-            foreach (Type settingsType in new[] { typeof(MySqlRepositorySettings), typeof(PostgresRepositorySettings), typeof(SqlServerRepositorySettings) })
+            foreach (Type settingsType in new[] { typeof(MySqlRepositorySettings), typeof(PostgresRepositorySettings), typeof(SqlServerRepositorySettings), typeof(OracleRepositorySettings) })
             {
                 Assert.True(typeof(RepositorySettings).IsAssignableFrom(settingsType));
                 foreach (KeyValuePair<string, Type> property in expected)

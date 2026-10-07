@@ -519,7 +519,9 @@ namespace Test.Shared
                 Assert.Contains("? Notes { get; set; }", code);
                 Assert.Contains("? Maybe { get; set; }", code);
                 Assert.Contains("byte[]? Data { get; set; }", code);
-                Assert.Contains("public string Name { get; set; } = string.Empty;", code);
+                // A dialect that declares string columns nullable (Oracle stores an empty string as NULL) scaffolds string?.
+                bool nameNullable = _Provider.Dialect.ColumnAllowsNull(EntityMetadata.For(typeof(CliScaffoldSource)).FindColumnByName("name")!);
+                Assert.Contains(nameNullable ? "public string? Name { get; set; }" : "public string Name { get; set; } = string.Empty;", code);
                 if (_Provider.DatabaseType != TestDatabaseType.Sqlite)
                 {
                     Assert.Contains("[Property(\"name\", Flags.String, 80)]", code);

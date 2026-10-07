@@ -432,7 +432,18 @@ namespace Durable.Sql
         {
             if (suffix.Length < 3 || suffix[suffix.Length - 1] != ')') return false;
             string inner = suffix.Substring(1, suffix.Length - 2);
-            return inner == "max" || int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out int _);
+            if (inner == "max") return true;
+
+            // A length may carry a unit after a space, as in Oracle's VARCHAR2(50 CHAR) or VARCHAR2(50 BYTE).
+            int space = inner.IndexOf(' ');
+            if (space > 0)
+            {
+                string unit = inner.Substring(space + 1);
+                if (unit.Length == 0 || !unit.All(char.IsLetter)) return false;
+                inner = inner.Substring(0, space);
+            }
+
+            return int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out int _);
         }
 
         private static string Truncate(string name, int maxLength)

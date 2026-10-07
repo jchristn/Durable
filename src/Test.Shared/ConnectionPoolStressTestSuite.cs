@@ -105,29 +105,35 @@ namespace Test.Shared
             int threadCount = 10;
             int totalQueries = queriesPerThread * threadCount;
 
-            long initialMemory = GC.GetTotalMemory(true);
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
-            Task[] tasks = new Task[threadCount];
-            for (int t = 0; t < threadCount; t++)
+            async Task RunThreadsAsync(int queries)
             {
-                int threadId = t;
-                tasks[t] = Task.Run(async () =>
+                Task[] tasks = new Task[threadCount];
+                for (int t = 0; t < threadCount; t++)
                 {
-                    for (int i = 0; i < queriesPerThread; i++)
+                    tasks[t] = Task.Run(async () =>
                     {
-                        Person[] people = (await repository.Query()
-                            .Where(p => p.Age > 25)
-                            .ExecuteAsync())
-                            .ToArray();
+                        for (int i = 0; i < queries; i++)
+                        {
+                            Person[] people = (await repository.Query()
+                                .Where(p => p.Age > 25)
+                                .ExecuteAsync())
+                                .ToArray();
 
-                        Assert.NotEmpty(people);
-                    }
-                });
+                            Assert.NotEmpty(people);
+                        }
+                    });
+                }
+
+                await Task.WhenAll(tasks);
             }
 
-            await Task.WhenAll(tasks);
+            // Warm-up pass: lets the driver pool grow to the workload's concurrency (ODP.NET keeps about 2 MB per pooled
+            // connection), so the measured pass reflects leaks rather than one-time pool growth.
+            await RunThreadsAsync(20);
 
+            long initialMemory = GC.GetTotalMemory(true);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            await RunThreadsAsync(queriesPerThread);
             stopwatch.Stop();
 
             long finalMemory = GC.GetTotalMemory(true);

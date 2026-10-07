@@ -541,7 +541,9 @@ namespace Test.Shared
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "SELECT COUNT(*) FROM information_schema.columns a CROSS JOIN information_schema.columns b CROSS JOIN information_schema.columns c";
                 case TestDatabaseType.SqlServer: return "WAITFOR DELAY '00:00:0" + seconds + "'";
-                case TestDatabaseType.Oracle: return "BEGIN DBMS_SESSION.SLEEP(" + seconds + "); END;";
+                // DBMS_SESSION.SLEEP ignores a cancel until it wakes up, and a SELECT sent as a non-query is never fetched,
+                // so run a long cross join inside PL/SQL, which Oracle interrupts with ORA-01013.
+                case TestDatabaseType.Oracle: return "DECLARE n NUMBER; BEGIN SELECT COUNT(*) INTO n FROM all_objects a CROSS JOIN all_objects b CROSS JOIN all_objects c; END;";
                 default: throw new NotSupportedException("No sleep statement for " + _Provider.DatabaseType);
             }
         }
