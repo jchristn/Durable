@@ -4,6 +4,34 @@ All notable changes to Durable are listed here, newest first. The format follows
 
 ## Current Version
 
+### v0.6.0 (2026-10-06)
+
+Entity mapping sources: Durable can map classes that cannot carry its attributes, such as generated code, models owned by another team or package, and models already annotated for another library. The work was prompted by a fork that needed to map classes carrying its own attribute system.
+
+**Core (`Durable`)**
+
+- `IEntityMappingSource`: `Describes(Type)`, `GetEntityAttribute(Type)`, `GetPropertyAttributes(Type, PropertyInfo)` and `GetCompositeIndexes(Type)`. A source answers with Durable's own attribute objects constructed in code, so queries, includes, migrations, the CLI and every backend treat a source-mapped class exactly like an attributed one. A class whose source returns no `PropertyAttribute` is convention-mapped.
+- `DurableMapping.Register<T>(source)` and `Register(Type, source)` register a source for one type; `DurableMapping.MappingSource` sets one for every type it `Describes`. Lookup order: per-type registration, then `MappingSource` when it describes the type, then the class's attributes. `DurableMapping.GetMappingSource(Type)` returns the source that applies, and `DurableMapping.AttributeSource` is the built-in attribute reader for sources that add to a class's attributes rather than replace them.
+- `EntityMetadata.MappingSource`: the source a type's metadata was built from.
+- A built type's mapping cannot change: registering a different source for it, per type or through `MappingSource`, throws `InvalidOperationException` naming the type. Registering the source it already uses is allowed.
+- Every mapping attribute is now read in one place (the attribute source) instead of through scattered `GetCustomAttribute` calls; behavior for attributed classes is unchanged.
+
+**Command-line tool (`Durable.Tool`)**
+
+- `--mapping-source <type>` (and `mappingSource` in `durable.json`) for `schema diff`, `schema sync` and `migrations add`: instantiates an `IEntityMappingSource` from your assembly, registers it for the classes it describes, and discovers those classes as entities alongside `[Entity]` types. A missing, ambiguous or unusable type is a command error.
+
+**Tests**
+
+- `MappingSourceTestSuite` (all four SQL providers): translated metadata, CRUD, composite and auto-increment keys, reference, collection and many-to-many includes, a version conflict, soft delete, a value converter, a generated default, indexes created by `InitializeTable`, an empty schema diff, the in-memory and LiteDB backends over the same classes, the global source, and the registration rules. The classes carry only test-only attributes translated by an adapter.
+- `DurableToolTestSuite` covers `--mapping-source`: discovery, schema diff, a generated migration that compiles and applies the mapped schema, and errors.
+- `Test.Aot` checks that a source-mapped class (with a converter attached by the source) round-trips through SQLite under Native AOT.
+
+**Breaking changes**
+
+None.
+
+## Previous Versions
+
 ### v0.5.0 (2026-10-06) - breaking
 
 **New packages**
@@ -164,8 +192,6 @@ Each item ends with how to migrate from 0.4.0.
 *Dependencies*
 
 - `Durable.Sqlite` moves to Microsoft.Data.Sqlite 10.0.12 and SQLitePCLRaw.bundle_e_sqlite3 3.0.5 (from 10.0.11 and 2.1.12). Update any direct SQLitePCLRaw 2.x references to 3.x.
-
-## Previous Versions
 
 ### v0.4.0 (2026-10-05) - breaking
 

@@ -209,6 +209,30 @@
             <typeparam name="T">The type of elements in the async enumerable.</typeparam>
             <returns>An empty async enumerable.</returns>
         </member>
+        <member name="T:Durable.AttributeMappingSource">
+            <summary>
+            The built-in mapping source: reads Durable's attributes from the entity class itself.
+            Exposed as <see cref="P:Durable.DurableMapping.AttributeSource"/> so adapters can combine it with their own translations.
+            Thread safety: stateless; safe to call concurrently.
+            </summary>
+        </member>
+        <member name="F:Durable.AttributeMappingSource.Instance">
+            <summary>
+            The shared instance.
+            </summary>
+        </member>
+        <member name="M:Durable.AttributeMappingSource.Describes(System.Type)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.AttributeMappingSource.GetEntityAttribute(System.Type)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.AttributeMappingSource.GetPropertyAttributes(System.Type,System.Reflection.PropertyInfo)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.AttributeMappingSource.GetCompositeIndexes(System.Type)">
+            <inheritdoc />
+        </member>
         <member name="T:Durable.ColumnMetadata">
             <summary>
             Immutable description of a mapped column, built once per entity type and cached.
@@ -1111,8 +1135,11 @@
             An entity without an <see cref="T:Durable.EntityAttribute"/> uses its class name (transformed by <see cref="P:Durable.DurableMapping.NamingConvention"/>) as the table name.
             An entity without any <see cref="T:Durable.PropertyAttribute"/> maps every public read/write property that is a scalar
             (not a navigation and not marked <see cref="T:Durable.NotMappedAttribute"/>), and uses <see cref="P:Durable.DurableMapping.KeyPropertyNames"/> to find the primary key.
+            Classes that cannot carry Durable's attributes can be mapped by an <see cref="T:Durable.IEntityMappingSource"/>, registered
+            per type with <see cref="M:Durable.DurableMapping.Register``1(Durable.IEntityMappingSource)"/> or for every type with <see cref="P:Durable.DurableMapping.MappingSource"/>.
             Configure these values once at startup, before the first repository for an entity is created: metadata is cached per type.
-            Thread safety: the setters are not synchronized with metadata construction; do not change them while repositories are in use.
+            Thread safety: the convention setters are not synchronized with metadata construction; do not change them while repositories
+            are in use. Mapping-source registration is thread-safe but, like the conventions, meant for startup.
             </summary>
         </member>
         <member name="P:Durable.DurableMapping.NamingConvention">
@@ -1132,6 +1159,26 @@
             Gets or sets whether a convention-mapped integer primary key is treated as database-generated. Default: true.
             </summary>
         </member>
+        <member name="P:Durable.DurableMapping.MappingSource">
+            <summary>
+            Gets or sets the mapping source consulted for every type that has no source registered with
+            <see cref="M:Durable.DurableMapping.Register``1(Durable.IEntityMappingSource)"/>. Durable uses it for a type only when its
+            <see cref="M:Durable.IEntityMappingSource.Describes(System.Type)"/> returns true, and reads the type's own attributes otherwise.
+            Default: null (attributes and conventions only).
+            Types whose metadata was built before the change keep the mapping they were built with; setting the same source
+            again is allowed.
+            </summary>
+            <exception cref="T:System.InvalidOperationException">
+            Thrown when the new source describes a type whose metadata has already been built from a different source.
+            </exception>
+        </member>
+        <member name="P:Durable.DurableMapping.AttributeSource">
+            <summary>
+            Gets the built-in mapping source, which reads Durable's attributes from the entity class.
+            Useful inside a custom <see cref="T:Durable.IEntityMappingSource"/> that adds to, rather than replaces, a class's own attributes.
+            Never null. Thread safety: stateless; safe to call concurrently.
+            </summary>
+        </member>
         <member name="M:Durable.DurableMapping.ApplyNamingConvention(System.String)">
             <summary>
             Applies the configured <see cref="P:Durable.DurableMapping.NamingConvention"/> to a name.
@@ -1139,6 +1186,41 @@
             <param name="name">Name to transform. Must not be null.</param>
             <returns>The transformed name.</returns>
             <exception cref="T:System.ArgumentNullException">Thrown when name is null.</exception>
+        </member>
+        <member name="M:Durable.DurableMapping.Register``1(Durable.IEntityMappingSource)">
+            <summary>
+            Registers the mapping source for one entity type. A registered source takes precedence over
+            <see cref="P:Durable.DurableMapping.MappingSource"/> and over the type's own attributes, and is used whether or not its
+            <see cref="M:Durable.IEntityMappingSource.Describes(System.Type)"/> returns true. Registering again for the same type replaces the
+            earlier source, as long as the type's metadata has not been built; registering the source a built type already
+            uses does nothing.
+            Call at startup, before the first repository, query or <see cref="M:Durable.EntityMetadata.For``1"/> call for the type.
+            Thread safety: thread-safe.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="source">Mapping source. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when source is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the type's metadata has already been built from a different source.</exception>
+        </member>
+        <member name="M:Durable.DurableMapping.Register(System.Type,Durable.IEntityMappingSource)">
+            <summary>
+            Registers the mapping source for one entity type. See <see cref="M:Durable.DurableMapping.Register``1(Durable.IEntityMappingSource)"/>.
+            Thread safety: thread-safe.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="source">Mapping source. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType or source is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the type's metadata has already been built from a different source.</exception>
+        </member>
+        <member name="M:Durable.DurableMapping.GetMappingSource(System.Type)">
+            <summary>
+            Gets the mapping source Durable uses for a type: its registered source, else <see cref="P:Durable.DurableMapping.MappingSource"/> when that
+            source describes the type, else <see cref="P:Durable.DurableMapping.AttributeSource"/>.
+            Thread safety: thread-safe.
+            </summary>
+            <param name="entityType">Entity or projection type. Must not be null.</param>
+            <returns>The mapping source. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
         </member>
         <member name="T:Durable.DurableResult`1">
             <summary>
@@ -1183,7 +1265,8 @@
         <member name="T:Durable.EntityMetadata">
             <summary>
             Cached, immutable mapping description for an entity (or projection) type.
-            Built once per type on first use from attributes, falling back to <see cref="T:Durable.DurableMapping"/> conventions.
+            Built once per type on first use from the type's mapping source (its attributes, unless an <see cref="T:Durable.IEntityMappingSource"/>
+            is registered with <see cref="T:Durable.DurableMapping"/>), falling back to <see cref="T:Durable.DurableMapping"/> conventions.
             Thread safety: <see cref="M:Durable.EntityMetadata.For(System.Type)"/> is thread-safe; instances are immutable and safe to share.
             </summary>
         </member>
@@ -1198,6 +1281,12 @@
         <member name="P:Durable.EntityMetadata.EntityType">
             <summary>
             Gets the described CLR type. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.EntityMetadata.MappingSource">
+            <summary>
+            Gets the mapping source this metadata was built from: a source registered with <see cref="T:Durable.DurableMapping"/>, or
+            <see cref="P:Durable.DurableMapping.AttributeSource"/> when the type is described by its own attributes. Never null.
             </summary>
         </member>
         <member name="P:Durable.EntityMetadata.TableName">
@@ -1709,6 +1798,56 @@
             <summary>
             Gets the results of the query execution.
             </summary>
+        </member>
+        <member name="T:Durable.IEntityMappingSource">
+            <summary>
+            Supplies the mapping of entity types that cannot carry Durable's attributes (generated code, models owned by
+            another team, models already annotated with another attribute system). A source answers with the same attribute
+            objects Durable reads from classes (<see cref="T:Durable.EntityAttribute"/>, <see cref="T:Durable.PropertyAttribute"/>,
+            <see cref="T:Durable.ForeignKeyAttribute"/> and so on), constructed in code, so an adapter is a translation table rather than
+            a second mapping language.
+            Register a source with <see cref="M:Durable.DurableMapping.Register``1(Durable.IEntityMappingSource)"/> or
+            <see cref="P:Durable.DurableMapping.MappingSource"/> at startup, before the first repository for a mapped type is used.
+            Thread safety: Durable calls a source at most once per type, while building that type's cached metadata, and may
+            do so from any thread; implementations must be safe to call concurrently for different types.
+            </summary>
+        </member>
+        <member name="M:Durable.IEntityMappingSource.Describes(System.Type)">
+            <summary>
+            Determines whether this source supplies the mapping for a type. When false, Durable reads the type's own
+            attributes instead. A source registered as <see cref="P:Durable.DurableMapping.MappingSource"/> is asked about every
+            entity and projection type, so it must return false for types it does not know.
+            </summary>
+            <param name="entityType">Entity or projection type. Never null.</param>
+            <returns>True when this source maps the type.</returns>
+        </member>
+        <member name="M:Durable.IEntityMappingSource.GetEntityAttribute(System.Type)">
+            <summary>
+            Gets the table (or collection) mapping of a type this source describes.
+            </summary>
+            <param name="entityType">Entity type. Never null.</param>
+            <returns>The entity attribute, or null to use the class name transformed by <see cref="P:Durable.DurableMapping.NamingConvention"/>.</returns>
+        </member>
+        <member name="M:Durable.IEntityMappingSource.GetPropertyAttributes(System.Type,System.Reflection.PropertyInfo)">
+            <summary>
+            Gets the mapping attributes of one property of a type this source describes. Durable reads
+            <see cref="T:Durable.PropertyAttribute"/>, <see cref="T:Durable.ForeignKeyAttribute"/>, <see cref="T:Durable.NavigationPropertyAttribute"/>,
+            <see cref="T:Durable.InverseNavigationPropertyAttribute"/>, <see cref="T:Durable.ManyToManyNavigationPropertyAttribute"/>,
+            <see cref="T:Durable.NotMappedAttribute"/>, <see cref="T:Durable.ValueConverterAttribute"/>, <see cref="T:Durable.VersionColumnAttribute"/>,
+            <see cref="T:Durable.SoftDeleteAttribute"/>, <see cref="T:Durable.IndexAttribute"/> and <see cref="T:Durable.DefaultValueAttribute"/>; any other
+            attribute is ignored. When no property of the type returns a <see cref="T:Durable.PropertyAttribute"/>, the type is mapped
+            by convention exactly as an unannotated class is.
+            </summary>
+            <param name="entityType">Entity type. Never null.</param>
+            <param name="property">Public instance property of <paramref name="entityType"/>. Never null.</param>
+            <returns>The property's mapping attributes; null or empty when it has none.</returns>
+        </member>
+        <member name="M:Durable.IEntityMappingSource.GetCompositeIndexes(System.Type)">
+            <summary>
+            Gets the multi-column indexes of a type this source describes.
+            </summary>
+            <param name="entityType">Entity type. Never null.</param>
+            <returns>The composite indexes; null or empty when there are none.</returns>
         </member>
         <member name="T:Durable.IGroupedQueryBuilder`2">
             <summary>

@@ -25,7 +25,7 @@ namespace Durable.Tool
         /// Options locating the user's code with entity discovery.
         /// </summary>
         public static OptionGroup ProjectWithEntities => new OptionGroup(
-            "Project", CliOptions.Project, CliOptions.Assembly, CliOptions.Framework, CliOptions.Configuration, CliOptions.NoBuild, CliOptions.EntitiesNamespace, CliOptions.Entities);
+            "Project", CliOptions.Project, CliOptions.Assembly, CliOptions.Framework, CliOptions.Configuration, CliOptions.NoBuild, CliOptions.EntitiesNamespace, CliOptions.Entities, CliOptions.MappingSource);
 
         /// <summary>
         /// Options locating the user's project (no discovery), used by scaffold for the output directory and namespace.

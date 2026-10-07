@@ -134,20 +134,38 @@ namespace Durable.Tool
         }
 
         /// <summary>
-        /// Loads the user's entity types, honoring --entities and --entities-namespace.
+        /// Loads the user's entity types, honoring --entities, --entities-namespace and --mapping-source. With a mapping source,
+        /// the source is registered (<see cref="DurableMapping.Register(Type, IEntityMappingSource)"/>) for every type it
+        /// describes before any metadata is built.
         /// </summary>
         /// <param name="token">Cancellation token.</param>
         /// <returns>The entity types (never empty).</returns>
-        /// <exception cref="DurableCliException">Thrown when no entity types are found.</exception>
+        /// <exception cref="DurableCliException">Thrown when no entity types are found or the mapping source cannot be used.</exception>
         public async Task<List<Type>> LoadEntitiesAsync(CancellationToken token)
         {
             UserAssembly assembly = await LoadAssemblyAsync(token).ConfigureAwait(false);
-            List<Type> entities = assembly.DiscoverEntities(Settings.Entities, Settings.EntitiesNamespace);
+            IEntityMappingSource? mappingSource = Settings.MappingSource != null ? assembly.CreateMappingSource(Settings.MappingSource) : null;
+            List<Type> entities = assembly.DiscoverEntities(Settings.Entities, Settings.EntitiesNamespace, mappingSource);
+            if (mappingSource != null)
+            {
+                foreach (Type entity in entities.Where(mappingSource.Describes))
+                {
+                    try
+                    {
+                        DurableMapping.Register(entity, mappingSource);
+                    }
+                    catch (InvalidOperationException e)
+                    {
+                        throw new DurableCliException(e.Message);
+                    }
+                }
+            }
+
             if (entities.Count == 0)
             {
                 throw new DurableCliException("No entity types found in " + Path.GetFileName(assembly.Path) +
                     (Settings.EntitiesNamespace != null ? " (namespace " + Settings.EntitiesNamespace + ")" : string.Empty) +
-                    ". Entity types are classes with [Entity(\"table\")]; or list them with --entities.");
+                    ". Entity types are classes with [Entity(\"table\")] or described by --mapping-source; or list them with --entities.");
             }
 
             if (Settings.Verbose) Error.WriteLine("Entity types: " + string.Join(", ", entities.Select(t => t.FullName)));

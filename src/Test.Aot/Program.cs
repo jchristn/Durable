@@ -44,6 +44,15 @@ namespace Test.Aot
                 runner.Fail("[inmemory] scenario aborted", ex);
             }
 
+            try
+            {
+                await MappingSourceScenario.RunAsync(runner).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                runner.Fail("[mapping] scenario aborted", ex);
+            }
+
 #if NET9_0_OR_GREATER
             try
             {

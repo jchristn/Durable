@@ -22,6 +22,7 @@ src/
 │   ├── IRepository.cs         # Neutral repository interface (incl. Capabilities, ConflictResolver)
 │   ├── IQueryBuilder.cs       # Neutral LINQ query builder interface
 │   ├── EntityMetadata.cs      # Cached per-type mapping (columns, keys, navigations, accessors); RequiredMemberTypes for AOT
+│   ├── IEntityMappingSource.cs # Mapping from somewhere other than the class's attributes (DurableMapping.Register / MappingSource)
 │   ├── DurableJson.cs         # AOT-safe JSON helpers (source-generated contexts for JSON columns)
 │   ├── AmbientTransactionScope.cs # Durable's AsyncLocal ambient transaction (not System.Transactions)
 │   ├── buildTransitive/       # Durable.props (NullabilityInfoContextSupport=true for trimmed apps)
@@ -119,6 +120,7 @@ src/
    - `[SoftDelete]`: Soft-delete marker column
    - `[NotMapped]`: Exclude a property from convention mapping
    - Classes without `[Property]` attributes are mapped by convention (`DurableMapping`)
+   - Classes that cannot carry these attributes are mapped by an `IEntityMappingSource` (registered with `DurableMapping.Register<T>` or `DurableMapping.MappingSource`) that returns the same attribute objects; `EntityMetadata` reads every mapping attribute through its type's source (`DurableMapping.GetMappingSource`), so never call `GetCustomAttribute` for mapping anywhere else
 
 ### Database-Specific Implementations
 

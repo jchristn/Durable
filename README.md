@@ -414,6 +414,53 @@ public class Article
 
 Converters also apply to values compared with the column in `Where` predicates.
 
+### Mapping classes you don't own
+
+Some classes can't carry Durable's attributes: generated code, models owned by another team or package, or models already annotated for another library. For those, implement `IEntityMappingSource` and register it once at startup. A source answers with the same attribute objects you would otherwise write on the class (`EntityAttribute`, `PropertyAttribute`, `ForeignKeyAttribute`, `NavigationPropertyAttribute`, `VersionColumnAttribute` and the rest), constructed in code, so an adapter is a translation table rather than a second mapping language. Everything downstream (queries, includes, migrations, the CLI, every backend) uses the result exactly as if the attributes were on the class.
+
+```csharp
+// Their model, which you can't change
+[Table("customers")]
+public class Customer
+{
+    [Column("customer_id", IsKey = true)] public int Id { get; set; }
+    [Column("display_name")] public string Name { get; set; } = "";
+}
+
+public class TheirAttributesMappingSource : IEntityMappingSource
+{
+    public bool Describes(Type type) => type.GetCustomAttribute<TableAttribute>() != null;
+
+    public EntityAttribute? GetEntityAttribute(Type type) =>
+        new EntityAttribute(type.GetCustomAttribute<TableAttribute>()!.Name);
+
+    public IEnumerable<Attribute>? GetPropertyAttributes(Type type, PropertyInfo property)
+    {
+        ColumnAttribute? column = property.GetCustomAttribute<ColumnAttribute>();
+        if (column == null) return null;   // not mapped
+        Flags flags = column.IsKey ? Flags.PrimaryKey | Flags.AutoIncrement : Flags.None;
+        return new Attribute[] { new PropertyAttribute(column.Name, flags) };
+    }
+
+    public IEnumerable<CompositeIndexAttribute>? GetCompositeIndexes(Type type) => null;
+}
+
+// Startup, before the first repository or query for these types
+DurableMapping.Register<Customer>(new TheirAttributesMappingSource());       // one type
+DurableMapping.MappingSource = new TheirAttributesMappingSource();           // or every type the source Describes
+```
+
+Rules:
+
+- **Lookup order.** A source registered for the type with `Register<T>` / `Register(Type, source)` wins; otherwise `DurableMapping.MappingSource` is used when its `Describes(type)` returns true; otherwise Durable reads the class's own attributes. `DurableMapping.GetMappingSource(type)` tells you which one applies, and `EntityMetadata.For<T>().MappingSource` which one was used.
+- **`Describes` matters for the global source.** `MappingSource` is asked about every entity and projection type, so return false for types you don't know; they keep their own attributes.
+- **Conventions still apply.** If no property gets a `PropertyAttribute`, the class is convention-mapped exactly like an unannotated class (`Id` key, `DurableMapping.NamingConvention`, `NotMappedAttribute` to skip a property).
+- **Mapping is fixed once used.** Metadata is cached per type, so registering a different source for a type whose metadata is already built throws `InvalidOperationException` naming the type. Registering the source it already uses again is allowed.
+- **Combine instead of replace.** `DurableMapping.AttributeSource` is the built-in attribute reader; call it from your source to keep a class's Durable attributes and add your own.
+- **Thread safety.** Registration is thread-safe but meant for startup. Durable calls a source only while building a type's metadata, once per type, possibly from any thread.
+
+The CLI finds source-mapped classes with `--mapping-source` (see [Command-Line Tool](#command-line-tool)).
+
 ## CRUD Operations
 
 Every operation has a sync and an async form; the async form takes a `CancellationToken`. Every method takes an optional `ITransaction`.
@@ -893,6 +940,7 @@ Common options:
 | `--assembly <path>` | Use a built `.dll` instead of building |
 | `--framework <tfm>`, `--configuration <name>`, `--no-build` | Build control (multi-targeted projects need `--framework`) |
 | `--migrations-namespace <ns>`, `--entities-namespace <ns>`, `--entities A,B` | Limit discovery of migrations and `[Entity]` types |
+| `--mapping-source <type>` | An `IEntityMappingSource` class in your assembly (full or simple name, public parameterless constructor). It is registered for the classes it describes, which are then discovered as entities alongside `[Entity]` types (`schema diff`, `schema sync`, `migrations add`). See [Mapping classes you don't own](#mapping-classes-you-dont-own) |
 | `--config <path>` | Settings file (default `./durable.json`) |
 | `--verbose` | Build output, executed SQL and stack traces |
 
@@ -910,7 +958,7 @@ Common options:
 }
 ```
 
-Other keys: `assembly`, `configuration`, `entities` (array). Exit codes: `0` success, `1` command error (message on stderr), `2` unexpected failure. Scaffolded code assumes nullable reference types are enabled; type mapping is approximate for SQLite `TEXT` affinity, unusual decimal precision and JSON columns, and unknown types are emitted as comments.
+Other keys: `assembly`, `configuration`, `entities` (array), `mappingSource`. Exit codes: `0` success, `1` command error (message on stderr), `2` unexpected failure. Scaffolded code assumes nullable reference types are enabled; type mapping is approximate for SQLite `TEXT` affinity, unusual decimal precision and JSON columns, and unknown types are emitted as comments.
 
 ## Diagnostics
 
@@ -1484,6 +1532,8 @@ EntityMetadata.For<OrderLine>();   // OrderLine is only reached through Order.Li
 ```
 
 If you forget, Durable throws an `InvalidOperationException` naming the type and this fix instead of silently mapping nothing.
+
+Mapping sources work under Native AOT. Register the type with `DurableMapping.Register<T>(source)` (the type argument keeps its members), and pass converter, provider and related types to the attribute constructors as `typeof(X)` literals, as you would on a class, so the trimmer keeps what they need.
 
 ### JSON columns
 

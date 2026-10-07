@@ -11,7 +11,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.LiteDb</PackageId>
 		<Title>Durable.LiteDb</Title>
-		<Version>0.5.0</Version>
+		<Version>0.6.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>LiteDB backend for Durable ORM: store entities in an embedded single-file (or in-memory) LiteDB document database with the full IRepository surface, LINQ predicates pushed down to LiteDB indexes where the semantics match C#, exact value round-trips, includes, optimistic concurrency and async-safe transactions.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;litedb;nosql;document;embedded;repository</PackageTags>
-		<PackageReleaseNotes>0.5.0: initial release. LiteDbBackend.Create/CreateAsync with LiteDbRepositorySettings.ForInMemory/ForFile/ForDatabase; lossless value encoding; push-down of comparisons, null checks and IN to LiteDB indexes; transactions across await; QueryPlanned/LastQueryPlan; Clear/ClearAsync, GetStoredRows; Native AOT verified (.NET 9+ in CI); passes the full conformance kit.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.6.0: released with Durable 0.6.0 (entity mapping sources); no changes in this package. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

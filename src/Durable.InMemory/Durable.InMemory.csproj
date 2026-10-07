@@ -10,7 +10,7 @@
 		<DocumentationFile>Durable.InMemory.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.InMemory</Title>
-		<Version>0.5.0</Version>
+		<Version>0.6.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>In-memory backend for Durable ORM: the reference IRepositoryBackend implementation with snapshot-isolation transactions, value converters, JSON columns, includes and full LINQ query evaluation. Ideal for tests and prototyping.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;inmemory;in-memory;testing;repository</PackageTags>
-		<PackageReleaseNotes>0.5.0 (breaking): unified backend convention: InMemoryBackend.Create/CreateAsync(InMemoryRepositorySettings) replaces the constructors (Capabilities, JsonOptions on the settings); Store replaced by the typed Backend property; the backend is IDisposable/IAsyncDisposable (disposing discards data); typed BeginTransactionAsync; Clear/ClearAsync (per type returns the row count); evaluator moved to core QueryEvaluator&lt;TRow&gt;; Native AOT verified. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.6.0: released with Durable 0.6.0 (entity mapping sources); no changes in this package. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

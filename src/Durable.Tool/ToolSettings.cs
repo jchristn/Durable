@@ -42,6 +42,9 @@ namespace Durable.Tool
         /// <summary>Gets the explicit entity type names; empty to discover [Entity] types.</summary>
         public List<string> Entities { get; private set; } = new List<string>();
 
+        /// <summary>Gets the mapping source type name, or null to map entities by their attributes only.</summary>
+        public string? MappingSource { get; private set; }
+
         /// <summary>Gets the migration history table, or null for the default.</summary>
         public string? HistoryTable { get; private set; }
 
@@ -88,6 +91,7 @@ namespace Durable.Tool
             settings.NoBuild = arguments.HasFlag(CliOptions.NoBuild);
             settings.MigrationsNamespace = Pick(arguments.GetValue(CliOptions.MigrationsNamespace), null, file.MigrationsNamespace);
             settings.EntitiesNamespace = Pick(arguments.GetValue(CliOptions.EntitiesNamespace), null, file.EntitiesNamespace);
+            settings.MappingSource = Pick(arguments.GetValue(CliOptions.MappingSource), null, file.MappingSource);
             settings.HistoryTable = Pick(arguments.GetValue(CliOptions.HistoryTable), null, file.HistoryTable);
             settings.Verbose = arguments.HasFlag(CliOptions.Verbose);
 

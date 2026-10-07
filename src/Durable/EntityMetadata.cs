@@ -10,7 +10,8 @@ namespace Durable
 
     /// <summary>
     /// Cached, immutable mapping description for an entity (or projection) type.
-    /// Built once per type on first use from attributes, falling back to <see cref="DurableMapping"/> conventions.
+    /// Built once per type on first use from the type's mapping source (its attributes, unless an <see cref="IEntityMappingSource"/>
+    /// is registered with <see cref="DurableMapping"/>), falling back to <see cref="DurableMapping"/> conventions.
     /// Thread safety: <see cref="For(Type)"/> is thread-safe; instances are immutable and safe to share.
     /// </summary>
     public sealed class EntityMetadata
@@ -31,6 +32,12 @@ namespace Durable
         /// </summary>
         [DynamicallyAccessedMembers(RequiredMemberTypes)]
         public Type EntityType { get; }
+
+        /// <summary>
+        /// Gets the mapping source this metadata was built from: a source registered with <see cref="DurableMapping"/>, or
+        /// <see cref="DurableMapping.AttributeSource"/> when the type is described by its own attributes. Never null.
+        /// </summary>
+        public IEntityMappingSource MappingSource { get; }
 
         /// <summary>
         /// Gets the table (or collection) name. Never null.
@@ -130,11 +137,17 @@ namespace Durable
                 throw new InvalidOperationException(TrimmedTypeMessage(type), ex);
             }
 
-            EntityAttribute? entityAttribute = type.GetCustomAttribute<EntityAttribute>();
+            IEntityMappingSource source = DurableMapping.GetMappingSource(type);
+            MappingSource = source;
+            EntityAttribute? entityAttribute = source.GetEntityAttribute(type);
             HasEntityAttribute = entityAttribute != null;
             TableName = entityAttribute?.Name ?? DurableMapping.ApplyNamingConvention(type.Name);
 
-            IsConventionMapped = !properties.Any(p => p.GetCustomAttribute<PropertyAttribute>() != null);
+            Dictionary<PropertyInfo, Attribute[]> attributes = new Dictionary<PropertyInfo, Attribute[]>();
+            foreach (PropertyInfo property in properties)
+                attributes[property] = source.GetPropertyAttributes(type, property)?.Where(a => a != null).ToArray() ?? Array.Empty<Attribute>();
+
+            IsConventionMapped = !attributes.Values.Any(a => Find<PropertyAttribute>(a) != null);
 
             NullabilityInfoContext? nullability = _NullabilitySupported ? new NullabilityInfoContext() : null;
             List<ColumnMetadata> columns = new List<ColumnMetadata>();
@@ -142,14 +155,14 @@ namespace Durable
 
             foreach (PropertyInfo property in properties)
             {
-                NavigationMetadata? navigation = BuildNavigation(type, property);
+                NavigationMetadata? navigation = BuildNavigation(type, property, attributes[property]);
                 if (navigation != null)
                 {
                     navigations.Add(navigation);
                     continue;
                 }
 
-                ColumnMetadata? column = BuildColumn(type, property, nullability, IsConventionMapped);
+                ColumnMetadata? column = BuildColumn(type, property, attributes[property], nullability, IsConventionMapped);
                 if (column != null) columns.Add(column);
             }
 
@@ -157,7 +170,7 @@ namespace Durable
             KeyColumns = columns
                 .Where(c => c.IsPrimaryKey)
                 .Select((c, i) => new { Column = c, Declared = i })
-                .OrderBy(x => x.Column.Property.GetCustomAttribute<PropertyAttribute>()?.KeyOrder ?? 0)
+                .OrderBy(x => Find<PropertyAttribute>(attributes[x.Column.Property])?.KeyOrder ?? 0)
                 .ThenBy(x => x.Declared)
                 .Select(x => x.Column)
                 .ToList();
@@ -174,7 +187,7 @@ namespace Durable
             VersionColumn = versions.FirstOrDefault();
             if (VersionColumn != null)
             {
-                VersionColumnAttribute versionAttribute = VersionColumn.Property.GetCustomAttribute<VersionColumnAttribute>()!;
+                VersionColumnAttribute versionAttribute = Find<VersionColumnAttribute>(attributes[VersionColumn.Property])!;
                 VersionInfo = new VersionColumnInfo(VersionColumn.Name, VersionColumn.Property, versionAttribute.Type);
             }
 
@@ -190,7 +203,7 @@ namespace Durable
             }
 
             Navigations = navigations;
-            CompositeIndexes = type.GetCustomAttributes<CompositeIndexAttribute>(true).ToList();
+            CompositeIndexes = source.GetCompositeIndexes(type)?.Where(i => i != null).ToList() ?? new List<CompositeIndexAttribute>();
 
             _ByColumnName = new Dictionary<string, ColumnMetadata>(StringComparer.OrdinalIgnoreCase);
             _ByPropertyName = new Dictionary<string, ColumnMetadata>(StringComparer.OrdinalIgnoreCase);
@@ -405,18 +418,28 @@ namespace Durable
 
         #region Private-Methods
 
-        [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "A navigation target type is read from the navigation property's type, which trimming cannot follow. Targets stay intact when the application references them through an annotated path (a repository or query type argument, [ForeignKey(typeof(X))] / [ManyToManyNavigationProperty(typeof(J))], or EntityMetadata.For<X>()), as documented for Native AOT; NavigationMetadata reports a target whose members were removed with an explicit error instead of failing silently.")]
-        private static NavigationMetadata? BuildNavigation([DynamicallyAccessedMembers(RequiredMemberTypes)] Type owner, PropertyInfo property)
+        internal static EntityMetadata? TryGetBuilt(Type type)
         {
-            NavigationPropertyAttribute? reference = property.GetCustomAttribute<NavigationPropertyAttribute>();
+            return _Cache.TryGetValue(type, out Lazy<EntityMetadata>? lazy) && lazy.IsValueCreated ? lazy.Value : null;
+        }
+
+        internal static IEnumerable<EntityMetadata> AllBuilt()
+        {
+            return _Cache.Values.Where(l => l.IsValueCreated).Select(l => l.Value);
+        }
+
+        [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "A navigation target type is read from the navigation property's type, which trimming cannot follow. Targets stay intact when the application references them through an annotated path (a repository or query type argument, [ForeignKey(typeof(X))] / [ManyToManyNavigationProperty(typeof(J))], or EntityMetadata.For<X>()), as documented for Native AOT; NavigationMetadata reports a target whose members were removed with an explicit error instead of failing silently.")]
+        private static NavigationMetadata? BuildNavigation([DynamicallyAccessedMembers(RequiredMemberTypes)] Type owner, PropertyInfo property, Attribute[] attributes)
+        {
+            NavigationPropertyAttribute? reference = Find<NavigationPropertyAttribute>(attributes);
             if (reference != null)
                 return new NavigationMetadata(property, NavigationKind.Reference, owner, property.PropertyType, reference.ForeignKeyProperty, null, null);
 
-            InverseNavigationPropertyAttribute? inverse = property.GetCustomAttribute<InverseNavigationPropertyAttribute>();
+            InverseNavigationPropertyAttribute? inverse = Find<InverseNavigationPropertyAttribute>(attributes);
             if (inverse != null)
                 return new NavigationMetadata(property, NavigationKind.Collection, owner, GetElementType(owner, property), inverse.InverseForeignKeyProperty, null, null);
 
-            ManyToManyNavigationPropertyAttribute? manyToMany = property.GetCustomAttribute<ManyToManyNavigationPropertyAttribute>();
+            ManyToManyNavigationPropertyAttribute? manyToMany = Find<ManyToManyNavigationPropertyAttribute>(attributes);
             if (manyToMany != null)
                 return new NavigationMetadata(property, NavigationKind.ManyToMany, owner, GetElementType(owner, property), manyToMany.ThisEntityForeignKeyProperty, manyToMany.JunctionEntityType, manyToMany.RelatedEntityForeignKeyProperty);
 
@@ -439,10 +462,10 @@ namespace Durable
             throw new InvalidOperationException("Collection navigation " + owner.Name + "." + property.Name + " must be a generic collection type such as List<T>.");
         }
 
-        private static ColumnMetadata? BuildColumn(Type owner, PropertyInfo property, NullabilityInfoContext? nullability, bool conventionMapped)
+        private static ColumnMetadata? BuildColumn(Type owner, PropertyInfo property, Attribute[] attributes, NullabilityInfoContext? nullability, bool conventionMapped)
         {
-            PropertyAttribute? attribute = property.GetCustomAttribute<PropertyAttribute>();
-            ValueConverterAttribute? converterAttribute = property.GetCustomAttribute<ValueConverterAttribute>();
+            PropertyAttribute? attribute = Find<PropertyAttribute>(attributes);
+            ValueConverterAttribute? converterAttribute = Find<ValueConverterAttribute>(attributes);
 
             string name;
             Flags flags;
@@ -457,7 +480,7 @@ namespace Durable
             else
             {
                 if (!conventionMapped) return null;
-                if (property.GetCustomAttribute<NotMappedAttribute>() != null) return null;
+                if (Find<NotMappedAttribute>(attributes) != null) return null;
                 if (!property.CanRead || !property.CanWrite) return null;
                 if (converterAttribute == null && !IsScalarType(property.PropertyType)) return null;
 
@@ -511,12 +534,12 @@ namespace Durable
                 isAutoIncrement,
                 isNullable,
                 isJson,
-                property.GetCustomAttribute<VersionColumnAttribute>() != null,
-                property.GetCustomAttribute<SoftDeleteAttribute>() != null,
+                Find<VersionColumnAttribute>(attributes) != null,
+                Find<SoftDeleteAttribute>(attributes) != null,
                 converter,
-                property.GetCustomAttribute<ForeignKeyAttribute>(),
-                BuildDefaultValue(property),
-                property.GetCustomAttributes<IndexAttribute>(true).ToList());
+                Find<ForeignKeyAttribute>(attributes),
+                BuildDefaultValue(attributes),
+                attributes.OfType<IndexAttribute>().ToList());
         }
 
         private static bool IsConventionKey(Type owner, PropertyInfo property)
@@ -530,9 +553,19 @@ namespace Durable
             return false;
         }
 
-        private static DefaultValueProviderInfo? BuildDefaultValue(PropertyInfo property)
+        private static TAttribute? Find<TAttribute>(Attribute[] attributes) where TAttribute : Attribute
         {
-            DefaultValueAttribute? attribute = property.GetCustomAttribute<DefaultValueAttribute>();
+            for (int i = 0; i < attributes.Length; i++)
+            {
+                if (attributes[i] is TAttribute match) return match;
+            }
+
+            return null;
+        }
+
+        private static DefaultValueProviderInfo? BuildDefaultValue(Attribute[] attributes)
+        {
+            DefaultValueAttribute? attribute = Find<DefaultValueAttribute>(attributes);
             if (attribute == null) return null;
 
             IDefaultValueProvider? provider = null;

@@ -15,6 +15,7 @@ namespace Test.Shared
     using Durable.Tool;
     using Test.Shared.CliFixtures.Entities;
     using Test.Shared.CliFixtures.Generated;
+    using Test.Shared.CliFixtures.Mapped;
     using Test.Shared.CliFixtures.Scaffold;
     using Xunit;
 
@@ -31,6 +32,7 @@ namespace Test.Shared
         private const string _MigrationsNamespace = "Test.Shared.CliFixtures.Migrations";
         private const string _EntitiesNamespace = "Test.Shared.CliFixtures.Entities";
         private const string _GeneratedNamespace = "Test.Shared.CliFixtures.Generated";
+        private const string _MappedNamespace = "Test.Shared.CliFixtures.Mapped";
         private const string _HistoryTable = "__durable_cli_history";
         private const string _First = "20260101000001_CreateItems";
         private const string _Second = "20260101000002_AddNote";
@@ -77,7 +79,7 @@ namespace Test.Shared
             CliRunResult version = await RunAsync(null, "--version");
             Expect(version, ExitCodes.Success);
             Assert.Equal(DurableCli.Version, version.Output.Trim());
-            Assert.StartsWith("0.5.0", DurableCli.Version);
+            Assert.StartsWith("0.6.0", DurableCli.Version);
 
             CliRunResult migrate = await RunAsync(null, "migrate", "--help");
             Expect(migrate, ExitCodes.Success);
@@ -94,6 +96,7 @@ namespace Test.Shared
             CliRunResult sync = await RunAsync(null, "schema", "sync", "-h");
             Expect(sync, ExitCodes.Success);
             Assert.Contains("--dry-run", sync.Output);
+            Assert.Contains("--mapping-source <type>", sync.Output);
             Assert.Contains("--allow-destructive", sync.Output);
 
             CliRunResult group = await RunAsync(null, "migrations", "--help");
@@ -333,6 +336,60 @@ namespace Test.Shared
             finally
             {
                 await DropTablesAsync(factory, "cli_customers", "cli_orders");
+            }
+        }
+
+        /// <summary>
+        /// --mapping-source registers an IEntityMappingSource from the user's assembly: the classes it describes are discovered
+        /// as entities without [Entity], schema diff shows the translated table, migrations add generates a migration that
+        /// compiles and applies exactly that schema, and a bad source type is reported.
+        /// </summary>
+        [Fact]
+        public async Task MappingSource_DiscoversAndMigratesSourceMappedTypes()
+        {
+            await using IConnectionFactory factory = _Provider.CreateConnectionFactory();
+            const string history = "__durable_cli_mapped_history";
+            await DropTablesAsync(factory, "cli_mapped_gadgets", history);
+            string directory = CreateTempDirectory();
+            try
+            {
+                await AssertErrorAsync(Database("schema", "diff", "--assembly", _AssemblyPath, "--entities-namespace", _MappedNamespace), "No entity types found");
+                await AssertErrorAsync(Database("schema", "diff", "--assembly", _AssemblyPath, "--mapping-source", "NoSuchSource"), "Mapping source type 'NoSuchSource' was not found");
+                await AssertErrorAsync(Database("schema", "diff", "--assembly", _AssemblyPath, "--mapping-source", "CliMappedGadget"), "must be a concrete IEntityMappingSource class");
+
+                CliRunResult diff = await RunAsync(null, Database("schema", "diff", "--assembly", _AssemblyPath, "--entities-namespace", _MappedNamespace, "--mapping-source", nameof(MapAttributeMappingSource)));
+                Expect(diff, ExitCodes.Success);
+                Assert.Contains("+ Create table cli_mapped_gadgets", diff.Output);
+                Assert.Contains("idx_cli_mapped_gadgets_kind_name", diff.Output);
+                Assert.Contains("1 entity type(s)", diff.Output);
+
+                CliRunResult added = await RunAsync(directory, Database(
+                    "migrations", "add", "CreateGadgets", "--assembly", _AssemblyPath, "--entities-namespace", _MappedNamespace,
+                    "--mapping-source", typeof(MapAttributeMappingSource).FullName!, "--migrations-namespace", _MigrationsNamespace,
+                    "--output-dir", "Gen", "--namespace", "Cli.Generated.Mapped"));
+                Expect(added, ExitCodes.Success);
+                string file = Assert.Single(Directory.GetFiles(Path.Combine(directory, "Gen"), "*_CreateGadgets.cs"));
+                string code = await File.ReadAllTextAsync(file);
+                Assert.Contains("// Create table cli_mapped_gadgets", code);
+                Assert.Contains("gadget_name", code);
+
+                Assembly compiled = GeneratedCodeCompiler.CompileAndLoad(NextAssemblyName(), new[] { code });
+                Migration migration = (Migration)Activator.CreateInstance(compiled.GetType("Cli.Generated.Mapped.CreateGadgets", true)!)!;
+                SqlMigrator migrator = new SqlMigrator(factory, _Provider.Dialect, new[] { migration }, new SqlMigratorOptions { HistoryTableName = history });
+                Assert.Single((await migrator.MigrateAsync()).Applied);
+
+                DurableMapping.Register<CliMappedGadget>(MsMappingRegistration.Source);
+                SchemaDiff after = await migrator.DiffSchemaAsync(new[] { EntityMetadata.For<CliMappedGadget>() });
+                Assert.True(after.IsEmpty, "Generated migration should produce the mapped schema: " + Describe(after));
+
+                CliRunResult clean = await RunAsync(null, Database("schema", "diff", "--assembly", _AssemblyPath, "--entities-namespace", _MappedNamespace, "--mapping-source", nameof(MapAttributeMappingSource)));
+                Expect(clean, ExitCodes.Success);
+                Assert.Contains("matches", clean.Output);
+            }
+            finally
+            {
+                await DropTablesAsync(factory, "cli_mapped_gadgets", history);
+                DeleteDirectory(directory);
             }
         }
 

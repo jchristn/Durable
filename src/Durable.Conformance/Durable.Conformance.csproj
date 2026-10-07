@@ -9,7 +9,7 @@
 		<ApplicationIcon>logo.ico</ApplicationIcon>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Conformance</Title>
-		<Version>0.5.0</Version>
+		<Version>0.6.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Conformance kit for Durable ORM backends. Implement IConformanceTarget for your IRepository&lt;T&gt; backend (SQL, document store, search engine, graph store, in-memory) and run the capability-aware Touchstone suites from ConformanceSuites.Build to prove CRUD, querying, includes, grouping, projections, query filters, soft delete, composite keys, value converters, optimistic concurrency, batch writes, upsert, transactions and string matching behave exactly like every other Durable backend. Unsupported capabilities are verified to fail fast with NotSupportedException.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>orm;linq;testing;conformance;touchstone;repository;nosql;database</PackageTags>
-		<PackageReleaseNotes>0.5.0: runs against SQLite, PostgreSQL, MySQL, SQL Server, in-memory, LiteDB and LiteGraph (no skipped cases on full-capability backends); resolver and transaction API updates (CancellationToken on resolver methods, AmbientTransactionScope); AOT-annotated IConformanceTarget.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.6.0: released with Durable 0.6.0 (entity mapping sources); no changes in this package. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

@@ -49,6 +49,10 @@ namespace Durable.Tool
         [JsonPropertyName("entities")]
         public List<string>? Entities { get; set; }
 
+        /// <summary>Gets or sets the mapping source type name (--mapping-source).</summary>
+        [JsonPropertyName("mappingSource")]
+        public string? MappingSource { get; set; }
+
         /// <summary>Gets or sets the migration history table (--history-table).</summary>
         [JsonPropertyName("historyTable")]
         public string? HistoryTable { get; set; }

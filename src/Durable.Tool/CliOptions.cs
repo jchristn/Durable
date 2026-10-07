@@ -40,6 +40,9 @@ namespace Durable.Tool
         /// <summary>Explicit entity list.</summary>
         public static readonly OptionDefinition Entities = new OptionDefinition("entities", "types", "Comma-separated entity type names (full or simple) instead of discovering [Entity] types");
 
+        /// <summary>Mapping source for entities without Durable attributes.</summary>
+        public static readonly OptionDefinition MappingSource = new OptionDefinition("mapping-source", "type", "IEntityMappingSource class in the assembly (full or simple name, public parameterless constructor) that maps entity types without Durable attributes");
+
         /// <summary>Configuration file.</summary>
         public static readonly OptionDefinition Config = new OptionDefinition("config", "path", "Settings file (default: ./durable.json when present)");
 
@@ -100,7 +103,7 @@ namespace Durable.Tool
         public static IReadOnlyList<OptionDefinition> All { get; } = new List<OptionDefinition>
         {
             Provider, Connection, HistoryTable, Assembly, Project, Framework, Configuration, NoBuild, MigrationsNamespace,
-            EntitiesNamespace, Entities, Config, Verbose, Help, MigrateTarget, From, To, Output, MigrationsOutputDir, Namespace,
+            EntitiesNamespace, Entities, MappingSource, Config, Verbose, Help, MigrateTarget, From, To, Output, MigrationsOutputDir, Namespace,
             Empty, AllowDestructive, DryRun, Sql, Tables, Force, NoSingularize
         };
     }

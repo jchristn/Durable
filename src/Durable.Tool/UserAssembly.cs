@@ -28,6 +28,7 @@ namespace Durable.Tool
         private static readonly Dictionary<string, UserAssembly> _Cache = new Dictionary<string, UserAssembly>(StringComparer.Ordinal);
         private readonly List<string> _Warnings = new List<string>();
         private readonly List<Type> _Types;
+        private readonly Dictionary<Type, IEntityMappingSource> _MappingSources = new Dictionary<Type, IEntityMappingSource>();
 
         private UserAssembly(Assembly assembly, string path)
         {
@@ -97,13 +98,50 @@ namespace Durable.Tool
         }
 
         /// <summary>
-        /// Returns the entity types: the explicitly named types, or every concrete [Entity] class in the namespace filter.
+        /// Instantiates (or returns the cached instance of) a mapping source class in the assembly. One instance is kept per
+        /// type for the lifetime of the loaded assembly, so repeated in-process invocations (by full or simple name) register
+        /// the same source.
         /// </summary>
-        /// <param name="names">Full or simple type names; empty to discover [Entity] types. Must not be null.</param>
+        /// <param name="name">Full or simple type name. Must not be null.</param>
+        /// <returns>The mapping source.</returns>
+        /// <exception cref="DurableCliException">Thrown when the type is missing, ambiguous, not an IEntityMappingSource, or cannot be created.</exception>
+        public IEntityMappingSource CreateMappingSource(string name)
+        {
+            ArgumentNullException.ThrowIfNull(name);
+            lock (_MappingSources)
+            {
+                List<Type> matches = _Types.Where(t => string.Equals(t.FullName, name, StringComparison.Ordinal)).ToList();
+                if (matches.Count == 0) matches = _Types.Where(t => string.Equals(t.Name, name, StringComparison.Ordinal)).ToList();
+                if (matches.Count == 0) throw new DurableCliException("Mapping source type '" + name + "' was not found in " + System.IO.Path.GetFileName(Path) + ".");
+                if (matches.Count > 1)
+                    throw new DurableCliException("Mapping source type name '" + name + "' is ambiguous (" + string.Join(", ", matches.Select(t => t.FullName)) + "); use the full name.");
+                Type type = matches[0];
+                if (_MappingSources.TryGetValue(type, out IEntityMappingSource? cached)) return cached;
+                if (!typeof(IEntityMappingSource).IsAssignableFrom(type) || type.IsAbstract || type.GetConstructor(Type.EmptyTypes) == null)
+                    throw new DurableCliException("Mapping source " + type.FullName + " must be a concrete IEntityMappingSource class with a public parameterless constructor.");
+                try
+                {
+                    IEntityMappingSource source = (IEntityMappingSource)Activator.CreateInstance(type)!;
+                    _MappingSources[type] = source;
+                    return source;
+                }
+                catch (TargetInvocationException e)
+                {
+                    throw new DurableCliException("Could not create mapping source " + type.FullName + ": " + (e.InnerException ?? e).Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the entity types: the explicitly named types, or every concrete class in the namespace filter that has
+        /// [Entity] or that the mapping source describes.
+        /// </summary>
+        /// <param name="names">Full or simple type names; empty to discover entity types. Must not be null.</param>
         /// <param name="namespaceFilter">Namespace to restrict discovery to (including nested namespaces), or null for all.</param>
+        /// <param name="mappingSource">Mapping source whose described types are also entities, or null.</param>
         /// <returns>The entity types, ordered by full name.</returns>
         /// <exception cref="DurableCliException">Thrown when a named type is missing or ambiguous.</exception>
-        public List<Type> DiscoverEntities(IReadOnlyList<string> names, string? namespaceFilter)
+        public List<Type> DiscoverEntities(IReadOnlyList<string> names, string? namespaceFilter, IEntityMappingSource? mappingSource = null)
         {
             ArgumentNullException.ThrowIfNull(names);
             if (names.Count > 0)
@@ -123,7 +161,8 @@ namespace Durable.Tool
             }
 
             return _Types
-                .Where(t => t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && t.GetCustomAttribute<EntityAttribute>(false) != null && InNamespace(t, namespaceFilter))
+                .Where(t => t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && InNamespace(t, namespaceFilter))
+                .Where(t => t.GetCustomAttribute<EntityAttribute>(false) != null || (mappingSource != null && !typeof(IEntityMappingSource).IsAssignableFrom(t) && mappingSource.Describes(t)))
                 .OrderBy(t => t.FullName, StringComparer.Ordinal)
                 .ToList();
         }

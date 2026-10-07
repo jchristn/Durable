@@ -36,7 +36,7 @@ namespace Durable.Tool
                 CommandOptionGroups.DatabaseWithHistory,
                 new OptionGroup(
                     "Project", CliOptions.Project, CliOptions.Assembly, CliOptions.Framework, CliOptions.Configuration, CliOptions.NoBuild,
-                    CliOptions.EntitiesNamespace, CliOptions.Entities, CliOptions.MigrationsNamespace),
+                    CliOptions.EntitiesNamespace, CliOptions.Entities, CliOptions.MappingSource, CliOptions.MigrationsNamespace),
                 CommandOptionGroups.General
             },
             new[]

@@ -10,7 +10,7 @@
 		<DocumentationFile>Durable.Sql.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Sql</Title>
-		<Version>0.5.0</Version>
+		<Version>0.6.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Shared SQL engine for Durable ORM providers (dialect abstraction, LINQ-to-SQL translation, materialization, includes). Referenced by Durable.Sqlite, Durable.Postgres, Durable.MySql and Durable.SqlServer.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -20,7 +20,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql</PackageTags>
-		<PackageReleaseNotes>0.5.0 (breaking): raw SQL redesigned (interpolated FromSql/ExecuteSql/ExecuteScalar/QueryMultiple whose holes are parameters, *Raw overloads with {0} placeholders, CancellationToken last; @p0 placeholders removed); procedures take IEnumerable&lt;SqlParameterValue&gt;; ValidateTable(s)[Async] return TableValidationResult/SchemaValidationResult; savepoints no longer disposable; WhereSql; AOT-safe EntityMetadata overloads for schema sync and migrations; RepositorySettings/RepositoryType now here; engine internals made internal (protected CreateCommand for providers); ISqlDialect.TableNamesQuery, SupportsNthValue, SupportsRangeFrameOffsets; SqlMigrator.GenerateScript(from, to); SqlStatement.ToInlineSql. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.6.0: released with Durable 0.6.0 (entity mapping sources); no changes in this package. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
