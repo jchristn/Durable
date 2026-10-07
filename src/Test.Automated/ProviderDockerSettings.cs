@@ -3,10 +3,14 @@ namespace Test.Automated
     using System;
     using System.Collections.Generic;
     using System.Text.RegularExpressions;
+    using System.Threading;
+    using System.Threading.Tasks;
     using Test.Shared;
 
     /// <summary>
     /// Docker image, ports, credentials and environment for one provider's disposable test container.
+    /// Each target fills in its own Create* method; <see cref="DockerizedDatabaseSession"/> needs nothing else unless
+    /// the target wants a readiness check other than the default (see <see cref="ReadinessProbe"/>).
     /// </summary>
     internal sealed class ProviderDockerSettings
     {
@@ -41,6 +45,31 @@ namespace Test.Automated
 
         public string? Schema { get; private init; }
 
+        /// <summary>
+        /// Gets extra "docker run" arguments placed before the image (for example "--memory", "1g"). Default: empty. Never null.
+        /// </summary>
+        public IReadOnlyList<string> ExtraRunArguments { get; private init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// Gets the arguments placed after the image and passed to the container's entry point (for example
+        /// "start-single-node", "--insecure"). Default: empty. Never null.
+        /// </summary>
+        public IReadOnlyList<string> ContainerCommand { get; private init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// Gets how long <see cref="DockerizedDatabaseSession"/> waits for readiness. Default: 3 minutes.
+        /// </summary>
+        public TimeSpan StartupTimeout { get; private init; } = TimeSpan.FromMinutes(3);
+
+        /// <summary>
+        /// Gets the readiness probe: it throws until the container is ready and is retried until <see cref="StartupTimeout"/>
+        /// (a <see cref="NotSupportedException"/> stops the retries). It may also prepare the database idempotently. Null
+        /// (default) uses the built-in waits for MySQL, PostgreSQL and SQL Server, <see cref="DocumentBackendTestTargets.ProbeAsync"/>
+        /// for document backends, and <see cref="RepositoryProviderFactory.Create"/> plus
+        /// <see cref="IRepositoryProvider.IsDatabaseAvailableAsync"/> for every other SQL target.
+        /// </summary>
+        public Func<TestRuntimeConfiguration, CancellationToken, Task>? ReadinessProbe { get; private init; }
+
         public static ProviderDockerSettings Create(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
             switch (configuration.DatabaseType)
@@ -51,6 +80,26 @@ namespace Test.Automated
                     return CreatePostgresql(configuration, dockerImageOverride);
                 case TestDatabaseType.SqlServer:
                     return CreateSqlServer(configuration, dockerImageOverride);
+
+                // v0.7.0 targets: each one fills in its own Create* method below.
+                case TestDatabaseType.Oracle:
+                    return CreateOracle(configuration, dockerImageOverride);
+
+                case TestDatabaseType.MariaDb:
+                    return CreateMariaDb(configuration, dockerImageOverride);
+
+                case TestDatabaseType.CockroachDb:
+                    return CreateCockroachDb(configuration, dockerImageOverride);
+
+                case TestDatabaseType.YugabyteDb:
+                    return CreateYugabyteDb(configuration, dockerImageOverride);
+
+                case TestDatabaseType.MongoDb:
+                    return CreateMongoDb(configuration, dockerImageOverride);
+
+                case TestDatabaseType.CosmosDb:
+                    return CreateCosmosDb(configuration, dockerImageOverride);
+
                 default:
                     throw new InvalidOperationException("Unsupported dockerized database type " + configuration.DatabaseType + ".");
             }
@@ -177,6 +226,36 @@ namespace Test.Automated
                 Debug = configuration.Debug,
                 Schema = configuration.Schema
             };
+        }
+
+        private static ProviderDockerSettings CreateOracle(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "docker settings");
+        }
+
+        private static ProviderDockerSettings CreateMariaDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "docker settings");
+        }
+
+        private static ProviderDockerSettings CreateCockroachDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "docker settings");
+        }
+
+        private static ProviderDockerSettings CreateYugabyteDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "docker settings");
+        }
+
+        private static ProviderDockerSettings CreateMongoDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MongoDb, "docker settings");
+        }
+
+        private static ProviderDockerSettings CreateCosmosDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CosmosDb, "docker settings");
         }
     }
 }

@@ -79,7 +79,7 @@ namespace Test.Shared
             CliRunResult version = await RunAsync(null, "--version");
             Expect(version, ExitCodes.Success);
             Assert.Equal(DurableCli.Version, version.Output.Trim());
-            Assert.StartsWith("0.6.0", DurableCli.Version);
+            Assert.StartsWith("0.7.0", DurableCli.Version);
 
             CliRunResult migrate = await RunAsync(null, "migrate", "--help");
             Expect(migrate, ExitCodes.Success);
@@ -684,8 +684,11 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "sqlite";
-                case TestDatabaseType.Postgres: return "postgres";
-                case TestDatabaseType.MySql: return "mysql";
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return "postgres";
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return "mysql";
                 case TestDatabaseType.SqlServer: return "sqlserver";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }
@@ -696,8 +699,11 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "Sqlite";
-                case TestDatabaseType.Postgres: return "Postgres";
-                case TestDatabaseType.MySql: return "MySql";
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return "Postgres";
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return "MySql";
                 default: return "SqlServer";
             }
         }

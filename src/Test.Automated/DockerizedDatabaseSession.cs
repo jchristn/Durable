@@ -12,14 +12,14 @@ namespace Test.Automated
     using Test.Shared;
 
     /// <summary>
-    /// Starts a disposable dockerized database (MySQL, PostgreSQL, or SQL Server) on an ephemeral host port,
-    /// waits for readiness, and removes the container on disposal. SQLite does not require docker.
+    /// Starts a disposable dockerized database (any server-based provider or document backend with a
+    /// <see cref="ProviderDockerSettings"/> case) on an ephemeral host port, waits for readiness, and removes the container
+    /// on disposal. In-process providers (SQLite, DuckDB) do not use docker.
     /// </summary>
     internal sealed class DockerizedDatabaseSession : IAsyncDisposable
     {
         #region Private-Members
 
-        private static readonly TimeSpan StartupTimeout = TimeSpan.FromMinutes(3);
         private static readonly TimeSpan PollDelay = TimeSpan.FromSeconds(2);
         private static readonly object LifecycleSyncRoot = new object();
         private static readonly Dictionary<string, bool> ActiveContainers = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -56,9 +56,10 @@ namespace Test.Automated
             bool keepContainer)
         {
             if (requestedConfiguration == null) throw new ArgumentNullException(nameof(requestedConfiguration));
-            if (requestedConfiguration.DatabaseType == TestDatabaseType.Sqlite)
+            if (TestDatabaseTypes.IsInProcess(requestedConfiguration.DatabaseType))
             {
-                throw new InvalidOperationException("The --docker option is only supported for mysql, postgres, and sqlserver.");
+                throw new InvalidOperationException(
+                    "The --docker option is not used for " + TestDatabaseTypes.ProviderTag(requestedConfiguration.DatabaseType) + ", which runs in-process.");
             }
 
             if (!string.IsNullOrWhiteSpace(requestedConfiguration.Filename))
@@ -141,6 +142,22 @@ namespace Test.Automated
 
         private async Task InitializeProviderAsync(ProviderDockerSettings settings)
         {
+            TimeSpan timeout = settings.StartupTimeout;
+            string description = TestDatabaseTypes.ProviderName(Configuration.DatabaseType) + " container readiness";
+
+            if (settings.ReadinessProbe != null)
+            {
+                Func<TestRuntimeConfiguration, CancellationToken, Task> probe = settings.ReadinessProbe;
+                await WaitUntilAsync(description, () => probe(Configuration, CancellationToken.None), timeout);
+                return;
+            }
+
+            if (TestDatabaseTypes.IsDocumentBackend(Configuration.DatabaseType))
+            {
+                await WaitUntilAsync(description, () => DocumentBackendTestTargets.ProbeAsync(Configuration, CancellationToken.None), timeout);
+                return;
+            }
+
             switch (Configuration.DatabaseType)
             {
                 case TestDatabaseType.MySql:
@@ -155,7 +172,17 @@ namespace Test.Automated
                     await WaitForSqlServerDatabaseAsync(Configuration);
                     break;
                 default:
-                    throw new InvalidOperationException("Unsupported dockerized database type " + Configuration.DatabaseType + ".");
+                    await WaitUntilAsync(description, () => ProbeSqlProviderAsync(Configuration), timeout);
+                    break;
+            }
+        }
+
+        private static async Task ProbeSqlProviderAsync(TestRuntimeConfiguration configuration)
+        {
+            using IRepositoryProvider provider = RepositoryProviderFactory.Create(configuration);
+            if (!await provider.IsDatabaseAvailableAsync())
+            {
+                throw new InvalidOperationException(provider.ProviderName + " is not accepting connections yet.");
             }
         }
 
@@ -312,9 +339,9 @@ namespace Test.Automated
                 });
         }
 
-        private static async Task WaitUntilAsync(string description, Func<Task> action)
+        private static async Task WaitUntilAsync(string description, Func<Task> action, TimeSpan? timeout = null)
         {
-            DateTime deadline = DateTime.UtcNow.Add(StartupTimeout);
+            DateTime deadline = DateTime.UtcNow.Add(timeout ?? TimeSpan.FromMinutes(3));
             Exception? lastException = null;
 
             while (DateTime.UtcNow < deadline)
@@ -323,6 +350,10 @@ namespace Test.Automated
                 {
                     await action();
                     return;
+                }
+                catch (NotSupportedException)
+                {
+                    throw;
                 }
                 catch (Exception e)
                 {
@@ -376,7 +407,9 @@ namespace Test.Automated
                 arguments.Add(environmentVariable.Key + "=" + environmentVariable.Value);
             }
 
+            arguments.AddRange(settings.ExtraRunArguments);
             arguments.Add(settings.ImageName);
+            arguments.AddRange(settings.ContainerCommand);
             return arguments;
         }
 

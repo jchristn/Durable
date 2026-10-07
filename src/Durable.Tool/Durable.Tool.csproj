@@ -18,7 +18,7 @@
 		<PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
 		<PackageId>Durable.Tool</PackageId>
 		<Title>Durable.Tool</Title>
-		<Version>0.6.0</Version>
+		<Version>0.7.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>The durable command-line tool for the Durable ORM: apply, roll back and script migrations, scaffold migrations from schema differences, diff and sync schemas, and reverse-engineer entity classes from SQLite, PostgreSQL, MySQL and SQL Server databases.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -28,7 +28,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql;migrations;cli;tool</PackageTags>
-		<PackageReleaseNotes>0.6.0: --mapping-source &lt;type&gt; (and mappingSource in durable.json) for schema diff, schema sync and migrations add: registers an IEntityMappingSource from your assembly and discovers the classes it describes as entities.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

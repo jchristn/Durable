@@ -19,6 +19,8 @@ namespace Test.Shared
         private static TestRuntimeConfiguration _Configuration = LoadDefaultConfiguration();
         private static IRepositoryProvider? _Provider;
         private static bool _Initialized;
+        private static IDocumentBackendTestTarget? _DocumentBackend;
+        private static bool _DocumentBackendInitialized;
 
         #endregion
 
@@ -54,7 +56,7 @@ namespace Test.Shared
 
             lock (_SyncRoot)
             {
-                if (_Initialized)
+                if (_Initialized || _DocumentBackend != null)
                 {
                     throw new InvalidOperationException("DurableTestRuntime cannot be reconfigured after initialization.");
                 }
@@ -126,17 +128,80 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// Cleans up the shared provider's schema and disposes it. Safe to call multiple times.
+        /// Returns the shared document-backend target for the configured document backend (MongoDB, Cosmos DB), creating
+        /// it on first use without connecting. Used while the suites are built; cases initialize it through
+        /// <see cref="EnsureDocumentBackendInitializedAsync"/>. Thread-safe.
+        /// </summary>
+        /// <returns>The shared target. Never null.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the configured type is not a document backend.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the backend's test wiring has not been added yet.</exception>
+        public static IDocumentBackendTestTarget GetDocumentBackend()
+        {
+            lock (_SyncRoot)
+            {
+                if (_DocumentBackend != null) return _DocumentBackend;
+                if (!TestDatabaseTypes.IsDocumentBackend(_Configuration.DatabaseType))
+                {
+                    throw new InvalidOperationException(
+                        TestDatabaseTypes.ProviderName(_Configuration.DatabaseType) + " is not a document backend; use EnsureInitializedAsync.");
+                }
+
+                _DocumentBackend = DocumentBackendTestTargets.Create(_Configuration.Copy());
+                return _DocumentBackend;
+            }
+        }
+
+        /// <summary>
+        /// Ensures the shared document-backend target exists and has been initialized (connected, database created).
+        /// Idempotent and thread-safe; the before-each hook of every document-backend case.
+        /// </summary>
+        /// <param name="token">A cancellation token.</param>
+        /// <returns>The initialized shared target.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the configured type is not a document backend.</exception>
+        public static async Task<IDocumentBackendTestTarget> EnsureDocumentBackendInitializedAsync(CancellationToken token = default)
+        {
+            IDocumentBackendTestTarget target = GetDocumentBackend();
+            if (_DocumentBackendInitialized) return target;
+
+            await _InitLock.WaitAsync(token).ConfigureAwait(false);
+            try
+            {
+                if (!_DocumentBackendInitialized)
+                {
+                    await target.InitializeAsync(token).ConfigureAwait(false);
+                    _DocumentBackendInitialized = true;
+                }
+
+                return target;
+            }
+            finally
+            {
+                _InitLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Cleans up the shared provider's schema and disposes it, and disposes the shared document-backend target when one
+        /// was created. Safe to call multiple times.
         /// </summary>
         /// <returns>A task representing the asynchronous cleanup operation.</returns>
         public static async Task CleanupAsync()
         {
             IRepositoryProvider? provider;
+            IDocumentBackendTestTarget? documentBackend;
             lock (_SyncRoot)
             {
                 provider = _Provider;
                 _Provider = null;
                 _Initialized = false;
+                documentBackend = _DocumentBackend;
+                _DocumentBackend = null;
+                _DocumentBackendInitialized = false;
+            }
+
+            if (documentBackend != null)
+            {
+                await documentBackend.DisposeAsync().ConfigureAwait(false);
             }
 
             if (provider == null)
@@ -163,9 +228,10 @@ namespace Test.Shared
             TestRuntimeConfiguration configuration = new TestRuntimeConfiguration();
 
             string? typeValue = Environment.GetEnvironmentVariable("DURABLE_TEST_DB");
-            if (!string.IsNullOrWhiteSpace(typeValue) && TryParseDatabaseType(typeValue, out TestDatabaseType parsed))
+            TestDatabaseType? parsed = TestDatabaseTypes.Parse(typeValue);
+            if (parsed.HasValue)
             {
-                configuration.DatabaseType = parsed;
+                configuration.DatabaseType = parsed.Value;
             }
 
             string? host = Environment.GetEnvironmentVariable("DURABLE_TEST_HOST");
@@ -187,31 +253,6 @@ namespace Test.Shared
             if (!string.IsNullOrWhiteSpace(filename)) configuration.Filename = filename;
 
             return configuration;
-        }
-
-        private static bool TryParseDatabaseType(string value, out TestDatabaseType databaseType)
-        {
-            switch (value.Trim().ToLowerInvariant())
-            {
-                case "sqlite":
-                    databaseType = TestDatabaseType.Sqlite;
-                    return true;
-                case "mysql":
-                    databaseType = TestDatabaseType.MySql;
-                    return true;
-                case "postgres":
-                case "postgresql":
-                case "pgsql":
-                    databaseType = TestDatabaseType.Postgres;
-                    return true;
-                case "sqlserver":
-                case "mssql":
-                    databaseType = TestDatabaseType.SqlServer;
-                    return true;
-                default:
-                    databaseType = TestDatabaseType.Sqlite;
-                    return false;
-            }
         }
 
         #endregion

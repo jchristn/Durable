@@ -18,18 +18,19 @@ namespace Test.Shared
 
         /// <summary>
         /// Gets or sets the database (catalog) name for server-based providers. Default: "durable_touchstone".
-        /// Ignored by SQLite when <see cref="Filename"/> or an in-memory database is used.
+        /// Ignored by in-process providers (SQLite, DuckDB) when <see cref="Filename"/> or an in-memory database is used.
         /// </summary>
         public string DatabaseName { get; set; } = "durable_touchstone";
 
         /// <summary>
-        /// Gets or sets the SQLite database file path. When null (default), an in-memory shared cache database is used.
-        /// Only applicable to <see cref="TestDatabaseType.Sqlite"/>.
+        /// Gets or sets the database file path for in-process providers. When null (default), an in-memory database is used.
+        /// Only applicable to <see cref="TestDatabaseType.Sqlite"/> and <see cref="TestDatabaseType.DuckDb"/>.
         /// </summary>
         public string? Filename { get; set; }
 
         /// <summary>
-        /// Gets or sets the hostname for server-based providers. Nullable; required for non-SQLite providers.
+        /// Gets or sets the hostname for server-based providers and document backends. Nullable; required unless the
+        /// target is in-process (<see cref="TestDatabaseTypes.IsInProcess"/>).
         /// </summary>
         public string? Hostname { get; set; }
 
@@ -94,19 +95,19 @@ namespace Test.Shared
         /// <exception cref="InvalidOperationException">Thrown when required connection values are missing.</exception>
         public void Validate()
         {
-            if (DatabaseType == TestDatabaseType.Sqlite)
+            if (TestDatabaseTypes.IsInProcess(DatabaseType))
             {
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(Hostname))
             {
-                throw new InvalidOperationException("Hostname is required for non-SQLite automated test execution.");
+                throw new InvalidOperationException("Hostname is required for " + TestDatabaseTypes.ProviderName(DatabaseType) + " automated test execution.");
             }
 
             if (string.IsNullOrWhiteSpace(DatabaseName))
             {
-                throw new InvalidOperationException("Database name is required for non-SQLite automated test execution.");
+                throw new InvalidOperationException("Database name is required for " + TestDatabaseTypes.ProviderName(DatabaseType) + " automated test execution.");
             }
         }
 

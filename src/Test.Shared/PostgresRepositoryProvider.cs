@@ -16,6 +16,7 @@ namespace Test.Shared
         #region Private-Members
 
         private readonly string _ConnectionString;
+        private readonly TestDatabaseType _DatabaseType;
         private bool _Disposed = false;
 
         #endregion
@@ -23,14 +24,14 @@ namespace Test.Shared
         #region Public-Members
 
         /// <summary>
-        /// Gets the name of the database provider.
+        /// Gets the name of the database provider (for example "PostgreSQL").
         /// </summary>
-        public string ProviderName => "PostgreSQL";
+        public string ProviderName => TestDatabaseTypes.ProviderName(_DatabaseType);
 
         /// <summary>
-        /// Gets the database type served by this provider.
+        /// Gets the database type served by this provider (PostgreSQL, CockroachDB or YugabyteDB). Default: <see cref="TestDatabaseType.Postgres"/>.
         /// </summary>
-        public TestDatabaseType DatabaseType => TestDatabaseType.Postgres;
+        public TestDatabaseType DatabaseType => _DatabaseType;
 
         /// <summary>
         /// Gets the connection string used by this provider.
@@ -50,9 +51,14 @@ namespace Test.Shared
         /// Initializes a new instance of the <see cref="PostgresRepositoryProvider"/> class.
         /// </summary>
         /// <param name="connectionString">The PostgreSQL connection string to use for tests.</param>
-        public PostgresRepositoryProvider(string connectionString)
+        /// <param name="databaseType">The database served (PostgreSQL, CockroachDB or YugabyteDB); wire-compatible databases reuse this provider. Default: <see cref="TestDatabaseType.Postgres"/>.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="connectionString"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="databaseType"/> is not served by this provider.</exception>
+        public PostgresRepositoryProvider(string connectionString, TestDatabaseType databaseType = TestDatabaseType.Postgres)
         {
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            if (!TestDatabaseTypes.IsPostgresFamily(databaseType)) throw new ArgumentOutOfRangeException(nameof(databaseType), databaseType, "Not served by PostgresRepositoryProvider.");
+            _DatabaseType = databaseType;
         }
 
         #endregion

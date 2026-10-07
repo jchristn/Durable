@@ -33,7 +33,7 @@ namespace Durable.Tool
             output.WriteLine("  " + "help [command]".PadRight(width) + "Show help for a command");
             output.WriteLine("  " + "--version".PadRight(width) + "Show the tool version");
             output.WriteLine();
-            output.WriteLine("Settings: --provider (sqlite|postgres|mysql|sqlserver) and --connection select the database; they default to");
+            output.WriteLine("Settings: --provider (" + DatabaseTarget.ProviderChoices + ") and --connection select the database; they default to");
             output.WriteLine("the DURABLE_PROVIDER and DURABLE_CONNECTION environment variables, then to ./durable.json. Commands that");
             output.WriteLine("read your code build the project in the current directory (or --project) or load --assembly.");
             output.WriteLine();

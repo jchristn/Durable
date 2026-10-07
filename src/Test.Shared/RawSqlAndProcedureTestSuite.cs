@@ -277,6 +277,7 @@ namespace Test.Shared
                         break;
 
                     case TestDatabaseType.MySql:
+                    case TestDatabaseType.MariaDb:
                         await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_people_by_dept");
                         await repository.ExecuteSqlRawAsync("CREATE PROCEDURE durable_people_by_dept(IN dept VARCHAR(32)) BEGIN " +
                             "SELECT first AS first_name, last AS last_name, age AS person_age FROM people WHERE department = dept ORDER BY age; END");
@@ -284,6 +285,8 @@ namespace Test.Shared
                         break;
 
                     case TestDatabaseType.Postgres:
+                    case TestDatabaseType.CockroachDb:
+                    case TestDatabaseType.YugabyteDb:
                         await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_count_by_dept");
                         await repository.ExecuteSqlRawAsync("CREATE PROCEDURE durable_count_by_dept(IN dept VARCHAR, INOUT total BIGINT) LANGUAGE plpgsql AS $$ " +
                             "BEGIN SELECT COUNT(*) INTO total FROM people WHERE department = dept; END $$");
@@ -324,6 +327,7 @@ namespace Test.Shared
                         break;
 
                     case TestDatabaseType.MySql:
+                    case TestDatabaseType.MariaDb:
                         await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_count_by_dept");
                         await repository.ExecuteSqlRawAsync("CREATE PROCEDURE durable_count_by_dept(IN dept VARCHAR(32), OUT total INT) BEGIN " +
                             "SELECT COUNT(*) INTO total FROM people WHERE department = dept; END");
@@ -333,6 +337,8 @@ namespace Test.Shared
                         break;
 
                     case TestDatabaseType.Postgres:
+                    case TestDatabaseType.CockroachDb:
+                    case TestDatabaseType.YugabyteDb:
                         await repository.ExecuteSqlRawAsync("DROP PROCEDURE IF EXISTS durable_count_by_dept");
                         await repository.ExecuteSqlRawAsync("CREATE PROCEDURE durable_count_by_dept(IN dept VARCHAR, INOUT total BIGINT) LANGUAGE plpgsql AS $$ " +
                             "BEGIN SELECT COUNT(*) INTO total FROM people WHERE department = dept; END $$");
@@ -501,10 +507,13 @@ namespace Test.Shared
         {
             switch (_Provider.DatabaseType)
             {
-                case TestDatabaseType.Postgres: return "SELECT pg_sleep(" + seconds + ")";
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return "SELECT pg_sleep(" + seconds + ")";
                 // SLEEP() returns 1 instead of raising an error when MySQL kills it (as MySqlConnector does on
                 // timeout/cancel), so use a long-running cross join that fails with ER_QUERY_INTERRUPTED instead.
-                case TestDatabaseType.MySql: return "SELECT COUNT(*) FROM information_schema.columns a CROSS JOIN information_schema.columns b CROSS JOIN information_schema.columns c";
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return "SELECT COUNT(*) FROM information_schema.columns a CROSS JOIN information_schema.columns b CROSS JOIN information_schema.columns c";
                 case TestDatabaseType.SqlServer: return "WAITFOR DELAY '00:00:0" + seconds + "'";
                 default: throw new NotSupportedException("No sleep statement for " + _Provider.DatabaseType);
             }

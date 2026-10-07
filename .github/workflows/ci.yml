@@ -104,7 +104,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [postgres, mysql, sqlserver]
+        # v0.7.0 targets: each one replaces its own placeholder comment with "- <name>" (blank lines keep merges clean).
+        provider:
+          - postgres
+          - mysql
+          - sqlserver
+
+          # oracle
+
+          # mariadb
+
+          # cockroachdb
+
+          # yugabytedb
+
+          # mongodb
+
+          # cosmosdb
         framework: [net8.0, net10.0]
     steps:
       - uses: actions/checkout@v4

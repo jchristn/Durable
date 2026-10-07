@@ -31,4 +31,27 @@
 		<ProjectReference Include="..\..\src\Durable.Tool\Durable.Tool.csproj" />
 	</ItemGroup>
 
+	<!-- v0.7.0 targets: each target adds its package and project references to its own labeled ItemGroup. -->
+
+	<ItemGroup Label="Oracle">
+	</ItemGroup>
+
+	<ItemGroup Label="DuckDb">
+	</ItemGroup>
+
+	<ItemGroup Label="MariaDb">
+	</ItemGroup>
+
+	<ItemGroup Label="CockroachDb">
+	</ItemGroup>
+
+	<ItemGroup Label="YugabyteDb">
+	</ItemGroup>
+
+	<ItemGroup Label="MongoDb">
+	</ItemGroup>
+
+	<ItemGroup Label="CosmosDb">
+	</ItemGroup>
+
 </Project>

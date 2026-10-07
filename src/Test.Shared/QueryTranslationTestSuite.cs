@@ -207,7 +207,7 @@ namespace Test.Shared
         {
             // String matching follows the database collation. MySQL's default utf8mb4_0900_ai_ci collation is
             // accent-insensitive, so this ordinal expectation only holds on the other providers.
-            if (_Provider.DatabaseType == TestDatabaseType.MySql) return;
+            if (TestDatabaseTypes.IsMySqlFamily(_Provider.DatabaseType)) return;
             using QueryTranslationFixture f = await SeedAsync();
             await CheckAsync(f, x => x.Name.Contains("ë"), Zoe);
         }

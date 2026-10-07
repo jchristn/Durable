@@ -123,8 +123,11 @@ namespace Test.Shared
                 case TestDatabaseType.Sqlite:
                     return "Data Source=" + Path.Combine(Path.GetTempPath(), database + ".db");
                 case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb:
                     return new MySqlConnectionStringBuilder(_Provider.ConnectionString) { Database = database }.ConnectionString;
                 case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb:
                     return new NpgsqlConnectionStringBuilder(_Provider.ConnectionString) { Database = database }.ConnectionString;
                 case TestDatabaseType.SqlServer:
                     return new SqlConnectionStringBuilder(_Provider.ConnectionString) { InitialCatalog = database }.ConnectionString;
@@ -138,8 +141,11 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return new SqliteRepository<T>(SqliteRepositorySettings.Parse(connectionString));
-                case TestDatabaseType.MySql: return new MySqlRepository<T>(MySqlRepositorySettings.Parse(connectionString));
-                case TestDatabaseType.Postgres: return new PostgresRepository<T>(PostgresRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return new MySqlRepository<T>(MySqlRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return new PostgresRepository<T>(PostgresRepositorySettings.Parse(connectionString));
                 case TestDatabaseType.SqlServer: return new SqlServerRepository<T>(SqlServerRepositorySettings.Parse(connectionString));
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
@@ -150,8 +156,11 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return new SqliteConnectionFactory(connectionString);
-                case TestDatabaseType.MySql: return new MySqlConnectionFactory(connectionString);
-                case TestDatabaseType.Postgres: return new PostgresConnectionFactory(connectionString);
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return new MySqlConnectionFactory(connectionString);
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return new PostgresConnectionFactory(connectionString);
                 case TestDatabaseType.SqlServer: return new SqlServerConnectionFactory(connectionString);
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
@@ -167,10 +176,13 @@ namespace Test.Shared
                     if (File.Exists(path)) File.Delete(path);
                     return;
                 case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb:
                     MySqlConnection.ClearAllPools();
                     await ExecuteOnServerAsync("DROP DATABASE IF EXISTS " + Q(name));
                     return;
                 case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb:
                     NpgsqlConnection.ClearAllPools();
                     await ExecuteOnServerAsync("DROP DATABASE IF EXISTS " + Q(name) + " WITH (FORCE)");
                     return;

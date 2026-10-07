@@ -16,6 +16,7 @@ namespace Test.Shared
         #region Private-Members
 
         private readonly string _ConnectionString;
+        private readonly TestDatabaseType _DatabaseType;
         private bool _Disposed = false;
 
         #endregion
@@ -23,14 +24,14 @@ namespace Test.Shared
         #region Public-Members
 
         /// <summary>
-        /// Gets the name of the database provider.
+        /// Gets the name of the database provider (for example "MySQL").
         /// </summary>
-        public string ProviderName => "MySQL";
+        public string ProviderName => TestDatabaseTypes.ProviderName(_DatabaseType);
 
         /// <summary>
-        /// Gets the database type served by this provider.
+        /// Gets the database type served by this provider (MySQL or MariaDB). Default: <see cref="TestDatabaseType.MySql"/>.
         /// </summary>
-        public TestDatabaseType DatabaseType => TestDatabaseType.MySql;
+        public TestDatabaseType DatabaseType => _DatabaseType;
 
         /// <summary>
         /// Gets the connection string used by this provider.
@@ -50,9 +51,14 @@ namespace Test.Shared
         /// Initializes a new instance of the <see cref="MySqlRepositoryProvider"/> class.
         /// </summary>
         /// <param name="connectionString">The MySQL connection string to use for tests.</param>
-        public MySqlRepositoryProvider(string connectionString)
+        /// <param name="databaseType">The database served (MySQL or MariaDB); wire-compatible databases reuse this provider. Default: <see cref="TestDatabaseType.MySql"/>.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="connectionString"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="databaseType"/> is not served by this provider.</exception>
+        public MySqlRepositoryProvider(string connectionString, TestDatabaseType databaseType = TestDatabaseType.MySql)
         {
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            if (!TestDatabaseTypes.IsMySqlFamily(databaseType)) throw new ArgumentOutOfRangeException(nameof(databaseType), databaseType, "Not served by MySqlRepositoryProvider.");
+            _DatabaseType = databaseType;
         }
 
         #endregion

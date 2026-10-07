@@ -8,7 +8,7 @@ namespace Durable.Tool
     internal static class CliOptions
     {
         /// <summary>Database provider.</summary>
-        public static readonly OptionDefinition Provider = new OptionDefinition("provider", "name", "Database provider: sqlite, postgres, mysql or sqlserver (env DURABLE_PROVIDER)");
+        public static readonly OptionDefinition Provider = new OptionDefinition("provider", "name", "Database provider: " + DatabaseTarget.ProviderNames + " (env DURABLE_PROVIDER)");
 
         /// <summary>Connection string.</summary>
         public static readonly OptionDefinition Connection = new OptionDefinition("connection", "string", "Connection string (env DURABLE_CONNECTION)");

@@ -20,6 +20,8 @@ namespace Test.Shared
         /// <param name="configuration">The runtime configuration. Cannot be null.</param>
         /// <returns>A repository provider for the configured database type.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown for a document backend (see <see cref="DocumentBackendTestTargets"/>).</exception>
+        /// <exception cref="NotSupportedException">Thrown when the target's provider wiring has not been added yet.</exception>
         public static IRepositoryProvider Create(TestRuntimeConfiguration configuration)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
@@ -34,6 +36,28 @@ namespace Test.Shared
                     return new PostgresRepositoryProvider(BuildPostgresConnectionString(configuration));
                 case TestDatabaseType.SqlServer:
                     return new SqlServerRepositoryProvider(BuildSqlServerConnectionString(configuration));
+
+                // v0.7.0 targets: each one fills in its own Create*Provider / Build*ConnectionString pair below.
+                case TestDatabaseType.Oracle:
+                    return CreateOracleProvider(configuration);
+
+                case TestDatabaseType.DuckDb:
+                    return CreateDuckDbProvider(configuration);
+
+                case TestDatabaseType.MariaDb:
+                    return CreateMariaDbProvider(configuration);
+
+                case TestDatabaseType.CockroachDb:
+                    return CreateCockroachDbProvider(configuration);
+
+                case TestDatabaseType.YugabyteDb:
+                    return CreateYugabyteDbProvider(configuration);
+
+                case TestDatabaseType.MongoDb:
+                case TestDatabaseType.CosmosDb:
+                    throw new InvalidOperationException(
+                        TestDatabaseTypes.ProviderName(configuration.DatabaseType) + " is a document backend, not a SQL provider; use DocumentBackendTestTargets.");
+
                 default:
                     throw new ArgumentOutOfRangeException(nameof(configuration), "Unsupported database type " + configuration.DatabaseType + ".");
             }
@@ -45,6 +69,7 @@ namespace Test.Shared
         /// <param name="configuration">The runtime configuration. Cannot be null.</param>
         /// <returns>The connection string for the configured database type.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is null.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the target's provider wiring has not been added yet.</exception>
         public static string BuildConnectionString(TestRuntimeConfiguration configuration)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
@@ -59,6 +84,22 @@ namespace Test.Shared
                     return BuildPostgresConnectionString(configuration);
                 case TestDatabaseType.SqlServer:
                     return BuildSqlServerConnectionString(configuration);
+
+                case TestDatabaseType.Oracle:
+                    return BuildOracleConnectionString(configuration);
+
+                case TestDatabaseType.DuckDb:
+                    return BuildDuckDbConnectionString(configuration);
+
+                case TestDatabaseType.MariaDb:
+                    return BuildMariaDbConnectionString(configuration);
+
+                case TestDatabaseType.CockroachDb:
+                    return BuildCockroachDbConnectionString(configuration);
+
+                case TestDatabaseType.YugabyteDb:
+                    return BuildYugabyteDbConnectionString(configuration);
+
                 default:
                     throw new ArgumentOutOfRangeException(nameof(configuration), "Unsupported database type " + configuration.DatabaseType + ".");
             }
@@ -151,6 +192,56 @@ namespace Test.Shared
             }
 
             return builder.ConnectionString;
+        }
+
+        private static IRepositoryProvider CreateOracleProvider(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "repository provider");
+        }
+
+        private static string BuildOracleConnectionString(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.Oracle, "connection string builder");
+        }
+
+        private static IRepositoryProvider CreateDuckDbProvider(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.DuckDb, "repository provider");
+        }
+
+        private static string BuildDuckDbConnectionString(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.DuckDb, "connection string builder");
+        }
+
+        private static IRepositoryProvider CreateMariaDbProvider(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "repository provider");
+        }
+
+        private static string BuildMariaDbConnectionString(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.MariaDb, "connection string builder");
+        }
+
+        private static IRepositoryProvider CreateCockroachDbProvider(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "repository provider");
+        }
+
+        private static string BuildCockroachDbConnectionString(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CockroachDb, "connection string builder");
+        }
+
+        private static IRepositoryProvider CreateYugabyteDbProvider(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "repository provider");
+        }
+
+        private static string BuildYugabyteDbConnectionString(TestRuntimeConfiguration configuration)
+        {
+            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.YugabyteDb, "connection string builder");
         }
 
         #endregion

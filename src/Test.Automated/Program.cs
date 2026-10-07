@@ -179,22 +179,13 @@ static string ReadNextValue(string[] args, ref int index, string option)
 
 static TestDatabaseType ParseProvider(string value)
 {
-    switch (value.ToLowerInvariant())
+    TestDatabaseType? parsed = TestDatabaseTypes.Parse(value);
+    if (!parsed.HasValue)
     {
-        case "sqlite":
-            return TestDatabaseType.Sqlite;
-        case "mysql":
-            return TestDatabaseType.MySql;
-        case "postgres":
-        case "postgresql":
-        case "pgsql":
-            return TestDatabaseType.Postgres;
-        case "sqlserver":
-        case "mssql":
-            return TestDatabaseType.SqlServer;
-        default:
-            throw new ArgumentException("Unknown provider '" + value + "'.");
+        throw new ArgumentException("Unknown provider '" + value + "'. Use one of: " + TestDatabaseTypes.CommandLineNames + ".");
     }
+
+    return parsed.Value;
 }
 
 static void PrintUsage()
@@ -203,12 +194,12 @@ static void PrintUsage()
     Console.WriteLine("Default behavior: run against SQLite using an in-memory database.");
     Console.WriteLine("Options:");
     Console.WriteLine("  --results <path>           Write Touchstone JSON results to a file.");
-    Console.WriteLine("  --docker                   Start a disposable dockerized database for mysql, postgres, or sqlserver.");
+    Console.WriteLine("  --docker                   Start a disposable dockerized database (server-based providers and document backends).");
     Console.WriteLine("  --keep-docker              Leave the docker container running after the test run.");
     Console.WriteLine("  --docker-image <image>     Override the default docker image for the selected provider.");
-    Console.WriteLine("  --type <provider>          sqlite | mysql | postgres | sqlserver");
+    Console.WriteLine("  --type <provider>          " + TestDatabaseTypes.CommandLineNames);
     Console.WriteLine("  --database <name>          Database name for external providers.");
-    Console.WriteLine("  --filename <path>          SQLite file path override.");
+    Console.WriteLine("  --filename <path>          Database file path override for in-process providers (sqlite, duckdb).");
     Console.WriteLine("  --host <hostname>          Hostname for external providers.");
     Console.WriteLine("  --port <port>              Port for external providers.");
     Console.WriteLine("  --instance <name>          SQL Server instance name.");

@@ -61,7 +61,7 @@ namespace Durable.Tool
         public DatabaseTarget OpenDatabase()
         {
             if (Settings.Provider == null)
-                throw new DurableCliException("No database provider. Pass --provider <sqlite|postgres|mysql|sqlserver>, set DURABLE_PROVIDER, or add \"provider\" to durable.json.", null, true);
+                throw new DurableCliException("No database provider. Pass --provider <" + DatabaseTarget.ProviderChoices + ">, set DURABLE_PROVIDER, or add \"provider\" to durable.json.", null, true);
             if (Settings.Connection == null)
                 throw new DurableCliException("No connection string. Pass --connection \"<connection string>\", set DURABLE_CONNECTION, or add \"connection\" to durable.json.", null, true);
             DatabaseTarget target = DatabaseTarget.Create(Settings.Provider, Settings.Connection);

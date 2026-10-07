@@ -13,7 +13,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.LiteGraph</PackageId>
 		<Title>Durable.LiteGraph</Title>
-		<Version>0.6.0</Version>
+		<Version>0.7.0</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>LiteGraph backend for Durable ORM (depends on the LiteGraph package): stores each entity row as a node of a LiteGraph property graph, maintains foreign keys as edges, uses deterministic node GUIDs for key lookups, supports atomic interactive transactions, includes and full LINQ query evaluation, so Durable data is first-class for LiteGraph traversals, algorithms and tools.</Description>
 		<Copyright>(c)2025 Durable Community</Copyright>
@@ -23,7 +23,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;graph;litegraph;property-graph;repository</PackageTags>
-		<PackageReleaseNotes>0.6.0: released with Durable 0.6.0 (entity mapping sources); no changes in this package. See CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

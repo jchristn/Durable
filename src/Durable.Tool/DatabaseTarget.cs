@@ -1,6 +1,7 @@
 namespace Durable.Tool
 {
     using System;
+    using System.Collections.Generic;
     using System.Threading.Tasks;
     using Durable.MySql;
     using Durable.Postgres;
@@ -14,10 +15,41 @@ namespace Durable.Tool
     /// </summary>
     internal sealed class DatabaseTarget : IAsyncDisposable
     {
+        // Canonical provider names, one per line so each provider adds its own line (keep in step with Create and
+        // NormalizeProvider).
+        private static readonly IReadOnlyList<string> _CanonicalProviders = new List<string>
+        {
+            "sqlite",
+            "postgres",
+            "mysql",
+            "sqlserver"
+        };
+
         /// <summary>
-        /// Gets the provider names accepted by --provider, for help and error messages.
+        /// Gets the canonical provider names accepted by --provider, in display order. Never null.
         /// </summary>
-        public static string ProviderNames => "sqlite, postgres, mysql or sqlserver";
+        public static IReadOnlyList<string> CanonicalProviders => _CanonicalProviders;
+
+        /// <summary>
+        /// Gets the provider names accepted by --provider, for help and error messages (for example
+        /// "sqlite, postgres, mysql or sqlserver").
+        /// </summary>
+        public static string ProviderNames
+        {
+            get
+            {
+                if (_CanonicalProviders.Count == 1) return _CanonicalProviders[0];
+                List<string> names = new List<string>(_CanonicalProviders);
+                string last = names[names.Count - 1];
+                names.RemoveAt(names.Count - 1);
+                return string.Join(", ", names) + " or " + last;
+            }
+        }
+
+        /// <summary>
+        /// Gets the provider names separated by '|', for usage lines (for example "sqlite|postgres|mysql|sqlserver").
+        /// </summary>
+        public static string ProviderChoices => string.Join("|", _CanonicalProviders);
 
         /// <summary>
         /// Gets the dialect.

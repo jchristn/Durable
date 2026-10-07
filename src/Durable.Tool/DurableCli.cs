@@ -19,7 +19,7 @@ namespace Durable.Tool
     public static class DurableCli
     {
         /// <summary>
-        /// Gets the tool version, for example "0.6.0".
+        /// Gets the tool version, for example "0.7.0".
         /// </summary>
         public static string Version { get; } = ReadVersion();
 
