@@ -405,9 +405,14 @@ namespace Test.Shared
             }
 
             // Warm-up pass: lets the driver pool grow to the workload's concurrency and JIT/caches settle,
-            // so the measured pass reflects leaks rather than one-time growth.
+            // so the measured pass reflects leaks rather than one-time growth. The pool is then filled to the
+            // workload's full width (one connection per batch), because the warm-up may not reach it and some drivers
+            // keep megabytes per pooled connection (ODP.NET about 2 MB).
             await RunBatchesAsync("Warm");
             await repository.ExecuteSqlRawAsync("DELETE FROM people");
+            List<DbConnection> widen = new List<DbConnection>();
+            for (int c = 0; c < batchCount; c++) widen.Add(await repository.ConnectionFactory.OpenConnectionAsync());
+            foreach (DbConnection connection in widen) await connection.DisposeAsync();
 
             long initialMemory = GC.GetTotalMemory(true);
             await RunBatchesAsync("Batch");
