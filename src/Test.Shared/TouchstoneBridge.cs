@@ -7,6 +7,7 @@ namespace Test.Shared
     using System.Runtime.ExceptionServices;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.Data.Sqlite;
     using Touchstone.Core;
     using Xunit;
     using Xunit.Sdk;
@@ -154,6 +155,12 @@ namespace Test.Shared
                         await valueTask.ConfigureAwait(false);
                     }
                 }
+                catch (Exception ex) when (!(ex is XunitException) && !(ex is OperationCanceledException))
+                {
+                    // Runners record only the message; write the full exception so intermittent failures (CI) are diagnosable.
+                    Console.Error.WriteLine(DescribeUnexpectedException(suiteId + "." + caseId, ex));
+                    throw;
+                }
                 finally
                 {
                     switch (instance)
@@ -169,6 +176,20 @@ namespace Test.Shared
             };
 
             return new TestCaseDescriptor(suiteId, caseId, displayName, executeAsync, tags, skip, skipReason);
+        }
+
+        private static string DescribeUnexpectedException(string testId, Exception ex)
+        {
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            text.Append("UNEXPECTED EXCEPTION in ").Append(testId).AppendLine(":");
+            for (Exception? current = ex; current != null; current = current.InnerException)
+            {
+                if (current is SqliteException sqlite)
+                    text.Append("  SqliteErrorCode=").Append(sqlite.SqliteErrorCode).Append(" SqliteExtendedErrorCode=").Append(sqlite.SqliteExtendedErrorCode).AppendLine();
+            }
+
+            text.Append(ex.ToString());
+            return text.ToString();
         }
 
         private static List<object?[]> ResolveTheoryData(MethodInfo method)
