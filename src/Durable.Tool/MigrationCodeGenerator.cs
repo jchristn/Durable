@@ -154,6 +154,7 @@ namespace Durable.Tool
         private static string FieldName(RepositoryType type)
         {
             if (type == RepositoryType.Sqlite) return nameof(RepositoryType.Sqlite);
+            if (type == RepositoryType.DuckDb) return nameof(RepositoryType.DuckDb);
             if (type == RepositoryType.Postgres) return nameof(RepositoryType.Postgres);
             if (type == RepositoryType.MySql) return nameof(RepositoryType.MySql);
             if (type == RepositoryType.SqlServer) return nameof(RepositoryType.SqlServer);

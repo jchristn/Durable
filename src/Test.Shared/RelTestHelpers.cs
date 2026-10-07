@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.DuckDb;
     using Durable.MySql;
     using Durable.Postgres;
     using Durable.Sql;
@@ -65,6 +66,7 @@ namespace Test.Shared
             ISqlRepository<T> template = provider.CreateRepository<T>();
             RepositoryType type = template.Dialect.RepositoryType;
             if (type == RepositoryType.Sqlite) return new SqliteRepository<T>(template.ConnectionFactory, options);
+            if (type == RepositoryType.DuckDb) return new DuckDbRepository<T>(template.ConnectionFactory, options);
             if (type == RepositoryType.MySql) return new MySqlRepository<T>(template.ConnectionFactory, options);
             if (type == RepositoryType.Postgres) return new PostgresRepository<T>(template.ConnectionFactory, options);
             if (type == RepositoryType.SqlServer) return new SqlServerRepository<T>(template.ConnectionFactory, options);

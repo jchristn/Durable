@@ -3,6 +3,7 @@ namespace Durable.Tool
     using System;
     using System.Collections.Generic;
     using System.Threading.Tasks;
+    using Durable.DuckDb;
     using Durable.MySql;
     using Durable.Postgres;
     using Durable.Sql;
@@ -20,6 +21,7 @@ namespace Durable.Tool
         private static readonly IReadOnlyList<string> _CanonicalProviders = new List<string>
         {
             "sqlite",
+            "duckdb",
             "postgres",
             "mysql",
             "sqlserver"
@@ -75,7 +77,7 @@ namespace Durable.Tool
         /// <summary>
         /// Creates a target for a provider name and connection string.
         /// </summary>
-        /// <param name="provider">Provider name (sqlite, postgres/postgresql, mysql/mariadb, sqlserver/mssql). Must not be null.</param>
+        /// <param name="provider">Provider name (sqlite, duckdb, postgres/postgresql, mysql/mariadb, sqlserver/mssql). Must not be null.</param>
         /// <param name="connectionString">Connection string. Must not be null.</param>
         /// <returns>The target.</returns>
         /// <exception cref="DurableCliException">Thrown when the provider is unknown or the connection string is invalid.</exception>
@@ -89,6 +91,8 @@ namespace Durable.Tool
                 {
                     case "sqlite":
                         return new DatabaseTarget(SqliteDialect.Default, new SqliteConnectionFactory(connectionString));
+                    case "duckdb":
+                        return new DatabaseTarget(DuckDbDialect.Default, new DuckDbConnectionFactory(connectionString));
                     case "postgres":
                         return new DatabaseTarget(PostgresDialect.Default, new PostgresConnectionFactory(connectionString));
                     case "mysql":
@@ -109,13 +113,14 @@ namespace Durable.Tool
         /// Returns the canonical provider name for an accepted alias, or null when the name is unknown.
         /// </summary>
         /// <param name="provider">Provider name. Must not be null.</param>
-        /// <returns>sqlite, postgres, mysql, sqlserver or null.</returns>
+        /// <returns>sqlite, duckdb, postgres, mysql, sqlserver or null.</returns>
         public static string? NormalizeProvider(string provider)
         {
             ArgumentNullException.ThrowIfNull(provider);
             switch (provider.Trim().ToLowerInvariant())
             {
                 case "sqlite": return "sqlite";
+                case "duckdb": return "duckdb";
                 case "postgres":
                 case "postgresql":
                 case "pgsql":

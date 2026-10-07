@@ -209,7 +209,7 @@ namespace Durable.Sql
                 token.ThrowIfCancellationRequested();
                 int wait = Math.Max(0, Math.Min(5, timeoutSeconds - (int)elapsed.Elapsed.TotalSeconds));
                 SqlStatement statement = Dialect.AcquireMigrationLockSql(lockName, wait)!;
-                if (IsAcquired(Scalar(statement, "MIGRATION LOCK")))
+                if (TryAcquire(statement))
                 {
                     _HeldLock = lockName;
                     return;
@@ -229,7 +229,7 @@ namespace Durable.Sql
                 token.ThrowIfCancellationRequested();
                 int wait = Math.Max(0, Math.Min(5, timeoutSeconds - (int)elapsed.Elapsed.TotalSeconds));
                 SqlStatement statement = Dialect.AcquireMigrationLockSql(lockName, wait)!;
-                if (IsAcquired(await ScalarAsync(statement, "MIGRATION LOCK", token).ConfigureAwait(false)))
+                if (await TryAcquireAsync(statement, token).ConfigureAwait(false))
                 {
                     _HeldLock = lockName;
                     return;
@@ -298,6 +298,30 @@ namespace Durable.Sql
             }
             while (reader.NextResult());
             return null;
+        }
+
+        private bool TryAcquire(SqlStatement statement)
+        {
+            try
+            {
+                return IsAcquired(Scalar(statement, "MIGRATION LOCK"));
+            }
+            catch (Exception e) when (Dialect.IsMigrationLockContention(e))
+            {
+                return false;
+            }
+        }
+
+        private async Task<bool> TryAcquireAsync(SqlStatement statement, CancellationToken token)
+        {
+            try
+            {
+                return IsAcquired(await ScalarAsync(statement, "MIGRATION LOCK", token).ConfigureAwait(false));
+            }
+            catch (Exception e) when (Dialect.IsMigrationLockContention(e))
+            {
+                return false;
+            }
         }
 
         private static bool IsAcquired(object? value)

@@ -47,6 +47,8 @@ namespace Test.Shared
         [Fact]
         public async Task Savepoint_RollbackUndoesOnlyLaterWork()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             const string department = "SpRollback";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -78,6 +80,8 @@ namespace Test.Shared
         [Fact]
         public async Task Savepoint_SyncRollbackWithGeneratedName()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             const string department = "SpRollbackSync";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -108,6 +112,8 @@ namespace Test.Shared
         [Fact]
         public async Task Savepoint_ReleaseKeepsWork()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             const string department = "SpRelease";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -135,6 +141,8 @@ namespace Test.Shared
         [Fact]
         public async Task Savepoint_OuterRollbackDiscardsReleasedWork()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             const string department = "SpOuterRollback";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -154,8 +162,10 @@ namespace Test.Shared
         /// Savepoint names containing anything other than letters, digits and underscores are rejected.
         /// </summary>
         [Fact]
-        public void Savepoint_InvalidNameThrows()
+        public async Task Savepoint_InvalidNameThrows()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             using ISqlTransaction transaction = repository.BeginTransaction();
             Assert.Throws<ArgumentException>(() => transaction.CreateSavepoint("bad name; DROP"));
@@ -168,6 +178,8 @@ namespace Test.Shared
         [Fact]
         public async Task Savepoint_DriverSavepointOnWrappedTransaction()
         {
+            if (await SavepointsUnsupportedAsync()) return;
+
             const string department = "SpDriver";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -369,37 +381,70 @@ namespace Test.Shared
 
         #region Private-Methods
 
-        private static async Task InsertRawAsync(DbConnection connection, DbTransaction transaction, string email, string department)
+        private async Task InsertRawAsync(DbConnection connection, DbTransaction transaction, string email, string department)
         {
             await using DbCommand command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = "INSERT INTO people (first, last, age, email, salary, department) VALUES (@first, @last, @age, @email, @salary, @department)";
-            AddParameter(command, "@first", "Raw");
-            AddParameter(command, "@last", "Ado");
-            AddParameter(command, "@age", 33);
-            AddParameter(command, "@email", email);
-            AddParameter(command, "@salary", 1000m);
-            AddParameter(command, "@department", department);
+            command.CommandText = "INSERT INTO people (first, last, age, email, salary, department) VALUES ("
+                + P(0) + ", " + P(1) + ", " + P(2) + ", " + P(3) + ", " + P(4) + ", " + P(5) + ")";
+            AddParameter(command, P(0), "Raw");
+            AddParameter(command, P(1), "Ado");
+            AddParameter(command, P(2), 33);
+            AddParameter(command, P(3), email);
+            AddParameter(command, P(4), 1000m);
+            AddParameter(command, P(5), department);
             int rows = await command.ExecuteNonQueryAsync();
             Assert.Equal(1, rows);
         }
 
-        private static async Task<long> CountRawAsync(DbConnection connection, DbTransaction? transaction, string department)
+        private async Task<long> CountRawAsync(DbConnection connection, DbTransaction? transaction, string department)
         {
             await using DbCommand command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = "SELECT COUNT(*) FROM people WHERE department = @department";
-            AddParameter(command, "@department", department);
+            command.CommandText = "SELECT COUNT(*) FROM people WHERE department = " + P(0);
+            AddParameter(command, P(0), department);
             object? value = await command.ExecuteScalarAsync();
             return Convert.ToInt64(value);
         }
 
-        private static void AddParameter(DbCommand command, string name, object value)
+        private string P(int index)
         {
+            return _Provider.Dialect.FormatParameterName(index);
+        }
+
+        private void AddParameter(DbCommand command, string name, object value)
+        {
+            // The dialect normalizes the name for its driver (DuckDB.NET binds "$p0" as "p0").
             DbParameter parameter = command.CreateParameter();
             parameter.ParameterName = name;
             parameter.Value = value;
+            _Provider.Dialect.ConfigureParameter(parameter, new SqlParameterValue(name, value));
             command.Parameters.Add(parameter);
+        }
+
+        private async Task<bool> SavepointsUnsupportedAsync()
+        {
+            // Databases without savepoints (DuckDB) reject them with NotSupportedException, sync and async, through a
+            // dialect-aware transaction and through the driver's savepoint API.
+            if (_Provider.Dialect.SupportsSavepoints) return false;
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
+            using (ISqlTransaction transaction = repository.BeginTransaction())
+            {
+                Assert.Throws<NotSupportedException>(() => transaction.CreateSavepoint("sp_unsupported"));
+                await Assert.ThrowsAsync<NotSupportedException>(() => transaction.CreateSavepointAsync());
+                transaction.Rollback();
+            }
+
+            await using (DbConnection connection = _Provider.CreateRawConnection())
+            {
+                await connection.OpenAsync();
+                await using DbTransaction dbTransaction = await connection.BeginTransactionAsync();
+                SqlTransactionContext context = SqlTransactionContext.Wrap(connection, dbTransaction);
+                Assert.Throws<NotSupportedException>(() => context.CreateSavepoint("sp_driver"));
+                await dbTransaction.RollbackAsync();
+            }
+
+            return true;
         }
 
         #endregion

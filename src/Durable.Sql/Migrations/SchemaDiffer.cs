@@ -89,8 +89,10 @@ namespace Durable.Sql
                 }
 
                 HashSet<string> availableColumns = new HashSet<string>(table.Columns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+                int first = operations.Count;
                 CompareColumns(dialect, metadata, table, options, operations, differences, availableColumns);
                 CompareIndexes(dialect, metadata, table, expectedIndexes, options, operations, availableColumns);
+                if (dialect.AlterTableRequiresDroppingIndexes && table.Indexes.Count > 0) WrapAlterations(dialect, metadata, table, operations, first);
             }
 
             return new SchemaDiff(dialect, operations.OrderBy(o => (int)o.Kind), differences);
@@ -400,6 +402,44 @@ namespace Durable.Sql
                     MigrationOperationKind.DropIndex, tableName, null, existing.Name, true,
                     "Drop undeclared index " + existing + " on " + tableName,
                     new[] { new SqlStatement(dialect.DropIndexSql(existing.Name, tableName)) }));
+            }
+        }
+
+        private static void WrapAlterations(ISqlDialect dialect, EntityMetadata metadata, TableSchema table, List<MigrationOperation> operations, int first)
+        {
+            // The database cannot drop a column or make one NOT NULL while the table has indexes: each such operation drops
+            // the table's indexes, alters the table, and re-creates the indexes that survive. Indexes this diff drops itself
+            // (undeclared or redefined ones, ordered before the alteration) are left to those operations.
+            HashSet<string> droppedByDiff = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = first; i < operations.Count; i++)
+            {
+                if (operations[i].Kind == MigrationOperationKind.DropIndex && operations[i].IndexName != null) droppedByDiff.Add(operations[i].IndexName!);
+            }
+
+            List<IndexSchema> kept = table.Indexes.Where(index => !droppedByDiff.Contains(index.Name)).ToList();
+            if (kept.Count == 0) return;
+            for (int i = first; i < operations.Count; i++)
+            {
+                MigrationOperation operation = operations[i];
+                bool alters = operation.Kind == MigrationOperationKind.DropColumn
+                    || (operation.Kind == MigrationOperationKind.AddColumn && operation.ColumnName != null && operation.Warning == null
+                        && metadata.FindColumnByName(operation.ColumnName) is ColumnMetadata added && !added.IsNullable);
+                if (!alters) continue;
+
+                List<SqlStatement> statements = new List<SqlStatement>();
+                foreach (IndexSchema index in kept) statements.Add(new SqlStatement(dialect.DropIndexSql(index.Name, table.Name)));
+                statements.AddRange(operation.Statements);
+                foreach (IndexSchema index in kept)
+                {
+                    if (operation.Kind == MigrationOperationKind.DropColumn && index.Columns.Contains(operation.ColumnName!, StringComparer.OrdinalIgnoreCase)) continue;
+                    IReadOnlyList<string>? included = index.IncludedColumns.Count > 0 ? index.IncludedColumns : null;
+                    statements.Add(new SqlStatement(dialect.CreateIndexSql(index.Name, table.Name, index.Columns, index.IsUnique, included)));
+                }
+
+                operations[i] = new MigrationOperation(
+                    operation.Kind, operation.TableName, operation.ColumnName, operation.IndexName, operation.IsDestructive,
+                    operation.Description + " (re-creating the table's indexes around it, which " + dialect.RepositoryType.DisplayName + " requires)",
+                    statements, operation.Warning);
             }
         }
 

@@ -59,6 +59,14 @@ namespace Durable.Sql
         /// <param name="value">The engine parameter. Must not be null.</param>
         void ConfigureParameter(DbParameter parameter, SqlParameterValue value);
 
+        /// <summary>
+        /// Gets whether the ADO.NET driver enforces <see cref="DbCommand.CommandTimeout"/>. When false (DuckDB.NET ignores
+        /// it), the engine enforces <see cref="SqlRepositoryOptions.CommandTimeoutSeconds"/> itself: it cancels the command
+        /// when the timeout elapses and throws a <see cref="TimeoutException"/>. Only an explicitly configured timeout is
+        /// enforced this way; without one, commands run until they finish. Default: true.
+        /// </summary>
+        bool DriverEnforcesCommandTimeout { get; }
+
         #endregion
 
         #region Expressions
@@ -214,6 +222,12 @@ namespace Durable.Sql
         #region Transactions
 
         /// <summary>
+        /// Gets whether the database supports savepoints inside a transaction. When false (DuckDB),
+        /// <see cref="ISqlTransaction.CreateSavepoint"/> throws <see cref="NotSupportedException"/>.
+        /// </summary>
+        bool SupportsSavepoints { get; }
+
+        /// <summary>
         /// Returns SQL that creates a savepoint.
         /// </summary>
         /// <param name="name">Savepoint name. Must be a valid identifier.</param>
@@ -304,6 +318,20 @@ namespace Durable.Sql
         /// Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
         /// </summary>
         bool SupportsDropColumn { get; }
+
+        /// <summary>
+        /// Gets whether string column types carry a maximum length that the database stores and reports through schema
+        /// introspection (VARCHAR(n)). When false (SQLite, DuckDB), <see cref="ColumnMetadata.MaxLength"/> is not part of
+        /// the column type, so schema comparison reports no length differences and scaffolding cannot recover lengths.
+        /// </summary>
+        bool SupportsStringMaxLength { get; }
+
+        /// <summary>
+        /// Gets whether the database refuses to alter a table's existing columns (drop a column, or make an added column
+        /// NOT NULL) while the table has secondary indexes. When true (DuckDB), schema comparison wraps such operations so
+        /// they drop the table's indexes first and re-create the ones that remain afterwards. Default: false.
+        /// </summary>
+        bool AlterTableRequiresDroppingIndexes { get; }
 
         /// <summary>
         /// Gets whether the NTH_VALUE window function is supported. When false,
@@ -443,6 +471,16 @@ namespace Durable.Sql
         /// <param name="lockName">Lock name. Must not be null.</param>
         /// <returns>The statement, or null.</returns>
         SqlStatement? ReleaseMigrationLockSql(string lockName);
+
+        /// <summary>
+        /// Returns whether an exception thrown by the <see cref="AcquireMigrationLockSql"/> statement means that another
+        /// session holds (or is concurrently taking) the lock, rather than a real failure. Databases with optimistic
+        /// concurrency (DuckDB) report a concurrent writer as a write-write conflict or key violation instead of waiting;
+        /// the migrator then treats the attempt as "not acquired" and polls again. Default: false (the exception propagates).
+        /// </summary>
+        /// <param name="exception">Exception thrown by the lock statement. Must not be null.</param>
+        /// <returns>True when the attempt should count as "not acquired".</returns>
+        bool IsMigrationLockContention(Exception exception);
 
         #endregion
     }

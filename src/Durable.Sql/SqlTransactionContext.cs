@@ -113,6 +113,7 @@ namespace Durable.Sql
         public ISavepoint CreateSavepoint(string? name = null)
         {
             ThrowIfNoTransaction();
+            ThrowIfSavepointsUnsupported();
             string savepointName = ResolveSavepointName(name);
             if (Dialect == null)
             {
@@ -129,6 +130,7 @@ namespace Durable.Sql
         public async Task<ISavepoint> CreateSavepointAsync(string? name = null, CancellationToken token = default)
         {
             ThrowIfNoTransaction();
+            ThrowIfSavepointsUnsupported();
             string savepointName = ResolveSavepointName(name);
             if (Dialect == null)
             {
@@ -208,6 +210,12 @@ namespace Durable.Sql
         {
             ThrowIfCompleted();
             if (Transaction == null) throw new InvalidOperationException("Savepoints require an active transaction.");
+        }
+
+        private void ThrowIfSavepointsUnsupported()
+        {
+            if (Dialect != null && !Dialect.SupportsSavepoints)
+                throw new NotSupportedException(Dialect.RepositoryType.DisplayName + " does not support savepoints; use separate transactions instead.");
         }
 
         private string ResolveSavepointName(string? name)

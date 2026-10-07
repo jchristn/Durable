@@ -139,7 +139,7 @@ namespace Test.Shared
         {
             ISqlRepository<StrMatchItem> repository = await SeedAsync(StringMatchMode.Database);
             RepositoryType type = repository.Dialect.RepositoryType;
-            if (type == RepositoryType.Sqlite || type == RepositoryType.Postgres)
+            if (type == RepositoryType.Sqlite || type == RepositoryType.DuckDb || type == RepositoryType.Postgres)
             {
                 AssertNames(repository, x => x.Name == "alpha", "alpha");
                 AssertNames(repository, x => x.Name == "cafe");

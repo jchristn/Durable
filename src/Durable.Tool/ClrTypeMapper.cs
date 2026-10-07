@@ -34,6 +34,7 @@ namespace Durable.Tool
             ScaffoldColumnType? mapped = null;
             RepositoryType repository = dialect.RepositoryType;
             if (repository == RepositoryType.Sqlite) mapped = MapSqlite(name);
+            else if (repository == RepositoryType.DuckDb) mapped = MapDuckDb(name);
             else if (repository == RepositoryType.Postgres) mapped = MapPostgres(name, arguments);
             else if (repository == RepositoryType.MySql) mapped = MapMySql(name, arguments, unsigned);
             else if (repository == RepositoryType.SqlServer) mapped = MapSqlServer(name, arguments);
@@ -50,6 +51,35 @@ namespace Durable.Tool
                 case "numeric": return Value("decimal");
                 case "blob": return _Bytes;
                 case "text": return _String;
+                default: return null;
+            }
+        }
+
+        private static ScaffoldColumnType? MapDuckDb(string name)
+        {
+            switch (name)
+            {
+                case "boolean": return Value("bool");
+                case "tinyint": return Value("sbyte");
+                case "utinyint": return Value("byte");
+                case "smallint": return Value("short");
+                case "usmallint": return Value("ushort");
+                case "integer": return Value("int");
+                case "uinteger": return Value("uint");
+                case "bigint": return Value("long");
+                case "ubigint": return Value("ulong");
+                case "float": return Value("float");
+                case "double": return Value("double");
+                case "decimal": return Value("decimal");
+                case "timestamp": return Value("DateTime");
+                case "timestamptz": return Value("DateTimeOffset");
+                case "date": return Value("DateOnly");
+                case "time": return Value("TimeOnly");
+                case "interval": return Value("TimeSpan");
+                case "uuid": return Value("Guid");
+                case "blob": return _Bytes;
+                case "varchar":
+                case "json": return _String;
                 default: return null;
             }
         }

@@ -520,9 +520,9 @@ namespace Test.Shared
                 Assert.Contains("? Maybe { get; set; }", code);
                 Assert.Contains("byte[]? Data { get; set; }", code);
                 Assert.Contains("public string Name { get; set; } = string.Empty;", code);
+                if (_Provider.Dialect.SupportsStringMaxLength) Assert.Contains("[Property(\"name\", Flags.String, 80)]", code);
                 if (_Provider.DatabaseType != TestDatabaseType.Sqlite)
                 {
-                    Assert.Contains("[Property(\"name\", Flags.String, 80)]", code);
                     Assert.Contains("public Guid Uid { get; set; }", code);
                     Assert.Contains("public bool Flag { get; set; }", code);
                 }
@@ -684,6 +684,7 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "sqlite";
+                case TestDatabaseType.DuckDb: return "duckdb";
                 case TestDatabaseType.Postgres:
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return "postgres";
@@ -699,6 +700,7 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "Sqlite";
+                case TestDatabaseType.DuckDb: return "DuckDb";
                 case TestDatabaseType.Postgres:
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return "Postgres";

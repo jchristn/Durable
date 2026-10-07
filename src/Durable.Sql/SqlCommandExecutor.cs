@@ -198,6 +198,7 @@ namespace Durable.Sql
             catch (Exception e)
             {
                 scope.Fail(e);
+                scope.ThrowIfTimedOut(e);
                 throw;
             }
         }
@@ -246,6 +247,7 @@ namespace Durable.Sql
                 catch (Exception e)
                 {
                     scope.Fail(e);
+                    scope.ThrowIfTimedOut(e);
                     throw;
                 }
             }
@@ -272,6 +274,7 @@ namespace Durable.Sql
             catch (Exception e)
             {
                 scope.Fail(e);
+                scope.ThrowIfTimedOut(e);
                 throw;
             }
         }
@@ -302,6 +305,7 @@ namespace Durable.Sql
                     catch (Exception e)
                     {
                         scope.Fail(e);
+                        scope.ThrowIfTimedOut(e);
                         throw;
                     }
                 }
@@ -416,6 +420,7 @@ namespace Durable.Sql
             catch (Exception e)
             {
                 scope.Fail(e);
+                scope.ThrowIfTimedOut(e);
                 throw;
             }
         }
@@ -474,6 +479,7 @@ namespace Durable.Sql
                 catch (Exception e)
                 {
                     scope.Fail(e);
+                    scope.ThrowIfTimedOut(e);
                     throw;
                 }
             }
@@ -502,6 +508,7 @@ namespace Durable.Sql
             {
                 scope.Fail(e);
                 command.Dispose();
+                scope.ThrowIfTimedOut(e);
                 throw;
             }
         }
@@ -529,6 +536,7 @@ namespace Durable.Sql
             {
                 scope.Fail(e);
                 await command.DisposeAsync().ConfigureAwait(false);
+                scope.ThrowIfTimedOut(e);
                 throw;
             }
         }
@@ -553,6 +561,7 @@ namespace Durable.Sql
                 catch (Exception e)
                 {
                     scope.Fail(e);
+                    scope.ThrowIfTimedOut(e);
                     throw;
                 }
 
@@ -573,6 +582,7 @@ namespace Durable.Sql
                             catch (Exception e)
                             {
                                 scope.Fail(e);
+                                scope.ThrowIfTimedOut(e);
                                 throw;
                             }
 
@@ -609,6 +619,7 @@ namespace Durable.Sql
                     catch (Exception e)
                     {
                         scope.Fail(e);
+                        scope.ThrowIfTimedOut(e);
                         throw;
                     }
 
@@ -630,6 +641,7 @@ namespace Durable.Sql
                                 catch (Exception e)
                                 {
                                     scope.Fail(e);
+                                    scope.ThrowIfTimedOut(e);
                                     throw;
                                 }
 
@@ -686,7 +698,10 @@ namespace Durable.Sql
                 }
             }
 
-            return new CommandScope(this, command, statement, operation, context, activity);
+            CommandScope scope = new CommandScope(this, command, statement, operation, context, activity);
+            if (!Dialect.DriverEnforcesCommandTimeout && Options.CommandTimeoutSeconds.HasValue && Options.CommandTimeoutSeconds.Value > 0)
+                scope.StartTimeout(TimeSpan.FromSeconds(Options.CommandTimeoutSeconds.Value));
+            return scope;
         }
 
         internal void OnComplete(CommandScope scope, long? rows)

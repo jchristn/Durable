@@ -7,6 +7,7 @@ namespace Test.Shared
     using System.Linq;
     using System.Threading.Tasks;
     using Durable;
+    using Durable.DuckDb;
     using Durable.MySql;
     using Durable.Postgres;
     using Durable.Sql;
@@ -122,6 +123,8 @@ namespace Test.Shared
             {
                 case TestDatabaseType.Sqlite:
                     return "Data Source=" + Path.Combine(Path.GetTempPath(), database + ".db");
+                case TestDatabaseType.DuckDb:
+                    return DuckDbRepositorySettings.ForFile(Path.Combine(Path.GetTempPath(), "durable-lifecycle", database + ".duckdb")).BuildConnectionString();
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb:
                     return new MySqlConnectionStringBuilder(_Provider.ConnectionString) { Database = database }.ConnectionString;
@@ -141,6 +144,7 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return new SqliteRepository<T>(SqliteRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.DuckDb: return new DuckDbRepository<T>(DuckDbRepositorySettings.Parse(connectionString));
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return new MySqlRepository<T>(MySqlRepositorySettings.Parse(connectionString));
                 case TestDatabaseType.Postgres:
@@ -156,6 +160,7 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return new SqliteConnectionFactory(connectionString);
+                case TestDatabaseType.DuckDb: return new DuckDbConnectionFactory(connectionString);
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return new MySqlConnectionFactory(connectionString);
                 case TestDatabaseType.Postgres:
@@ -174,6 +179,11 @@ namespace Test.Shared
                     SqliteConnection.ClearAllPools();
                     string path = new SqliteConnectionStringBuilder(connectionString).DataSource;
                     if (File.Exists(path)) File.Delete(path);
+                    return;
+                case TestDatabaseType.DuckDb:
+                    string duckPath = DuckDbRepositorySettings.Parse(connectionString).DataSource!;
+                    if (File.Exists(duckPath)) File.Delete(duckPath);
+                    if (File.Exists(duckPath + ".wal")) File.Delete(duckPath + ".wal");
                     return;
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb:
