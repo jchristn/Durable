@@ -4,7 +4,7 @@ All notable changes to Durable are listed here, newest first. The format follows
 
 ## Current Version
 
-### v0.5.0 (unreleased) - breaking
+### v0.5.0 (2026-10-06) - breaking
 
 **New packages**
 
