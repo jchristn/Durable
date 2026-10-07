@@ -9,6 +9,7 @@ namespace Test.Shared
     using System.Threading.Tasks;
     using Durable;
     using Durable.Conformance;
+    using Durable.CosmosDb;
     using Durable.InMemory;
     using Durable.LiteDb;
     using Durable.LiteGraph;
@@ -44,6 +45,7 @@ namespace Test.Shared
             typeof(LiteDbBackend).Assembly,
             typeof(LiteGraphBackend).Assembly,
             typeof(ConformanceSuites).Assembly,
+            typeof(CosmosDbBackend).Assembly,
             typeof(DurableCli).Assembly
         };
 
@@ -58,7 +60,7 @@ namespace Test.Shared
             { "TokenWithoutDefault:LiteDbBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:LiteGraphBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
             { "TokenWithoutDefault:BackendIncludeLoader.*", "Backend SPI helper called by RepositoryBase with its token." },
-
+            { "TokenWithoutDefault:CosmosDbBackend.*", "IRepositoryBackend implementation (SPI token is required)." },
 
             // Unwraps an IAsyncDurableResult without starting enumeration; callers cancel with WithCancellation(token).
             { "MissingToken:RepositoryResultExtensions.AsAsyncEnumerable", "Pure accessor over an existing stream." },

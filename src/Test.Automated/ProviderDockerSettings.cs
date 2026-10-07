@@ -255,7 +255,28 @@ namespace Test.Automated
 
         private static ProviderDockerSettings CreateCosmosDb(TestRuntimeConfiguration configuration, string? dockerImageOverride)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CosmosDb, "docker settings");
+            // The Linux "vNext" emulator (arm64 and x64) speaks plain HTTP on 8081 with --protocol http, supports only gateway
+            // mode, and accepts the well-known emulator key. The test target disables endpoint discovery so the random host
+            // port works. Readiness is DocumentBackendTestTargets.ProbeAsync (connect and create the database).
+            string databaseName = string.IsNullOrWhiteSpace(configuration.DatabaseName) ? "durable_touchstone" : configuration.DatabaseName;
+            string password = string.IsNullOrWhiteSpace(configuration.Password) ? "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==" : configuration.Password;
+
+            return new ProviderDockerSettings
+            {
+                ProviderSlug = "cosmosdb",
+                ImageName = string.IsNullOrWhiteSpace(dockerImageOverride) ? "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview" : dockerImageOverride,
+                ContainerPort = 8081,
+                HostPort = configuration.Port,
+                ExtraRunArguments = new[] { "--memory", "2g" },
+                ContainerCommand = new[] { "--protocol", "http", "--enable-explorer", "false" },
+                StartupTimeout = TimeSpan.FromMinutes(4),
+                DatabaseType = TestDatabaseType.CosmosDb,
+                DatabaseName = databaseName,
+                Username = string.Empty,
+                Password = password,
+                Debug = configuration.Debug,
+                Schema = configuration.Schema
+            };
         }
     }
 }
