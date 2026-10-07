@@ -293,6 +293,20 @@ MySqlRepository<Person> myFromSettings = new MySqlRepository<Person>(new MySqlRe
 
 All settings properties are nullable and init-only; null leaves the driver default (`ConnectionTimeout` is in seconds). The settings base class `RepositorySettings` and `RepositoryType` live in the `Durable.Sql` namespace. Each settings class has `Parse(connectionString)` and `BuildConnectionString()`; For the server providers, `Parse` leaves `SslMode` null when the string selects the driver default and keeps keys it does not model in `AdditionalProperties`. The command timeout is not a connection setting: use `SqlRepositoryOptions.CommandTimeoutSeconds`. `CreateDatabaseIfNotExistsAsync()` creates the database (or, for SQLite, the file's directory).
 
+On SQL Server, `CommandTimeoutSeconds` does not cover transaction commits. Durable sets it on the commands it creates, but `COMMIT` and `ROLLBACK` are issued by SqlClient, which uses the connection's `Command Timeout` (default 30 s). If commits can take longer, for example large transactions or a busy server, raise it in the connection string or through `AdditionalProperties`:
+
+```csharp
+SqlServerRepositorySettings settings = new SqlServerRepositorySettings
+{
+    Hostname = "localhost",
+    Database = "app",
+    Username = "sa",
+    Password = "...",
+    AdditionalProperties = new Dictionary<string, string> { ["Command Timeout"] = "120" }   // also applies to COMMIT
+};
+// or: "Server=localhost;Database=app;User Id=sa;Password=...;Command Timeout=120"
+```
+
 Disposable local databases for development:
 
 ```bash
@@ -1073,7 +1087,7 @@ SqlRepositoryOptions options = new SqlRepositoryOptions
 {
     Logger = loggerFactory.CreateLogger("Durable"),   // Debug per command, Warning when slow, Error on failure
     SlowCommandThreshold = TimeSpan.FromMilliseconds(200),
-    CommandTimeoutSeconds = 30
+    CommandTimeoutSeconds = 30                        // commands Durable runs; SQL Server commits use the connection's Command Timeout
 };
 options.Interceptors.Add(new TimingInterceptor());
 SqliteRepository<Person> people = new SqliteRepository<Person>("Data Source=app.db", options);

@@ -29,6 +29,9 @@ namespace Durable.Sql
 
         /// <summary>
         /// Gets or sets the command timeout in seconds, or null for the driver default. Minimum: 0 (no timeout).
+        /// Applies to the commands Durable creates (and to SQL Server bulk copy). Transaction commits and rollbacks are issued
+        /// by the driver and use the connection's own timeout; on SQL Server that is the connection string's
+        /// <c>Command Timeout</c> (default 30 s).
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when set to a negative value.</exception>
         public int? CommandTimeoutSeconds

@@ -17,6 +17,10 @@ Entity mapping sources: Durable can map classes that cannot carry its attributes
 - A built type's mapping cannot change: registering a different source for it, per type or through `MappingSource`, throws `InvalidOperationException` naming the type. Registering the source it already uses is allowed.
 - Every mapping attribute is now read in one place (the attribute source) instead of through scattered `GetCustomAttribute` calls; behavior for attributed classes is unchanged.
 
+**Documentation**
+
+- On SQL Server, `SqlRepositoryOptions.CommandTimeoutSeconds` does not cover transaction commits: SqlClient issues `COMMIT` with the connection's `Command Timeout` (default 30 s). The README and the property's XML docs now say so and show how to raise it in the connection string or `AdditionalProperties`.
+
 **Command-line tool (`Durable.Tool`)**
 
 - `--mapping-source <type>` (and `mappingSource` in `durable.json`) for `schema diff`, `schema sync` and `migrations add`: instantiates an `IEntityMappingSource` from your assembly, registers it for the classes it describes, and discovers those classes as entities alongside `[Entity]` types. A missing, ambiguous or unusable type is a command error.
