@@ -33,7 +33,7 @@ namespace Test.Shared
                     return new MongoDbTestTarget(configuration);
 
                 case TestDatabaseType.CosmosDb:
-                    throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.CosmosDb, "document backend test target");
+                    return new CosmosDbTestTarget(configuration);
 
                 default:
                     throw new ArgumentOutOfRangeException(

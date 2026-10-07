@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<IsAotCompatible>true</IsAotCompatible>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<ApplicationIcon>logo.ico</ApplicationIcon>
+		<DocumentationFile>Durable.CosmosDb.xml</DocumentationFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<PackageId>Durable.CosmosDb</PackageId>
+		<Title>Durable.CosmosDb</Title>
+		<Version>0.7.0</Version>
+		<Authors>jchristn,joshclopton</Authors>
+		<Description>Azure Cosmos DB for NoSQL backend for Durable ORM: store entities as JSON documents with the full IRepository surface, LINQ filters, ordering, paging and aggregates pushed down to parameterized Cosmos DB SQL queries where the semantics match C#, lossless value round-trips, configurable partition keys, ETag-based optimistic concurrency without lost updates, includes and counter-document auto-increment keys.</Description>
+		<Copyright>(c)2025 Durable Community</Copyright>
+		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
+		<PackageIcon>logo.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageTags>linq;orm;database;cosmosdb;cosmos;azure;nosql;document;repository</PackageTags>
+		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+		<IncludeSymbols>True</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Content Include="logo.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="..\..\assets\logo.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\LICENSE.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\..\README.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The Cosmos DB SDK needs Newtonsoft.Json at run time (its own internals) but no longer brings it in; Durable never
+		     uses it for entities (documents are written and read with System.Text.Json through the stream APIs). -->
+		<PackageReference Include="Microsoft.Azure.Cosmos" Version="3.63.2" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Durable\Durable.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="Durable.CosmosDb.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>

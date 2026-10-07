@@ -1,0 +1,1367 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.CosmosDb</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.CosmosDb.CosmosDbBackend">
+            <summary>
+            An Azure Cosmos DB for NoSQL <see cref="T:Durable.Query.IRepositoryBackend"/>: stores entities as JSON documents in a Cosmos DB
+            database. Use it through <see cref="T:Durable.CosmosDb.CosmosDbRepository`1"/> (or any <see cref="T:Durable.Query.RepositoryBase`1"/>); one backend
+            wraps one <see cref="T:Microsoft.Azure.Cosmos.CosmosClient"/> and database and serves every entity type, so includes and navigation predicates
+            work across repositories that share it. Create one backend per database and share it.
+            <para>
+            Storage: each entity type is a container named <see cref="P:Durable.EntityMetadata.TableName"/> (created on first use), each
+            mapped column a document property named after the column, written by Durable from <see cref="T:Durable.EntityMetadata"/> with
+            System.Text.Json through the SDK's stream APIs (the SDK's reflection serializer is never used for entities). The
+            document <c>id</c> is the primary key as text (composite keys joined with <c>|</c>); a single primary key column named
+            <c>id</c> with string values is the <c>id</c> itself, and a column named <c>id</c> that is not is stored as
+            <c>durable_id</c>. Values are stored the way a database driver would (<see cref="T:Durable.IValueConverter"/> provider values,
+            JSON text for JSON columns, enum names or numbers) and encoded losslessly and so that Cosmos DB orders them like C#
+            (see <see cref="T:Durable.CosmosDb.CosmosDbRepositorySettings"/> for partition keys): numbers as JSON numbers, DateTime as fixed-width
+            ISO 8601 wall-clock text plus a kind suffix (<c>Z</c>, none, or the local offset), DateTimeOffset as its UTC instant
+            (<c>...Z</c>), DateOnly as <c>yyyy-MM-dd</c>, TimeSpan and TimeOnly as ticks, Guid as lowercase text, byte arrays as
+            base64. Because Cosmos DB may hold JSON numbers only as doubles, longs beyond plus or minus 2^53 and decimals a double
+            cannot round-trip keep an exact copy under the document's <c>_durable</c> object, as does the offset of a
+            DateTimeOffset; reads use it. Decimal scale (trailing zeros) is not preserved. Auto-increment values come from a
+            counter document per container (see <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.SequenceContainerName"/>) incremented with
+            an ETag-conditioned replace, so concurrent creates never share a key, also across processes. Inserting a duplicate
+            primary key throws <see cref="T:System.InvalidOperationException"/>. Cosmos DB indexes every property;
+            <see cref="T:Durable.IndexAttribute"/> needs no action, and <see cref="P:Durable.IndexAttribute.IsUnique"/> is not enforced (Cosmos DB
+            unique keys apply only within a logical partition and only at container creation).
+            </para>
+            <para>
+            Queries: the parts of a filter whose Cosmos DB semantics match C# (see <see cref="T:Durable.CosmosDb.CosmosDbQueryPlan"/>) are pushed down
+            as a parameterized Cosmos DB SQL query, with a single-key ORDER BY, OFFSET/LIMIT, COUNT, SUM, AVG, MIN and MAX when the
+            whole query is exact; key lookups are point reads. Everything else (functions, navigations, multi-key ordering,
+            grouping, residual filters) is evaluated client-side with C# semantics over the documents Cosmos DB returns, so
+            push-down never changes results. Strings compare ordinally and case-sensitively, so
+            <see cref="F:Durable.StringMatchMode.Database"/> behaves as <see cref="F:Durable.StringMatchMode.Ordinal"/>. Unordered queries return
+            documents in primary key order.
+            </para>
+            <para>
+            Writes: every single-document write is atomic. Updates and deletes read the matching documents and write each one
+            with an ETag condition (<c>If-Match</c>); when another writer changed a document first, it is read again, re-checked
+            against the condition (for example the expected version) and written again, so optimistic concurrency and set-based
+            updates never lose updates. A write that matches several documents is not atomic as a whole, and neither is a change
+            of a document's id or partition key (create the new document, then delete the old one). Transactions are not
+            supported (<see cref="F:Durable.RepositoryCapabilities.Transactions"/> is absent): Cosmos DB transactional batches cover only one
+            logical partition, so Durable does not pretend to offer atomicity across documents.
+            </para>
+            <para>
+            Lifetime: create a backend with <see cref="M:Durable.CosmosDb.CosmosDbBackend.CreateAsync(Durable.CosmosDb.CosmosDbRepositorySettings,System.Threading.CancellationToken)"/> (or <see cref="M:Durable.CosmosDb.CosmosDbBackend.Create(Durable.CosmosDb.CosmosDbRepositorySettings)"/>), share it across repositories, and
+            dispose it when done. It disposes the client only when it created it (<see cref="P:Durable.CosmosDb.CosmosDbBackend.OwnsClient"/>); a client passed in
+            with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/> is never disposed. Repositories never dispose the backend.
+            </para>
+            <para>
+            Trimming and Native AOT: not supported. The Azure Cosmos DB SDK (Microsoft.Azure.Cosmos) uses Newtonsoft.Json and
+            reflection internally, so <see cref="M:Durable.CosmosDb.CosmosDbBackend.CreateAsync(Durable.CosmosDb.CosmosDbRepositorySettings,System.Threading.CancellationToken)"/> and <see cref="M:Durable.CosmosDb.CosmosDbBackend.Create(Durable.CosmosDb.CosmosDbRepositorySettings)"/> carry
+            <c>[RequiresUnreferencedCode]</c> and <c>[RequiresDynamicCode]</c>. Durable's own code in
+            this package is trim-annotated and warning-free.
+            </para>
+            Thread safety: safe for concurrent use by any number of repositories and threads.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.SupportedCapabilities">
+            <summary>
+            Gets the optional features every Cosmos DB backend supports: everything except
+            <see cref="F:Durable.RepositoryCapabilities.Transactions"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.Capabilities">
+            <summary>
+            Gets the optional features the backend supports (see <see cref="P:Durable.CosmosDb.CosmosDbBackend.SupportedCapabilities"/>).
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.Client">
+            <summary>
+            Gets the Cosmos DB client. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.OwnsClient">
+            <summary>
+            Gets whether the backend disposes <see cref="P:Durable.CosmosDb.CosmosDbBackend.Client"/> when it is disposed (true when the backend created it from
+            settings, false when the client was passed in).
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.Database">
+            <summary>
+            Gets the Cosmos DB database holding the containers. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.JsonOptions">
+            <summary>
+            Gets the JSON options used to store JSON columns. Never null.
+            Default: camelCase property names, not indented (the same as the SQL providers).
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbBackend.LastQueryPlan">
+            <summary>
+            Gets the plan of the most recent read or write executed by any thread, or null before the first one. Use it in
+            single-threaded diagnostics and tests; use <see cref="E:Durable.CosmosDb.CosmosDbBackend.QueryPlanned"/> to observe every plan.
+            </summary>
+        </member>
+        <member name="E:Durable.CosmosDb.CosmosDbBackend.QueryPlanned">
+            <summary>
+            Raised with the plan of every read and write, synchronously on the thread that executed it; the sender is the
+            backend. Handlers must be thread-safe and fast and must not call the backend; an exception thrown by a handler is
+            logged (Warning) and otherwise ignored.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.CreateAsync(Durable.CosmosDb.CosmosDbRepositorySettings,System.Threading.CancellationToken)">
+            <summary>
+            Creates a backend: uses <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/> when set (not owned, never disposed),
+            otherwise creates a client from the endpoint and key or the connection string (owned and disposed by the backend);
+            then creates the database when missing (unless <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.CreateIfNotExists"/> is
+            false, in which case it must exist). Containers are created on first use.
+            </summary>
+            <param name="settings">Settings; null uses <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForEmulator(System.String,System.String)"/> with its defaults.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The backend. Never null. Dispose it when done.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the settings are invalid (see <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.Validate"/>).</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the database does not exist and may not be created.</exception>
+            <exception cref="T:Microsoft.Azure.Cosmos.CosmosException">Thrown when Cosmos DB rejects the request (for example a wrong key).</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown when the token is canceled.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Create(Durable.CosmosDb.CosmosDbRepositorySettings)">
+            <summary>
+            Creates a backend (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.CreateAsync(Durable.CosmosDb.CosmosDbRepositorySettings,System.Threading.CancellationToken)"/>). Blocks the calling thread while the database is created or
+            checked; prefer <see cref="M:Durable.CosmosDb.CosmosDbBackend.CreateAsync(Durable.CosmosDb.CosmosDbRepositorySettings,System.Threading.CancellationToken)"/> in asynchronous code.
+            </summary>
+            <param name="settings">Settings; null uses <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForEmulator(System.String,System.String)"/> with its defaults.</param>
+            <returns>The backend. Never null. Dispose it when done.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when the settings are invalid (see <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.Validate"/>).</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the database does not exist and may not be created.</exception>
+            <exception cref="T:Microsoft.Azure.Cosmos.CosmosException">Thrown when Cosmos DB rejects the request.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.CreateRepository``1(Durable.RepositoryOptions)">
+            <summary>
+            Creates a repository over this backend. Does not touch the account (the container is created on first use).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="options">Options; null uses defaults.</param>
+            <returns>A new repository.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB (see <see cref="T:Durable.CosmosDb.CosmosDbRepository`1"/>).</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Owns(Durable.ITransaction)">
+            <summary>
+            Determines whether a transaction belongs to this backend. Always false: the Cosmos DB backend has no transactions.
+            </summary>
+            <param name="transaction">Transaction; may be null.</param>
+            <returns>False.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.BeginTransaction">
+            <summary>
+            Always throws: Cosmos DB has no multi-document transactions across partitions (transactional batches cover one
+            logical partition), and the backend does not fake atomicity. <see cref="P:Durable.CosmosDb.CosmosDbBackend.Capabilities"/> lacks
+            <see cref="F:Durable.RepositoryCapabilities.Transactions"/>, so repositories reject transactions before calling this.
+            </summary>
+            <returns>Never returns.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.BeginTransactionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Always throws (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.BeginTransaction"/>).
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>Never returns.</returns>
+            <exception cref="T:System.NotSupportedException">Always thrown.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Durable#Query#IRepositoryBackend#BeginTransactionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.GetContainerAsync(System.Type,System.Threading.CancellationToken)">
+            <summary>
+            Returns the container of an entity type, creating it when missing (unless
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.CreateIfNotExists"/> is false). Use it for Cosmos DB features Durable does
+            not expose (change feed, indexing policy, throughput).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The container. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the container is missing and may not be created, or exists with another partition key path.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.GetContainer(System.Type)">
+            <summary>
+            Returns the container of an entity type (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.GetContainerAsync(System.Type,System.Threading.CancellationToken)"/>). Blocks the calling thread while the
+            container is created or checked.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The container. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the container is missing and may not be created, or exists with another partition key path.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.GetPartitionKeyPath(System.Type)">
+            <summary>
+            Returns the partition key path of an entity's container (<c>/id</c> unless configured in
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.PartitionKeys"/>).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The path, for example <c>/id</c> or <c>/tenant_id</c>. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.GetStoredRowsAsync(System.Type,System.Threading.CancellationToken)">
+            <summary>
+            Returns the stored documents of an entity, in primary key order, for diagnostics and tests that check the stored
+            representation (including Cosmos DB system properties). Soft-deleted documents are included.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Copies of the documents. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.GetStoredRows(System.Type)">
+            <summary>
+            Returns the stored documents of an entity (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.GetStoredRowsAsync(System.Type,System.Threading.CancellationToken)"/>). Blocks the calling thread.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>Copies of the documents in primary key order. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.ClearAsync(System.Threading.CancellationToken)">
+            <summary>
+            Deletes every container of the database (all data and auto-increment counters, including containers Durable did
+            not create), bypassing soft delete and query filters. The database itself is kept.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Clear">
+            <summary>
+            Deletes every container of the database (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.ClearAsync(System.Threading.CancellationToken)"/>). Blocks the calling thread.
+            </summary>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.ClearAsync(System.Type,System.Threading.CancellationToken)">
+            <summary>
+            Removes every document of one entity type (including soft-deleted rows) and resets its auto-increment counter, so
+            generated keys restart at 1. The container and its settings are kept. Bypasses soft delete and query filters; not
+            atomic (documents are deleted one by one, <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.MaxConcurrentDeletes"/> at a time).
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>The number of documents removed.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Clear(System.Type)">
+            <summary>
+            Removes every document of one entity type (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.ClearAsync(System.Type,System.Threading.CancellationToken)"/>). Blocks the
+            calling thread.
+            </summary>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <returns>The number of documents removed.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when entityType is null.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.QueryAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.CountAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.AggregateAsync(Durable.Query.QueryModel,Durable.Query.AggregateFunction,Durable.Query.QueryNode,System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Thrown when <paramref name="function"/> is Count or Any.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.InsertAsync(Durable.EntityMetadata,System.Object,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.ReplaceAsync(Durable.EntityMetadata,System.Object,Durable.Query.QueryNode,Durable.Query.QuerySource,Durable.ITransaction,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.UpdateAsync(Durable.Query.QueryModel,System.Collections.Generic.IReadOnlyList{Durable.Query.FieldAssignment},System.Threading.CancellationToken)">
+            <inheritdoc />
+            <exception cref="T:System.InvalidOperationException">Thrown when an assignment changes a primary key to one that already exists.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.DeleteAsync(Durable.Query.QueryModel,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.Dispose">
+            <summary>
+            Disposes the backend and, when <see cref="P:Durable.CosmosDb.CosmosDbBackend.OwnsClient"/> is true, the client. Repositories over the backend can no
+            longer be used; their operations throw <see cref="T:System.ObjectDisposedException"/>. Safe to call more than once.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbBackend.DisposeAsync">
+            <summary>
+            Disposes the backend (see <see cref="M:Durable.CosmosDb.CosmosDbBackend.Dispose"/>). The client closes synchronously, so this completes synchronously.
+            </summary>
+            <returns>A completed task.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbContainerSchema">
+            <summary>
+            How an entity is stored in a Cosmos DB container: the container is <see cref="P:Durable.EntityMetadata.TableName"/>; each column
+            is a document property named after the column, except that a column whose name is reserved by Cosmos DB or Durable
+            (<c>id</c>, <c>_rid</c>, <c>_self</c>, <c>_etag</c>, <c>_attachments</c>, <c>_ts</c>, <c>_lsn</c>, <c>_durable</c>) is
+            stored as <c>durable_</c> plus its name. The document <c>id</c> is the primary key as text: a single primary key column
+            named <c>id</c> whose values are strings (string, char, Guid, enum names, dates) is stored directly as the
+            <c>id</c> (such keys cannot contain <c>/</c>, <c>\</c>, <c>?</c>, <c>#</c> or a percent escape like <c>%2F</c>); any
+            other key is rendered as invariant text with <c>~</c>, <c>%</c>, <c>/</c>, <c>\</c>, <c>?</c>, <c>#</c> and <c>|</c>
+            escaped as <c>~</c> plus two hex digits, composite key parts joined with <c>|</c> in key order. The partition key path is
+            <c>/id</c> unless <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.PartitionKeys"/> names a column for the entity.
+            Thread safety: immutable once built; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbContainerSchema.IdField">
+            <summary>
+            The document id property.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbContainerSchema.ShadowField">
+            <summary>
+            The document property holding exact shadows of approximate values.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbContainerSchema.ETagField">
+            <summary>
+            The document property holding the ETag.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbContainerSchema.MaxIdLength">
+            <summary>
+            The longest document id Cosmos DB accepts, in characters.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.SystemFields">
+            <summary>
+            Gets the system properties Cosmos DB adds to every document.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.Metadata">
+            <summary>
+            Gets the entity metadata. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.ContainerName">
+            <summary>
+            Gets the container name. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.SingleKey">
+            <summary>
+            Gets whether the entity has a single key column.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.KeyInId">
+            <summary>
+            Gets whether the single key column is stored as the document id itself.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyColumn">
+            <summary>
+            Gets the partition key column, or null when the partition key is the document id.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyPath">
+            <summary>
+            Gets the partition key path, for example <c>/id</c>. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyField">
+            <summary>
+            Gets the document property of the partition key. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyFromKey">
+            <summary>
+            Gets whether the partition key value follows from the primary key (the partition key is the id or a key column),
+            so a key lookup can be a point read.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.#ctor(Durable.EntityMetadata,System.String)">
+            <summary>
+            Builds the schema of an entity.
+            </summary>
+            <param name="metadata">Entity metadata. Must not be null.</param>
+            <param name="partitionKeyProperty">Property (or column) name of the partition key column; null for the document id.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when metadata is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the entity has no primary key.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB (invalid container name, colliding property names, unsupported value types, partition key or auto-increment column).</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.Field(Durable.ColumnMetadata)">
+            <summary>
+            Returns the document property of a column.
+            </summary>
+            <param name="column">Column of this entity. Must not be null.</param>
+            <returns>The property name.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the column does not belong to the entity.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.StoredType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the stored type of a column (see <see cref="M:Durable.CosmosDb.CosmosDbValueConverter.StoredType(Durable.ColumnMetadata)"/>).
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The stored type.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.Kind(Durable.ColumnMetadata)">
+            <summary>
+            Returns the representation kind of a column.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The kind.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.Path(Durable.ColumnMetadata)">
+            <summary>
+            Returns the Cosmos DB SQL path of a column's property, for example <c>c["name"]</c>.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The path.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.ShadowPath(Durable.ColumnMetadata)">
+            <summary>
+            Returns the Cosmos DB SQL path of the shadow of a column, for example <c>c["_durable"]["price"]</c>.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The path.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.FieldPath(System.String)">
+            <summary>
+            Returns the Cosmos DB SQL path of a property.
+            </summary>
+            <param name="field">Property name. Must not be null.</param>
+            <returns>The path.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.Id(System.Object[])">
+            <summary>
+            Builds the document id of a key.
+            </summary>
+            <param name="storedKey">Stored key values in key order. Must not be null; no part may be null.</param>
+            <returns>The id.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when a key part is null, or the id is empty, too long or contains characters Cosmos DB does not allow.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyOf(System.Text.Json.Nodes.JsonObject)">
+            <summary>
+            Returns the partition key of a document.
+            </summary>
+            <param name="document">Document. Must not be null.</param>
+            <returns>The partition key.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbContainerSchema.PartitionKeyOfValue(System.Object)">
+            <summary>
+            Returns the partition key for a stored value of the partition key column.
+            </summary>
+            <param name="stored">Stored value; may be null.</param>
+            <returns>The partition key.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbDocument">
+            <summary>
+            A document read from (or about to be written to) a Cosmos DB container, with lazily decoded stored column values.
+            Thread safety: not thread-safe; owned by one operation.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbDocument.Schema">
+            <summary>
+            Gets the schema of the document's entity. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbDocument.Content">
+            <summary>
+            Gets the document content (including system properties when read from Cosmos DB). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbDocument.Id">
+            <summary>
+            Gets the document id. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbDocument.ETag">
+            <summary>
+            Gets the ETag of the stored version, or null for a document that has not been read from Cosmos DB.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbDocument.PartitionKey">
+            <summary>
+            Gets the partition key of the document.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbDocument.#ctor(Durable.CosmosDb.CosmosDbContainerSchema,System.Text.Json.Nodes.JsonObject)">
+            <summary>
+            Wraps document content.
+            </summary>
+            <param name="schema">Schema. Must not be null.</param>
+            <param name="content">Content. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the content has no string id.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbDocument.Get(Durable.ColumnMetadata)">
+            <summary>
+            Returns the stored value of a column (decoded from the document, preferring its exact shadow).
+            </summary>
+            <param name="column">Column of the document's entity. Must not be null.</param>
+            <returns>The stored value, or null when the property is null or missing.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the property cannot be read as the column's stored type.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbDocument.Shadow(System.String)">
+            <summary>
+            Returns the shadow text of a property, or null.
+            </summary>
+            <param name="field">Property name. Must not be null.</param>
+            <returns>The shadow, or null.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbDocument.HasUncertainOrder(Durable.ColumnMetadata)">
+            <summary>
+            Returns whether Cosmos DB may order this document's value of a column differently from C#: strings with characters
+            at or above U+D800 (code point versus UTF-16 order), integers and decimals that have an exact shadow (Cosmos DB
+            may compare their double approximations), and non-finite floating point values (stored as strings).
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>True when the position of this document in a Cosmos DB ordering is not guaranteed to match C#.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbJsonCodec">
+            <summary>
+            Encodes stored values (see <see cref="T:Durable.CosmosDb.CosmosDbValueConverter"/>) as JSON document values, losslessly and so that Cosmos
+            DB compares and orders them like C#: integers, floats, doubles and decimals as JSON numbers (shortest round-trip text),
+            bool as JSON booleans, strings, chars and Guids as strings, DateTime as fixed-width wall-clock text plus a kind suffix,
+            DateTimeOffset as its fixed-width UTC instant, DateOnly as "yyyy-MM-dd", TimeOnly and TimeSpan as ticks, byte arrays
+            as base64. Cosmos DB may keep JSON numbers only as doubles, so values a double cannot hold exactly (integers beyond
+            plus or minus 2^53, decimals that do not round-trip through a double) also get an exact text "shadow", stored under the
+            document's <c>_durable</c> object, and so does a non-zero DateTimeOffset offset; reads prefer the shadow.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbJsonCodec.MaxExactInteger">
+            <summary>
+            The largest magnitude of an integer a double holds exactly (2^53).
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbJsonCodec.PrefixUpperBound">
+            <summary>
+            The character appended to a DateTime prefix to form the exclusive upper bound of every value with that prefix.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.KindOf(System.Type)">
+            <summary>
+            Returns the representation kind of a stored type.
+            </summary>
+            <param name="stored">Stored CLR type. Must not be null.</param>
+            <returns>The kind.</returns>
+            <exception cref="T:System.NotSupportedException">Thrown when the type cannot be stored in a Cosmos DB document.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.IsStringKind(Durable.CosmosDb.CosmosDbValueKind)">
+            <summary>
+            Returns whether values of a kind are JSON strings.
+            </summary>
+            <param name="kind">Kind.</param>
+            <returns>True for string-represented kinds.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.IsNumberKind(Durable.CosmosDb.CosmosDbValueKind)">
+            <summary>
+            Returns whether values of a kind are JSON numbers.
+            </summary>
+            <param name="kind">Kind.</param>
+            <returns>True for number-represented kinds.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.Encode(System.Object,Durable.CosmosDb.CosmosDbValueKind,System.String@)">
+            <summary>
+            Encodes a stored value as a JSON value.
+            </summary>
+            <param name="stored">Stored value; may be null.</param>
+            <param name="kind">Kind of the column.</param>
+            <param name="shadow">Receives the exact text to keep in the document's shadow object, or null when the JSON value is exact.</param>
+            <returns>The JSON value, or null for a null value.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the value does not have the column's stored type.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.Decode(System.Text.Json.Nodes.JsonNode,System.String,System.Type)">
+            <summary>
+            Decodes a JSON value to a stored value of a column.
+            </summary>
+            <param name="node">JSON value; null for JSON null or a missing field.</param>
+            <param name="shadow">Exact shadow text, or null.</param>
+            <param name="stored">Stored type of the column. Must not be null.</param>
+            <returns>The stored value, or null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the JSON value cannot be read as the stored type.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.Decode(System.Text.Json.JsonElement,System.String,System.Type)">
+            <summary>
+            Decodes a JSON element to a stored value of a column.
+            </summary>
+            <param name="element">JSON element.</param>
+            <param name="shadow">Exact shadow text, or null.</param>
+            <param name="stored">Stored type of the column. Must not be null.</param>
+            <returns>The stored value, or null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the JSON value cannot be read as the stored type.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.Parameter(System.Object)">
+            <summary>
+            Converts a stored value to the value bound as a Cosmos DB query parameter, so it compares with stored values like
+            the stored JSON value would.
+            </summary>
+            <param name="stored">Stored value. Must not be null.</param>
+            <returns>The parameter value (string, long, ulong, double, decimal or bool).</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when the value cannot be stored.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.DateTimePrefix(System.DateTime)">
+            <summary>
+            Returns the fixed-width wall-clock prefix of a DateTime (27 characters, years 0001 to 9999), which orders like
+            <see cref="P:System.DateTime.Ticks"/>.
+            </summary>
+            <param name="value">Value.</param>
+            <returns>The prefix.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.RoundTrips(System.Decimal)">
+            <summary>
+            Returns whether a decimal survives a round trip through a double (the decimal's text parsed as a double, then
+            formatted with the shortest round-trip text and parsed back as a decimal).
+            </summary>
+            <param name="value">Value.</param>
+            <returns>True when a double holds the value exactly enough to round-trip.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.HasHighCharacters(System.String)">
+            <summary>
+            Returns whether a string contains a character at or above U+D800, where Cosmos DB's code point order and C#'s
+            UTF-16 ordinal order can disagree.
+            </summary>
+            <param name="value">Value. Must not be null.</param>
+            <returns>True when the orders may disagree for this value.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbJsonCodec.ToElement(System.Text.Json.Nodes.JsonNode)">
+            <summary>
+            Returns the element of a JSON node.
+            </summary>
+            <param name="node">Node. Must not be null.</param>
+            <returns>The element.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbPushdown">
+            <summary>
+            Translates the parts of a <see cref="T:Durable.Query.QueryNode"/> filter whose Cosmos DB semantics match C# into a parameterized
+            Cosmos DB SQL condition. The filter is split into AND-ed conjuncts; each conjunct is translated when it is built from
+            comparisons, null checks, <c>Contains</c> (IN) lists, string matches (<c>StartsWith</c>, <c>EndsWith</c>,
+            <c>Contains</c>) and <c>IsNullOrEmpty</c> on a column of the queried source against client-side values, combined with
+            AND, OR and NOT; anything else (functions, arithmetic, navigations, columns compared with columns) is left to
+            client-side evaluation. Every translated condition is total (true or false, never undefined, guarded by
+            <c>IS_NUMBER</c> / <c>IS_STRING</c> / <c>IS_BOOL</c>, with C# null semantics through <c>IS_DEFINED</c> /
+            <c>IS_NULL</c>) and a necessary condition of the filter, so evaluating the full filter client-side afterwards never
+            changes results; when every conjunct translated exactly, <see cref="P:Durable.CosmosDb.CosmosDbPushdown.Exact"/> is true and Cosmos DB's result is final.
+            <para>
+            Exactness rules: parameters are converted to the column's stored form and must have its stored type (integers may
+            mix widths). Integers, booleans, Guids, dates, DateTimeOffset instants, floats and doubles compare exactly (NaN and
+            infinities, stored as strings, are included explicitly where C# orders them). Strings compare exactly for equality,
+            string matches and IN; ordering comparisons are exact when the parameter has no character at or above U+D800 (where
+            Cosmos DB's code point order differs from UTF-16 ordinal order). DateTime compares by its fixed-width wall-clock prefix
+            (ticks, ignoring the kind, like C#). Long values beyond plus or minus 2^53 and decimals that a double cannot round-trip
+            may be compared as doubles inside Cosmos DB: comparisons with such a parameter are widened (non-strict) and re-checked
+            client-side; comparisons of a decimal column with an exact parameter are exact unless the column holds such decimals,
+            which <see cref="P:Durable.CosmosDb.CosmosDbPushdown.UncertainDecimals"/> lets the backend probe for (translate again with
+            <c>conservativeDecimals</c> when it does). Case-insensitive matches are pushed with Cosmos DB's case-insensitive
+            functions only for ASCII patterns without i, I, s or S (whose case folding differs from
+            <see cref="F:System.StringComparison.OrdinalIgnoreCase"/>) and are always re-checked client-side. Byte arrays support
+            equality only. Columns with a value converter compare their provider values.
+            </para>
+            Thread safety: not thread-safe while translating; immutable afterwards.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbPushdown.Predicates">
+            <summary>
+            Gets the pushed conditions (ANDed). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbPushdown.Parameters">
+            <summary>
+            Gets the parameters referenced by the conditions, in order. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbPushdown.Exact">
+            <summary>
+            Gets whether the conditions are exactly the filter.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbPushdown.UncertainDecimals">
+            <summary>
+            Gets the decimal columns whose comparisons were translated exactly on the assumption that the column holds no
+            decimal a double cannot round-trip. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbPushdown.Equalities">
+            <summary>
+            Gets the stored values of the top-level equality conditions on columns of the queried source (exact kinds only),
+            used for point reads and single-partition queries. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.Translate(Durable.Query.QuerySource,Durable.Query.QueryNode,Durable.CosmosDb.CosmosDbContainerSchema,Durable.CosmosDb.CosmosDbValueConverter,System.Boolean)">
+            <summary>
+            Translates a filter.
+            </summary>
+            <param name="source">Source the filter's own columns refer to. Must not be null.</param>
+            <param name="filter">Filter; null pushes nothing and is exact.</param>
+            <param name="schema">Schema of the source's entity. Must not be null.</param>
+            <param name="values">Value converter. Must not be null.</param>
+            <param name="conservativeDecimals">Whether decimal columns may hold values a double cannot round-trip (widen every decimal comparison).</param>
+            <returns>The translation. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when source, schema or values is null.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.Where">
+            <summary>
+            Returns the conditions ANDed into one WHERE clause body, or null when nothing was pushed.
+            </summary>
+            <returns>The condition, or null.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.AddParameter(System.Object)">
+            <summary>
+            Adds a parameter and returns its name.
+            </summary>
+            <param name="value">Parameter value. Must not be null.</param>
+            <returns>The parameter name, for example <c>@p0</c>.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.ParametersJson">
+            <summary>
+            Returns the parameters as JSON for diagnostics.
+            </summary>
+            <returns>The JSON, or null when there are no parameters.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.WriteValue(System.Text.Json.Utf8JsonWriter,System.Object)">
+            <summary>
+            Writes a parameter value as JSON.
+            </summary>
+            <param name="writer">Writer. Must not be null.</param>
+            <param name="value">Value (string, long, ulong, double, decimal, bool, or an array of those).</param>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitLogical(Durable.Query.LogicalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitNot(Durable.Query.NotNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitValue(Durable.Query.ValueNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitColumn(Durable.Query.ColumnNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitNullCheck(Durable.Query.NullCheckNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitComparison(Durable.Query.ComparisonNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitIn(Durable.Query.InNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitStringMatch(Durable.Query.StringMatchNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitStringTest(Durable.Query.StringTestNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitArithmetic(Durable.Query.ArithmeticNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitNegate(Durable.Query.NegateNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitConcat(Durable.Query.ConcatNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitCoalesce(Durable.Query.CoalesceNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitConditional(Durable.Query.ConditionalNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitFunction(Durable.Query.FunctionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitNavigationMember(Durable.Query.NavigationMemberNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitCollection(Durable.Query.CollectionNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.VisitAggregate(Durable.Query.AggregateNode)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbPushdown.Guard(Durable.CosmosDb.CosmosDbValueKind,System.String)">
+            <summary>
+            Returns the Cosmos DB type check for a kind.
+            </summary>
+            <param name="kind">Kind.</param>
+            <param name="path">Property path.</param>
+            <returns>The check, for example <c>IS_NUMBER(c["x"])</c>.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbQueryEvaluator">
+            <summary>
+            Evaluates <see cref="T:Durable.Query.QueryNode"/> trees client-side against Cosmos DB documents with the C# semantics of
+            <see cref="T:Durable.Query.QueryEvaluator`1"/>: everything a <see cref="T:Durable.CosmosDb.CosmosDbBackend"/> does not push down (residual
+            predicates, navigations, collection predicates, computed values, ordering, paging and aggregates). Values are
+            compared in their stored form (enum names, converter provider values, JSON text): properties are decoded with
+            <see cref="T:Durable.CosmosDb.CosmosDbJsonCodec"/> and parameter values converted with <see cref="M:Durable.CosmosDb.CosmosDbValueConverter.ToStored(Durable.ColumnMetadata,System.Object)"/>.
+            Related documents are looked up through the backend (a point read by key or a query by property) and cached for the
+            evaluator's lifetime; the lookup blocks the calling thread because the evaluator is synchronous.
+            Thread safety: not thread-safe; create one per operation.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryEvaluator.#ctor(Durable.CosmosDb.CosmosDbValueConverter,System.Func{Durable.EntityMetadata,Durable.ColumnMetadata,System.Object,System.Collections.Generic.IReadOnlyList{Durable.CosmosDb.CosmosDbDocument}})">
+            <summary>
+            Instantiates an evaluator.
+            </summary>
+            <param name="values">Value converter. Must not be null.</param>
+            <param name="findRows">Looks up the documents of an entity whose column equals a stored value. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when an argument is null.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryEvaluator.GetValue(Durable.EntityMetadata,Durable.CosmosDb.CosmosDbDocument,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryEvaluator.FindRows(Durable.EntityMetadata,Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryEvaluator.NormalizeValue(Durable.ColumnMetadata,System.Object)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbQueryPlan">
+            <summary>
+            Describes how a <see cref="T:Durable.CosmosDb.CosmosDbBackend"/> executed one read or write: the parameterized Cosmos DB SQL query it
+            sent (or the point read it used), whether the query ran in one partition, whether anything was evaluated client-side
+            afterwards, whether ordering and paging ran inside Cosmos DB, how many documents Cosmos DB returned and the request
+            units charged. Pushed conditions are always necessary conditions of the query, so client-side evaluation can only
+            remove documents; when <see cref="P:Durable.CosmosDb.CosmosDbQueryPlan.Exact"/> is true the pushed conditions are the whole filter. Observe plans with
+            <see cref="E:Durable.CosmosDb.CosmosDbBackend.QueryPlanned"/>, <see cref="P:Durable.CosmosDb.CosmosDbBackend.LastQueryPlan"/> or the backend's logger
+            (Debug level).
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.Operation">
+            <summary>
+            Gets the operation: Query, Count, Aggregate, Replace, Update, Delete or Lookup (related documents). Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.EntityType">
+            <summary>
+            Gets the entity type read or written. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.Container">
+            <summary>
+            Gets the Cosmos DB container. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.QueryText">
+            <summary>
+            Gets the Cosmos DB SQL query text with parameters shown as <c>@pN</c>, or null for a point read.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.Parameters">
+            <summary>
+            Gets the query parameters as JSON, or null when there are none.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.PartitionKey">
+            <summary>
+            Gets the partition key the query or point read was scoped to (as JSON, for example <c>["tenant-1"]</c>), or null
+            for a cross-partition query.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.PointRead">
+            <summary>
+            Gets whether the document was read by id and partition key (a point read) instead of a query.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.Exact">
+            <summary>
+            Gets whether the pushed conditions are exactly the filter (nothing was evaluated client-side).
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.ClientSide">
+            <summary>
+            Gets the client-side part of the query (residual filter, ordering, paging) in Durable's neutral notation, or null
+            when Cosmos DB evaluated everything.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.OrderingPushedDown">
+            <summary>
+            Gets whether ORDER BY ran inside Cosmos DB.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.PagingPushedDown">
+            <summary>
+            Gets whether OFFSET/LIMIT (or counting) ran inside Cosmos DB.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.DocumentsRead">
+            <summary>
+            Gets the number of documents Cosmos DB returned (before client-side evaluation); -1 when Cosmos DB only counted or
+            aggregated.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbQueryPlan.RequestCharge">
+            <summary>
+            Gets the request units Cosmos DB charged for the operation's reads.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryPlan.#ctor(System.String,System.Type,System.String,System.String,System.String,System.String,System.Boolean,System.Boolean,System.String,System.Boolean,System.Boolean,System.Int64,System.Double)">
+            <summary>
+            Instantiates a plan.
+            </summary>
+            <param name="operation">Operation. Must not be null.</param>
+            <param name="entityType">Entity type. Must not be null.</param>
+            <param name="container">Container. Must not be null.</param>
+            <param name="queryText">Query text, or null for a point read.</param>
+            <param name="parameters">Parameters as JSON; may be null.</param>
+            <param name="partitionKey">Partition key as JSON; null for a cross-partition query.</param>
+            <param name="pointRead">Whether a point read was used.</param>
+            <param name="exact">Whether the pushed conditions are the whole filter.</param>
+            <param name="clientSide">Client-side part; may be null.</param>
+            <param name="orderingPushedDown">Whether ORDER BY ran in Cosmos DB.</param>
+            <param name="pagingPushedDown">Whether paging or counting ran in Cosmos DB.</param>
+            <param name="documentsRead">Documents returned by Cosmos DB, or -1.</param>
+            <param name="requestCharge">Request units charged.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when operation, entityType or container is null.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbQueryPlan.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbRepository`1">
+            <summary>
+            A repository stored in Azure Cosmos DB for NoSQL: the complete <see cref="T:Durable.IRepository`1"/> surface from
+            <see cref="T:Durable.Query.RepositoryBase`1"/> over a <see cref="T:Durable.CosmosDb.CosmosDbBackend"/>, except transactions (see
+            <see cref="T:Durable.CosmosDb.CosmosDbBackend"/>). Repositories created over the same backend (or over backends using the same account
+            and database) share data, so includes and navigation predicates work across entity types. Creating a repository
+            validates the entity's Cosmos DB mapping but does not touch the account; the container is created on first use. The
+            repository never disposes the backend.
+            <para>
+            Entities that cannot be stored (reported with <see cref="T:System.NotSupportedException"/> by the constructor): a table name
+            that is not a Cosmos DB container name (1 to 255 characters, no '/', '\', '#' or '?', no trailing space), two
+            columns mapping to the same document property, a value type JSON cannot hold without a value converter, a partition
+            key that is not a mapped string, integer, Guid, date or boolean column, and an auto-increment column that is not an
+            integer.
+            </para>
+            Thread safety: safe for concurrent use once configured (see <see cref="T:Durable.Query.RepositoryBase`1"/>).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepository`1.Backend">
+            <summary>
+            Gets the Cosmos DB backend. Never null. The repository does not own or dispose it.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepository`1.#ctor(Durable.CosmosDb.CosmosDbBackend,Durable.RepositoryOptions)">
+            <summary>
+            Instantiates a repository over a backend shared with other repositories. Equivalent to
+            <see cref="M:Durable.CosmosDb.CosmosDbBackend.CreateRepository``1(Durable.RepositoryOptions)"/>.
+            </summary>
+            <param name="backend">Backend. Must not be null. Not disposed by the repository.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when backend is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key or an invalid mapping.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the entity cannot be stored in Cosmos DB.</exception>
+            <exception cref="T:System.ObjectDisposedException">Thrown when the backend has been disposed.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepository`1.AcceptsAmbientTransaction(Durable.ITransaction)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbRepositorySettings">
+            <summary>
+            Settings for a <see cref="T:Durable.CosmosDb.CosmosDbBackend"/>: which account and database to use (an existing
+            <see cref="T:Microsoft.Azure.Cosmos.CosmosClient"/>, an endpoint and key, a connection string, or the local emulator), how an owned client
+            connects (connection mode, endpoint discovery, timeouts), how storage is provisioned (database and container
+            throughput, creation on first use), how entities are partitioned (<see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.PartitionKeys"/>), and how the backend
+            behaves (JSON columns, logging, conflict retries).
+            <para>
+            Account: exactly one of <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/> (never disposed by Durable; the client options below then do not apply),
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/>, or <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionString"/>. A client built from the
+            endpoint or connection string is owned and disposed by the backend.
+            </para>
+            <para>
+            Partitioning: by default every entity is partitioned by its document id (<c>/id</c>, one logical partition per
+            document), which spreads load evenly, makes every key lookup a point read and needs no design work, but means every
+            filter that does not name a key is a cross-partition query. Map an entity to one of its properties (for example a
+            tenant or customer id) with <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.WithPartitionKey``1(System.String)"/> to keep related documents together and make queries
+            that filter on that property single-partition; key lookups then need the partition key value (point reads when the
+            property is part of the primary key, otherwise a cross-partition query by id), and Durable checks key uniqueness
+            across partitions with an extra query on insert (Cosmos DB ids are unique only within a partition).
+            </para>
+            Thread safety: not thread-safe; configure before creating the backend. The backend reads the settings once, when it
+            is created; later changes have no effect on it.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbRepositorySettings.EmulatorAccountKey">
+            <summary>
+            The well-known account key of the Azure Cosmos DB emulator (public; never use it for a real account).
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbRepositorySettings.EmulatorEndpoint">
+            <summary>
+            The default emulator endpoint.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName">
+            <summary>
+            The default database name.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client">
+            <summary>
+            Gets or sets an existing client to use; null to create one from <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> and
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/> or from <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionString"/>. The backend never disposes a client passed here.
+            Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint">
+            <summary>
+            Gets or sets the account endpoint, for example <c>https://myaccount.documents.azure.com:443/</c>; used with
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/>. Default: null.
+            </summary>
+            <exception cref="T:System.ArgumentException">Thrown when value is not an absolute http or https URI.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey">
+            <summary>
+            Gets or sets the account key (primary or secondary key, or a resource token) used with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/>.
+            Never logged or included in <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.ToString"/>. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionString">
+            <summary>
+            Gets or sets an account connection string (<c>AccountEndpoint=...;AccountKey=...;</c>); an alternative to
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> and <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/>. Never logged or included in <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.ToString"/>.
+            Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.DatabaseName">
+            <summary>
+            Gets or sets the database that holds the containers (created on first use unless <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.CreateIfNotExists"/>
+            is false). Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName"/>.
+            </summary>
+            <exception cref="T:System.ArgumentNullException">Thrown when value is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when value is not a valid Cosmos DB database name (1 to 255 characters, no '/', '\', '#' or '?', no trailing space).</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionMode">
+            <summary>
+            Gets or sets the connection mode of an owned client; null uses the SDK default (<see cref="F:Microsoft.Azure.Cosmos.ConnectionMode.Direct"/>).
+            The emulator supports only <see cref="F:Microsoft.Azure.Cosmos.ConnectionMode.Gateway"/>. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.LimitToEndpoint">
+            <summary>
+            Gets or sets whether an owned client talks only to <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> and does not discover regional
+            endpoints. Required when the endpoint is reached through a mapped port (for example a container's random host
+            port). Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.AcceptAnyServerCertificate">
+            <summary>
+            Gets or sets whether an owned client accepts any server TLS certificate (only for the emulator's self-signed
+            certificate in development; never in production). Default: false.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.RequestTimeout">
+            <summary>
+            Gets or sets the request timeout of an owned client; null uses the SDK default (6 seconds per network request,
+            retried by the SDK). Default: null. Minimum: 1 second. Maximum: 10 minutes.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.ApplicationName">
+            <summary>
+            Gets or sets the application name an owned client adds to its user agent; null for none. Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.CreateIfNotExists">
+            <summary>
+            Gets or sets whether the database and containers are created when missing (database when the backend is created,
+            each container on its first use). When false, a missing database or container fails the operation. Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.DatabaseThroughput">
+            <summary>
+            Gets or sets the manual throughput (RU/s) of a database created by the backend, shared by its containers; null for
+            none (serverless accounts, or per-container throughput). Applies only when the database is created.
+            Default: null. Minimum: 400. Must be a multiple of 100.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is below 400 or not a multiple of 100.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.DatabaseAutoscaleMaxThroughput">
+            <summary>
+            Gets or sets the autoscale maximum throughput (RU/s) of a database created by the backend; null for none. Cannot be
+            combined with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.DatabaseThroughput"/>. Default: null. Minimum: 1000. Must be a multiple of 1000.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is below 1000 or not a multiple of 1000.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.ContainerThroughput">
+            <summary>
+            Gets or sets the manual throughput (RU/s) of each container created by the backend (including the sequence
+            container); null for none (shared database throughput or serverless). Applies only when a container is created.
+            Default: null. Minimum: 400. Must be a multiple of 100.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is below 400 or not a multiple of 100.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.ContainerAutoscaleMaxThroughput">
+            <summary>
+            Gets or sets the autoscale maximum throughput (RU/s) of each container created by the backend; null for none.
+            Cannot be combined with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.ContainerThroughput"/>. Default: null. Minimum: 1000. Must be a multiple of 1000.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is below 1000 or not a multiple of 1000.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.PartitionKeys">
+            <summary>
+            Gets the partition key of each entity type that is not partitioned by its document id: the entity type mapped to
+            the name of one of its mapped properties (or columns). The property's values must be strings, integers, Guids,
+            dates or booleans. Entities not listed are partitioned by <c>/id</c>. Never null. Default: empty.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.SequenceContainerName">
+            <summary>
+            Gets or sets the container that holds the auto-increment counters (one document per entity container, partitioned
+            by <c>/id</c>), created on first use. Default: "durable_sequences".
+            </summary>
+            <exception cref="T:System.ArgumentNullException">Thrown when value is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when value is not a valid container name.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.MaxConflictRetries">
+            <summary>
+            Gets or sets how many times a conditional write (ETag-checked replace, delete or counter increment) is retried after
+            another writer changed the document first. Default: 100. Minimum: 1. Maximum: 10000.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.MaxConcurrentDeletes">
+            <summary>
+            Gets or sets how many documents <see cref="M:Durable.CosmosDb.CosmosDbBackend.Clear(System.Type)"/> deletes concurrently.
+            Default: 8. Minimum: 1. Maximum: 256.
+            </summary>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when value is outside the allowed range.</exception>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.IsInMemory">
+            <summary>
+            Gets whether the settings select a database held only in memory. Always false: Cosmos DB has no in-memory mode
+            (use the emulator, <see cref="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForEmulator(System.String,System.String)"/>, for local development and tests).
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.Logger">
+            <summary>
+            Gets or sets the logger for query plans (Debug) and conflict retries (Debug); null for none.
+            Default: null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRepositorySettings.JsonOptions">
+            <summary>
+            Gets or sets the JSON options used to store JSON columns; null for camelCase, non-indented output (the same as
+            the SQL providers). Documents themselves are always written by Durable from entity metadata. Under Native AOT,
+            pass options with a source-generated context (<see cref="M:Durable.DurableJson.CreateOptions(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver)"/>).
+            Default: null.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.#ctor">
+            <summary>
+            Instantiates empty settings; set <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/>, <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> and <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/>, or
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionString"/> before use.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForEmulator(System.String,System.String)">
+            <summary>
+            Creates settings for the local Azure Cosmos DB emulator: the well-known emulator key, gateway mode, no endpoint
+            discovery (so a mapped port works), and any server certificate accepted (the emulator's certificate is
+            self-signed).
+            </summary>
+            <param name="endpoint">Emulator endpoint. Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.EmulatorEndpoint"/>.</param>
+            <param name="databaseName">Database name. Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName"/>.</param>
+            <returns>The settings. Never null.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when endpoint or databaseName is invalid.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForEndpoint(System.String,System.String,System.String)">
+            <summary>
+            Creates settings for an account endpoint and key.
+            </summary>
+            <param name="endpoint">Account endpoint. Must not be null.</param>
+            <param name="accountKey">Account key. Must not be null or empty.</param>
+            <param name="databaseName">Database name. Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName"/>.</param>
+            <returns>The settings. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when endpoint or accountKey is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when an argument is invalid.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForConnectionString(System.String,System.String)">
+            <summary>
+            Creates settings for an account connection string.
+            </summary>
+            <param name="connectionString">Connection string. Must not be null or empty.</param>
+            <param name="databaseName">Database name. Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName"/>.</param>
+            <returns>The settings. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when an argument is invalid.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.ForClient(Microsoft.Azure.Cosmos.CosmosClient,System.String)">
+            <summary>
+            Creates settings for an existing client, which the backend does not dispose.
+            </summary>
+            <param name="client">Client. Must not be null.</param>
+            <param name="databaseName">Database name. Default: <see cref="F:Durable.CosmosDb.CosmosDbRepositorySettings.DefaultDatabaseName"/>.</param>
+            <returns>The settings. Never null.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when client is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when databaseName is invalid.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.WithPartitionKey``1(System.String)">
+            <summary>
+            Partitions an entity type by one of its properties instead of its document id (see <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.PartitionKeys"/>).
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+            <param name="propertyName">Name of a mapped property (use <c>nameof</c>). Must not be null or empty.</param>
+            <returns>These settings, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when propertyName is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when propertyName is empty.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.Validate">
+            <summary>
+            Validates the settings. <see cref="M:Durable.CosmosDb.CosmosDbBackend.Create(Durable.CosmosDb.CosmosDbRepositorySettings)"/> calls it.
+            </summary>
+            <exception cref="T:System.ArgumentException">
+            Thrown when not exactly one of <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/>, <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Endpoint"/> with <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.AccountKey"/>, or
+            <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.ConnectionString"/> is set; when <see cref="P:Durable.CosmosDb.CosmosDbRepositorySettings.Client"/> is combined with options for an owned client; or
+            when manual and autoscale throughput are both set for the database or for containers.
+            </exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRepositorySettings.ToString">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbRequestCharge">
+            <summary>
+            Accumulates the request units charged by the Cosmos DB requests of one operation.
+            Thread safety: safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbRequestCharge.Total">
+            <summary>
+            Gets the total request units charged so far.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbRequestCharge.Add(System.Double)">
+            <summary>
+            Adds the charge of one request.
+            </summary>
+            <param name="requestUnits">Request units of the request.</param>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbSqlFragment">
+            <summary>
+            A Cosmos DB SQL condition translated from a <see cref="T:Durable.Query.QueryNode"/>. The text always evaluates to true
+            or false for every document (never undefined), so it can be negated and combined freely. It is a necessary condition
+            of the node: documents it rejects never satisfy the node; when <see cref="P:Durable.CosmosDb.CosmosDbSqlFragment.Exact"/> is true it is also sufficient.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbSqlFragment.Text">
+            <summary>
+            Gets the condition text. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbSqlFragment.Exact">
+            <summary>
+            Gets whether the condition is exactly the node (no client-side check needed).
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbSqlFragment.#ctor(System.String,System.Boolean)">
+            <summary>
+            Instantiates a fragment.
+            </summary>
+            <param name="text">Condition text. Must not be null.</param>
+            <param name="exact">Whether the condition is exactly the node.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when text is null.</exception>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbValueConverter">
+            <summary>
+            Converts between entity property values and the stored values of a <see cref="T:Durable.CosmosDb.CosmosDbBackend"/> (before JSON
+            encoding by <see cref="T:Durable.CosmosDb.CosmosDbJsonCodec"/>), the way a database driver would: per-property
+            <see cref="T:Durable.IValueConverter"/>s store their provider value; JSON columns store serialized text; enums store their name
+            (or their numeric value as <see cref="T:System.Int64"/> with <see cref="F:Durable.Flags.Integer"/>); byte arrays are copied; other values
+            are stored in the column's CLR type. The stored form is also the form queries compare values in.
+            Thread safety: immutable; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.CosmosDb.CosmosDbValueConverter.JsonOptions">
+            <summary>
+            Gets the JSON options used for JSON columns. Never null.
+            </summary>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbValueConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates a converter.
+            </summary>
+            <param name="jsonOptions">JSON options. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when jsonOptions is null.</exception>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbValueConverter.StoredType(Durable.ColumnMetadata)">
+            <summary>
+            Returns the CLR type a column's values are stored (and compared) as.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <returns>The stored type: the converter's provider type, string for JSON columns and name-stored enums, long for integer-stored enums, otherwise the column type.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbValueConverter.ToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a property (model) value to its stored value. Integral values for enum columns are converted to the
+            enum first, as SQL parameters are.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Model value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbValueConverter.ComputedToStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a value computed by a query expression (already in the stored domain, or a plain CLR value) to the
+            stored representation of a column, applying a converter only to values of the converter's model type.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="value">Computed value; may be null.</param>
+            <returns>The stored value, or null.</returns>
+        </member>
+        <member name="M:Durable.CosmosDb.CosmosDbValueConverter.FromStored(Durable.ColumnMetadata,System.Object)">
+            <summary>
+            Converts a stored value back to a property value.
+            </summary>
+            <param name="column">Column. Must not be null.</param>
+            <param name="stored">Stored value; may be null.</param>
+            <returns>The property value, or null.</returns>
+        </member>
+        <member name="T:Durable.CosmosDb.CosmosDbValueKind">
+            <summary>
+            How a stored value is represented in a Cosmos DB document (see <see cref="T:Durable.CosmosDb.CosmosDbJsonCodec"/>), which decides how
+            it is compared, ordered and aggregated inside Cosmos DB.
+            </summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Integer">
+            <summary>A JSON number that is always an exact integer within plus or minus 2^53 (int, uint, short, ushort, byte, sbyte, TimeOnly ticks).</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Int64">
+            <summary>A JSON integer that may exceed 2^53 (long, ulong, TimeSpan ticks); larger values also get an exact shadow.</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Decimal">
+            <summary>A JSON number for a decimal; values a double cannot round-trip also get an exact shadow.</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Single">
+            <summary>A JSON number for a float (shortest round-trip text); NaN and infinities are the strings "NaN", "Infinity" and "-Infinity".</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Double">
+            <summary>A JSON number for a double (shortest round-trip text); NaN and infinities are the strings "NaN", "Infinity" and "-Infinity".</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Boolean">
+            <summary>A JSON boolean.</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.String">
+            <summary>A JSON string compared ordinally (string, char, enum names, JSON column text).</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Guid">
+            <summary>A JSON string holding a Guid in lowercase "D" format (orders like <see cref="M:System.Guid.CompareTo(System.Guid)"/>).</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.DateTime">
+            <summary>A JSON string holding the wall-clock ticks as fixed-width ISO 8601 text plus a kind suffix ("Z", none, or a local offset).</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.DateTimeOffset">
+            <summary>A JSON string holding the UTC instant as fixed-width ISO 8601 text ending in "Z"; a non-zero offset gets a shadow.</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.DateOnly">
+            <summary>A JSON string "yyyy-MM-dd".</summary>
+        </member>
+        <member name="F:Durable.CosmosDb.CosmosDbValueKind.Bytes">
+            <summary>A JSON string holding base64 bytes (equality only; never ordered inside Cosmos DB).</summary>
+        </member>
+    </members>
+</doc>

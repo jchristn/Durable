@@ -53,6 +53,7 @@
 	</ItemGroup>
 
 	<ItemGroup Label="CosmosDb">
+		<ProjectReference Include="..\..\src\Durable.CosmosDb\Durable.CosmosDb.csproj" />
 	</ItemGroup>
 
 </Project>
