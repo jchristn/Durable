@@ -18,6 +18,43 @@ namespace Test.Shared
         #region Public-Methods
 
         /// <summary>
+        /// A native connection that Microsoft.Data.Sqlite pooled while still inside a transaction (here one started with raw
+        /// SQL, so the driver does not know about it) is rolled back when the factory leases it again: BeginTransaction
+        /// works and the abandoned write is gone. Without this, the next lease failed with "cannot start a transaction
+        /// within a transaction" (the intermittent ParallelBatchOperations_ShouldHandleConcurrency failure).
+        /// </summary>
+        /// <param name="useAsync">True to lease with OpenConnectionAsync, false with OpenConnection.</param>
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PooledConnectionLeftInTransactionIsRolledBackOnLease(bool useAsync)
+        {
+            string name = "DurableStaleTxn" + (useAsync ? "Async" : "Sync");
+            using SqliteConnectionFactory factory = new SqliteConnectionFactory("Data Source=file:/" + name + "?vfs=memdb");
+            await using (DbConnection setup = await LeaseAsync(factory, useAsync))
+            {
+                await ExecuteAsync(setup, null, "CREATE TABLE stale_txn (x INTEGER)");
+            }
+
+            await using (DbConnection abandoned = await LeaseAsync(factory, useAsync))
+            {
+                await ExecuteAsync(abandoned, null, "BEGIN");
+                await ExecuteAsync(abandoned, null, "INSERT INTO stale_txn VALUES (1)");
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                await using DbConnection connection = await LeaseAsync(factory, useAsync);
+                await using DbTransaction transaction = await connection.BeginTransactionAsync();
+                await using DbCommand count = connection.CreateCommand();
+                count.Transaction = transaction;
+                count.CommandText = "SELECT COUNT(*) FROM stale_txn";
+                Assert.Equal(0L, Convert.ToInt64(await count.ExecuteScalarAsync()));
+                await transaction.CommitAsync();
+            }
+        }
+
+        /// <summary>
         /// Readers on other connections wait for a writer holding an immediate transaction, then see its committed table.
         /// </summary>
         /// <param name="connectionString">In-memory connection string form.</param>
@@ -192,6 +229,23 @@ namespace Test.Shared
             await using DbCommand check = reopened.CreateCommand();
             check.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE name = 'private_items'";
             Assert.Equal(0L, Convert.ToInt64(await check.ExecuteScalarAsync()));
+        }
+
+        #endregion
+
+        #region Private-Methods
+
+        private static async Task<DbConnection> LeaseAsync(SqliteConnectionFactory factory, bool useAsync)
+        {
+            return useAsync ? await factory.OpenConnectionAsync(CancellationToken.None) : factory.OpenConnection();
+        }
+
+        private static async Task ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql)
+        {
+            await using DbCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync();
         }
 
         #endregion

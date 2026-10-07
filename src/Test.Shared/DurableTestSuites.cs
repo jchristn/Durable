@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Threading.Tasks;
     using Durable;
     using Durable.Conformance;
+    using Durable.Sql;
     using Touchstone.Core;
 
     /// <summary>
@@ -261,12 +262,16 @@ namespace Test.Shared
             System.Func<CancellationToken, Task> beforeEach) where T : class
         {
             List<string> tags = new List<string> { providerTag, "shared" };
+            // Cases marked [RequiresDialect] are built as skipped (with the reason) when the configured dialect lacks the
+            // feature, so a database without it never reports a case that did not run as passed.
+            ISqlDialect dialect = RepositoryProviderFactory.DialectFor(DurableTestRuntime.Configuration.DatabaseType);
             return TouchstoneBridge.BuildSuite<T>(
                 suiteId,
                 displayName,
                 () => (T)System.Activator.CreateInstance(typeof(T), DurableTestRuntime.RequireProvider())!,
                 tags,
-                beforeEach);
+                beforeEach,
+                method => RequiresDialectAttribute.SkipReason(method, dialect));
         }
 
         #endregion

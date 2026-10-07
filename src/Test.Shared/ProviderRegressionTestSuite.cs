@@ -38,6 +38,18 @@ namespace Test.Shared
         #region Public-Methods
 
         /// <summary>
+        /// The dialect the suites are gated on while they are built (RepositoryProviderFactory.DialectFor, see
+        /// RequiresDialectAttribute) is the configured provider's dialect, so no case is skipped or run by mistake.
+        /// </summary>
+        [Fact]
+        public void GatingDialectMatchesProviderDialect()
+        {
+            ISqlDialect gating = RepositoryProviderFactory.DialectFor(_Provider.DatabaseType);
+            Assert.Same(gating, _Provider.Dialect);
+            using (ISqlRepository<Person> repository = _Provider.CreateRepository<Person>()) Assert.Same(gating, repository.Dialect);
+        }
+
+        /// <summary>
         /// Where(a).Where(b || c) keeps the OR inside its own group (a AND (b OR c)), sync and async.
         /// </summary>
         [Fact]

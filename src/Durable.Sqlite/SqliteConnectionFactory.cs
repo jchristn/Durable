@@ -6,6 +6,7 @@ namespace Durable.Sqlite
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
+    using SQLitePCL;
     using Durable.Sql;
 
     /// <summary>
@@ -111,6 +112,14 @@ namespace Durable.Sqlite
             return "PRAGMA busy_timeout = " + _BusyTimeoutMilliseconds.ToString(CultureInfo.InvariantCulture);
         }
 
+        private static bool InStaleTransaction(DbConnection connection)
+        {
+            // A freshly leased connection has no Microsoft.Data.Sqlite transaction; autocommit off means the native
+            // connection is still inside a transaction from its previous lease.
+            if (connection is not SqliteConnection sqlite || sqlite.Handle == null) return false;
+            return raw.sqlite3_get_autocommit(sqlite.Handle) == 0;
+        }
+
         private static string MemoryDatabaseUri(string name)
         {
             return "file:/" + Uri.EscapeDataString(name) + "?vfs=memdb";
@@ -135,20 +144,54 @@ namespace Durable.Sqlite
             return new SqliteConnection(ConnectionString);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Prepares a newly opened connection: rolls back a transaction the driver's pool left open on it (see below) and
+        /// applies <see cref="BusyTimeoutMilliseconds"/>.
+        /// Microsoft.Data.Sqlite returns a native connection to its pool without checking that its transaction ended, for
+        /// example after a transaction started with raw SQL (<c>BEGIN</c>, <c>SAVEPOINT</c>) or one whose <c>ROLLBACK</c>
+        /// failed. The next lease of that native connection would then run inside the stale transaction, and its
+        /// <c>BeginTransaction</c> would fail with "cannot start a transaction within a transaction". A connection leased
+        /// from this factory never starts inside a transaction.
+        /// </summary>
+        /// <param name="connection">The opened connection. Must not be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
         protected override void OnConnectionOpened(DbConnection connection)
         {
             ArgumentNullException.ThrowIfNull(connection);
+            if (InStaleTransaction(connection))
+            {
+                using DbCommand rollback = connection.CreateCommand();
+                rollback.CommandText = "ROLLBACK";
+                rollback.ExecuteNonQuery();
+            }
+
             if (_BusyTimeoutMilliseconds == 0) return;
             using DbCommand command = connection.CreateCommand();
             command.CommandText = BusyTimeoutSql();
             command.ExecuteNonQuery();
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Asynchronous <see cref="OnConnectionOpened"/>: rolls back a transaction the driver's pool left open on the
+        /// connection and applies <see cref="BusyTimeoutMilliseconds"/>.
+        /// </summary>
+        /// <param name="connection">The opened connection. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A task that completes when the connection is ready.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
         protected override async Task OnConnectionOpenedAsync(DbConnection connection, CancellationToken token)
         {
             ArgumentNullException.ThrowIfNull(connection);
+            if (InStaleTransaction(connection))
+            {
+                DbCommand rollback = connection.CreateCommand();
+                await using (rollback.ConfigureAwait(false))
+                {
+                    rollback.CommandText = "ROLLBACK";
+                    await rollback.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                }
+            }
+
             if (_BusyTimeoutMilliseconds == 0) return;
             DbCommand command = connection.CreateCommand();
             await using (command.ConfigureAwait(false))

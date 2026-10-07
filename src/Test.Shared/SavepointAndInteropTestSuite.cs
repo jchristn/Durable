@@ -45,10 +45,9 @@ namespace Test.Shared
         /// Rolling back to a savepoint undoes only the work done after it; earlier and later work commits.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_RollbackUndoesOnlyLaterWork()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             const string department = "SpRollback";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -78,10 +77,9 @@ namespace Test.Shared
         /// The synchronous savepoint rollback path, with an auto-generated name, also undoes later work.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_SyncRollbackWithGeneratedName()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             const string department = "SpRollbackSync";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -110,10 +108,9 @@ namespace Test.Shared
         /// Releasing a savepoint keeps its work, which then commits with the transaction. On SQL Server release is a no-op.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_ReleaseKeepsWork()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             const string department = "SpRelease";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -139,10 +136,9 @@ namespace Test.Shared
         /// Rolling back the whole transaction after a released savepoint discards the savepoint's work too.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_OuterRollbackDiscardsReleasedWork()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             const string department = "SpOuterRollback";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -162,10 +158,9 @@ namespace Test.Shared
         /// Savepoint names containing anything other than letters, digits and underscores are rejected.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_InvalidNameThrows()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             using ISqlTransaction transaction = repository.BeginTransaction();
             Assert.Throws<ArgumentException>(() => transaction.CreateSavepoint("bad name; DROP"));
@@ -176,10 +171,9 @@ namespace Test.Shared
         /// Savepoints on a wrapped external transaction created without a dialect use the driver's savepoint API.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.Savepoints)]
         public async Task Savepoint_DriverSavepointOnWrappedTransaction()
         {
-            if (await SavepointsUnsupportedAsync()) return;
-
             const string department = "SpDriver";
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             await InfrastructureTestData.ClearDepartmentAsync(repository, department);
@@ -377,6 +371,33 @@ namespace Test.Shared
         {
         }
 
+        /// <summary>
+        /// On databases without savepoints (DuckDB: <see cref="ISqlDialect.SupportsSavepoints"/> is false), savepoints are
+        /// rejected with <see cref="NotSupportedException"/>, sync and async, through a dialect-aware transaction and through
+        /// the driver's savepoint API.
+        /// </summary>
+        [Fact]
+        [RequiresDialect(DialectRequirement.NoSavepoints)]
+        public async Task Savepoint_UnsupportedThrowsNotSupported()
+        {
+            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
+            using (ISqlTransaction transaction = repository.BeginTransaction())
+            {
+                Assert.Throws<NotSupportedException>(() => transaction.CreateSavepoint("sp_unsupported"));
+                await Assert.ThrowsAsync<NotSupportedException>(() => transaction.CreateSavepointAsync());
+                transaction.Rollback();
+            }
+
+            await using (DbConnection connection = _Provider.CreateRawConnection())
+            {
+                await connection.OpenAsync();
+                await using DbTransaction dbTransaction = await connection.BeginTransactionAsync();
+                SqlTransactionContext context = SqlTransactionContext.Wrap(connection, dbTransaction);
+                Assert.Throws<NotSupportedException>(() => context.CreateSavepoint("sp_driver"));
+                await dbTransaction.RollbackAsync();
+            }
+        }
+
         #endregion
 
         #region Private-Methods
@@ -420,31 +441,6 @@ namespace Test.Shared
             parameter.Value = value;
             _Provider.Dialect.ConfigureParameter(parameter, new SqlParameterValue(name, value));
             command.Parameters.Add(parameter);
-        }
-
-        private async Task<bool> SavepointsUnsupportedAsync()
-        {
-            // Databases without savepoints (DuckDB) reject them with NotSupportedException, sync and async, through a
-            // dialect-aware transaction and through the driver's savepoint API.
-            if (_Provider.Dialect.SupportsSavepoints) return false;
-            ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
-            using (ISqlTransaction transaction = repository.BeginTransaction())
-            {
-                Assert.Throws<NotSupportedException>(() => transaction.CreateSavepoint("sp_unsupported"));
-                await Assert.ThrowsAsync<NotSupportedException>(() => transaction.CreateSavepointAsync());
-                transaction.Rollback();
-            }
-
-            await using (DbConnection connection = _Provider.CreateRawConnection())
-            {
-                await connection.OpenAsync();
-                await using DbTransaction dbTransaction = await connection.BeginTransactionAsync();
-                SqlTransactionContext context = SqlTransactionContext.Wrap(connection, dbTransaction);
-                Assert.Throws<NotSupportedException>(() => context.CreateSavepoint("sp_driver"));
-                await dbTransaction.RollbackAsync();
-            }
-
-            return true;
         }
 
         #endregion

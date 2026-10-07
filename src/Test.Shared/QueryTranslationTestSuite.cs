@@ -327,11 +327,9 @@ namespace Test.Shared
         /// == null on a string column with the null on either side and captured nulls; an empty string is not null.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.EmptyStrings)]
         public async Task EqualsNullOnStringColumn()
         {
-            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
-            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
-            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
             using QueryTranslationFixture f = await SeedAsync();
             string? noEmail = null;
             await CheckAsync(f, x => x.Email == null, Beta);
@@ -387,11 +385,9 @@ namespace Test.Shared
         /// ?? on a string column replaces null but not an empty string.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.EmptyStrings)]
         public async Task CoalesceOperatorOnStringColumn()
         {
-            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
-            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
-            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
             using QueryTranslationFixture f = await SeedAsync();
             await CheckAsync(f, x => (x.Email ?? "none") == "none", Beta);
         }
@@ -474,11 +470,9 @@ namespace Test.Shared
         /// Contains over a list holding null matches NULL rows.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.EmptyStrings)]
         public async Task CollectionContainsWithNullElement()
         {
-            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the Nihon row's empty Email
-            // reads as NULL there and these C# expectations cannot hold; the null checks on other columns run everywhere.
-            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
             using QueryTranslationFixture f = await SeedAsync();
             List<string?> emails = new List<string?> { null, "alpha@x.com" };
             await CheckAsync(f, x => emails.Contains(x.Email), Alpha, Beta);

@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;cosmosdb;cosmos;azure;nosql;document;repository</PackageTags>
-		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: new Azure Cosmos DB for NoSQL backend on Microsoft.Azure.Cosmos 3.63.2: partition keys, Cosmos DB SQL push-down, ETag-checked writes, query plans with RU charges (no transactions). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

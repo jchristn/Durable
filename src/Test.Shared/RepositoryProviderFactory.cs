@@ -1,7 +1,13 @@
 namespace Test.Shared
 {
     using System;
+    using Durable.DuckDb;
+    using Durable.MySql;
     using Durable.Oracle;
+    using Durable.Postgres;
+    using Durable.Sql;
+    using Durable.Sqlite;
+    using Durable.SqlServer;
     using Microsoft.Data.SqlClient;
     using MySqlConnector;
     using Npgsql;
@@ -61,6 +67,36 @@ namespace Test.Shared
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(configuration), "Unsupported database type " + configuration.DatabaseType + ".");
+            }
+        }
+
+        /// <summary>
+        /// Gets the dialect the provider for a SQL target uses, without creating the provider or connecting, so suites can
+        /// be gated on dialect features (<see cref="RequiresDialectAttribute"/>) while they are built. The provider's own
+        /// <see cref="IRepositoryProvider.Dialect"/> is checked against it (ProviderRegressionTestSuite).
+        /// </summary>
+        /// <param name="databaseType">The SQL target.</param>
+        /// <returns>The dialect instance. Never null.</returns>
+        /// <exception cref="InvalidOperationException">Thrown for a document backend.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for an unknown database type.</exception>
+        public static ISqlDialect DialectFor(TestDatabaseType databaseType)
+        {
+            switch (databaseType)
+            {
+                case TestDatabaseType.Sqlite: return SqliteDialect.Default;
+                case TestDatabaseType.DuckDb: return DuckDbDialect.Default;
+                case TestDatabaseType.MySql:
+                case TestDatabaseType.MariaDb: return MySqlDialect.For(MySqlRepositoryProvider.FlavorFor(databaseType));
+                case TestDatabaseType.Postgres:
+                case TestDatabaseType.CockroachDb:
+                case TestDatabaseType.YugabyteDb: return PostgresDialect.For(PostgresRepositoryProvider.FlavorFor(databaseType));
+                case TestDatabaseType.SqlServer: return SqlServerDialect.Default;
+                case TestDatabaseType.Oracle: return OracleDialect.Default;
+                case TestDatabaseType.MongoDb:
+                case TestDatabaseType.CosmosDb:
+                    throw new InvalidOperationException(TestDatabaseTypes.ProviderName(databaseType) + " is a document backend and has no SQL dialect.");
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(databaseType), "Unsupported database type " + databaseType + ".");
             }
         }
 

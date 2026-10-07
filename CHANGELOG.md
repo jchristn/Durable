@@ -4,6 +4,114 @@ All notable changes to Durable are listed here, newest first. The format follows
 
 ## Current Version
 
+### v0.7.0 (2026-10-07) - breaking
+
+New databases: two SQL providers (Oracle, DuckDB), three wire-compatible databases on the existing providers (MariaDB on `Durable.MySql`; CockroachDB and YugabyteDB on `Durable.Postgres`), and two non-SQL backends (MongoDB, Azure Cosmos DB for NoSQL). Fifteen packages now share the version number.
+
+**New package: `Durable.Oracle`**
+
+- Oracle Database provider on `Oracle.ManagedDataAccess.Core` 23.26.301: `OracleDialect`, `OracleDataTypeConverter`, `OracleConnectionFactory`, `OracleRepositorySettings`, `OracleRepository<T>` (connection string, settings, shared factory, shared factory plus a configured `OracleDialect`). Generated SQL targets Oracle 19c; tested on Oracle Database 23ai Free.
+- Identifiers quoted and folded to upper case (`OracleDialect(upperCaseIdentifiers: false)` keeps case); parameters bound by name (`:p0`); `OFFSET`/`FETCH` paging with LINQ's null ordering (`NULLS FIRST`/`NULLS LAST`); identity keys through `RETURNING ... INTO`; `MERGE` upsert; statement batches as PL/SQL blocks; IN lists split at 1000 items; `MINUS` for `Except`; `FROM DUAL` for table-less selects; Oracle date, interval and string functions.
+- Types: `NUMBER(1)` booleans, `RAW(16)` GUIDs (RFC 4122 order), `VARCHAR2(n CHAR)`/`CLOB` strings, `CLOB` JSON, `RAW`/`BLOB` binary, `TIMESTAMP(7)`, `TIMESTAMP(7) WITH TIME ZONE`, `DATE` for `DateOnly`, `INTERVAL DAY TO SECOND` for `TimeSpan` and `TimeOnly`.
+- Empty strings: Oracle stores `''` as NULL, so `OracleDialect.TreatsEmptyStringAsNull` is true, Oracle repositories lack `RepositoryCapabilities.EmptyStrings`, and string columns are declared NULL-able so non-nullable string properties can hold `""`.
+- Schema: `CREATE TABLE` and the migration history table inside PL/SQL blocks that ignore ORA-00955; introspection from the `ALL_*` dictionary views (owner-qualified names supported); savepoints (release is a no-op); `DBMS_LOCK` migration lock (needs `EXECUTE` on `SYS.DBMS_LOCK`); scripts with `/` after PL/SQL blocks; DDL not transactional.
+- `BulkInsert` through ODP.NET array binding. `CreateDatabaseIfNotExists` verifies connectivity only (a DBA creates pluggable databases and schemas).
+- Trimming/AOT: Durable's code is warning-free; the constructors that create ODP.NET connections carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` because the driver publishes with trim and AOT warnings.
+
+**New package: `Durable.DuckDb`**
+
+- DuckDB provider on DuckDB.NET.Data.Full 1.5.6 (engine and native libraries bundled): `DuckDbDialect`, `DuckDbDataTypeConverter`, `DuckDbConnectionFactory`, `DuckDbRepositorySettings` (`ForInMemory`, `ForSharedInMemory`, `ForFile`, `Parse`, `IsInMemory`, `AccessMode`, `Threads`, `MemoryLimit`) and `DuckDbRepository<T>`.
+- In-process database lifetime: the connection factory keeps a root connection open, so a `:memory:` database is shared by every repository on the factory and released with it; file and `:memory:?cache=shared` databases stay open for the factory's lifetime.
+- Native types: unsigned integers (`UTINYINT` to `UBIGINT`), `UUID`, `TIMESTAMP`/`TIMESTAMPTZ`, `DATE`, `TIME`, `INTERVAL`, `DECIMAL(38,10)`, `BLOB`, `JSON`, and `HUGEINT` for `BigInteger` provider types.
+- Auto-increment keys through per-table sequences (`DEFAULT nextval`) with `INSERT ... RETURNING`; upsert through `INSERT ... ON CONFLICT`; `BulkInsert` through the DuckDB Appender, with a prepared-INSERT fallback when column types differ from the mapping.
+- Optimistic concurrency control: statements outside a transaction that hit a write-write conflict are retried (`DuckDbDialect.AutocommitConflictRetries`, default 10); conflicts inside a transaction are thrown.
+- Schema introspection through `information_schema` and the `duckdb_*()` functions; migration lock as a row in `durable_migration_lock`; schema sync drops and re-creates a table's indexes around column drops and NOT NULL additions, which DuckDB refuses on indexed tables.
+- Documented limitations: no savepoints, no stored procedures, string lengths not stored, migrations not wrapped in a transaction, `DbCommand.CommandTimeout` ignored by the driver (Durable enforces `CommandTimeoutSeconds` itself).
+
+**New package: `Durable.MongoDb`**
+
+- `MongoDbBackend` (`IRepositoryBackend`) over MongoDB.Driver 3.12.0 following the backend convention: `Create`/`CreateAsync` (one `hello` round trip detects transaction support), `CreateRepository<T>`, `Owns`, `OwnsClient`, `Client`, `Database`, `SupportsTransactions`, `EnsureIndexes[Async]`, `GetStoredRows[Async]`, `Clear[Async]`, `BeginTransaction[Async]`, `QueryPlanned`, `LastQueryPlan`, `ExplainQueries`.
+- `MongoDbRepository<T>`, `MongoDbRepositorySettings` (`ForClient`, `ForConnectionString`, `ForHost`, credentials, replica set, TLS, timeouts, pool sizes, `TransactionsEnabled`, `SequenceCollectionName`), `MongoDbTransaction` (client session; needs a replica set or sharded cluster), `MongoDbQueryPlan`.
+- Entities are encoded to BSON from `EntityMetadata` (no driver class maps), losslessly: Decimal128 for `decimal`/`ulong` and for `DateTime`/`DateTimeOffset` ticks, standard binary GUIDs.
+- Server-side push-down through a `QueryNodeVisitor` with C# semantics (comparisons, null checks, IN, ordinal and case-insensitive string matches via exact character-class regexes, AND/OR/NOT), then ordering, `Skip`/`Take`, `Count` and column aggregates when the filter is exact; everything else is evaluated by `QueryEvaluator`.
+- Auto-increment keys from a counters collection, Guid/string/composite keys, version columns, soft delete, includes, indexes from `[Index]`/`[CompositeIndex]` (unique indexes enforced, null-tolerant).
+- Not trim/AOT compatible (the driver is not): `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`.
+
+**New package: `Durable.CosmosDb`**
+
+- Azure Cosmos DB for NoSQL backend (`CosmosDbBackend`, `CosmosDbRepository<T>`, `CosmosDbRepositorySettings`, `CosmosDbQueryPlan`) on Microsoft.Azure.Cosmos 3.63.2 (plus Newtonsoft.Json 13.0.4, which the SDK needs at run time). Documents are written and read with System.Text.Json through the SDK's stream APIs.
+- Settings: `ForEmulator`, `ForEndpoint`, `ForConnectionString`, `ForClient` (not owned), connection mode, `LimitToEndpoint`, database and container throughput (manual or autoscale), creation on first use, conflict retries.
+- Partition keys: `/id` by default; `WithPartitionKey<T>(propertyName)` partitions an entity by a column, with single-partition queries for equality on it and cross-partition key uniqueness checks. No Cosmos-specific attribute was added to core Durable.
+- Push-down to parameterized Cosmos DB SQL (comparisons, null checks, IN, string matches, AND/OR/NOT, single-key ORDER BY, OFFSET/LIMIT, COUNT, integer aggregates), point reads for key lookups, and client-side evaluation for everything else with checks that keep results identical to C#.
+- Lossless values (exact shadows for longs beyond 2^53 and decimals beyond double precision, `DateTime` kind, `DateTimeOffset` offset); ETag-conditioned writes with re-check and retry, so concurrent updates are never lost; auto-increment keys from an ETag-incremented counter document.
+- Transactions are not supported and reported through `Capabilities`; `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` because the SDK is not trim/AOT-compatible.
+
+**MariaDB (`Durable.MySql`)**
+
+- `MySqlFlavor`, `MariaDbDialect` (tested on 11.4 LTS): `VALUES()` upsert, `CHAR_LENGTH` empty-string test, `utf8mb4_nopad_bin` ordinal collation, emulated LEAD/LAG defaults, JSON as LONGTEXT, `db.system` `mariadb`.
+- `MySqlRepositorySettings.Flavor`, `MySqlRepositorySettings.Parse(connectionString, flavor)`, `MySqlConnectionFactory.Flavor`, `MySqlDialect.Flavor`, `MySqlDialect.For(flavor)`; repository constructors `MySqlRepository<T>(connectionString, flavor, options?)` and `MySqlRepository<T>(connectionFactory, dialect, options?)`. `MySqlRepository<T>(connectionFactory)` uses the factory's flavor. Without a flavor nothing changes.
+
+**CockroachDB and YugabyteDB (`Durable.Postgres`)**
+
+- `PostgresFlavor.CockroachDb`, `CockroachDbDialect` (tested on 26.3): `INT4` integers and identity keys, `div()` integer division, `FLOAT8` cast for `Sqrt`, a migration lock table `durable_migration_locks` with takeover after `MigrationLockExpirySeconds`, non-transactional DDL, positional procedure arguments, `db.system` `cockroachdb`.
+- `PostgresFlavor.YugabyteDb`, `YugabyteDbDialect` (tested on 2026.1): non-transactional DDL.
+- `PostgresRepositorySettings.Flavor`, `PostgresRepositorySettings.Parse(connectionString, flavor)`, `PostgresConnectionFactory.Flavor`, `PostgresDialect.Flavor`, `PostgresDialect.For(flavor)`, protected `PostgresDialect.IndexSchemaConstraintFilter`; repository constructors `PostgresRepository<T>(connectionString, flavor, options?)` and `PostgresRepository<T>(connectionFactory, dialect, options?)`. `PostgresRepository<T>(connectionFactory)` uses the factory's flavor. PostgreSQL SQL is unchanged.
+
+**Core (`Durable`)**
+
+- `RepositoryCapabilities.EmptyStrings` (included in `All`): empty strings are stored and compared as values distinct from null. No call throws without it. SQL repositories lack it when the dialect stores `''` as NULL (Oracle).
+
+**SQL engine (`Durable.Sql`)**
+
+- `RepositoryType.Oracle` and `RepositoryType.DuckDb`.
+- New `ISqlDialect` members, all with defaults on `SqlDialect` that keep existing behavior: `ConfigureCommand`, `StatementBatchPrefix`/`StatementBatchSuffix`, `SupportsMultiRowInsert`, `SingleRowFromClause`, `MaxInListItems` (IN lists split with OR/AND, include chunking), `Modulo`, `SetOperationKeyword`, `TreatsEmptyStringAsNull`, `ColumnAllowsNull` (CREATE TABLE, ADD COLUMN and schema comparison), `AppendScriptStatement` (migration script terminators), `SupportsSavepoints`, `DriverEnforcesCommandTimeout`, `AutocommitConflictRetries`, `IsRetryableConflict(Exception)`, `SupportsStringMaxLength`, `AlterTableRequiresDroppingIndexes`, `IsMigrationLockContention(Exception)`, `SupportsOffsetFunctionDefault`, `SupportsNamedProcedureArguments`, `PrepareMigrationLockSql()`.
+- `InsertKeyStrategy.ReturningInto`: generated keys read from output parameters (`Create`, `CreateMany`).
+- `SqlRepository<T>.Capabilities` follows `TreatsEmptyStringAsNull`.
+- `ISqlTransaction.CreateSavepoint(Async)` throws `NotSupportedException` when the dialect does not support savepoints.
+- The command executor enforces `SqlRepositoryOptions.CommandTimeoutSeconds` (cancel, then `TimeoutException`) for drivers that ignore `DbCommand.CommandTimeout`, and re-runs a statement that ran outside a transaction and failed with a retryable write-write conflict (only for dialects that opt in; the default is no retry).
+- The migrator runs a dialect's lock setup statement before taking the lock, and treats a lock attempt that fails with a dialect-reported contention error as "not acquired".
+- Schema comparison wraps column drops and NOT NULL column additions with index drop/re-create for dialects that require it, and reports a length change with a unit (`VARCHAR2(50 CHAR)` to `VARCHAR2(100 CHAR)`) as `MaxLengthMismatch` rather than `TypeMismatch`.
+- `Lead`/`Lag` with a default value are emulated with a one-row-frame CASE where the database has no default argument; procedures are called positionally where named arguments are not supported.
+- `Sum`/`Average` results (repository, query builder, grouped and projected queries) are converted through the data type converter, because some drivers return aggregates in types without `IConvertible` (DuckDB: `HUGEINT` as `BigInteger`).
+
+**SQLite (`Durable.Sqlite`)**
+
+- `SqliteDialect.SupportsStringMaxLength` is false (SQLite never stored declared lengths; this only reports it).
+- Fixed: `SqliteConnectionFactory` rolls back a transaction that Microsoft.Data.Sqlite's pool left open on a native connection (Microsoft.Data.Sqlite pools a connection without checking that its transaction ended, for example after raw `BEGIN`/`SAVEPOINT` SQL or a failed `ROLLBACK`). Before, the next lease of that connection ran inside the stale transaction and `BeginTransaction` failed with "cannot start a transaction within a transaction"; this was the intermittent `ParallelBatchOperations_ShouldHandleConcurrency` failure.
+
+**Conformance kit (`Durable.Conformance`)**
+
+- Assertions that depend on empty strings being distinct from null moved into their own cases that require `RepositoryCapabilities.EmptyStrings` (`EqualsNullOnStrings`, `CoalesceOperatorOnStrings`, `CollectionContainsNullOnStrings`, `TrimToEmptyString`, `UpdateFieldSetsNull`, `EmptyStringsRoundTrip`). No assertion was removed; backends with the capability run all of them as before.
+- The Capabilities suite gained an `EmptyStrings` case (an empty string reads back as `""` with the capability, and as `""` or null without it).
+
+**Command-line tool (`Durable.Tool`)**
+
+- `--provider duckdb`, `oracle` (aliases `odp`, `odpnet`), `cockroachdb` (aliases `cockroach`, `crdb`), `yugabytedb` (aliases `yugabyte`, `ysql`) and `mariadb` for every command, with scaffolding of each database's types. Help and error texts list the providers from one place.
+
+**Tests**
+
+- New targets `--type oracle|duckdb|mariadb|cockroachdb|yugabytedb|mongodb|cosmosdb` (docker images `gvenzl/oracle-free:23-slim-faststart`, `mariadb:11.4`, `cockroachdb/cockroach:latest-v26.3`, `yugabytedb/yugabyte:2026.1.2.0-b137`, `mongo:8` as a single-node replica set, and the Cosmos DB Linux vNext emulator; DuckDB runs in process). Every SQL suite and the conformance kit run on each SQL target; MongoDB and Cosmos DB run the conformance kit and their own backend suites through `IDocumentBackendTestTarget`.
+- New suites: `Oracle.Provider`, `DuckDbProvider`, `MongoDbBackendTestSuite`, `CosmosDbBackendTestSuite`, and `durable` CLI coverage for the new provider names.
+- Shared SQL suites gate cases on dialect features with `[RequiresDialect(DialectRequirement...)]`, evaluated when the suites are built: a dialect without savepoints, stored procedures or empty strings distinct from NULL reports those cases as skipped with a reason instead of passing them silently. The negative path has its own gated cases (`Savepoint_UnsupportedThrowsNotSupported`, `StoredProcedure_SqliteNotSupported`), and `GatingDialectMatchesProviderDialect` checks that the gating dialect is the provider's.
+- Assertions that differ by database derive their expectation from the dialect (`ColumnAllowsNull`, `SupportsStringMaxLength`, `SupportsMultiRowInsert`, `MaxInListItems`) rather than from the database name.
+- The connection-pool stress suite fills the driver pool to the workload's width before measuring memory growth (ODP.NET keeps about 2 MB per pooled connection); the thresholds are unchanged.
+- `PublicApiConventionsTestSuite` covers `Durable.Oracle`, `Durable.DuckDb`, `Durable.MongoDb` and `Durable.CosmosDb`.
+- `Test.Aot` runs a DuckDB scenario on .NET 9+ (DuckDB.NET.Data compiled in single-warn mode, like LiteDB).
+
+**CI**
+
+- New job "DuckDB" (in process, Linux, Windows and macOS, net8.0 and net10.0) and `databases` matrix entries for `oracle`, `mariadb`, `cockroachdb`, `yugabytedb`, `mongodb` and `cosmosdb` (net8.0 and net10.0).
+
+**Breaking changes**
+
+- `durable --provider mariadb` now selects `MariaDbDialect`; it used to be an alias of `mysql` (MySQL dialect). Use `--provider mysql` to keep the old behavior against a MariaDB server.
+- `ISqlDialect` has new members (listed above). Dialects deriving from `SqlDialect` get behavior-preserving defaults; a class implementing `ISqlDialect` directly must add them.
+- `RepositoryCapabilities.All` now includes `EmptyStrings`. A custom backend that returns `All` now claims it (correct for any store that keeps `""` distinct from null); code that stores or compares capability values numerically sees a new bit.
+- Conformance kit cases that use empty strings were split into new cases that require `RepositoryCapabilities.EmptyStrings`, so test reports of a custom backend show new case names (`EqualsNullOnStrings`, ...) and a new `Capabilities.EmptyStrings` case.
+- Aggregate `Sum`/`Average` results are converted through the repository's data type converter instead of `Convert.ToDecimal`; a custom `IDataTypeConverter` must convert the driver's aggregate type to `decimal`.
+
+## Previous Versions
+
 ### v0.6.0 (2026-10-06)
 
 Entity mapping sources: Durable can map classes that cannot carry its attributes, such as generated code, models owned by another team or package, and models already annotated for another library. The work was prompted by a fork that needed to map classes carrying its own attribute system.
@@ -35,8 +143,6 @@ Entity mapping sources: Durable can map classes that cannot carry its attributes
 **Breaking changes**
 
 None.
-
-## Previous Versions
 
 ### v0.5.0 (2026-10-06) - breaking
 

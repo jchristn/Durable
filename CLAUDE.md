@@ -47,12 +47,16 @@ src/
 │   ├── RowMaterializer.cs     # Compiled typed row readers (RowReaderCompiler, TypedRowMapper)
 │   └── Migrations/            # SqlMigrator, schema reader/differ/sync, migration history and locking
 ├── Durable.Sqlite/            # SQLite implementation
-├── Durable.MySql/             # MySQL implementation
-├── Durable.Postgres/          # PostgreSQL implementation
+├── Durable.DuckDb/            # DuckDB implementation (embedded, in-process; DuckDB.NET.Data.Full)
+├── Durable.MySql/             # MySQL implementation (+ MariaDbDialect, MySqlFlavor)
+├── Durable.Postgres/          # PostgreSQL implementation (+ CockroachDbDialect, YugabyteDbDialect, PostgresFlavor)
 ├── Durable.SqlServer/         # SQL Server implementation
+├── Durable.Oracle/            # Oracle implementation (ODP.NET managed driver; driver not trim-annotated)
 ├── Durable.InMemory/          # In-memory IRepositoryBackend (reference non-SQL backend)
 ├── Durable.LiteDb/            # LiteDB IRepositoryBackend (embedded document database)
 ├── Durable.LiteGraph/         # LiteGraph IRepositoryBackend (property graph; not AOT-capable: LiteGraph lib)
+├── Durable.MongoDb/           # MongoDB IRepositoryBackend (document server; not AOT-capable: MongoDB driver)
+├── Durable.CosmosDb/          # Azure Cosmos DB for NoSQL IRepositoryBackend (not AOT-capable: Cosmos DB SDK)
 ├── Durable.Conformance/       # Conformance kit: capability-gated suites for any IRepository<T> backend
 ├── Durable.Tool/              # The `durable` .NET tool: migrations, schema diff/sync, scaffolding (not AOT)
 ├── Test.Shared/               # Touchstone source of truth: entities, provider glue, and all test suites
@@ -62,7 +66,7 @@ src/
 ├── Test.Aot/                  # Native AOT end-to-end app (PublishAot; trim/AOT warnings are errors)
 ├── Test.Benchmark/            # BenchmarkDotNet: Durable vs Dapper vs ADO.NET reads
 └── Sample.BlogApp.*/          # Sample applications per database
-.github/workflows/ci.yml       # CI: build, SQLite x3 OS, xUnit/NUnit adapters, docker databases, aot (all net8.0+net10.0)
+.github/workflows/ci.yml       # CI: build, SQLite x3 OS, DuckDB x3 OS, xUnit/NUnit adapters, docker databases, aot (all net8.0+net10.0)
 ```
 
 ## Architecture
@@ -72,18 +76,19 @@ src/
 - **Durable** (core) is backend-neutral so non-SQL repositories (document stores, search engines, graph databases) can implement `IRepository<T>`/`IQueryBuilder<T>`. Do not add SQL concepts here.
 - **LINQ is interpreted once**, by `QueryNormalizer` (Durable.Query), into `QueryNode` trees with C# semantics (null handling, enum conversion, string match modes, navigations, grouping). Backends translate nodes with `QueryNodeVisitor<TResult>`; never parse expression trees in a backend. New LINQ support = a normalizer change (+ node type if needed) plus a visitor method per backend.
 - **Non-SQL backends** implement `IRepositoryBackend` and use `RepositoryBase<T>`; they declare `RepositoryCapabilities`, and unsupported calls must throw `NotSupportedException` at the call site (`QueryCapabilityValidator`). Evaluate what the store cannot push down with `QueryEvaluator<TRow>`.
-- **Backend convention** (InMemory, LiteDb, LiteGraph; follow it for any new backend):
+- **Backend convention** (InMemory, LiteDb, LiteGraph, MongoDb, CosmosDb; follow it for any new backend):
   - `XBackend.Create(XRepositorySettings? settings = null)` / `CreateAsync(settings?, token)`; no public constructors.
-  - `XRepositorySettings` with `ForInMemory()` (+ `ForFile(path)`, `ForDatabase(db)` / `ForClient(client, ...)` where they apply), `IsInMemory`, `Validate()`, `JsonOptions`, `Logger` (InMemory: `Capabilities`, `JsonOptions`).
+  - `XRepositorySettings` with `ForInMemory()` (+ `ForFile(path)`, `ForDatabase(db)` / `ForClient(client, ...)` where they apply), `IsInMemory`, `Validate()`, `JsonOptions`, `Logger` (InMemory: `Capabilities`, `JsonOptions`). Server backends have no `ForInMemory` (`IsInMemory` is always false): MongoDb `ForClient`/`ForConnectionString`/`ForHost`, CosmosDb `ForClient`/`ForEndpoint`/`ForConnectionString`/`ForEmulator`.
   - `backend.CreateRepository<T>(options?)` or `new XRepository<T>(backend, options?)`; the repository exposes a typed `new XBackend Backend`.
   - Ownership: the backend disposes only stores it opened (`OwnsDatabase` / `OwnsClient`); repositories never dispose the backend.
   - Backends are `IDisposable` + `IAsyncDisposable` and throw `ObjectDisposedException` after disposal.
-  - Typed `BeginTransaction()` / `BeginTransactionAsync(token)` returning `XTransaction` (`IAsyncDisposable`); `Owns(ITransaction?)`.
+  - Typed `BeginTransaction()` / `BeginTransactionAsync(token)` returning `XTransaction` (`IAsyncDisposable`); `Owns(ITransaction?)`. Backends without transactions (Cosmos DB; MongoDB on a standalone server) omit `Transactions` from `Capabilities`; their `BeginTransaction[Async]` throw `NotSupportedException` and `Owns` returns false.
   - `Clear()` / `ClearAsync(token)`, `Clear(Type)` / `ClearAsync(Type, token)` (row count; sequences restart); `GetStoredRows[Async](Type)`.
   - Query plans: `event EventHandler<XQueryPlan> QueryPlanned` + `LastQueryPlan`; plan types derive from `EventArgs` with `Operation` and `EntityType`; handler exceptions are logged, never thrown.
   - `IRepositoryBackend` SPI methods take a required `CancellationToken` (RepositoryBase always passes one).
 - **Durable.Sql** holds the SQL engine. All SQL generation goes through `ISqlDialect`; never special-case a provider inside the engine. `RepositoryType` checks in the engine are a smell.
 - **Providers** contain only a dialect (`XDialect : SqlDialect`), a converter (`XDataTypeConverter : DataTypeConverter`, constructor takes optional `JsonSerializerOptions`), a connection factory (`XConnectionFactory : ConnectionFactory`, constructors from a connection string or `XRepositorySettings`, plus optional `maxConcurrentConnections`), settings (`XRepositorySettings : RepositorySettings`; shared names `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `Pooling`), and a thin `XRepository<T> : SqlRepository<T>` (constructors, bulk insert via the protected `CreateCommand(ConnectionLease, SqlStatement)`, database creation). A new database = those five files. Engine internals (`SqlCommandExecutor`, `IncludeLoader`, materializers, translator, concrete builders) are `internal`; keep them so.
+- **Wire-compatible databases** (MariaDB on Durable.MySql; CockroachDB and YugabyteDB on Durable.Postgres) are dialect subclasses selected by a flavor (`MySqlFlavor` / `PostgresFlavor` on settings, connection factories and repository constructors; `XDialect.For(flavor)`). They are not packages. Put database differences in the subclass or behind an `ISqlDialect` hook with a behavior-preserving default, never in the engine. Defaults (no flavor) must stay byte-identical to MySQL/PostgreSQL.
 
 ### Core Abstractions (Durable project)
 
@@ -124,7 +129,7 @@ src/
 
 ### Database-Specific Implementations
 
-Each database provider (Sqlite, MySql, Postgres, SqlServer) contains only:
+Each database provider (Sqlite, DuckDb, MySql, Postgres, SqlServer, Oracle) contains only:
 - `{Provider}Dialect`: identifier quoting, paging, functions, upsert, DDL types, schema introspection, savepoints
 - `{Provider}DataTypeConverter`: CLR <-> database value rules the driver does not handle natively
 - `{Provider}ConnectionFactory`: opens connections (driver pooling; optional concurrency cap)
@@ -146,6 +151,8 @@ dotnet build src/Durable.Sqlite/Durable.Sqlite.csproj
 dotnet build src/Durable.MySql/Durable.MySql.csproj
 dotnet build src/Durable.Postgres/Durable.Postgres.csproj
 dotnet build src/Durable.SqlServer/Durable.SqlServer.csproj
+dotnet build src/Durable.Oracle/Durable.Oracle.csproj
+dotnet build src/Durable.DuckDb/Durable.DuckDb.csproj
 
 # Build in Release mode for NuGet packaging
 dotnet build src/Durable.sln -c Release
@@ -163,10 +170,19 @@ dotnet test src/Test.Nunit/Test.Nunit.csproj
 # Touchstone CLI runner (console). Default: in-memory SQLite.
 dotnet run --project src/Test.Automated/Test.Automated.csproj -c Debug -f net8.0
 
+# DuckDB, in process (no docker); --filename <path> for a database file
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type duckdb
+
 # Run against a specific provider using a disposable, auto-removed docker container
 dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type postgres --docker
 dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type mysql --docker
 dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type sqlserver --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type oracle --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type mariadb --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type cockroachdb --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type yugabytedb --docker   # ~3 GB, ~5 min
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type mongodb --docker
+dotnet run --project src/Test.Automated/Test.Automated.csproj -f net8.0 -- --type cosmosdb --docker
 
 # Or point at an existing server: --type <provider> --host <h> --port <p> --user <u> --pass <p> --database <db>
 # Use --help to list all options.
@@ -180,8 +196,11 @@ dotnet publish src/Test.Aot/Test.Aot.csproj -c Release -r osx-arm64 -f net10.0 -
 **Notes**:
 - The xUnit/NUnit adapters and the CLI all consume the same Touchstone suites in `Test.Shared`, so coverage stays in sync.
 - Provider selection for the adapters can also be set via environment variables (`DURABLE_TEST_DB`, `DURABLE_TEST_HOST`, etc.).
-- Every behavioral suite runs on all four providers; run all four before committing engine changes (Docker runs can execute in parallel).
-- The Durable.Conformance kit runs against each SQL provider and, in the SQLite configuration, against the in-memory backend (full and with no capabilities), LiteDB and LiteGraph. Fix behavior differences in the engine or backend, never by weakening a conformance assertion.
+- Every behavioral suite runs on every SQL target (SQLite, DuckDB, PostgreSQL, MySQL, SQL Server, Oracle, MariaDB, CockroachDB, YugabyteDB); run them all before committing engine changes (Docker runs can execute in parallel if memory allows). After changing MySqlDialect or PostgresDialect, run the matching wire-compatible databases too.
+- Shared SQL suites gate cases on dialect features with `[RequiresDialect(DialectRequirement.X)]` (Test.Shared; resolved from `RepositoryProviderFactory.DialectFor(type)` when the suites are built): a case whose requirement the dialect does not meet is reported as skipped with the reason. Never `return` early from a test for a database that lacks a feature (that reports a pass); add a requirement (or a capability) instead, and gate on dialect flags, never on `TestDatabaseType` names.
+- The Durable.Conformance kit runs against each SQL provider and, in the SQLite configuration, against the in-memory backend (full and with no capabilities), LiteDB and LiteGraph. Document backends (`--type mongodb|cosmosdb --docker`) run the kit through `IDocumentBackendTestTarget`; MongoDB runs as a single-node replica set (`DURABLE_TEST_MONGODB_STANDALONE=1` declares a standalone server so transaction cases are gated), Cosmos DB on the Linux vNext emulator (`--protocol http`, gateway mode). Fix behavior differences in the engine or backend, never by weakening a conformance assertion; a database that genuinely lacks a feature gets a capability (for example `RepositoryCapabilities.EmptyStrings` on Oracle) so the case is skipped with a reason.
+- Oracle tests: the docker probe connects as SYS to grant the test user `EXECUTE ON SYS.DBMS_LOCK` (migration lock) and user management (the lifecycle suite creates a fresh schema); against an existing server the user needs those grants. The test connection string sets `Self Tuning=false` so the memory stress suites measure leaks, not ODP.NET cache resizing. Some shared tests use 23ai syntax in raw SQL, so the suites need 23ai; generated SQL stays 19c-compatible.
+- MariaDB, CockroachDB and YugabyteDB reuse `MySqlRepositoryProvider` / `PostgresRepositoryProvider` with a `TestDatabaseType`, which picks the flavor. YugabyteDB needs about 3 GB and 5 minutes; its container sets `ysql_sequence_cache_minval=1` so keys are consecutive.
 - The test projects target net8.0 and net10.0; run both (C# 14 changes some expression trees, e.g. `array.Contains` binds to `MemoryExtensions.Contains`).
 - Test targets: `TestDatabaseType` values are described once in `TestDatabaseTypes` (display name, tag = `--type` / `DURABLE_TEST_DB` name, aliases, `IsInProcess`, `IsMySqlFamily` / `IsPostgresFamily` for wire-compatible databases, `IsDocumentBackend`). SQL targets are created by `RepositoryProviderFactory`; suites gate on the family helpers, not on `== TestDatabaseType.MySql`. Document backends (MongoDB, Cosmos DB) build no `IRepositoryProvider`: `DocumentBackendTestTargets` creates an `IDocumentBackendTestTarget` whose conformance target and backend suites replace the SQL suites. Docker runs read `ProviderDockerSettings` (image, env, `ExtraRunArguments`, `ContainerCommand`, `StartupTimeout`, optional `ReadinessProbe`).
 - `PublicApiConventionsTestSuite` (Test.Shared) checks every Durable assembly by reflection: async methods take a defaulted `CancellationToken` as the last parameter, awaitables end in `Async`, sync I/O members of the repository/query-builder/transaction interfaces have async twins, no tuples, no `out`/`ref` on async-capable types. Justified exceptions go in its commented allow-lists (stale entries fail the suite). New public API must pass it.
@@ -197,16 +216,20 @@ dotnet pack src/Durable.sln -c Release
 dotnet pack src/Durable.Sqlite/Durable.Sqlite.csproj -c Release
 ```
 
-Published packages (11, one shared version number):
+Published packages (15, one shared version number):
 - `Durable` (core)
 - `Durable.Sql` (shared SQL engine)
 - `Durable.Sqlite`
-- `Durable.MySql`
-- `Durable.Postgres`
+- `Durable.DuckDb`
+- `Durable.MySql` (also MariaDB)
+- `Durable.Postgres` (also CockroachDB, YugabyteDB)
 - `Durable.SqlServer`
+- `Durable.Oracle`
 - `Durable.InMemory`
 - `Durable.LiteDb`
 - `Durable.LiteGraph`
+- `Durable.MongoDb`
+- `Durable.CosmosDb`
 - `Durable.Conformance`
 - `Durable.Tool` (.NET tool, command `durable`)
 
@@ -528,7 +551,9 @@ Every library project sets `<IsAotCompatible>true</IsAotCompatible>` (Durable.To
 - No runtime code generation on the AOT path: no `Reflection.Emit`, no `Expression.Compile` without the `RuntimeFeature.IsDynamicCodeSupported` fallback that `MemberAccessorFactory` uses, `MakeGenericType`/`MakeGenericMethod` only where the analyzer is satisfied (annotated, or on the JIT-only path behind `IsDynamicCodeSupported`), no delegate types built at runtime on the AOT path, no `MetadataToken` ordering.
 - JSON goes through `DurableJson` (`CreateOptions`, `Serialize`, `Deserialize`) with the configured `JsonSerializerOptions`; never call reflection-based `JsonSerializer` overloads directly.
 - `[UnconditionalSuppressMessage]` only with a precise `Justification` explaining why the code is safe (for example navigation targets kept through `[ForeignKey(typeof(X))]` or `EntityMetadata.For<X>()`).
-- Durable.LiteGraph is annotated, but the LiteGraph library is not AOT-compatible; its `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. Do not add it to Test.Aot until LiteGraph is fixed.
+- Durable.LiteGraph is annotated, but the LiteGraph library is not AOT-compatible; its `Create`/`CreateAsync` carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. Do not add it to Test.Aot until LiteGraph is fixed. Durable.MongoDb (MongoDB driver) and Durable.CosmosDb (Cosmos DB SDK: Newtonsoft.Json and reflection) are in the same position: their backends' `Create`/`CreateAsync` carry the same attributes; do not add them to Test.Aot.
+- ODP.NET is not trim-annotated: `OracleConnectionFactory` constructors, `CreateRawConnection` and the self-connecting `OracleRepository<T>` constructors carry `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`; Oracle is not in Test.Aot (it needs a server). Do not set `OracleCommand.InitialLOBFetchSize` (throws under native AOT).
+- DuckDB.NET.Data is not trim-annotated either; Test.Aot runs its DuckDB scenario on .NET 9+ only, with DuckDB.NET.Data compiled single-warn (like LiteDB).
 - Behavior that matters under AOT gets a check in `src/Test.Aot` (it publishes with `PublishAot` and trim/AOT warnings as errors). Run it (publish + run the binary) for changes to metadata, accessors, materialization, JSON or annotations.
 
 ## Working with Entity Relationships
@@ -585,7 +610,7 @@ Implementation (`IncludeLoader`) uses split queries: the root query runs (with i
 
 ## Testing Strategy
 
-Tests use the **Touchstone** framework: each case is authored once in `Test.Shared` and surfaced identically to the CLI runner (Test.Automated), the xUnit adapter (Test.Xunit), and the NUnit adapter (Test.Nunit). Provider-agnostic behavioral suites (`IRepositoryProvider`-based) run against whichever provider is configured (SQLite by default, or MySQL/PostgreSQL/SQL Server via docker or an external server). Coverage includes:
+Tests use the **Touchstone** framework: each case is authored once in `Test.Shared` and surfaced identically to the CLI runner (Test.Automated), the xUnit adapter (Test.Xunit), and the NUnit adapter (Test.Nunit). Provider-agnostic behavioral suites (`IRepositoryProvider`-based) run against whichever provider is configured (SQLite by default, or DuckDB in process, or MySQL/MariaDB/PostgreSQL/CockroachDB/YugabyteDB/SQL Server/Oracle via docker or an external server; MongoDB and Cosmos DB run the conformance kit and their backend suites instead). Coverage includes:
 - CRUD, querying, ordering, pagination, aggregation
 - Data-type round-tripping
 - Include/Join and relationship loading
@@ -603,7 +628,7 @@ Tests use the **Touchstone** framework: each case is authored once in `Test.Shar
 - Negative / edge cases (not-found, empty sets, single-result violations)
 - SQLite-specific unit suites (data-type converter, repository settings, initialization)
 
-Test entities and the four `IRepositoryProvider` implementations live in `Test.Shared`.
+Test entities and the `IRepositoryProvider` implementations (SQLite, DuckDB, MySQL/MariaDB, PostgreSQL/CockroachDB/YugabyteDB, SQL Server, Oracle) and the document backend targets (MongoDB, Cosmos DB) live in `Test.Shared`.
 
 ## Common Patterns
 
@@ -647,7 +672,15 @@ Per-call SQL: the `*WithQuery` methods (`CreateWithQuery`, `ReadManyWithQuery`, 
 
 7. **Repository settings**: Each provider has a `{Provider}RepositorySettings` class (derived from `Durable.Sql.RepositorySettings`, init-only nullable properties) for strongly-typed configuration instead of connection strings. Command timeouts belong to `SqlRepositoryOptions.CommandTimeoutSeconds`, not to settings.
 
-8. **Dependencies**: Durable.Sqlite uses Microsoft.Data.Sqlite 10.0.12 with SQLitePCLRaw 3.x (aligned with the stack LiteGraph requires); keep them aligned.
+8. **Dependencies**: Durable.Sqlite uses Microsoft.Data.Sqlite 10.0.12 with SQLitePCLRaw 3.x (aligned with the stack LiteGraph requires); keep them aligned. Durable.Oracle uses Oracle.ManagedDataAccess.Core 23.26.301, Durable.DuckDb DuckDB.NET.Data.Full 1.5.6, Durable.MongoDb MongoDB.Driver 3.12.0, Durable.CosmosDb Microsoft.Azure.Cosmos 3.63.2 (+ Newtonsoft.Json 13.0.4, which the SDK needs at run time).
+
+9. **Oracle** (`Durable.Oracle`): identifiers are quoted and folded to upper case (`OracleDialect.UpperCaseIdentifiers`); introspection reports upper-case names in lower case. Parameters are `:pN` and bound by name (`ConfigureCommand`). Statement batches are PL/SQL blocks (`StatementBatchPrefix`/`Suffix`); generated keys use `InsertKeyStrategy.ReturningInto`; IN lists are capped at 1000 items (`MaxInListItems`). Oracle stores `''` as NULL: `TreatsEmptyStringAsNull`, no `RepositoryCapabilities.EmptyStrings`, and `ColumnAllowsNull` declares string columns NULL.
+
+10. **DuckDB** (`Durable.DuckDb`) is in-process. `DuckDbConnectionFactory` keeps a root connection open for its lifetime (DuckDB has no pool; a database lives while a connection is open): `:memory:` is private to one factory, `:memory:?cache=shared` is process-wide, files hold DuckDB's single-writer-process lock until the factory is disposed. Concurrency is optimistic MVCC ("Conflict on update" instead of waiting); the executor retries autocommit statements (`AutocommitConflictRetries`), never statements inside a transaction. Dialect flags: `SupportsSavepoints`, `SupportsStoredProcedures`, `SupportsTransactionalDdl`, `SupportsStringMaxLength` false; `AlterTableRequiresDroppingIndexes` true and `DriverEnforcesCommandTimeout` false. Parameters are `$p0` (the dialect strips `$` for DuckDB.NET). Auto-increment keys are sequences `{table}_{column}_seq`; the migration lock is a row in `durable_migration_lock`.
+
+11. **Wire-compatible databases**: CockroachDB and YugabyteDB run DDL outside transactions (`SupportsTransactionalDdl` false); CockroachDB has no real advisory locks (lock table `durable_migration_locks`, via `PrepareMigrationLockSql`), no named procedure arguments (`SupportsNamedProcedureArguments`), 64-bit `INT` and DECIMAL `int / int`; MariaDB has no upsert row alias, PAD SPACE collations and no LEAD/LAG default (`SupportsOffsetFunctionDefault`).
+
+12. **Document backends**: Durable.MongoDb pushes filters down only where MongoDB matches C# exactly (simple collation on every command; case-insensitive matching via character-class regexes built from `OrdinalIgnoreCase`, never the regex `i` option); transactions need a replica set. Durable.CosmosDb has no transactions (Cosmos DB batches cover one logical partition), partitions by `/id` unless `WithPartitionKey<T>` says otherwise, and writes with ETag conditions.
 
 ## Key Interfaces for Extension
 

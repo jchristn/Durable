@@ -30,15 +30,18 @@ namespace Test.Shared
         /// <param name="instanceFactory">Factory that creates a fresh test-class instance for each case.</param>
         /// <param name="tags">Optional tags applied to every case in the suite.</param>
         /// <param name="beforeEachAsync">Optional delegate awaited before every case (e.g., shared schema setup).</param>
+        /// <param name="skipResolver">Optional delegate returning a skip reason for a test method (null to run it), evaluated
+        /// while the suite is built (for example <see cref="RequiresDialectAttribute.SkipReason"/>).</param>
         /// <returns>A populated suite descriptor.</returns>
         public static TestSuiteDescriptor BuildSuite<T>(
             string suiteId,
             string displayName,
             Func<T> instanceFactory,
             IReadOnlyList<string>? tags = null,
-            Func<CancellationToken, Task>? beforeEachAsync = null) where T : class
+            Func<CancellationToken, Task>? beforeEachAsync = null,
+            Func<MethodInfo, string?>? skipResolver = null) where T : class
         {
-            List<TestCaseDescriptor> cases = BuildCases(typeof(T), suiteId, () => instanceFactory(), tags, beforeEachAsync);
+            List<TestCaseDescriptor> cases = BuildCases(typeof(T), suiteId, () => instanceFactory(), tags, beforeEachAsync, skipResolver);
             return new TestSuiteDescriptor(suiteId, displayName, cases);
         }
 
@@ -50,13 +53,15 @@ namespace Test.Shared
         /// <param name="instanceFactory">Factory that creates a fresh test-class instance for each case.</param>
         /// <param name="tags">Optional tags applied to every case.</param>
         /// <param name="beforeEachAsync">Optional delegate awaited before every case.</param>
+        /// <param name="skipResolver">Optional delegate returning a skip reason for a test method (null to run it).</param>
         /// <returns>The list of cases discovered on the test class.</returns>
         public static List<TestCaseDescriptor> BuildCases(
             Type testClass,
             string suiteId,
             Func<object> instanceFactory,
             IReadOnlyList<string>? tags = null,
-            Func<CancellationToken, Task>? beforeEachAsync = null)
+            Func<CancellationToken, Task>? beforeEachAsync = null,
+            Func<MethodInfo, string?>? skipResolver = null)
         {
             if (testClass == null) throw new ArgumentNullException(nameof(testClass));
             if (instanceFactory == null) throw new ArgumentNullException(nameof(instanceFactory));
@@ -78,6 +83,7 @@ namespace Test.Shared
 
                 bool isTheory = method.GetCustomAttribute<TheoryAttribute>() != null;
                 string? skipReason = string.IsNullOrWhiteSpace(fact.Skip) ? null : fact.Skip;
+                if (skipReason == null && skipResolver != null) skipReason = skipResolver(method);
                 bool skip = skipReason != null;
 
                 if (isTheory)

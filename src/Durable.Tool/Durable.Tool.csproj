@@ -28,7 +28,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>mysql;linq;postgres;orm;database;sqlite;postgresql;sqlserver;ef;sql;migrations;cli;tool</PackageTags>
-		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: --provider duckdb, oracle, mariadb, cockroachdb and yugabytedb (mariadb now selects the MariaDB dialect). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

@@ -120,12 +120,9 @@ namespace Test.Shared
         /// Null checks on a string column (the fixture holds an empty Email) return the same rows on both backends.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.EmptyStrings)]
         public async Task StringNullChecksMatchSql()
         {
-            // Oracle stores an empty string as NULL (ISqlDialect.TreatsEmptyStringAsNull), so the empty Email reads as NULL
-            // there while the in-memory backend keeps it; the comparison only holds where empty strings are kept.
-            if (_Provider.Dialect.TreatsEmptyStringAsNull) return;
-
             using QueryTranslationFixture sql = await QueryTranslationFixture.CreateAsync(_Provider);
             InMemoryQtData memory = await InMemoryQtData.CreateAsync();
             List<Expression<Func<QtItem, bool>>> predicates = new List<Expression<Func<QtItem, bool>>>

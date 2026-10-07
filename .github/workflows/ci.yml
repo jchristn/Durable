@@ -5,7 +5,8 @@
 #              conformance kit) on Linux, Windows and macOS, for net8.0 and net10.0.
 # - duckdb:    the Touchstone CLI runner on DuckDB (in-process) on Linux, Windows and macOS, for net8.0 and net10.0.
 # - adapters:  the same suites through the xUnit and NUnit adapters (dotnet test, both frameworks).
-# - databases: PostgreSQL, MySQL and SQL Server in disposable docker containers (--docker), both frameworks.
+# - databases: PostgreSQL, MySQL, SQL Server, Oracle, MariaDB, CockroachDB, YugabyteDB, MongoDB and Cosmos DB (emulator)
+#              in disposable docker containers (--docker), both frameworks.
 # - aot:       publishes src/Test.Aot with Native AOT (trim/AOT warnings are errors) and runs the native binary.
 
 name: CI
@@ -134,22 +135,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # v0.7.0 targets: each one replaces its own placeholder comment with "- <name>" (blank lines keep merges clean).
         provider:
           - postgres
           - mysql
           - sqlserver
-
           - oracle
-
           - mariadb
-
           - cockroachdb
-
           - yugabytedb
-
           - mongodb
-
           - cosmosdb
         framework: [net8.0, net10.0]
     steps:

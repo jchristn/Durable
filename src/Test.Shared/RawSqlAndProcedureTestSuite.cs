@@ -248,10 +248,9 @@ namespace Test.Shared
         /// false), stored procedure calls throw <see cref="NotSupportedException"/>.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.NoStoredProcedures)]
         public async Task StoredProcedure_SqliteNotSupported()
         {
-            if (_Provider.Dialect.SupportsStoredProcedures) return;
-
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             Assert.Throws<NotSupportedException>(() => repository.ExecuteProcedure("anything"));
             Assert.Throws<NotSupportedException>(() => repository.FromProcedure<PersonNameDto>("anything"));
@@ -264,10 +263,9 @@ namespace Test.Shared
         /// (MySQL and SQL Server). On PostgreSQL a procedure with an INOUT parameter returns its single row.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.StoredProcedures)]
         public async Task StoredProcedure_InputParameterReturnsResultSet()
         {
-            if (!_Provider.Dialect.SupportsStoredProcedures) return;
-
             ISqlRepository<Person> repository = await SeedAsync();
             try
             {
@@ -319,10 +317,9 @@ namespace Test.Shared
         /// <see cref="SqlParameterValue.Direction"/> receives the procedure's value after ExecuteProcedure.
         /// </summary>
         [Fact]
+        [RequiresDialect(DialectRequirement.StoredProcedures)]
         public async Task StoredProcedure_OutputParameterIsPopulated()
         {
-            if (!_Provider.Dialect.SupportsStoredProcedures) return;
-
             ISqlRepository<Person> repository = await SeedAsync();
             try
             {

@@ -62,10 +62,27 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.OnConnectionOpened(System.Data.Common.DbConnection)">
-            <inheritdoc />
+            <summary>
+            Prepares a newly opened connection: rolls back a transaction the driver's pool left open on it (see below) and
+            applies <see cref="P:Durable.Sqlite.SqliteConnectionFactory.BusyTimeoutMilliseconds"/>.
+            Microsoft.Data.Sqlite returns a native connection to its pool without checking that its transaction ended, for
+            example after a transaction started with raw SQL (<c>BEGIN</c>, <c>SAVEPOINT</c>) or one whose <c>ROLLBACK</c>
+            failed. The next lease of that native connection would then run inside the stale transaction, and its
+            <c>BeginTransaction</c> would fail with "cannot start a transaction within a transaction". A connection leased
+            from this factory never starts inside a transaction.
+            </summary>
+            <param name="connection">The opened connection. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
         </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.OnConnectionOpenedAsync(System.Data.Common.DbConnection,System.Threading.CancellationToken)">
-            <inheritdoc />
+            <summary>
+            Asynchronous <see cref="M:Durable.Sqlite.SqliteConnectionFactory.OnConnectionOpened(System.Data.Common.DbConnection)"/>: rolls back a transaction the driver's pool left open on the
+            connection and applies <see cref="P:Durable.Sqlite.SqliteConnectionFactory.BusyTimeoutMilliseconds"/>.
+            </summary>
+            <param name="connection">The opened connection. Must not be null.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>A task that completes when the connection is ready.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
         </member>
         <member name="M:Durable.Sqlite.SqliteConnectionFactory.Dispose(System.Boolean)">
             <inheritdoc />

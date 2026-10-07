@@ -21,7 +21,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>linq;orm;database;litedb;nosql;document;embedded;repository</PackageTags>
-		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: supports RepositoryCapabilities.EmptyStrings (part of All). See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

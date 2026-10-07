@@ -10,11 +10,13 @@ namespace Test.Shared
     using Durable;
     using Durable.Conformance;
     using Durable.CosmosDb;
+    using Durable.DuckDb;
     using Durable.InMemory;
     using Durable.LiteDb;
     using Durable.LiteGraph;
     using Durable.MongoDb;
     using Durable.MySql;
+    using Durable.Oracle;
     using Durable.Postgres;
     using Durable.Sql;
     using Durable.Sqlite;
@@ -39,10 +41,11 @@ namespace Test.Shared
             typeof(IRepository<>).Assembly,
             typeof(ISqlRepository<>).Assembly,
             typeof(SqliteRepository<>).Assembly,
+            typeof(DuckDbRepository<>).Assembly,
             typeof(MySqlRepository<>).Assembly,
             typeof(PostgresRepository<>).Assembly,
             typeof(SqlServerRepository<>).Assembly,
-            typeof(Durable.Oracle.OracleRepository<>).Assembly,
+            typeof(OracleRepository<>).Assembly,
             typeof(InMemoryBackend).Assembly,
             typeof(LiteDbBackend).Assembly,
             typeof(LiteGraphBackend).Assembly,

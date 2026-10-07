@@ -19,7 +19,7 @@
 		<RepositoryUrl>https://github.com/jchristn/durable</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>duckdb;linq;orm;database;analytics;olap;embedded;sql</PackageTags>
-		<PackageReleaseNotes>v0.7.0: see CHANGELOG.md</PackageReleaseNotes>
+		<PackageReleaseNotes>v0.7.0: new DuckDB provider (embedded, in-process) on DuckDB.NET.Data.Full 1.5.6: native types, sequence keys, Appender bulk insert, conflict retries, migrations. See CHANGELOG.md.</PackageReleaseNotes>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>

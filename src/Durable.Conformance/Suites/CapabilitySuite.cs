@@ -340,6 +340,25 @@ namespace Durable.Conformance
             Assert.Equal(0L, repository.Count());
         }
 
+        [ConformanceTest(Description = "EmptyStrings: an empty string reads back as an empty string, or (without the flag, no call throws) as an empty string or null")]
+        public async Task EmptyStrings()
+        {
+            const RepositoryCapabilities flag = RepositoryCapabilities.EmptyStrings;
+            await ResetAsync(typeof(CfItem));
+            IRepository<CfItem> repository = Repository<CfItem>();
+            AssertReported(flag, repository.Capabilities);
+            CfItem created = await repository.CreateAsync(new CfItem { Name = "empty", Category = "c", Email = string.Empty, CreatedUtc = new DateTime(2020, 1, 1) }, null, Token);
+            CfItem? stored = await repository.ReadByIdAsync(created.Id, null, Token);
+            Assert.NotNull(stored);
+            if (Supports(flag))
+            {
+                Assert.True(stored.Email == string.Empty, "Email should read back \"\" but was " + (stored.Email == null ? "null" : "\"" + stored.Email + "\""));
+                return;
+            }
+
+            Assert.True(stored.Email == null || stored.Email == string.Empty, "Email should read back \"\" or null but was \"" + stored.Email + "\"");
+        }
+
         private void AssertReported(RepositoryCapabilities flag, RepositoryCapabilities reported)
         {
             bool expected = Supports(flag);
