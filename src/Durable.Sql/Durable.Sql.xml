@@ -1960,6 +1960,7 @@
             <returns>The savepoint.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when there is no active transaction.</exception>
             <exception cref="T:System.ArgumentException">Thrown when name contains invalid characters.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not support savepoints (<see cref="P:Durable.Sql.ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlTransaction.CreateSavepointAsync(System.String,System.Threading.CancellationToken)">
             <summary>
@@ -1969,6 +1970,7 @@
             <param name="token">Cancellation token.</param>
             <returns>The savepoint.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when there is no active transaction.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not support savepoints (<see cref="P:Durable.Sql.ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         </member>
         <member name="T:Durable.Sql.IWindowedQueryBuilder`1">
             <summary>

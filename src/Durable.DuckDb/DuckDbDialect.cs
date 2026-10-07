@@ -491,8 +491,7 @@ namespace Durable.DuckDb
                 if (current is DuckDBException duck)
                 {
                     string message = duck.Message ?? string.Empty;
-                    return message.Contains("Conflict", StringComparison.OrdinalIgnoreCase)
-                        || message.Contains("conflict", StringComparison.Ordinal)
+                    return message.Contains("conflict", StringComparison.OrdinalIgnoreCase)
                         || message.Contains("Constraint Error", StringComparison.Ordinal)
                         || message.Contains("constraint violation", StringComparison.OrdinalIgnoreCase);
                 }
