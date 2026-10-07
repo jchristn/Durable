@@ -30,6 +30,11 @@ namespace Durable.Sql
         public static readonly RepositoryType Sqlite = new RepositoryType("sqlite", "SQLite");
 
         /// <summary>
+        /// Represents a DuckDB repository
+        /// </summary>
+        public static readonly RepositoryType DuckDb = new RepositoryType("duckdb", "DuckDB");
+
+        /// <summary>
         /// Represents a MySQL repository
         /// </summary>
         public static readonly RepositoryType MySql = new RepositoryType("mysql", "MySQL");

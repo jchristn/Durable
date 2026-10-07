@@ -241,12 +241,13 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// On SQLite, stored procedure calls throw <see cref="NotSupportedException"/>.
+        /// On databases without stored procedures (SQLite, DuckDB: <see cref="ISqlDialect.SupportsStoredProcedures"/> is
+        /// false), stored procedure calls throw <see cref="NotSupportedException"/>.
         /// </summary>
         [Fact]
         public async Task StoredProcedure_SqliteNotSupported()
         {
-            if (_Provider.DatabaseType != TestDatabaseType.Sqlite) return;
+            if (_Provider.Dialect.SupportsStoredProcedures) return;
 
             ISqlRepository<Person> repository = _Provider.CreateRepository<Person>();
             Assert.Throws<NotSupportedException>(() => repository.ExecuteProcedure("anything"));
@@ -262,7 +263,7 @@ namespace Test.Shared
         [Fact]
         public async Task StoredProcedure_InputParameterReturnsResultSet()
         {
-            if (_Provider.DatabaseType == TestDatabaseType.Sqlite) return;
+            if (!_Provider.Dialect.SupportsStoredProcedures) return;
 
             ISqlRepository<Person> repository = await SeedAsync();
             try
@@ -309,7 +310,7 @@ namespace Test.Shared
         [Fact]
         public async Task StoredProcedure_OutputParameterIsPopulated()
         {
-            if (_Provider.DatabaseType == TestDatabaseType.Sqlite) return;
+            if (!_Provider.Dialect.SupportsStoredProcedures) return;
 
             ISqlRepository<Person> repository = await SeedAsync();
             try
@@ -515,6 +516,8 @@ namespace Test.Shared
                 case TestDatabaseType.MySql:
                 case TestDatabaseType.MariaDb: return "SELECT COUNT(*) FROM information_schema.columns a CROSS JOIN information_schema.columns b CROSS JOIN information_schema.columns c";
                 case TestDatabaseType.SqlServer: return "WAITFOR DELAY '00:00:0" + seconds + "'";
+                // DuckDB has no sleep function; a cross join of this size runs for far longer than the tests wait.
+                case TestDatabaseType.DuckDb: return "SELECT SUM(a.range * b.range) FROM range(300000) a CROSS JOIN range(300000) b";
                 default: throw new NotSupportedException("No sleep statement for " + _Provider.DatabaseType);
             }
         }

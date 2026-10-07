@@ -512,9 +512,10 @@ namespace Durable.Sql
             return RowMaterializer.CreateMapper<TResult>(_ResultMetadata, Context.Converter);
         }
 
-        private static decimal ToDecimal(object? value)
+        private decimal ToDecimal(object? value)
         {
-            return value == null ? 0m : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+            // Through the converter: some drivers return aggregates in types without IConvertible (DuckDB: HUGEINT as BigInteger).
+            return value == null || value == DBNull.Value ? 0m : (decimal)Context.Converter.ConvertFromDatabase(value, typeof(decimal))!;
         }
 
         private static NotSupportedException NotSupported(string operation)

@@ -1,0 +1,478 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Durable.DuckDb</name>
+    </assembly>
+    <members>
+        <member name="T:Durable.DuckDb.AppenderPlan">
+            <summary>
+            How one bulk insert maps prepared rows onto a table's columns for the DuckDB Appender (which appends every column
+            in table order). Sources: an index into the row values, -1 for NULL, -2 for a value pre-generated from the
+            column's sequence default.
+            Thread safety: not thread-safe; used by one bulk insert.
+            </summary>
+        </member>
+        <member name="T:Durable.DuckDb.DuckDbConnectionFactory">
+            <summary>
+            Opens DuckDB connections. DuckDB runs in-process and has no connection pool; instead, a database instance lives as
+            long as at least one connection to it is open, and DuckDB.NET shares one instance between connections opened with
+            the same data source. This factory therefore opens one root connection on first use and keeps it open until it is
+            disposed. Every connection it hands out shares the root's database instance (in-memory connections are
+            <see cref="M:DuckDB.NET.Data.DuckDBConnection.Duplicate"/>s of the root; file connections are opened with the same data source):
+            <list type="bullet">
+            <item><description><c>:memory:</c> (or an empty data source): an in-memory database private to this factory. All
+            repositories sharing the factory see the same data; raw connections opened with the same connection string do not
+            (each would get its own empty database). The database is released when the factory is disposed.</description></item>
+            <item><description><c>:memory:?cache=shared</c>: the process-wide shared in-memory database. Raw connections with the
+            same string share it; it lives while any connection to it (including this factory's root) is open.</description></item>
+            <item><description>A file path: the database file. The root connection keeps the database open (and DuckDB's file
+            lock held: a read-write file can be opened by one process at a time) until the factory is disposed, which avoids
+            re-opening and checkpointing the file for every operation.</description></item>
+            </list>
+            Concurrency: DuckDB uses optimistic multi-version concurrency control. Concurrent transactions do not block each
+            other; a transaction that updates or deletes a row changed by another concurrent transaction fails with a
+            "Conflict on update" error (a <see cref="T:DuckDB.NET.Data.DuckDBException"/>) instead of waiting, so callers that update the same rows
+            from several threads should retry such failures.
+            Thread safety: safe for concurrent use.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbConnectionFactory.ConnectionString">
+            <summary>
+            Gets the effective connection string. Never null.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbConnectionFactory.IsInMemory">
+            <summary>
+            Gets whether the database is in memory (<c>:memory:</c>, <c>:memory:?cache=shared</c> or an empty data source).
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbConnectionFactory.IsPrivateInMemory">
+            <summary>
+            Gets whether the database is an in-memory database private to this factory (a <c>:memory:</c> data source without options).
+            </summary>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbConnectionFactory.#ctor(Durable.DuckDb.DuckDbRepositorySettings,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory from strongly-typed settings (<see cref="M:Durable.DuckDb.DuckDbRepositorySettings.BuildConnectionString"/>).
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack a data source.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbConnectionFactory.#ctor(System.String,System.Nullable{System.Int32})">
+            <summary>
+            Instantiates the factory. No connection is opened until the first connection is requested.
+            </summary>
+            <param name="connectionString">DuckDB.NET connection string (for example <c>Data Source=:memory:</c>). Must not be null.</param>
+            <param name="maxConcurrentConnections">Optional cap on concurrently open connections; null for none.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when the connection string is invalid.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbConnectionFactory.CreateConnection">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbConnectionFactory.Dispose(System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.DuckDb.DuckDbDataTypeConverter">
+            <summary>
+            DuckDB value conversion. DuckDB.NET binds and reads most CLR types natively (including unsigned integers, GUIDs as
+            UUID, DateOnly/TimeOnly, TimeSpan as INTERVAL and DateTimeOffset as TIMESTAMPTZ). This converter covers what the
+            driver returns in other shapes: BLOB columns are read as a <see cref="T:System.IO.Stream"/> (copied to a byte array),
+            HUGEINT/UHUGEINT values (for example SUM over integer columns) are read as <see cref="T:System.Numerics.BigInteger"/> and narrowed to
+            the target numeric type, and <see cref="T:System.DateTime"/> values are written with unspecified kind for TIMESTAMP columns.
+            Thread safety: stateless; safe for concurrent use.
+            </summary>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDataTypeConverter.#ctor(System.Text.Json.JsonSerializerOptions)">
+            <summary>
+            Instantiates the converter.
+            </summary>
+            <param name="jsonOptions">JSON options for JSON columns; null uses the defaults.</param>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDataTypeConverter.ToDatabaseCore(System.Object,System.Type,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDataTypeConverter.FromDatabaseCore(System.Object,System.Type,System.Type,Durable.ColumnMetadata)">
+            <inheritdoc />
+        </member>
+        <member name="T:Durable.DuckDb.DuckDbDialect">
+            <summary>
+            DuckDB dialect (DuckDB 1.1+, as bundled with DuckDB.NET.Data.Full). Tables are resolved in <c>current_database()</c>
+            and <c>current_schema()</c> unless the name is schema-qualified. Notable differences from PostgreSQL, which DuckDB's
+            SQL otherwise follows: auto-increment keys use a sequence per column (<c>DEFAULT nextval(...)</c>, because DuckDB has
+            no identity columns), savepoints are not supported (<see cref="P:Durable.DuckDb.DuckDbDialect.SupportsSavepoints"/> is false), integer division
+            uses <c>//</c>, and the migration lock is a row in <see cref="P:Durable.DuckDb.DuckDbDialect.MigrationLockTableName"/> (DuckDB has no advisory
+            locks; see <see cref="M:Durable.DuckDb.DuckDbDialect.AcquireMigrationLockSql(System.String,System.Int32)"/>).
+            Thread safety: immutable; safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.Default">
+            <summary>
+            Gets the shared default instance.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.RepositoryType">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.DbSystemName">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.MaxParameters">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.SupportsStoredProcedures">
+            <inheritdoc />
+            <remarks>DuckDB has macros but no stored procedures.</remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.SupportsSavepoints">
+            <inheritdoc />
+            <remarks>DuckDB (through 1.5) does not support SAVEPOINT.</remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.StringCastType">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.DriverEnforcesCommandTimeout">
+            <inheritdoc />
+            <remarks>DuckDB.NET ignores <see cref="P:System.Data.Common.DbCommand.CommandTimeout"/>; the engine cancels commands that exceed <see cref="P:Durable.Sql.SqlRepositoryOptions.CommandTimeoutSeconds"/>.</remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.AutocommitConflictRetries">
+            <inheritdoc />
+            <remarks>
+            DuckDB fails an UPDATE or DELETE of a row that a concurrent transaction changed ("Conflict on update") instead of
+            waiting. Statements outside a transaction are run again up to this many times, so concurrent autocommit writes to
+            the same rows behave as on other databases. Writes inside a transaction still fail with the conflict. Default: 10.
+            </remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.OrdinalCollationName">
+            <summary>
+            Gets the collation applied by <see cref="M:Durable.DuckDb.DuckDbDialect.OrdinalCollation(System.String)"/> for ordinal and ignore-case string matching.
+            Default: binary. DuckDB compares strings by byte (code point) order unless a default collation such as
+            <c>nocase</c> is configured; the explicit collation keeps ordinal semantics in that case too.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.MigrationLockTableName">
+            <summary>
+            Gets the name of the table holding migration locks (one row per held lock; see <see cref="M:Durable.DuckDb.DuckDbDialect.AcquireMigrationLockSql(System.String,System.Int32)"/>).
+            Default: durable_migration_lock. Created on first use and excluded from <see cref="M:Durable.DuckDb.DuckDbDialect.TableNamesQuery"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.SupportsTransactionalDdl">
+            <inheritdoc />
+            <remarks>
+            Reported as false although DuckDB can roll back DDL: DuckDB cannot create an index in a transaction that has
+            already changed rows of the table (for example by adding a column with a default) and cannot drop a column in
+            the transaction that dropped its index, which schema synchronization and typical migrations need. Durable
+            therefore applies migrations and schema changes statement by statement (each commits on its own), as on MySQL;
+            a failed migration may leave its earlier statements applied.
+            </remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.SupportsStringMaxLength">
+            <inheritdoc />
+            <remarks>DuckDB accepts VARCHAR(n) but neither stores nor enforces the length.</remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.AlterTableRequiresDroppingIndexes">
+            <inheritdoc />
+            <remarks>DuckDB reports a dependency error for DROP COLUMN, SET NOT NULL and type changes on a table with indexes.</remarks>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbDialect.CurrentUtcTimestampSql">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.#ctor(Durable.Sql.IDataTypeConverter,System.String,System.String,System.Int32)">
+            <summary>
+            Instantiates the dialect.
+            </summary>
+            <param name="converter">Converter; null uses <see cref="T:Durable.DuckDb.DuckDbDataTypeConverter"/>.</param>
+            <param name="ordinalCollation">Collation for ordinal string matching. Default: binary.</param>
+            <param name="migrationLockTableName">Table holding migration locks. Default: durable_migration_lock.</param>
+            <param name="autocommitConflictRetries">How often a conflicting statement outside a transaction is run again (see <see cref="P:Durable.DuckDb.DuckDbDialect.AutocommitConflictRetries"/>). Default: 10. Minimum: 0.</param>
+            <exception cref="T:System.ArgumentException">Thrown when ordinalCollation or migrationLockTableName is not a simple identifier.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when autocommitConflictRetries is negative.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.FormatParameterName(System.Int32)">
+            <inheritdoc />
+            <remarks>DuckDB binds named parameters written as <c>$name</c>.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.ConfigureParameter(System.Data.Common.DbParameter,Durable.Sql.SqlParameterValue)">
+            <inheritdoc />
+            <remarks>DuckDB.NET matches parameters by name without the <c>$</c> prefix.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.OrderDirection(System.Boolean)">
+            <inheritdoc />
+            <remarks>DuckDB sorts NULLs last by default; NULLS FIRST / NULLS LAST restore LINQ ordering.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.Divide(System.String,System.String,System.Boolean)">
+            <inheritdoc />
+            <remarks>DuckDB's <c>/</c> always returns DOUBLE; <c>//</c> is integer division truncating toward zero, like C#.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.OrdinalCollation(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.TranslateFunction(Durable.Query.QueryFunction,System.Collections.Generic.IReadOnlyList{System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.GetColumnType(Durable.ColumnMetadata)">
+            <inheritdoc />
+            <remarks>
+            DuckDB ignores declared string lengths, so strings are always <c>VARCHAR</c> (MaxLength is not enforced by the
+            database). Unsigned integers use DuckDB's native unsigned types, <see cref="T:System.Numerics.BigInteger"/> (for example from a
+            value converter) maps to <c>HUGEINT</c>, and JSON columns use the <c>JSON</c> type.
+            </remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.AppendCreateTable(Durable.Sql.SqlStatementBuilder,Durable.EntityMetadata)">
+            <inheritdoc />
+            <remarks>
+            Each auto-increment column gets a sequence named <c>{table}_{column}_seq</c> (in the table's schema), and the
+            column defaults to <c>nextval</c> of it. DuckDB does not drop a sequence with the table that uses it, so the
+            statement first drops a sequence of that name left behind by an earlier, dropped table and recreates it: a
+            recreated table numbers its rows from 1 again, as on the other databases. The engine emits this statement only
+            for tables that do not exist; when the table does exist, DuckDB refuses to drop the sequence it depends on and
+            the statement fails instead of being a no-op.
+            </remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.TableExistsQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.ColumnNamesQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.IndexNamesQuery(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.CreateIndexSql(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean,System.Collections.Generic.IReadOnlyList{System.String})">
+            <inheritdoc />
+            <remarks>DuckDB has no covering (INCLUDE) indexes; included columns are ignored.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.DropIndexSql(System.String,System.String)">
+            <inheritdoc />
+            <remarks>Index names are schema-scoped; the index is qualified with the table's schema when the table name is qualified.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.CreateSavepointSql(System.String)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always: DuckDB does not support savepoints.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.RollbackToSavepointSql(System.String)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always: DuckDB does not support savepoints.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.ReleaseSavepointSql(System.String)">
+            <inheritdoc />
+            <exception cref="T:System.NotSupportedException">Always: DuckDB does not support savepoints.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.ColumnSchemaQuery(System.String)">
+            <inheritdoc />
+            <remarks>
+            Reads <c>duckdb_columns()</c> and <c>duckdb_constraints()</c>. DuckDB reports no character lengths (VARCHAR
+            lengths are not stored), so column 3 is always null; a column whose default is <c>nextval(...)</c> is reported as
+            database-generated.
+            </remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.TableNamesQuery">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.IndexSchemaQuery(System.String)">
+            <inheritdoc />
+            <remarks>DuckDB indexes have no included columns; column 4 is always 0.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.NormalizeColumnType(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.AddColumnSql(System.String,Durable.ColumnMetadata,System.Boolean,System.String)">
+            <inheritdoc />
+            <remarks>DuckDB cannot add a column with a constraint, so a NOT NULL column is added with its default and then altered.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.AcquireMigrationLockSql(System.String,System.Int32)">
+            <inheritdoc />
+            <remarks>
+            DuckDB has no advisory or session locks. The lock is a row in <see cref="P:Durable.DuckDb.DuckDbDialect.MigrationLockTableName"/> (created on
+            first use): the statement inserts the row and yields 1, or yields no row when another session holds the lock.
+            Concurrent attempts that DuckDB reports as write-write conflicts or key violations count as "not acquired"
+            (<see cref="M:Durable.DuckDb.DuckDbDialect.IsMigrationLockContention(System.Exception)"/>). A DuckDB file is opened read-write by one process at a time, so rows
+            left by another process (one that exited without releasing) are stale and removed first. waitSeconds is not
+            used: the migrator polls.
+            </remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.IsRetryableConflict(System.Exception)">
+            <inheritdoc />
+            <remarks>True for DuckDB write-write conflicts ("Conflict on update", "Conflict on tuple deletion", catalog write-write conflicts).</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.IsMigrationLockContention(System.Exception)">
+            <inheritdoc />
+            <remarks>True for DuckDB transaction conflicts and constraint violations, which is how a concurrent insert of the lock row fails.</remarks>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.AutoIncrementColumnType(Durable.ColumnMetadata,System.Boolean)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbDialect.BinaryLiteral(System.Byte[])">
+            <inheritdoc />
+            <remarks>DuckDB blob literals spell every byte as <c>\xHH</c>.</remarks>
+        </member>
+        <member name="T:Durable.DuckDb.DuckDbRepository`1">
+            <summary>
+            DuckDB repository for <typeparamref name="T"/>. All behavior comes from <see cref="T:Durable.Sql.SqlRepository`1"/>; this class
+            supplies the DuckDB dialect and connection handling, a bulk insert through the DuckDB Appender, and database file
+            creation. See <see cref="T:Durable.DuckDb.DuckDbConnectionFactory"/> for in-memory database lifetime and concurrency semantics.
+            Thread safety: safe for concurrent use.
+            </summary>
+            <typeparam name="T">Entity type.</typeparam>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.#ctor(System.String,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from a connection string. The repository owns its connection factory and disposes it, so a
+            <c>:memory:</c> database is private to this repository; share one <see cref="T:Durable.DuckDb.DuckDbConnectionFactory"/> to use
+            one in-memory database from several repositories.
+            </summary>
+            <param name="connectionString">DuckDB.NET connection string. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is invalid.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.#ctor(Durable.DuckDb.DuckDbRepositorySettings,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository from settings. The repository owns its connection factory and disposes it.
+            </summary>
+            <param name="settings">Settings. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when settings is null.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when the settings lack a data source.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.#ctor(Durable.Sql.IConnectionFactory,Durable.Sql.SqlRepositoryOptions)">
+            <summary>
+            Creates a repository on a shared connection factory. The factory is not disposed with the repository.
+            </summary>
+            <param name="connectionFactory">Factory producing <see cref="T:DuckDB.NET.Data.DuckDBConnection"/> instances. Must not be null.</param>
+            <param name="options">Options; null uses defaults.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionFactory is null.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.CreateDatabaseIfNotExists">
+            <summary>
+            Ensures the database exists: creates the directory of a database file and opens a connection, which creates the
+            file. In-memory databases need no action.
+            </summary>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.CreateDatabaseIfNotExistsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Ensures the database exists: creates the directory of a database file and opens a connection.
+            </summary>
+            <param name="token">Cancellation token.</param>
+            <returns>A task.</returns>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.BulkInsertCore(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{`0})">
+            <summary>
+            Inserts rows with the DuckDB Appender when every value's type matches its column type exactly (as it does for
+            tables created by Durable), generating auto-increment keys from their sequences; otherwise with a prepared INSERT
+            executed once per row inside the transaction.
+            </summary>
+            <param name="lease">Lease inside a transaction.</param>
+            <param name="entities">Prepared entities.</param>
+            <returns>Rows inserted.</returns>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepository`1.BulkInsertCoreAsync(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{`0},System.Threading.CancellationToken)">
+            <summary>
+            Inserts rows with the DuckDB Appender, or a prepared INSERT when types do not match (see <see cref="M:Durable.DuckDb.DuckDbRepository`1.BulkInsertCore(Durable.Sql.ConnectionLease,System.Collections.Generic.IReadOnlyList{`0})"/>).
+            The Appender itself is synchronous (DuckDB runs in-process).
+            </summary>
+            <param name="lease">Lease inside a transaction.</param>
+            <param name="entities">Prepared entities.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Rows inserted.</returns>
+        </member>
+        <member name="T:Durable.DuckDb.DuckDbRepositorySettings">
+            <summary>
+            Connection settings for DuckDB repositories. DuckDB runs in-process: <see cref="P:Durable.DuckDb.DuckDbRepositorySettings.DataSource"/> is a database file
+            path, <c>:memory:</c> for an in-memory database private to one <see cref="T:Durable.DuckDb.DuckDbConnectionFactory"/>, or
+            <c>:memory:?cache=shared</c> for the process-wide shared in-memory database. The server settings inherited from
+            <see cref="T:Durable.Sql.RepositorySettings"/> (host, port, user, password, database) are not used.
+            Thread safety: immutable after construction (init-only properties); safe to share.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.Type">
+            <summary>
+            Gets <see cref="F:Durable.Sql.RepositoryType.DuckDb"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.DataSource">
+            <summary>
+            Gets the database file path, <c>:memory:</c> (private in-memory database) or <c>:memory:?cache=shared</c>
+            (process-wide shared in-memory database). Default: null. Required by <see cref="M:Durable.DuckDb.DuckDbRepositorySettings.BuildConnectionString"/>.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.AccessMode">
+            <summary>
+            Gets the access mode (DuckDB <c>access_mode</c>). Default: null (DuckDB's default, automatic: read-write).
+            A read-only file database can be opened by several processes at once; a read-write one by one process.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.Threads">
+            <summary>
+            Gets the number of worker threads DuckDB uses (DuckDB <c>threads</c>). Default: null (DuckDB's default, the
+            number of cores). Minimum: 1.
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.MemoryLimit">
+            <summary>
+            Gets the memory limit (DuckDB <c>memory_limit</c>, for example "1GB"). Default: null (DuckDB's default, 80% of RAM).
+            </summary>
+        </member>
+        <member name="P:Durable.DuckDb.DuckDbRepositorySettings.IsInMemory">
+            <summary>
+            Gets whether <see cref="P:Durable.DuckDb.DuckDbRepositorySettings.DataSource"/> names an in-memory database (<c>:memory:</c>, with or without options, or empty).
+            </summary>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Durable.DuckDb.DuckDbRepositorySettings"/> class.
+            </summary>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.ForInMemory">
+            <summary>
+            Returns settings for an in-memory database. The database is private to the connection factory built from these
+            settings (every connection of that factory sees it) and is released when the factory is disposed.
+            </summary>
+            <returns>The settings.</returns>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.ForSharedInMemory">
+            <summary>
+            Returns settings for the process-wide shared in-memory database (<c>:memory:?cache=shared</c>): every factory and
+            raw connection using it sees the same data while at least one connection to it is open.
+            </summary>
+            <returns>The settings.</returns>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.ForFile(System.String)">
+            <summary>
+            Returns settings for a database file, created when it does not exist.
+            </summary>
+            <param name="path">File path. Must not be null or empty.</param>
+            <returns>The settings.</returns>
+            <exception cref="T:System.ArgumentException">Thrown when path is null, empty or whitespace.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.Parse(System.String)">
+            <summary>
+            Parses a DuckDB.NET connection string (for example <c>Data Source=analytics.duckdb;threads=4</c>).
+            </summary>
+            <param name="connectionString">Connection string. Must not be null.</param>
+            <returns>The settings. Keywords without a typed property are kept in <see cref="P:Durable.Sql.RepositorySettings.AdditionalProperties"/>.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when connectionString is empty, whitespace or invalid.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.BuildConnectionString">
+            <summary>
+            Builds a DuckDB.NET connection string from the settings.
+            </summary>
+            <returns>The connection string. Never null.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when <see cref="P:Durable.DuckDb.DuckDbRepositorySettings.DataSource"/> is null or empty, or <see cref="P:Durable.DuckDb.DuckDbRepositorySettings.Threads"/> is less than 1.</exception>
+        </member>
+        <member name="M:Durable.DuckDb.DuckDbRepositorySettings.IsInMemoryDataSource(System.String)">
+            <summary>
+            Returns whether a data source names an in-memory database: null, empty, <c>:memory:</c> or <c>:memory:?...</c>.
+            </summary>
+            <param name="dataSource">Data source; may be null.</param>
+            <returns>True for an in-memory database.</returns>
+        </member>
+    </members>
+</doc>

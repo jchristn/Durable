@@ -20,9 +20,12 @@
 		<WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2060;IL2062;IL2067;IL2070;IL2072;IL2075;IL2077;IL2080;IL2087;IL2090;IL2091;IL2111;IL3050;IL3051</WarningsAsErrors>
 
 		<!-- IL2104/IL3053 are the per-assembly summaries ILC emits for assemblies compiled in single-warn mode. Only LiteDB
-		     is (see LiteDbSingleWarn below): LiteDB is not trim-annotated and warns in BsonMapper / type-name binding code that
-		     Durable.LiteDb never calls (it works with BsonDocument and BsonExpression only). Every other assembly reports
-		     its warnings individually and fails the build. -->
+		     and DuckDB.NET.Data are (see UnannotatedDependenciesSingleWarn below). LiteDB is not trim-annotated and warns in BsonMapper /
+		     type-name binding code that Durable.LiteDb never calls (it works with BsonDocument and BsonExpression only).
+		     DuckDB.NET.Data is not trim-annotated either and warns in its LIST/STRUCT/MAP vector readers, collection
+		     parameters, generic nullable readers and connection-string property descriptors; Durable.DuckDb maps only scalar
+		     columns, binds scalar parameters and reads values with GetValue, and the DuckDB scenario checks that path. Every
+		     other assembly reports its warnings individually and fails the build. -->
 		<NoWarn>$(NoWarn);CS1591;IL2104;IL3053</NoWarn>
 	</PropertyGroup>
 
@@ -31,19 +34,21 @@
 		<ProjectReference Include="..\Durable.InMemory\Durable.InMemory.csproj" />
 	</ItemGroup>
 
-	<!-- LiteDB runs under Native AOT on .NET 8 too, but the .NET 8 ILC cannot collapse LiteDB's IL3050 warnings into a
-	     per-assembly summary, which would fail this warnings-as-errors build; the LiteDB scenario runs on .NET 9+. -->
+	<!-- LiteDB and DuckDB.NET run under Native AOT on .NET 8 too, but the .NET 8 ILC cannot collapse their IL2067/IL3050
+	     warnings into a per-assembly summary, which would fail this warnings-as-errors build; their scenarios run on .NET 9+. -->
 	<ItemGroup Condition="'$(TargetFramework)' != 'net8.0'">
 		<ProjectReference Include="..\Durable.LiteDb\Durable.LiteDb.csproj" />
+		<ProjectReference Include="..\Durable.DuckDb\Durable.DuckDb.csproj" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
 		<Compile Remove="LiteDbScenario.cs" />
+		<Compile Remove="DuckDbScenario.cs" />
 	</ItemGroup>
 
-	<Target Name="LiteDbSingleWarn" BeforeTargets="WriteIlcRspFileForCompilation">
+	<Target Name="UnannotatedDependenciesSingleWarn" BeforeTargets="WriteIlcRspFileForCompilation">
 		<ItemGroup>
-			<ManagedAssemblyToLink Condition="'%(Filename)' == 'LiteDB'">
+			<ManagedAssemblyToLink Condition="'%(Filename)' == 'LiteDB' Or '%(Filename)' == 'DuckDB.NET.Data'">
 				<TrimmerSingleWarn>true</TrimmerSingleWarn>
 			</ManagedAssemblyToLink>
 		</ItemGroup>

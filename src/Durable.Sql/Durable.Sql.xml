@@ -79,6 +79,8 @@
         <member name="T:Durable.Sql.CommandScope">
             <summary>
             Tracks one command execution for interceptors, tracing and logging. Internal to <see cref="T:Durable.Sql.SqlCommandExecutor"/>.
+            For drivers that ignore <see cref="P:System.Data.Common.DbCommand.CommandTimeout"/> (<see cref="P:Durable.Sql.ISqlDialect.DriverEnforcesCommandTimeout"/>),
+            it also enforces the configured timeout by canceling the command.
             </summary>
         </member>
         <member name="T:Durable.Sql.ConnectionFactory">
@@ -775,6 +777,31 @@
             <param name="parameter">The provider parameter. Must not be null.</param>
             <param name="value">The engine parameter. Must not be null.</param>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.DriverEnforcesCommandTimeout">
+            <summary>
+            Gets whether the ADO.NET driver enforces <see cref="P:System.Data.Common.DbCommand.CommandTimeout"/>. When false (DuckDB.NET ignores
+            it), the engine enforces <see cref="P:Durable.Sql.SqlRepositoryOptions.CommandTimeoutSeconds"/> itself: it cancels the command
+            when the timeout elapses and throws a <see cref="T:System.TimeoutException"/>. Only an explicitly configured timeout is
+            enforced this way; without one, commands run until they finish. Default: true.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.AutocommitConflictRetries">
+            <summary>
+            Gets how many times a statement that runs outside a transaction (autocommit) and fails with a
+            <see cref="M:Durable.Sql.ISqlDialect.IsRetryableConflict(System.Exception)"/> error is run again, after a short randomized delay. Databases with optimistic
+            concurrency (DuckDB) fail a write that conflicts with a concurrent transaction instead of waiting for it; a
+            statement on its own was rolled back as a whole, so running it again gives the waiting behavior of other
+            databases. Statements inside a transaction are never retried (the transaction is aborted). Default: 0.
+            </summary>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.IsRetryableConflict(System.Exception)">
+            <summary>
+            Returns whether an exception is a transient write-write conflict with a concurrent transaction (see
+            <see cref="P:Durable.Sql.ISqlDialect.AutocommitConflictRetries"/>). Default: false.
+            </summary>
+            <param name="exception">Exception thrown by a statement. Must not be null.</param>
+            <returns>True when the statement may be run again.</returns>
+        </member>
         <member name="M:Durable.Sql.ISqlDialect.BooleanLiteral(System.Boolean)">
             <summary>
             Returns the SQL literal for a boolean (TRUE/FALSE or 1/0).
@@ -917,6 +944,12 @@
             Gets whether the database supports stored procedures.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsSavepoints">
+            <summary>
+            Gets whether the database supports savepoints inside a transaction. When false (DuckDB),
+            <see cref="M:Durable.Sql.ISqlTransaction.CreateSavepoint(System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
+            </summary>
+        </member>
         <member name="M:Durable.Sql.ISqlDialect.CreateSavepointSql(System.String)">
             <summary>
             Returns SQL that creates a savepoint.
@@ -1001,6 +1034,20 @@
         <member name="P:Durable.Sql.ISqlDialect.SupportsDropColumn">
             <summary>
             Gets whether ALTER TABLE ... DROP COLUMN is supported. When false, column drops are reported instead of generated.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsStringMaxLength">
+            <summary>
+            Gets whether string column types carry a maximum length that the database stores and reports through schema
+            introspection (VARCHAR(n)). When false (SQLite, DuckDB), <see cref="P:Durable.ColumnMetadata.MaxLength"/> is not part of
+            the column type, so schema comparison reports no length differences and scaffolding cannot recover lengths.
+            </summary>
+        </member>
+        <member name="P:Durable.Sql.ISqlDialect.AlterTableRequiresDroppingIndexes">
+            <summary>
+            Gets whether the database refuses to alter a table's existing columns (drop a column, or make an added column
+            NOT NULL) while the table has secondary indexes. When true (DuckDB), schema comparison wraps such operations so
+            they drop the table's indexes first and re-create the ones that remain afterwards. Default: false.
             </summary>
         </member>
         <member name="P:Durable.Sql.ISqlDialect.SupportsNthValue">
@@ -1141,6 +1188,16 @@
             </summary>
             <param name="lockName">Lock name. Must not be null.</param>
             <returns>The statement, or null.</returns>
+        </member>
+        <member name="M:Durable.Sql.ISqlDialect.IsMigrationLockContention(System.Exception)">
+            <summary>
+            Returns whether an exception thrown by the <see cref="M:Durable.Sql.ISqlDialect.AcquireMigrationLockSql(System.String,System.Int32)"/> statement means that another
+            session holds (or is concurrently taking) the lock, rather than a real failure. Databases with optimistic
+            concurrency (DuckDB) report a concurrent writer as a write-write conflict or key violation instead of waiting;
+            the migrator then treats the attempt as "not acquired" and polls again. Default: false (the exception propagates).
+            </summary>
+            <param name="exception">Exception thrown by the lock statement. Must not be null.</param>
+            <returns>True when the attempt should count as "not acquired".</returns>
         </member>
         <member name="T:Durable.Sql.ISqlQueryBuilder`1">
             <summary>
@@ -1920,6 +1977,7 @@
             <returns>The savepoint.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when there is no active transaction.</exception>
             <exception cref="T:System.ArgumentException">Thrown when name contains invalid characters.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not support savepoints (<see cref="P:Durable.Sql.ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         </member>
         <member name="M:Durable.Sql.ISqlTransaction.CreateSavepointAsync(System.String,System.Threading.CancellationToken)">
             <summary>
@@ -1929,6 +1987,7 @@
             <param name="token">Cancellation token.</param>
             <returns>The savepoint.</returns>
             <exception cref="T:System.InvalidOperationException">Thrown when there is no active transaction.</exception>
+            <exception cref="T:System.NotSupportedException">Thrown when the database does not support savepoints (<see cref="P:Durable.Sql.ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         </member>
         <member name="T:Durable.Sql.IWindowedQueryBuilder`1">
             <summary>
@@ -3835,6 +3894,11 @@
             Represents a SQLite repository
             </summary>
         </member>
+        <member name="F:Durable.Sql.RepositoryType.DuckDb">
+            <summary>
+            Represents a DuckDB repository
+            </summary>
+        </member>
         <member name="F:Durable.Sql.RepositoryType.MySql">
             <summary>
             Represents a MySQL repository
@@ -4553,10 +4617,25 @@
         <member name="P:Durable.Sql.SqlDialect.SupportsOrdinalLike">
             <inheritdoc />
         </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsSavepoints">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.DriverEnforcesCommandTimeout">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.AutocommitConflictRetries">
+            <inheritdoc />
+        </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsTransactionalDdl">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsDropColumn">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsStringMaxLength">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.AlterTableRequiresDroppingIndexes">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsNthValue">
@@ -4687,6 +4766,12 @@
             <inheritdoc />
         </member>
         <member name="M:Durable.Sql.SqlDialect.ReleaseMigrationLockSql(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.IsRetryableConflict(System.Exception)">
+            <inheritdoc />
+        </member>
+        <member name="M:Durable.Sql.SqlDialect.IsMigrationLockContention(System.Exception)">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.IdentifierOpen">

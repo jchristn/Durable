@@ -37,6 +37,7 @@
 	</ItemGroup>
 
 	<ItemGroup Label="DuckDb">
+		<ProjectReference Include="..\..\src\Durable.DuckDb\Durable.DuckDb.csproj" />
 	</ItemGroup>
 
 	<ItemGroup Label="MariaDb">

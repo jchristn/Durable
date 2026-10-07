@@ -57,6 +57,15 @@ namespace Durable.Sql
         /// <inheritdoc />
         public virtual bool SupportsOrdinalLike => true;
 
+        /// <inheritdoc />
+        public virtual bool SupportsSavepoints => true;
+
+        /// <inheritdoc />
+        public virtual bool DriverEnforcesCommandTimeout => true;
+
+        /// <inheritdoc />
+        public virtual int AutocommitConflictRetries => 0;
+
         // Migrations
 
         /// <inheritdoc />
@@ -64,6 +73,12 @@ namespace Durable.Sql
 
         /// <inheritdoc />
         public virtual bool SupportsDropColumn => true;
+
+        /// <inheritdoc />
+        public virtual bool SupportsStringMaxLength => true;
+
+        /// <inheritdoc />
+        public virtual bool AlterTableRequiresDroppingIndexes => false;
 
         /// <inheritdoc />
         public virtual bool SupportsNthValue => true;
@@ -413,6 +428,20 @@ namespace Durable.Sql
         public virtual SqlStatement? ReleaseMigrationLockSql(string lockName)
         {
             return null;
+        }
+
+        /// <inheritdoc />
+        public virtual bool IsRetryableConflict(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return false;
+        }
+
+        /// <inheritdoc />
+        public virtual bool IsMigrationLockContention(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return false;
         }
 
         #endregion

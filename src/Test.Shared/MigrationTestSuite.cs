@@ -72,7 +72,7 @@ namespace Test.Shared
             Assert.True(table.FindColumn("maybe")!.IsNullable);
             Assert.False(table.FindColumn("count")!.IsNullable);
             Assert.False(table.FindColumn("uid")!.IsNullable);
-            if (_Provider.DatabaseType != TestDatabaseType.Sqlite)
+            if (_Provider.Dialect.SupportsStringMaxLength)
             {
                 Assert.Equal(50, table.FindColumn("name")!.MaxLength);
                 Assert.Equal(20, table.FindColumn("code")!.MaxLength);
@@ -175,7 +175,7 @@ namespace Test.Shared
             Assert.Empty(diff.Operations);
             Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.TypeMismatch && d.ColumnName == "count");
             Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.NullabilityMismatch && d.ColumnName == "note" && d.Expected == "NULL" && d.Actual == "NOT NULL");
-            if (_Provider.DatabaseType == TestDatabaseType.Sqlite)
+            if (!_Provider.Dialect.SupportsStringMaxLength)
                 Assert.DoesNotContain(diff.Differences, d => d.ColumnName == "name");
             else
                 Assert.Contains(diff.Differences, d => d.Kind == SchemaDifferenceKind.MaxLengthMismatch && d.ColumnName == "name");

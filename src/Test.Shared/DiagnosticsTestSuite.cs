@@ -284,7 +284,7 @@ namespace Test.Shared
             string? withParameters = repository.LastExecutedSqlWithParameters;
             Assert.False(string.IsNullOrWhiteSpace(sql));
             Assert.DoesNotContain(literal, sql!, StringComparison.Ordinal);
-            Assert.Contains("@", sql!, StringComparison.Ordinal);
+            Assert.Contains(_Provider.Dialect.FormatParameterName(0).Substring(0, 1), sql!, StringComparison.Ordinal);
             Assert.NotNull(withParameters);
             Assert.Contains(literal, withParameters!, StringComparison.Ordinal);
         }
@@ -434,6 +434,7 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "sqlite";
+                case TestDatabaseType.DuckDb: return "duckdb";
                 case TestDatabaseType.Postgres:
                 case TestDatabaseType.CockroachDb:
                 case TestDatabaseType.YugabyteDb: return "postgresql";

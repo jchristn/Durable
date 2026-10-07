@@ -38,6 +38,10 @@ namespace Durable.Sqlite
         // Migrations
 
         /// <inheritdoc />
+        /// <remarks>SQLite stores values by type affinity and ignores declared lengths.</remarks>
+        public override bool SupportsStringMaxLength => false;
+
+        /// <inheritdoc />
         public override string CurrentUtcTimestampSql => "(strftime('%Y-%m-%d %H:%M:%f', 'now') || '0000')";
 
         #endregion

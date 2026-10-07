@@ -36,6 +36,7 @@ namespace Durable.Sql
         /// <returns>The savepoint.</returns>
         /// <exception cref="InvalidOperationException">Thrown when there is no active transaction.</exception>
         /// <exception cref="ArgumentException">Thrown when name contains invalid characters.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the database does not support savepoints (<see cref="ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         ISavepoint CreateSavepoint(string? name = null);
 
         /// <summary>
@@ -45,6 +46,7 @@ namespace Durable.Sql
         /// <param name="token">Cancellation token.</param>
         /// <returns>The savepoint.</returns>
         /// <exception cref="InvalidOperationException">Thrown when there is no active transaction.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the database does not support savepoints (<see cref="ISqlDialect.SupportsSavepoints"/>, DuckDB) or, for a transaction wrapped without a dialect, when the driver does not.</exception>
         Task<ISavepoint> CreateSavepointAsync(string? name = null, CancellationToken token = default);
     }
 }

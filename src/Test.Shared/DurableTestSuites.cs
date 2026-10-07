@@ -234,6 +234,7 @@ namespace Test.Shared
                     break;
 
                 case TestDatabaseType.DuckDb:
+                    suites.Add(SharedSuite<DuckDbProviderTestSuite>("DuckDbProvider", "DuckDB Provider (Settings / In-Memory and File Lifetime / Native Types / Appender / Sequences / Conflicts / Migration Lock / Indexed Alters) Tests", providerTag, beforeEach));
                     break;
 
                 case TestDatabaseType.MariaDb:

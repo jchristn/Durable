@@ -57,6 +57,7 @@
 		<ProjectReference Include="..\Durable\Durable.csproj" />
 		<ProjectReference Include="..\Durable.Sql\Durable.Sql.csproj" />
 		<ProjectReference Include="..\Durable.Sqlite\Durable.Sqlite.csproj" />
+		<ProjectReference Include="..\Durable.DuckDb\Durable.DuckDb.csproj" />
 		<ProjectReference Include="..\Durable.Postgres\Durable.Postgres.csproj" />
 		<ProjectReference Include="..\Durable.MySql\Durable.MySql.csproj" />
 		<ProjectReference Include="..\Durable.SqlServer\Durable.SqlServer.csproj" />

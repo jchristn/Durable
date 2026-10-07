@@ -206,12 +206,19 @@ namespace Test.Shared
 
         private static IRepositoryProvider CreateDuckDbProvider(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.DuckDb, "repository provider");
+            return new DuckDbRepositoryProvider(BuildDuckDbConnectionString(configuration));
         }
 
         private static string BuildDuckDbConnectionString(TestRuntimeConfiguration configuration)
         {
-            throw TestDatabaseTypes.NotYetAvailable(TestDatabaseType.DuckDb, "connection string builder");
+            // In-process like SQLite: a database file when --filename is given, otherwise the process-wide shared in-memory
+            // database (kept alive by DuckDbRepositoryProvider for the run).
+            if (!string.IsNullOrWhiteSpace(configuration.Filename))
+            {
+                return Durable.DuckDb.DuckDbRepositorySettings.ForFile(configuration.Filename).BuildConnectionString();
+            }
+
+            return DuckDbRepositoryProvider.DefaultConnectionString;
         }
 
         private static IRepositoryProvider CreateMariaDbProvider(TestRuntimeConfiguration configuration)

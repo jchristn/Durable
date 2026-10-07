@@ -113,6 +113,10 @@
             <inheritdoc />
             <remarks>SQLite's LIKE folds ASCII case regardless of collation, so ordinal substring tests use INSTR/SUBSTR.</remarks>
         </member>
+        <member name="P:Durable.Sqlite.SqliteDialect.SupportsStringMaxLength">
+            <inheritdoc />
+            <remarks>SQLite stores values by type affinity and ignores declared lengths.</remarks>
+        </member>
         <member name="P:Durable.Sqlite.SqliteDialect.CurrentUtcTimestampSql">
             <inheritdoc />
         </member>
