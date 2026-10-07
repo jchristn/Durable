@@ -25,6 +25,13 @@ namespace Durable.Postgres
         /// </summary>
         public string? ConnectionString { get; }
 
+        /// <summary>
+        /// Gets the database flavor of the connections this factory opens. Repositories created on this factory without an
+        /// explicit dialect use the flavor's dialect (<see cref="PostgresDialect.For(PostgresFlavor)"/>). Default: <see cref="PostgresFlavor.PostgreSql"/>, or
+        /// <see cref="PostgresRepositorySettings.Flavor"/> when the factory is built from settings.
+        /// </summary>
+        public PostgresFlavor Flavor { get; init; } = PostgresFlavor.PostgreSql;
+
         #endregion
 
         #region Constructors-and-Factories
@@ -39,6 +46,7 @@ namespace Durable.Postgres
         public PostgresConnectionFactory(PostgresRepositorySettings settings, int? maxConcurrentConnections = null)
             : this(BuildConnectionString(settings), maxConcurrentConnections)
         {
+            Flavor = settings.Flavor;
         }
 
         /// <summary>

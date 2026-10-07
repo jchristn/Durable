@@ -24,6 +24,12 @@ namespace Durable.Postgres
         /// </summary>
         public static PostgresDialect Default { get; } = new PostgresDialect();
 
+        /// <summary>
+        /// Gets the database flavor this dialect targets. Default: <see cref="PostgresFlavor.PostgreSql"/>;
+        /// <see cref="CockroachDbDialect"/> and <see cref="YugabyteDbDialect"/> override it.
+        /// </summary>
+        public virtual PostgresFlavor Flavor => PostgresFlavor.PostgreSql;
+
         /// <inheritdoc />
         public override RepositoryType RepositoryType => RepositoryType.Postgres;
 
@@ -60,6 +66,24 @@ namespace Durable.Postgres
         public PostgresDialect(IDataTypeConverter? converter = null, string ordinalCollation = "C") : base(converter ?? new PostgresDataTypeConverter())
         {
             OrdinalCollationName = SqlIdentifierValidator.RequireIdentifier(ordinalCollation, nameof(ordinalCollation));
+        }
+
+        /// <summary>
+        /// Returns the shared default dialect for a flavor: <see cref="Default"/>, <see cref="CockroachDbDialect.Default"/>
+        /// or <see cref="YugabyteDbDialect.Default"/>.
+        /// </summary>
+        /// <param name="flavor">Database flavor.</param>
+        /// <returns>The shared dialect instance. Never null.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        public static PostgresDialect For(PostgresFlavor flavor)
+        {
+            switch (flavor)
+            {
+                case PostgresFlavor.PostgreSql: return Default;
+                case PostgresFlavor.CockroachDb: return CockroachDbDialect.Default;
+                case PostgresFlavor.YugabyteDb: return YugabyteDbDialect.Default;
+                default: throw new ArgumentOutOfRangeException(nameof(flavor), flavor, "Unknown PostgreSQL flavor.");
+            }
         }
 
         #endregion

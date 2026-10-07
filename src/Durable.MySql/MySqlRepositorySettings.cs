@@ -50,6 +50,14 @@ namespace Durable.MySql
         /// </summary>
         public MySqlSslMode? SslMode { get; init; }
 
+        /// <summary>
+        /// Gets the MySQL-compatible database the settings connect to, which selects the dialect of repositories and
+        /// connection factories built from these settings (<see cref="MySqlDialect.For(MySqlFlavor)"/>).
+        /// Default: <see cref="MySqlFlavor.MySql"/>. Not part of the connection string: <c>Parse(connectionString)</c> returns the default,
+        /// <c>Parse(connectionString, flavor)</c> sets it, and <see cref="BuildConnectionString"/> ignores it.
+        /// </summary>
+        public MySqlFlavor Flavor { get; init; } = MySqlFlavor.MySql;
+
         #endregion
 
 
@@ -71,6 +79,21 @@ namespace Durable.MySql
         /// <exception cref="ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
         public static MySqlRepositorySettings Parse(string connectionString)
         {
+            return Parse(connectionString, MySqlFlavor.MySql);
+        }
+
+        /// <summary>
+        /// Parses a MySQL connection string and returns a MySqlRepositorySettings instance
+        /// </summary>
+        /// <param name="connectionString">The connection string to parse</param>
+        /// <param name="flavor">Database flavor stored in <see cref="Flavor"/>.</param>
+        /// <returns>A MySqlRepositorySettings instance</returns>
+        /// <exception cref="ArgumentNullException">Thrown when connectionString is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        /// <exception cref="ArgumentException">Thrown when connectionString is empty or whitespace, or when the connection string is invalid</exception>
+        public static MySqlRepositorySettings Parse(string connectionString, MySqlFlavor flavor)
+        {
+            if (!Enum.IsDefined(flavor)) throw new ArgumentOutOfRangeException(nameof(flavor), flavor, "Unknown MySQL flavor.");
             ArgumentNullException.ThrowIfNull(connectionString);
 
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -139,7 +162,8 @@ namespace Durable.MySql
                 MaxPoolSize = builder.MaximumPoolSize != 100 ? (int)builder.MaximumPoolSize : null,
                 Pooling = builder.Pooling != true ? builder.Pooling : null,
                 SslMode = builder.SslMode != MySqlSslMode.Preferred ? builder.SslMode : null,
-                AdditionalProperties = additionalProperties
+                AdditionalProperties = additionalProperties,
+                Flavor = flavor
             };
         }
 

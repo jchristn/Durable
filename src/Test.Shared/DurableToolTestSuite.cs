@@ -684,11 +684,11 @@ namespace Test.Shared
             switch (_Provider.DatabaseType)
             {
                 case TestDatabaseType.Sqlite: return "sqlite";
-                case TestDatabaseType.Postgres:
-                case TestDatabaseType.CockroachDb:
-                case TestDatabaseType.YugabyteDb: return "postgres";
-                case TestDatabaseType.MySql:
-                case TestDatabaseType.MariaDb: return "mysql";
+                case TestDatabaseType.Postgres: return "postgres";
+                case TestDatabaseType.CockroachDb: return "cockroachdb";
+                case TestDatabaseType.YugabyteDb: return "yugabytedb";
+                case TestDatabaseType.MySql: return "mysql";
+                case TestDatabaseType.MariaDb: return "mariadb";
                 case TestDatabaseType.SqlServer: return "sqlserver";
                 default: throw new InvalidOperationException("Unknown provider " + _Provider.DatabaseType);
             }

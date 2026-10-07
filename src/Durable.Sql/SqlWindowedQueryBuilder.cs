@@ -246,13 +246,24 @@ namespace Durable.Sql
                 string value = translator.Value(column.Body);
                 ColumnReference? reference = translator.ResolveColumn(column.Body);
                 string arguments = value + ", " + offset.ToString(CultureInfo.InvariantCulture);
-                if (defaultValue != null) arguments += ", " + translator.Parameter(defaultValue, reference?.Column);
-                return function + "(" + arguments + ")" + Over(translator, source) + " AS " + quotedAlias;
+                if (defaultValue == null || translator.Dialect.SupportsOffsetFunctionDefault)
+                {
+                    if (defaultValue != null) arguments += ", " + translator.Parameter(defaultValue, reference?.Column);
+                    return function + "(" + arguments + ")" + Over(translator, source) + " AS " + quotedAlias;
+                }
+
+                // No default argument (MariaDB): the default applies exactly when the row at the offset does not exist,
+                // which a one-row frame at that offset detects.
+                string call = function + "(" + arguments + ")" + Over(translator, source);
+                if (offset == 0) return call + " AS " + quotedAlias;
+                string bound = offset.ToString(CultureInfo.InvariantCulture) + (function == "LEAD" ? " FOLLOWING" : " PRECEDING");
+                string probe = "COUNT(*)" + Over(translator, source, "ROWS BETWEEN " + bound + " AND " + bound);
+                return "CASE WHEN " + probe + " = 0 THEN " + translator.Parameter(defaultValue, reference?.Column) + " ELSE " + call + " END AS " + quotedAlias;
             });
             return this;
         }
 
-        private string Over(SqlExpressionTranslator translator, TableSource source)
+        private string Over(SqlExpressionTranslator translator, TableSource source, string? frameOverride = null)
         {
             List<string> parts = new List<string>();
             List<string> partitions = new List<string>();
@@ -274,7 +285,8 @@ namespace Durable.Sql
             }
 
             if (orderings.Count > 0) parts.Add("ORDER BY " + string.Join(", ", orderings));
-            if (_Frame != null) parts.Add(_Frame);
+            if (frameOverride != null) parts.Add(frameOverride);
+            else if (_Frame != null) parts.Add(_Frame);
             return " OVER (" + string.Join(" ", parts) + ")";
         }
 

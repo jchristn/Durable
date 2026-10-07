@@ -21,7 +21,10 @@ namespace Durable.Tool
         {
             "sqlite",
             "postgres",
+            "cockroachdb",
+            "yugabytedb",
             "mysql",
+            "mariadb",
             "sqlserver"
         };
 
@@ -75,7 +78,7 @@ namespace Durable.Tool
         /// <summary>
         /// Creates a target for a provider name and connection string.
         /// </summary>
-        /// <param name="provider">Provider name (sqlite, postgres/postgresql, mysql/mariadb, sqlserver/mssql). Must not be null.</param>
+        /// <param name="provider">Provider name (sqlite, postgres/postgresql, mysql, sqlserver/mssql, mariadb, cockroachdb/cockroach/crdb, yugabytedb/yugabyte/ysql). Must not be null.</param>
         /// <param name="connectionString">Connection string. Must not be null.</param>
         /// <returns>The target.</returns>
         /// <exception cref="DurableCliException">Thrown when the provider is unknown or the connection string is invalid.</exception>
@@ -91,8 +94,14 @@ namespace Durable.Tool
                         return new DatabaseTarget(SqliteDialect.Default, new SqliteConnectionFactory(connectionString));
                     case "postgres":
                         return new DatabaseTarget(PostgresDialect.Default, new PostgresConnectionFactory(connectionString));
+                    case "cockroachdb":
+                        return new DatabaseTarget(CockroachDbDialect.Default, new PostgresConnectionFactory(connectionString) { Flavor = PostgresFlavor.CockroachDb });
+                    case "yugabytedb":
+                        return new DatabaseTarget(YugabyteDbDialect.Default, new PostgresConnectionFactory(connectionString) { Flavor = PostgresFlavor.YugabyteDb });
                     case "mysql":
                         return new DatabaseTarget(MySqlDialect.Default, new MySqlConnectionFactory(connectionString));
+                    case "mariadb":
+                        return new DatabaseTarget(MariaDbDialect.Default, new MySqlConnectionFactory(connectionString) { Flavor = MySqlFlavor.MariaDb });
                     case "sqlserver":
                         return new DatabaseTarget(SqlServerDialect.Default, new SqlServerConnectionFactory(connectionString));
                     default:
@@ -109,7 +118,7 @@ namespace Durable.Tool
         /// Returns the canonical provider name for an accepted alias, or null when the name is unknown.
         /// </summary>
         /// <param name="provider">Provider name. Must not be null.</param>
-        /// <returns>sqlite, postgres, mysql, sqlserver or null.</returns>
+        /// <returns>A name from <see cref="CanonicalProviders"/>, or null.</returns>
         public static string? NormalizeProvider(string provider)
         {
             ArgumentNullException.ThrowIfNull(provider);
@@ -120,8 +129,14 @@ namespace Durable.Tool
                 case "postgresql":
                 case "pgsql":
                 case "npgsql": return "postgres";
-                case "mysql":
-                case "mariadb": return "mysql";
+                case "cockroachdb":
+                case "cockroach":
+                case "crdb": return "cockroachdb";
+                case "yugabytedb":
+                case "yugabyte":
+                case "ysql": return "yugabytedb";
+                case "mysql": return "mysql";
+                case "mariadb": return "mariadb";
                 case "sqlserver":
                 case "mssql": return "sqlserver";
                 default: return null;

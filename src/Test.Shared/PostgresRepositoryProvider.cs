@@ -17,6 +17,7 @@ namespace Test.Shared
 
         private readonly string _ConnectionString;
         private readonly TestDatabaseType _DatabaseType;
+        private readonly PostgresFlavor _Flavor;
         private bool _Disposed = false;
 
         #endregion
@@ -41,7 +42,12 @@ namespace Test.Shared
         /// <summary>
         /// Gets the SQL dialect of this provider.
         /// </summary>
-        public ISqlDialect Dialect => PostgresDialect.Default;
+        public ISqlDialect Dialect => PostgresDialect.For(_Flavor);
+
+        /// <summary>
+        /// Gets the driver flavor used for the served database type.
+        /// </summary>
+        public PostgresFlavor Flavor => _Flavor;
 
         #endregion
 
@@ -59,11 +65,24 @@ namespace Test.Shared
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             if (!TestDatabaseTypes.IsPostgresFamily(databaseType)) throw new ArgumentOutOfRangeException(nameof(databaseType), databaseType, "Not served by PostgresRepositoryProvider.");
             _DatabaseType = databaseType;
+            _Flavor = FlavorFor(databaseType);
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <summary>
+        /// Returns the driver flavor for a PostgreSQL-family database type.
+        /// </summary>
+        /// <param name="databaseType">Database type.</param>
+        /// <returns>The flavor; <see cref="PostgresFlavor.PostgreSql"/> for anything that is not CockroachDB or YugabyteDB.</returns>
+        public static PostgresFlavor FlavorFor(TestDatabaseType databaseType)
+        {
+            if (databaseType == TestDatabaseType.CockroachDb) return PostgresFlavor.CockroachDb;
+            if (databaseType == TestDatabaseType.YugabyteDb) return PostgresFlavor.YugabyteDb;
+            return PostgresFlavor.PostgreSql;
+        }
 
         /// <summary>
         /// Creates and configures a repository for the specified entity type.
@@ -72,7 +91,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new PostgresRepository<T>(_ConnectionString);
+            return new PostgresRepository<T>(_ConnectionString, _Flavor);
         }
 
         /// <summary>
@@ -82,7 +101,7 @@ namespace Test.Shared
         /// <returns>A new connection factory.</returns>
         public IConnectionFactory CreateConnectionFactory(int? maxConcurrentConnections = null)
         {
-            return new PostgresConnectionFactory(_ConnectionString, maxConcurrentConnections);
+            return new PostgresConnectionFactory(_ConnectionString, maxConcurrentConnections) { Flavor = _Flavor };
         }
 
         /// <summary>
@@ -105,7 +124,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepositoryWithOptions<T>(SqlRepositoryOptions options) where T : class, new()
         {
-            return new PostgresRepository<T>(_ConnectionString, options);
+            return new PostgresRepository<T>(_ConnectionString, _Flavor, options);
         }
 
         /// <summary>

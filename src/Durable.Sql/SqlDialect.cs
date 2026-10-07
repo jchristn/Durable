@@ -69,6 +69,9 @@ namespace Durable.Sql
         public virtual bool SupportsNthValue => true;
 
         /// <inheritdoc />
+        public virtual bool SupportsOffsetFunctionDefault => true;
+
+        /// <inheritdoc />
         public virtual bool SupportsRangeFrameOffsets => true;
 
         /// <inheritdoc />

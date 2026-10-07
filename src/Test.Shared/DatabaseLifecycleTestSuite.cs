@@ -142,10 +142,10 @@ namespace Test.Shared
             {
                 case TestDatabaseType.Sqlite: return new SqliteRepository<T>(SqliteRepositorySettings.Parse(connectionString));
                 case TestDatabaseType.MySql:
-                case TestDatabaseType.MariaDb: return new MySqlRepository<T>(MySqlRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.MariaDb: return new MySqlRepository<T>(MySqlRepositorySettings.Parse(connectionString, MySqlRepositoryProvider.FlavorFor(_Provider.DatabaseType)));
                 case TestDatabaseType.Postgres:
                 case TestDatabaseType.CockroachDb:
-                case TestDatabaseType.YugabyteDb: return new PostgresRepository<T>(PostgresRepositorySettings.Parse(connectionString));
+                case TestDatabaseType.YugabyteDb: return new PostgresRepository<T>(PostgresRepositorySettings.Parse(connectionString, PostgresRepositoryProvider.FlavorFor(_Provider.DatabaseType)));
                 case TestDatabaseType.SqlServer: return new SqlServerRepository<T>(SqlServerRepositorySettings.Parse(connectionString));
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }
@@ -157,10 +157,10 @@ namespace Test.Shared
             {
                 case TestDatabaseType.Sqlite: return new SqliteConnectionFactory(connectionString);
                 case TestDatabaseType.MySql:
-                case TestDatabaseType.MariaDb: return new MySqlConnectionFactory(connectionString);
+                case TestDatabaseType.MariaDb: return new MySqlConnectionFactory(connectionString) { Flavor = MySqlRepositoryProvider.FlavorFor(_Provider.DatabaseType) };
                 case TestDatabaseType.Postgres:
                 case TestDatabaseType.CockroachDb:
-                case TestDatabaseType.YugabyteDb: return new PostgresConnectionFactory(connectionString);
+                case TestDatabaseType.YugabyteDb: return new PostgresConnectionFactory(connectionString) { Flavor = PostgresRepositoryProvider.FlavorFor(_Provider.DatabaseType) };
                 case TestDatabaseType.SqlServer: return new SqlServerConnectionFactory(connectionString);
                 default: throw new NotSupportedException(_Provider.DatabaseType.ToString());
             }

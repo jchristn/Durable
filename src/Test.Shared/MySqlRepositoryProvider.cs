@@ -17,6 +17,7 @@ namespace Test.Shared
 
         private readonly string _ConnectionString;
         private readonly TestDatabaseType _DatabaseType;
+        private readonly MySqlFlavor _Flavor;
         private bool _Disposed = false;
 
         #endregion
@@ -41,7 +42,12 @@ namespace Test.Shared
         /// <summary>
         /// Gets the SQL dialect of this provider.
         /// </summary>
-        public ISqlDialect Dialect => MySqlDialect.Default;
+        public ISqlDialect Dialect => MySqlDialect.For(_Flavor);
+
+        /// <summary>
+        /// Gets the driver flavor used for the served database type.
+        /// </summary>
+        public MySqlFlavor Flavor => _Flavor;
 
         #endregion
 
@@ -59,11 +65,22 @@ namespace Test.Shared
             _ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             if (!TestDatabaseTypes.IsMySqlFamily(databaseType)) throw new ArgumentOutOfRangeException(nameof(databaseType), databaseType, "Not served by MySqlRepositoryProvider.");
             _DatabaseType = databaseType;
+            _Flavor = FlavorFor(databaseType);
         }
 
         #endregion
 
         #region Public-Methods
+
+        /// <summary>
+        /// Returns the driver flavor for a MySQL-family database type.
+        /// </summary>
+        /// <param name="databaseType">Database type.</param>
+        /// <returns>The flavor; <see cref="MySqlFlavor.MySql"/> for anything that is not MariaDB.</returns>
+        public static MySqlFlavor FlavorFor(TestDatabaseType databaseType)
+        {
+            return databaseType == TestDatabaseType.MariaDb ? MySqlFlavor.MariaDb : MySqlFlavor.MySql;
+        }
 
         /// <summary>
         /// Creates and configures a repository for the specified entity type.
@@ -72,7 +89,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepository<T>() where T : class, new()
         {
-            return new MySqlRepository<T>(_ConnectionString);
+            return new MySqlRepository<T>(_ConnectionString, _Flavor);
         }
 
         /// <summary>
@@ -82,7 +99,7 @@ namespace Test.Shared
         /// <returns>A new connection factory.</returns>
         public IConnectionFactory CreateConnectionFactory(int? maxConcurrentConnections = null)
         {
-            return new MySqlConnectionFactory(_ConnectionString, maxConcurrentConnections);
+            return new MySqlConnectionFactory(_ConnectionString, maxConcurrentConnections) { Flavor = _Flavor };
         }
 
         /// <summary>
@@ -105,7 +122,7 @@ namespace Test.Shared
         /// <returns>A configured repository instance.</returns>
         public ISqlRepository<T> CreateRepositoryWithOptions<T>(SqlRepositoryOptions options) where T : class, new()
         {
-            return new MySqlRepository<T>(_ConnectionString, options);
+            return new MySqlRepository<T>(_ConnectionString, _Flavor, options);
         }
 
         /// <summary>

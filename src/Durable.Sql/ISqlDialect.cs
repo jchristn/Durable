@@ -312,6 +312,13 @@ namespace Durable.Sql
         bool SupportsNthValue { get; }
 
         /// <summary>
+        /// Gets whether LEAD and LAG accept a third (default value) argument. When false (MariaDB), a default passed to
+        /// <see cref="IWindowedQueryBuilder{T}.Lead"/> or <see cref="IWindowedQueryBuilder{T}.Lag"/> is applied with an
+        /// equivalent CASE over a one-row frame at the offset, so a NULL value at an existing row is still returned as NULL.
+        /// </summary>
+        bool SupportsOffsetFunctionDefault { get; }
+
+        /// <summary>
         /// Gets whether RANGE window frames accept numeric offsets (<c>RANGE BETWEEN n PRECEDING AND m FOLLOWING</c>).
         /// When false, <see cref="IWindowedQueryBuilder{T}.Range"/> throws <see cref="System.NotSupportedException"/>;
         /// UNBOUNDED and CURRENT ROW bounds remain available.

@@ -30,7 +30,22 @@ namespace Durable.Postgres
         /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
         public PostgresRepository(string connectionString, SqlRepositoryOptions? options = null)
-            : this(PostgresRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, options)
+            : this(PostgresDialect.Default, PostgresRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, PostgresFlavor.PostgreSql, options)
+        {
+        }
+
+        /// <summary>
+        /// Creates a repository from a connection string for a PostgreSQL-compatible database. The repository owns its
+        /// connection factory and disposes it.
+        /// </summary>
+        /// <param name="connectionString">Npgsql connection string. Must not be null.</param>
+        /// <param name="flavor">Database flavor; selects the dialect (<see cref="PostgresDialect.For(PostgresFlavor)"/>).</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionString is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when flavor is not a defined value.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="T"/> has no primary key.</exception>
+        public PostgresRepository(string connectionString, PostgresFlavor flavor, SqlRepositoryOptions? options = null)
+            : this(PostgresDialect.For(flavor), PostgresRepositorySettings.Parse(connectionString ?? throw new ArgumentNullException(nameof(connectionString))), connectionString, flavor, options)
         {
         }
 
@@ -41,7 +56,7 @@ namespace Durable.Postgres
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when settings is null.</exception>
         public PostgresRepository(PostgresRepositorySettings settings, SqlRepositoryOptions? options = null)
-            : this(settings ?? throw new ArgumentNullException(nameof(settings)), settings.BuildConnectionString(), options)
+            : this(PostgresDialect.For((settings ?? throw new ArgumentNullException(nameof(settings))).Flavor), settings, settings.BuildConnectionString(), settings.Flavor, options)
         {
         }
 
@@ -52,12 +67,25 @@ namespace Durable.Postgres
         /// <param name="options">Options; null uses defaults.</param>
         /// <exception cref="ArgumentNullException">Thrown when connectionFactory is null.</exception>
         public PostgresRepository(IConnectionFactory connectionFactory, SqlRepositoryOptions? options = null)
-            : base(PostgresDialect.Default, connectionFactory, false, typeof(NpgsqlConnection), null, options)
+            : base(DialectFor(connectionFactory), connectionFactory, false, typeof(NpgsqlConnection), null, options)
         {
         }
 
-        private PostgresRepository(PostgresRepositorySettings settings, string connectionString, SqlRepositoryOptions? options)
-            : base(PostgresDialect.Default, new PostgresConnectionFactory(connectionString), true, typeof(NpgsqlConnection), settings, options)
+        /// <summary>
+        /// Creates a repository on a shared connection factory with an explicit dialect (for example a flavor's dialect, or
+        /// a <see cref="PostgresDialect"/> with a custom ordinal collation). The factory is not disposed with the repository.
+        /// </summary>
+        /// <param name="connectionFactory">Factory producing <see cref="NpgsqlConnection"/> instances. Must not be null.</param>
+        /// <param name="dialect">Dialect. Must not be null.</param>
+        /// <param name="options">Options; null uses defaults.</param>
+        /// <exception cref="ArgumentNullException">Thrown when connectionFactory or dialect is null.</exception>
+        public PostgresRepository(IConnectionFactory connectionFactory, PostgresDialect dialect, SqlRepositoryOptions? options = null)
+            : base(dialect ?? throw new ArgumentNullException(nameof(dialect)), connectionFactory, false, typeof(NpgsqlConnection), null, options)
+        {
+        }
+
+        private PostgresRepository(PostgresDialect dialect, PostgresRepositorySettings settings, string connectionString, PostgresFlavor flavor, SqlRepositoryOptions? options)
+            : base(dialect, new PostgresConnectionFactory(connectionString) { Flavor = flavor }, true, typeof(NpgsqlConnection), settings, options)
         {
         }
 
@@ -117,6 +145,11 @@ namespace Durable.Postgres
         #endregion
 
         #region Private-Methods
+
+        private static PostgresDialect DialectFor(IConnectionFactory connectionFactory)
+        {
+            return connectionFactory is PostgresConnectionFactory typed ? PostgresDialect.For(typed.Flavor) : PostgresDialect.Default;
+        }
 
         /// <summary>
         /// Inserts rows with PostgreSQL binary COPY. Column CLR types must match the table's column types.

@@ -1009,6 +1009,13 @@
             <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.NthValue``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.String)"/> throws <see cref="T:System.NotSupportedException"/>.
             </summary>
         </member>
+        <member name="P:Durable.Sql.ISqlDialect.SupportsOffsetFunctionDefault">
+            <summary>
+            Gets whether LEAD and LAG accept a third (default value) argument. When false (MariaDB), a default passed to
+            <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Lead``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)"/> or <see cref="M:Durable.Sql.IWindowedQueryBuilder`1.Lag``1(System.Linq.Expressions.Expression{System.Func{`0,``0}},System.Int32,System.Object,System.String)"/> is applied with an
+            equivalent CASE over a one-row frame at the offset, so a NULL value at an existing row is still returned as NULL.
+            </summary>
+        </member>
         <member name="P:Durable.Sql.ISqlDialect.SupportsRangeFrameOffsets">
             <summary>
             Gets whether RANGE window frames accept numeric offsets (<c>RANGE BETWEEN n PRECEDING AND m FOLLOWING</c>).
@@ -4560,6 +4567,9 @@
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsNthValue">
+            <inheritdoc />
+        </member>
+        <member name="P:Durable.Sql.SqlDialect.SupportsOffsetFunctionDefault">
             <inheritdoc />
         </member>
         <member name="P:Durable.Sql.SqlDialect.SupportsRangeFrameOffsets">
