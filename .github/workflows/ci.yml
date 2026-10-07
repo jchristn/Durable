@@ -3,6 +3,7 @@
 # - build:     the whole solution (Release) on Linux.
 # - sqlite:    the Touchstone CLI runner on SQLite (which also runs the in-memory backend and the
 #              conformance kit) on Linux, Windows and macOS, for net8.0 and net10.0.
+# - duckdb:    the Touchstone CLI runner on DuckDB (in-process) on Linux, Windows and macOS, for net8.0 and net10.0.
 # - adapters:  the same suites through the xUnit and NUnit adapters (dotnet test, both frameworks).
 # - databases: PostgreSQL, MySQL and SQL Server in disposable docker containers (--docker), both frameworks.
 # - aot:       publishes src/Test.Aot with Native AOT (trim/AOT warnings are errors) and runs the native binary.
@@ -67,6 +68,35 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: results-sqlite-${{ matrix.os }}-${{ matrix.framework }}
+          path: test-results.json
+          if-no-files-found: ignore
+
+  # DuckDB runs in-process (no container), so it gets its own job on every OS: DuckDB.NET ships a native library per
+  # platform, and each one is exercised.
+  duckdb:
+    name: DuckDB (${{ matrix.os }}, ${{ matrix.framework }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        framework: [net8.0, net10.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Run test suites
+        run: dotnet run --project src/Test.Automated/Test.Automated.csproj -c Release -f ${{ matrix.framework }} -- --type duckdb --results test-results.json
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-duckdb-${{ matrix.os }}-${{ matrix.framework }}
           path: test-results.json
           if-no-files-found: ignore
 

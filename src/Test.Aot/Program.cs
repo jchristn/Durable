@@ -56,6 +56,15 @@ namespace Test.Aot
 #if NET9_0_OR_GREATER
             try
             {
+                await DuckDbScenario.RunAsync(runner, rows).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                runner.Fail("[duckdb] scenario aborted", ex);
+            }
+
+            try
+            {
                 await LiteDbScenario.RunAsync(runner).ConfigureAwait(false);
             }
             catch (Exception ex)

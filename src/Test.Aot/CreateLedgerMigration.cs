@@ -3,7 +3,7 @@ namespace Test.Aot
     using Durable.Sql;
 
     /// <summary>
-    /// Versioned migration: creates a ledger table and seeds it (Down drops it).
+    /// Versioned migration: creates a ledger table and seeds it (Down drops it). Portable SQL (SQLite and DuckDB).
     /// </summary>
     public sealed class CreateLedgerMigration : Migration
     {
@@ -11,8 +11,8 @@ namespace Test.Aot
 
         public override void Up(MigrationContext context)
         {
-            context.ExecuteSqlRaw("CREATE TABLE ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, entry TEXT NOT NULL)");
-            context.ExecuteSqlRaw("INSERT INTO ledger (entry) VALUES ({0})", new object?[] { "opening" });
+            context.ExecuteSqlRaw("CREATE TABLE ledger (id INTEGER PRIMARY KEY, entry TEXT NOT NULL)");
+            context.ExecuteSqlRaw("INSERT INTO ledger (id, entry) VALUES (1, {0})", new object?[] { "opening" });
         }
 
         public override void Down(MigrationContext context)
