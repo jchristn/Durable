@@ -9,10 +9,10 @@
 		<DocumentationFile>Durable.MySql.xml</DocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.MySql</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>MySQL provider for the Durable ORM (MySqlConnector): dialect, connection factory, repository and MySqlBulkCopy bulk insert.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -23,6 +23,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

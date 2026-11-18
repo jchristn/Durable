@@ -11,10 +11,10 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.CosmosDb</PackageId>
 		<Title>Durable.CosmosDb</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Azure Cosmos DB for NoSQL backend for Durable ORM: store entities as JSON documents with the full IRepository surface, LINQ filters, ordering, paging and aggregates pushed down to parameterized Cosmos DB SQL queries where the semantics match C#, lossless value round-trips, configurable partition keys, ETag-based optimistic concurrency without lost updates, includes and counter-document auto-increment keys.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -25,6 +25,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

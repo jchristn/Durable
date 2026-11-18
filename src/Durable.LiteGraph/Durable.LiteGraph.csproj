@@ -13,10 +13,10 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.LiteGraph</PackageId>
 		<Title>Durable.LiteGraph</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>LiteGraph backend for Durable ORM (depends on the LiteGraph package): stores each entity row as a node of a LiteGraph property graph, maintains foreign keys as edges, uses deterministic node GUIDs for key lookups, supports atomic interactive transactions, includes and full LINQ query evaluation, so Durable data is first-class for LiteGraph traversals, algorithms and tools.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -27,6 +27,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

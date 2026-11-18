@@ -11,10 +11,10 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.MongoDb</PackageId>
 		<Title>Durable.MongoDb</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>MongoDB backend for Durable ORM: store entities in MongoDB collections with the full IRepository surface, LINQ predicates, ordering, paging, counts and aggregates pushed down to the server where the semantics match C#, exact value round-trips, includes, indexes, optimistic concurrency and multi-document transactions on replica sets.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -25,6 +25,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

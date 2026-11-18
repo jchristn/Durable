@@ -11,10 +11,10 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageId>Durable.LiteDb</PackageId>
 		<Title>Durable.LiteDb</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>LiteDB backend for Durable ORM: store entities in an embedded single-file (or in-memory) LiteDB document database with the full IRepository surface, LINQ predicates pushed down to LiteDB indexes where the semantics match C#, exact value round-trips, includes, optimistic concurrency and async-safe transactions.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -25,6 +25,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

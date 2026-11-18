@@ -10,10 +10,10 @@
 		<ApplicationIcon>logo.ico</ApplicationIcon>
 		<DocumentationFile>Durable.xml</DocumentationFile>
 		<Title>Durable</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>A lightweight .NET ORM with full LINQ support: the backend-neutral core of Durable (IRepository, IQueryBuilder, attribute and convention mapping, transactions, optimistic concurrency, the neutral query model and RepositoryBase for non-SQL backends). Trim- and Native AOT-compatible. Use with Durable.Sqlite, Durable.Postgres, Durable.MySql, Durable.SqlServer, Durable.InMemory, Durable.LiteDb or Durable.LiteGraph.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -24,6 +24,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>

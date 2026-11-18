@@ -9,10 +9,10 @@
 		<ApplicationIcon>logo.ico</ApplicationIcon>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Durable.Conformance</Title>
-		<Version>0.7.1</Version>
+		<Version>0.7.2</Version>
 		<Authors>jchristn,joshclopton</Authors>
 		<Description>Conformance kit for Durable ORM backends. Implement IConformanceTarget for your IRepository&lt;T&gt; backend (SQL, document store, search engine, graph store, in-memory) and run the capability-aware Touchstone suites from ConformanceSuites.Build to prove CRUD, querying, includes, grouping, projections, query filters, soft delete, composite keys, value converters, optimistic concurrency, batch writes, upsert, transactions and string matching behave exactly like every other Durable backend. Unsupported capabilities are verified to fail fast with NotSupportedException.</Description>
-		<Copyright>(c)2025 Durable Community</Copyright>
+		<Copyright>(c)2026 Joel Christner</Copyright>
 		<PackageProjectUrl>https://github.com/jchristn/durable</PackageProjectUrl>
 		<PackageIcon>logo.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
@@ -23,6 +23,9 @@
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<IncludeSymbols>True</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>
